@@ -33,7 +33,7 @@ class TestInheritance extends TestHelper {
     @BeforeEach
     void each() throws AntikytheraException {
         System.setOut(new PrintStream(outContent));
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.PersonExt", Evaluator.class);
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.PersonExt", Evaluator.class);
     }
 
     @Test

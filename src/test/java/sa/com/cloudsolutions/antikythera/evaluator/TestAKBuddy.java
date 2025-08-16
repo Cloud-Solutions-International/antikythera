@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 
 class TestAKBuddy extends TestHelper {
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Employee";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee";
     CompilationUnit cu;
 
     @BeforeAll
@@ -68,7 +68,7 @@ class TestAKBuddy extends TestHelper {
 
     @Test
     void createComplexDynamicClass() throws ReflectiveOperationException {
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeService", SpringEvaluator.class);
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService", SpringEvaluator.class);
 
         TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "FakeService").orElseThrow();
         MethodInterceptor interceptor = new MethodInterceptor(evaluator);
@@ -106,7 +106,7 @@ class TestAKBuddy extends TestHelper {
         assertNotNull(m2, "publicAccess method defined in Employee sources has been copied to the dynamic class");
 
         Object fieldValue = f.get(emp1); // get the value of field 'p' from emp1
-        assertEquals("sa.com.cloudsolutions.antikythera.evaluator.Person",
+        assertEquals("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person",
                 fieldValue.getClass().getName(), "We have an accessible Person field in Employee");
 
 
@@ -134,7 +134,7 @@ class TestAKBuddy extends TestHelper {
     @ParameterizedTest
     @CsvSource({"convert","map","mapPerson"})
     void testConvert(String name) throws ReflectiveOperationException {
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.ConvertValue", SpringEvaluator.class);
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.ConvertValue", SpringEvaluator.class);
         cu = evaluator.getCompilationUnit();
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         evaluator.executeMethod(method);
@@ -144,7 +144,7 @@ class TestAKBuddy extends TestHelper {
     @ParameterizedTest
     @CsvSource({"createPerson1, Person created: Horatio", "createPerson2, Person created: Horatio Colombo"})
     void createPerson(String name, String value) throws ReflectiveOperationException {
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Reflective", SpringEvaluator.class);
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Reflective", SpringEvaluator.class);
         cu = evaluator.getCompilationUnit();
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         evaluator.executeMethod(method);

@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestTryCatch extends TestHelper {
     CompilationUnit cu;
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.TryCatch";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.TryCatch";
 
     @BeforeAll
     static void setup() throws IOException {

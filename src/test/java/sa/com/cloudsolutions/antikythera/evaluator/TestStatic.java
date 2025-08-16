@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TestStatic extends TestHelper{
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Static";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Static";
     CompilationUnit cu;
 
     @BeforeAll

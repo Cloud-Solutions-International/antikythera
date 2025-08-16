@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestReturnValue extends TestHelper {
-    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.ReturnValue";
+    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.ReturnValue";
     CompilationUnit cu;
 
     @BeforeAll

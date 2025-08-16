@@ -30,11 +30,11 @@ class DepSolverIntegrationTest {
     @Test
     void testEmployee() throws AntikytheraException {
         DepSolver depSolver = DepSolver.createSolver();
-        depSolver.processMethod("sa.com.cloudsolutions.antikythera.evaluator.Employee#simpleAccess");
+        depSolver.processMethod("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee#simpleAccess");
 
         Map<String, CompilationUnit> dependencies = Graph.getDependencies();
         assertFalse(dependencies.isEmpty());
-        CompilationUnit cu = dependencies.get("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        CompilationUnit cu = dependencies.get("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee");
         assertNotNull(cu);
         assertEquals("java.io.Serializable", cu.getImports().get(0).getNameAsString());
     }
@@ -43,11 +43,11 @@ class DepSolverIntegrationTest {
     @Test
     void testThisPerson() throws AntikytheraException {
         DepSolver depSolver = DepSolver.createSolver();
-        depSolver.processMethod("sa.com.cloudsolutions.antikythera.evaluator.Employee#thisAccess");
+        depSolver.processMethod("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee#thisAccess");
 
         Map<String, CompilationUnit> dependencies = Graph.getDependencies();
         assertFalse(dependencies.isEmpty());
-        CompilationUnit cu = dependencies.get("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        CompilationUnit cu = dependencies.get("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee");
         assertNotNull(cu);
         assertEquals("java.io.Serializable", cu.getImports().get(0).getNameAsString());
         assertTrue(cu.findFirst(FieldDeclaration.class, f -> f.getVariables().get(0).getNameAsString().equals("p")).isPresent());

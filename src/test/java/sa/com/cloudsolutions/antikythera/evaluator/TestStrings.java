@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestStrings extends TestHelper{
     CompilationUnit cu;
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Hello";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Hello";
 
     @BeforeAll
     static void setup() throws IOException {

@@ -66,7 +66,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testFieldSearchAddsFieldToClass() throws AntikytheraException {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Person");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person");
         FieldDeclaration field = sourceClass.getFieldByName("name").orElseThrow();
         node.setNode(field);
 
@@ -78,7 +78,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testFieldSearchAddsAnnotations() throws AntikytheraException {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Person");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person");
         FieldDeclaration field = sourceClass.getFieldByName("name").orElseThrow();
         node.setNode(field);
         field.addAnnotation("Deprecated");
@@ -93,7 +93,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testFieldSearchAddsImports() throws AntikytheraException {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Person");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person");
         FieldDeclaration field = sourceClass.getFieldByName("name").orElseThrow();
         node.setNode(field);
 
@@ -108,7 +108,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testMethodSearch() throws AntikytheraException {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Person");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person");
         MethodDeclaration md = sourceClass.getMethodsByName("getName").getFirst();
         node.setNode(md);
 
@@ -120,7 +120,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testSetter() throws AntikytheraException {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Person");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person");
         MethodDeclaration md = sourceClass.getMethodsByName("setId").get(1);
         node.setNode(md);
 
@@ -129,16 +129,16 @@ class DepSolverTest extends TestHelper {
         assertNotNull(m, "method should be added to the class.");
         assertEquals(1, m.getParameters().size());
         assertEquals("String", m.getParameter(0).getTypeAsString());
-        assertTrue(Graph.getDependencies().containsKey("sa.com.cloudsolutions.antikythera.evaluator.IPerson"));
+        assertTrue(Graph.getDependencies().containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.IPerson"));
     }
 
     @Test
     void testMethodReference() {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Functional");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Functional");
         Graph.createGraphNode(sourceClass.getMethodsByName("people1").getFirst());
         depSolver.dfs();
 
-        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.evaluator.Person");
+        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person");
         assertNotNull(resolved);
         String s = resolved.toString();
         assertTrue(s.contains("getName"));
@@ -148,20 +148,20 @@ class DepSolverTest extends TestHelper {
     @ParameterizedTest
     @ValueSource(strings = {"searchFakeDataWithCriteria1", "searchFakeDataWithCriteria2"})
     void testSpecification(String name) {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.FakeService");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService");
         Graph.createGraphNode(
                 node.getEnclosingType().asClassOrInterfaceDeclaration()
                         .getMethodsByName(name).getFirst());
 
         depSolver.dfs();
         Map<String, CompilationUnit> a = Graph.getDependencies();
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeService"));
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeSearchModel"));
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity"));
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository"));
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.evaluator.CrazySpecification"));
+        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService"));
+        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeSearchModel"));
+        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeEntity"));
+        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeRepository"));
+        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.CrazySpecification"));
 
-        CompilationUnit cs = a.get("sa.com.cloudsolutions.antikythera.evaluator.CrazySpecification");
+        CompilationUnit cs = a.get("sa.com.cloudsolutions.antikythera.testhelper.evaluator.CrazySpecification");
         ClassOrInterfaceDeclaration cst = cs.getType(0).asClassOrInterfaceDeclaration();
         assertEquals(2, cst.findAll(MethodDeclaration.class).size(),
                 "Should be two with the inner method");
@@ -170,14 +170,14 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testAnnotationBinary() {
-        postSetup("sa.com.cloudsolutions.antikythera.depsolver.DummyClass");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.depsolver.DummyClass");
 
         AnnotationExpr ann = sourceClass
                 .getMethodsByName("binaryAnnotation").getFirst()
                 .getAnnotationByName("DummyAnnotation").orElseThrow();
         Resolver.resolveNormalAnnotationExpr(node, ann.asNormalAnnotationExpr());
 
-        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.depsolver.DummyClass");
+        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.testhelper.depsolver.DummyClass");
         assertNotNull(resolved);
         String s = resolved.toString();
         assertFalse(s.contains("DummyAnnotation"),
@@ -189,13 +189,13 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testAnnotationWithField() {
-        postSetup("sa.com.cloudsolutions.antikythera.depsolver.DummyClass");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.depsolver.DummyClass");
 
         AnnotationExpr ann = sourceClass
                 .getMethodsByName("annotationWIthField").getFirst()
                 .getAnnotationByName("DummyAnnotation").orElseThrow();
         Resolver.resolveNormalAnnotationExpr(node, ann.asNormalAnnotationExpr());
-        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.depsolver.DummyClass");
+        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.testhelper.depsolver.DummyClass");
         assertNotNull(resolved);
         String s = resolved.toString();
         assertFalse(s.contains("DummyAnnotation"),
@@ -206,12 +206,12 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testThisAccess1() {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee");
         // create a new FieldAccessExpression with this.
         FieldAccessExpr fieldAccessExpr = new FieldAccessExpr(new NameExpr("this"), "p");
         Resolver.resolveField(node, fieldAccessExpr);
 
-        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee");
         assertNotNull(resolved);
         String s = resolved.toString();
         assertTrue(s.contains("Hornblower"));
@@ -219,11 +219,11 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testThisAccess2() {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee");
         // create a new FieldAccessExpression with this.
         FieldAccessExpr fieldAccessExpr = new FieldAccessExpr(new NameExpr("this"), "objectMapper");
         Resolver.resolveField(node, fieldAccessExpr);
-        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        CompilationUnit resolved = Graph.getDependencies().get("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee");
         assertNotNull(resolved);
         String s = resolved.toString();
         assertTrue(s.contains("com.fasterxml.jackson.databind.ObjectMapper"));
@@ -232,14 +232,14 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testFindInterfaceImplementations() throws AntikytheraException {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.IPerson");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.IPerson");
         assertTrue(sourceClass.isInterface(), "Test should use an interface");
 
         MethodDeclaration method = sourceClass.getMethodsByName("getName").getFirst();
         depSolver.methodSearch(Graph.createGraphNode(method));
 
         Map<String, CompilationUnit> deps = Graph.getDependencies();
-        assertTrue(deps.containsKey("sa.com.cloudsolutions.antikythera.evaluator.Person"),
+        assertTrue(deps.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person"),
                 "Should find Person implementation");
 
         GraphNode top = depSolver.peek();
@@ -249,7 +249,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testResolveArrayAccessExpr() {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Locals");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Locals");
 
         // Find array access expressions in the people method
         MethodDeclaration peopleMethod = sourceClass.getMethodsByName("people").getFirst();
@@ -275,7 +275,7 @@ class DepSolverTest extends TestHelper {
         "ternary6, 2"
     })
     void testResolveConditionalExpr(String methodName, int expectedTypeCount) {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Conditional");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Conditional");
 
         MethodDeclaration method = sourceClass.getMethodsByName(methodName).getFirst();
         var conditionalExprs = method.findAll(com.github.javaparser.ast.expr.ConditionalExpr.class);
@@ -289,7 +289,7 @@ class DepSolverTest extends TestHelper {
 
     @Test
     void testResolveFieldAccess() {
-        postSetup("sa.com.cloudsolutions.antikythera.evaluator.Employee");
+        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee");
 
         // Find field access expressions in the chained method
         MethodDeclaration chainedMethod = sourceClass.getMethodsByName("chained").getFirst();

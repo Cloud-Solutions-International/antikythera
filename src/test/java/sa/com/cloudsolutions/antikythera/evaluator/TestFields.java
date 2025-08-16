@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestFields extends TestHelper {
 
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Employee";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee";
     CompilationUnit cu;
 
     @BeforeAll
@@ -96,7 +96,7 @@ class TestFields extends TestHelper {
     }
 
     private void lombokHelper() throws ReflectiveOperationException {
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Tea", Evaluator.class);
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Tea", Evaluator.class);
         cu = evaluator.getCompilationUnit();
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("run")).orElseThrow();

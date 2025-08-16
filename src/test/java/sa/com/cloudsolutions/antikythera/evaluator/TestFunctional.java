@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class TestFunctional extends TestHelper{
 
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Functional";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Functional";
     CompilationUnit cu;
 
     @BeforeAll

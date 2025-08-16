@@ -90,7 +90,7 @@ class UnitTestGeneratorTest {
      */
     @Test
     void testSetUpBase() throws NoSuchMethodException {
-        unitTestGenerator.loadPredefinedBaseClassForTest("sa.com.cloudsolutions.antikythera.evaluator.mock.Hello");
+        unitTestGenerator.loadPredefinedBaseClassForTest("sa.com.cloudsolutions.antikythera.testhelper.evaluator.mock.Hello");
 
         Method m = Statement.class.getDeclaredMethod("execute", String.class);
         assertNotNull(m);
@@ -187,7 +187,7 @@ class UnitTestGeneratorTest {
 
     @Test
     void testLogger() throws ReflectiveOperationException {
-        Settings.setProperty(Settings.LOG_APPENDER,"sa.com.cloudsolutions.antikythera.generator.LogHandler");
+        Settings.setProperty(Settings.LOG_APPENDER,"sa.com.cloudsolutions.antikythera.testhelper.generator.LogHandler");
         MethodDeclaration md = classUnderTest.getMethodsByName("queries5").getFirst();
         argumentGenerator = new DummyArgumentGenerator();
         unitTestGenerator.setArgumentGenerator(argumentGenerator);
@@ -277,9 +277,9 @@ class UnitTestGeneratorTest {
 }
 
 class UnitTestGeneratorMoreTests extends TestHelper {
-    public static final String FAKE_SERVICE = "sa.com.cloudsolutions.antikythera.evaluator.FakeService";
-    public static final String PERSON = "sa.com.cloudsolutions.antikythera.evaluator.Person";
-    public static final String CONDITIONAL = "sa.com.cloudsolutions.antikythera.evaluator.Conditional";
+    public static final String FAKE_SERVICE = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService";
+    public static final String PERSON = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person";
+    public static final String CONDITIONAL = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Conditional";
     CompilationUnit cu;
     UnitTestGenerator unitTestGenerator;
 
@@ -488,9 +488,9 @@ class UnitTestGeneratorMoreTests extends TestHelper {
      */
     @Test
     void testAddingBaseClassToTestClass() {
-        CompilationUnit base = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.generator.DummyBase");
+        CompilationUnit base = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.generator.DummyBase");
         assertNotNull(base);
-        CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Overlord");
+        CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Overlord");
         assertNotNull(compilationUnit);
 
         ClassOrInterfaceDeclaration classUnderTest = compilationUnit.getType(0).asClassOrInterfaceDeclaration();
@@ -504,7 +504,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
         assertEquals("OverlordAKTest", publicType.getNameAsString());
         assertTrue(publicType.asClassOrInterfaceDeclaration().getExtendedTypes()
                 .stream()
-                .anyMatch(t -> t.asString().equals("sa.com.cloudsolutions.antikythera.generator.DummyBase")));
+                .anyMatch(t -> t.asString().equals("sa.com.cloudsolutions.antikythera.testhelper.generator.DummyBase")));
     }
 }
 

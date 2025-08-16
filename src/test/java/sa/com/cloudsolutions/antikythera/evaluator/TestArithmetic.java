@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TestArithmetic extends  TestHelper {
 
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Arithmetic";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Arithmetic";
     CompilationUnit cu;
 
     @BeforeAll

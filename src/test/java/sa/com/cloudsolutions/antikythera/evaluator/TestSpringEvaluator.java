@@ -233,7 +233,7 @@ class TestSpringEvaluatorAgain {
 
     @Test
     void argumentGeneratorTest() throws ReflectiveOperationException {
-        String cls = "sa.com.cloudsolutions.antikythera.evaluator.Functional";
+        String cls = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Functional";
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(cls);
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class, f -> f.getNameAsString().equals("printHello")).get();
         SpringEvaluator eval = EvaluatorFactory.create(cls, SpringEvaluator.class);

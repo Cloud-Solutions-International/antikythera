@@ -19,7 +19,7 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestLocals extends TestHelper {
-    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Locals";
+    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Locals";
     CompilationUnit cu;
 
     @BeforeAll

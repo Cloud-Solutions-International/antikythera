@@ -46,7 +46,7 @@ class ResolverTest {
     @Test
     void lombokSolver1() {
         TypeDeclaration<?> t = AntikytheraRunTime.getTypeDeclaration(
-                "sa.com.cloudsolutions.antikythera.evaluator.Tea").orElseThrow();
+                "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Tea").orElseThrow();
         GraphNode node = Graph.createGraphNode(t); // Use the Graph.createGraphNode method to create GraphNode
         MethodCallExpr methodCallExpr = t.findFirst(MethodCallExpr.class).orElseThrow();
         Type type = Resolver.lombokSolver(methodCallExpr, t.asClassOrInterfaceDeclaration(), node);
@@ -56,7 +56,7 @@ class ResolverTest {
     @Test
     void lombokSolver2() {
         TypeDeclaration<?> t = AntikytheraRunTime.getTypeDeclaration(
-                "sa.com.cloudsolutions.antikythera.evaluator.Tea").orElseThrow();
+                "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Tea").orElseThrow();
         GraphNode node = Graph.createGraphNode(t); // Use the Graph.createGraphNode method to create GraphNode
         MethodCallExpr methodCallExpr = t.findFirst(MethodCallExpr.class).orElseThrow();
         methodCallExpr.setName("getGibberish");
@@ -68,7 +68,7 @@ class ResolverTest {
     void wrapCallable() {
         NodeList<Type> nodes = new NodeList<>();
         TypeDeclaration<?> t = AntikytheraRunTime.getTypeDeclaration(
-                "sa.com.cloudsolutions.antikythera.evaluator.Tea").orElseThrow();
+                "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Tea").orElseThrow();
         GraphNode node = Graph.createGraphNode(t); // Use the Graph.createGraphNode method to create GraphNode
         MethodCallExpr methodCallExpr = t.findFirst(MethodCallExpr.class).orElseThrow();
         Resolver.wrapCallable(node, methodCallExpr, nodes);

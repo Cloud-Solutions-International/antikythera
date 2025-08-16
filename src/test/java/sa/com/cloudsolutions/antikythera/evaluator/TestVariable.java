@@ -29,7 +29,7 @@ class TestVariable {
         assertEquals("240", s.toString());
 
         Variable e = new Variable(EvaluatorFactory.create(
-                "sa.com.cloudsolutions.antikythera.evaluator.Functional", Evaluator.class)
+                "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Functional", Evaluator.class)
         );
         assertTrue(e.toString().startsWith("Evaluator for sa.com.cloudsolutions.antikythera.evaluator.Functional"));
     }

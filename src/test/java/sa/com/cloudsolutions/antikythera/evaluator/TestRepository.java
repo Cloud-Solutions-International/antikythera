@@ -17,7 +17,7 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestRepository extends TestHelper {
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.FakeService";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService";
     CompilationUnit cu;
 
     @BeforeAll
@@ -29,7 +29,7 @@ public class TestRepository extends TestHelper {
 
     @BeforeEach
     void each() {
-        MockingRegistry.markAsMocked("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository");
+        MockingRegistry.markAsMocked("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeRepository");
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         System.setOut(new PrintStream(outContent));

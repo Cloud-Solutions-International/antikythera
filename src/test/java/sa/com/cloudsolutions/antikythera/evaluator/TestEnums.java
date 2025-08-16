@@ -16,7 +16,7 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestEnums extends TestHelper {
-    static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Status";
+    static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Status";
     @BeforeAll
     static void setup() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
@@ -50,7 +50,7 @@ class TestEnums extends TestHelper {
 
     @Test
     void testMultiEnum() throws ReflectiveOperationException {
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Hello", Evaluator.class);
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Hello", Evaluator.class);
         MethodDeclaration md = evaluator.getCompilationUnit().findFirst(
                 MethodDeclaration.class, m -> m.getNameAsString().equals("helloEnum3")).orElseThrow();
 

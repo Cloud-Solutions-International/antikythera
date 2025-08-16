@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class TestBunches  {
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Bunches";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Bunches";
     Evaluator evaluator;
     CompilationUnit cu;
 

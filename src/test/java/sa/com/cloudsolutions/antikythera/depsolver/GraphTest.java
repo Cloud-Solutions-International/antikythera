@@ -32,7 +32,7 @@ class GraphTest {
 
     @Test
     void testCreatGraphNode() {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.ReturnValue");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.ReturnValue");
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("returnConditionally")).orElseThrow();
 
@@ -46,7 +46,7 @@ class GraphTest {
 
     @Test
     void testPersonInterface()  {
-         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Person");
+         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person");
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("getName")).orElseThrow();
 

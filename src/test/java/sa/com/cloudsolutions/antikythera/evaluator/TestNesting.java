@@ -26,26 +26,26 @@ class TestNesting extends TestHelper{
 
     @Test
     void testInnerClasses() {
-        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Bunches"));
-        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Bunches.DTO"));
-        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Bunches.Person"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Bunches"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Bunches.DTO"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Bunches.Person"));
 
-        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.evaluator.Bunches"));
-        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.evaluator.Bunches.DTO"));
-        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.evaluator.Bunches.Person"));
+        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Bunches"));
+        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Bunches.DTO"));
+        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Bunches.Person"));
 
-        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting"));
-        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting.Inner"));
-        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.evaluator.Nesting"));
-        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.evaluator.Nesting.Inner"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Nesting"));
+        assertNotNull(AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Nesting.Inner"));
+        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Nesting"));
+        assertNotNull(AntikytheraRunTime.getTypeDeclaration("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Nesting.Inner"));
 
     }
 
     @ParameterizedTest
     @CsvSource({"t1, Hello World", "t2, from outer method"})
     void testNesting(String name, String output) throws ReflectiveOperationException {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting");
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Nesting", Evaluator.class);
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Nesting");
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Nesting", Evaluator.class);
         System.setOut(new PrintStream(outContent));
 
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,

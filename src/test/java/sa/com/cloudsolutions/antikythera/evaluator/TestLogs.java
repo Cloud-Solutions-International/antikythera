@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class TestLogs extends TestHelper {
 
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Noisy";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Noisy";
     CompilationUnit cu;
 
     @BeforeAll
