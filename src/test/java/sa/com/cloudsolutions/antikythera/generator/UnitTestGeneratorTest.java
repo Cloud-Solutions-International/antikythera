@@ -90,7 +90,7 @@ class UnitTestGeneratorTest {
      */
     @Test
     void testSetUpBase() throws NoSuchMethodException {
-        unitTestGenerator.loadPredefinedBaseClassForTest("sa.com.cloudsolutions.antikythera.testhelper.evaluator.mock.Hello");
+        unitTestGenerator.loadPredefinedBaseClassForTest("sa.com.cloudsolutions.antikythera.evaluator.mock.Hello");
 
         Method m = Statement.class.getDeclaredMethod("execute", String.class);
         assertNotNull(m);

@@ -190,10 +190,10 @@ class TestEvaluator extends TestHelper {
     @Test
     void evaluateClassExpressionReturnsClassObject2() throws AntikytheraException, ReflectiveOperationException {
         evaluator.getCompilationUnit().addImport("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Evaluator");
-        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Evaluator"));
+        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person"));
         Variable result = evaluator.evaluateClassExpression(evaluatorClassExpr);
         assertNotNull(result);
-        assertEquals("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Evaluator", ((Class<?>) result.getValue()).getName());
+        assertEquals("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person", ((Class<?>) result.getValue()).getName());
     }
 
 

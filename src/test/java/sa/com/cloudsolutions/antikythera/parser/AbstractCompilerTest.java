@@ -91,7 +91,7 @@ class AbstractCompilerTest {
         assertNotNull(w);
         assertNotNull(w.getSimplified());
         assertEquals("java.util.List", w.getSimplified().getNameAsString());
-        assertNotNull(AbstractCompiler.findWildcardImport(cu, "Loops"));
+        assertNotNull(AbstractCompiler.findWildcardImport(cu, "Stack"));
     }
 
     @Test
