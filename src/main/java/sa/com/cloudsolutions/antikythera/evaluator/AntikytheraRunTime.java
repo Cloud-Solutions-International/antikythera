@@ -4,6 +4,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -154,7 +155,7 @@ public class AntikytheraRunTime {
     }
 
     public static Variable getStaticVariable(String fqn, String field) {
-        return statics.getOrDefault(fqn, new TreeMap<>()).get(field);
+        return statics.getOrDefault(fqn, Collections.emptyMap()).get(field);
     }
 
     public static void setStaticVariable(String fqn, String field, Variable variable)
