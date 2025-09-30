@@ -5,9 +5,36 @@
     <artifactId>antikythera</artifactId>
     <version>0.1.0</version>
 
+    <name>Antikythera</name>
+    <description>Automated Test Generator for Java projects. Generates unit tests and API tests for Spring applications.</description>
+    <url>https://github.com/Cloud-Solutions-International/antikythera</url>
+
+    <licenses>
+        <license>
+            <name>The Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
+    <scm>
+        <connection>scm:git:git://github.com/Cloud-Solutions-International/antikythera.git</connection>
+        <developerConnection>scm:git:ssh://github.com/Cloud-Solutions-International/antikythera.git</developerConnection>
+        <url>https://github.com/Cloud-Solutions-International/antikythera/tree/master</url>
+    </scm>
+
     <properties>
         <api-framework-version>2.0.0</api-framework-version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
+
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/Cloud-Solutions-International/antikythera</url>
+        </repository>
+    </distributionManagement>
 
     <dependencies>
         <dependency>
@@ -59,7 +86,7 @@
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
-            <version>5.5.1</version>
+            <version>5.5.5</version>
         </dependency>
 
         <dependency>
@@ -99,7 +126,7 @@
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
-            <version>3.1.2</version>
+            <version>3.2.1</version>
         </dependency>
     </dependencies>
     <build>
@@ -151,6 +178,41 @@
                 <version>3.2.0</version>
                 <configuration>
                     <mainClass>sa.com.cloudsolutions.antikythera.generator.Antikythera</mainClass>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>3.1.1</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.3.0</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.6.3</version>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <failOnError>false</failOnError>
+                    <quiet>true</quiet>
                 </configuration>
             </plugin>
         </plugins>
