@@ -28,6 +28,12 @@
             <version>1.15.3</version>
         </dependency>
         <dependency>
+            <groupId>sa.com.cloudsolutions</groupId>
+            <artifactId>antikythera-common</artifactId>
+            <version>1.0</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>1.7.36</version>

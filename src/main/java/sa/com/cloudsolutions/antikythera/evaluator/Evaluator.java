@@ -96,7 +96,7 @@ import java.util.stream.Stream;
 /**
  * Expression evaluator engine.
  */
-public class Evaluator {
+public class Evaluator implements EvaluationEngine {
     private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
     /**
      * The fields that were encountered in the current class.
@@ -243,6 +243,7 @@ public class Evaluator {
      * @param name the name of the variable.
      * @return the value for the variable in the current scope
      */
+    @Override
     public Variable getValue(Node n, String name) {
         Variable value = getLocal(n, name);
         if (value == null && getField(name) != null) {
@@ -261,6 +262,7 @@ public class Evaluator {
      * @return the result as a Variable instance which can be null if the expression is supposed to return null
      */
     @SuppressWarnings("java:S3776")
+    @Override
     public Variable evaluateExpression(Expression expr) throws ReflectiveOperationException {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
@@ -612,6 +614,7 @@ public class Evaluator {
         return v;
     }
 
+    @Override
     public void setField(String nameAsString, Variable v) {
         fields.put(nameAsString, v);
     }
@@ -807,6 +810,7 @@ public class Evaluator {
      * @return the Variable if it's found or null.
      */
     @SuppressWarnings("java:S3776")
+    @Override
     public Variable getLocal(Node node, String name) {
         Node n = node;
 
@@ -1400,6 +1404,7 @@ public class Evaluator {
     }
 
 
+    @Override
     public Map<Integer, Map<String, Variable>> getLocals() {
         return locals;
     }
@@ -1546,6 +1551,7 @@ public class Evaluator {
         return v;
     }
 
+    @Override
     public Variable getField(String name) {
         Variable v = fields.get(name);
         if (v == null && typeDeclaration != null && typeDeclaration.isEnumDeclaration()) {
@@ -1554,6 +1560,7 @@ public class Evaluator {
         return v;
     }
 
+    @Override
     public void visit(MethodDeclaration md) throws ReflectiveOperationException {
         executeMethod(md);
     }
@@ -1979,6 +1986,7 @@ public class Evaluator {
         processParentClasses(typeDeclaration, "FieldVisitor");
     }
 
+    @Override
     public String getClassName() {
         return className;
     }
