@@ -28,13 +28,12 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
 
-    <distributionManagement>
+    <repositories>
         <repository>
-            <id>github</id>
-            <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Cloud-Solutions-International/antikythera</url>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
         </repository>
-    </distributionManagement>
+    </repositories>
 
     <dependencies>
         <dependency>
@@ -55,9 +54,9 @@
             <version>1.15.3</version>
         </dependency>
         <dependency>
-            <groupId>sa.com.cloudsolutions</groupId>
+            <groupId>com.github.Cloud-Solutions-International</groupId>
             <artifactId>antikythera-common</artifactId>
-            <version>1.0</version>
+            <version>0.0.2</version>
         </dependency>
 
         <dependency>

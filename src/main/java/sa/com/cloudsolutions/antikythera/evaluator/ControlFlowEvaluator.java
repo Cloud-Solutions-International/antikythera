@@ -68,7 +68,8 @@ public class ControlFlowEvaluator extends Evaluator {
         Expression key = entry.getKey();
         NameExpr nameExpr = key.isNameExpr() ? key.asNameExpr() : key.asMethodCallExpr().getArgument(0).asNameExpr();
 
-        Variable v = getValue(stmt, nameExpr.getNameAsString());
+        Symbol s0 = getValue(stmt, nameExpr.getNameAsString());
+        Variable v = (s0 instanceof Variable var0) ? var0 : (s0 == null ? null : new Variable(s0.getType(), s0.getValue()));
         if (v != null) {
             List<Expression> expr = setupConditionThroughAssignmentForLocal(stmt, entry, v, nameExpr);
             if (expr != null) return expr;
@@ -177,7 +178,8 @@ public class ControlFlowEvaluator extends Evaluator {
             Expression scope = mce.getScope().orElseThrow();
             if (scope.toString().equals(TruthTable.COLLECTION_UTILS)) {
                 Expression arg = mce.getArgument(0);
-                Variable vx = getValue(mce, arg.asNameExpr().getNameAsString());
+                Symbol s1 = getValue(mce, arg.asNameExpr().getNameAsString());
+                Variable vx = (s1 instanceof Variable var1) ? var1 : (s1 == null ? null : new Variable(s1.getType(), s1.getValue()));
                 return setupNonEmptyCollections(vx, arg.asNameExpr());
             }
         }
@@ -389,7 +391,8 @@ public class ControlFlowEvaluator extends Evaluator {
 
     private void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry, Expression expr) {
 
-        Variable v = getValue(stmt, expr.toString());
+        Symbol s2 = getValue(stmt, expr.toString());
+        Variable v = (s2 instanceof Variable var2) ? var2 : (s2 == null ? null : new Variable(s2.getType(), s2.getValue()));
         if (v == null ) {
             if (expr.isNameExpr()) {
                 /*
@@ -411,7 +414,8 @@ public class ControlFlowEvaluator extends Evaluator {
                     }
                 }
             } else if (expr instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
-                v = getValue(stmt, mce.getScope().orElseThrow().toString());
+                Symbol s3 = getValue(stmt, mce.getScope().orElseThrow().toString());
+                v = (s3 instanceof Variable var3) ? var3 : (s3 == null ? null : new Variable(s3.getType(), s3.getValue()));
             } else if (expr.isObjectCreationExpr()) {
                 ObjectCreationExpr oce = expr.asObjectCreationExpr();
                 addPreCondition(stmt, oce);
@@ -478,7 +482,8 @@ public class ControlFlowEvaluator extends Evaluator {
         if (side.isLiteralExpr()) {
             setter.addArgument(side.asLiteralExpr());
         } else if (side.isNameExpr()) {
-            Variable v = getValue(side, side.asNameExpr().getNameAsString());
+            Symbol s4 = getValue(side, side.asNameExpr().getNameAsString());
+            Variable v = (s4 instanceof Variable var4) ? var4 : (s4 == null ? null : new Variable(s4.getType(), s4.getValue()));
             if (v != null) {
                 setter.addArgument(v.getInitializer().getFirst());
             }
@@ -514,7 +519,8 @@ public class ControlFlowEvaluator extends Evaluator {
         MethodCallExpr mce = entry.getKey().asMethodCallExpr();
         String value = "\"T\"";
         if (mce.getScope().isPresent()) {
-            Variable scopeVar = getValue(stmt, mce.getScope().orElseThrow().toString());
+            Symbol s5 = getValue(stmt, mce.getScope().orElseThrow().toString());
+            Variable scopeVar = (s5 instanceof Variable var5) ? var5 : (s5 == null ? null : new Variable(s5.getType(), s5.getValue()));
             if (scopeVar != null && scopeVar.getValue() instanceof Evaluator evaluator) {
                 value = findSuitableNotNullValue(name, evaluator, value);
             }

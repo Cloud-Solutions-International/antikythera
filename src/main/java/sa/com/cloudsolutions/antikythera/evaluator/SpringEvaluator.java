@@ -317,7 +317,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @throws ReflectiveOperationException if a reflection operation fails
      */
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
-        Variable va = getValue(md.getBody().orElseThrow(), p.getNameAsString());
+        Symbol s = getValue(md.getBody().orElseThrow(), p.getNameAsString());
+        Variable va = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
 
         if (currentConditional != null) {
             if (currentConditional.getStatement() instanceof IfStmt || currentConditional.getConditionalExpression() != null) {

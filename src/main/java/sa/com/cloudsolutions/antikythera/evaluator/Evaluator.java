@@ -101,14 +101,14 @@ public class Evaluator implements EvaluationEngine {
     /**
      * The fields that were encountered in the current class.
      */
-    protected final Map<String, Variable> fields;
+    protected final Map<String, Symbol> fields;
     /**
      * <p>Local variables.</p>
      *
      * <p>These are specific to a block statement. A block statement may also be an
      * entire method. The primary key will be the hashcode of the block statement.</p>
      */
-    private final Map<Integer, Map<String, Variable>> locals;
+    private final Map<Integer, Map<String, Symbol>> locals;
     /**
      * The fully qualified name of the class for which we created this evaluator.
      */
@@ -244,8 +244,8 @@ public class Evaluator implements EvaluationEngine {
      * @return the value for the variable in the current scope
      */
     @Override
-    public Variable getValue(Node n, String name) {
-        Variable value = getLocal(n, name);
+    public Symbol getValue(Node n, String name) {
+        Symbol value = getLocal(n, name);
         if (value == null && getField(name) != null) {
             return getField(name);
         }
@@ -266,7 +266,10 @@ public class Evaluator implements EvaluationEngine {
     public Variable evaluateExpression(Expression expr) throws ReflectiveOperationException {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
-            return getValue(expr, name);
+            Symbol s = getValue(expr, name);
+            if (s == null) return null;
+            if (s instanceof Variable var) return var;
+            return new Variable(s.getType(), s.getValue());
         } else if (expr.isMethodCallExpr()) {
 
             /*
@@ -581,9 +584,10 @@ public class Evaluator implements EvaluationEngine {
             String fieldName = fae.getNameAsString();
 
 
-            Variable variable = fae.getScope().toString().equals("this")
+            Symbol symb = fae.getScope().toString().equals("this")
                     ? getValue(expr, fieldName)
                     : getValue(expr, fae.getScope().toString());
+            Variable variable = (symb instanceof Variable var) ? var : (symb == null ? null : new Variable(symb.getType(), symb.getValue()));
 
             if (variable == null) {
                 setField(fae.getNameAsString(), v);
@@ -615,7 +619,7 @@ public class Evaluator implements EvaluationEngine {
     }
 
     @Override
-    public void setField(String nameAsString, Variable v) {
+    public void setField(String nameAsString, Symbol v) {
         fields.put(nameAsString, v);
     }
 
@@ -811,15 +815,15 @@ public class Evaluator implements EvaluationEngine {
      */
     @SuppressWarnings("java:S3776")
     @Override
-    public Variable getLocal(Node node, String name) {
+    public Symbol getLocal(Node node, String name) {
         Node n = node;
 
         while (n != null) {
             BlockStmt block = AbstractCompiler.findBlockStatement(n);
             int hash = (block != null) ? block.hashCode() : 0;
             if (hash == 0) {
-                for (Map<String, Variable> entry : locals.values()) {
-                    Variable v = entry.get(name);
+                for (Map<String, Symbol> entry : locals.values()) {
+                    Symbol v = entry.get(name);
                     if (v != null) {
                         return v;
                     }
@@ -827,10 +831,10 @@ public class Evaluator implements EvaluationEngine {
                 break;
             }
 
-            Map<String, Variable> localsVars = this.locals.get(hash);
+            Map<String, Symbol> localsVars = this.locals.get(hash);
 
             if (localsVars != null) {
-                Variable v = localsVars.get(name);
+                Symbol v = localsVars.get(name);
                 if (v != null)
                     return v;
             }
@@ -854,12 +858,12 @@ public class Evaluator implements EvaluationEngine {
      *                     If the variable is already available as a local it's value will be replaced.
      * @param v            The value to be set for the variable.
      */
-    void setLocal(Node node, String nameAsString, Variable v) {
+    void setLocal(Node node, String nameAsString, Symbol v) {
         Optional<Node> parent = node.getParentNode();
         if (parent.isEmpty() ||  !(parent.get() instanceof VariableDeclarationExpr)) {
-            Variable old = getValue(node, nameAsString);
-            if (old != null) {
-                old.setValue(v.getValue());
+            Symbol old = getValue(node, nameAsString);
+            if (old instanceof Variable ov) {
+                ov.setValue(v.getValue());
                 return;
             }
         }
@@ -867,7 +871,7 @@ public class Evaluator implements EvaluationEngine {
         BlockStmt block = AbstractCompiler.findBlockStatement(node);
         int hash = (block != null) ? block.hashCode() : 0;
 
-        Map<String, Variable> localVars = this.locals.computeIfAbsent(hash, k -> new HashMap<>());
+        Map<String, Symbol> localVars = this.locals.computeIfAbsent(hash, k -> new HashMap<>());
         localVars.put(nameAsString, v);
     }
 
@@ -1013,7 +1017,8 @@ public class Evaluator implements EvaluationEngine {
             Field field = System.class.getField(expr2.asFieldAccessExpr().getNameAsString());
             variable = new Variable(field.get(null));
         } else if (variable.getValue() instanceof Evaluator eval) {
-            variable = eval.getValue(expr2, expr2.asFieldAccessExpr().getNameAsString());
+            Symbol s = eval.getValue(expr2, expr2.asFieldAccessExpr().getNameAsString());
+            variable = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
         } else {
             if (variable.getValue() instanceof Evaluator eval) {
                 variable = eval.evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
@@ -1051,7 +1056,8 @@ public class Evaluator implements EvaluationEngine {
             variable.setClazz(System.class);
             return variable;
         } else {
-            Variable v = getValue(expr, expr.asNameExpr().getNameAsString());
+            Symbol s = getValue(expr, expr.asNameExpr().getNameAsString());
+            Variable v = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
             if (v == null) {
                 /*
                  * We know that we don't have a matching local variable or field. That indicates the
@@ -1405,7 +1411,7 @@ public class Evaluator implements EvaluationEngine {
 
 
     @Override
-    public Map<Integer, Map<String, Variable>> getLocals() {
+    public Map<Integer, Map<String, Symbol>> getLocals() {
         return locals;
     }
 
@@ -1553,7 +1559,8 @@ public class Evaluator implements EvaluationEngine {
 
     @Override
     public Variable getField(String name) {
-        Variable v = fields.get(name);
+        Symbol s = fields.get(name);
+        Variable v = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
         if (v == null && typeDeclaration != null && typeDeclaration.isEnumDeclaration()) {
             return AntikytheraRunTime.getStaticVariable(typeDeclaration.getFullyQualifiedName().orElseThrow(), name);
         }
@@ -1796,8 +1803,11 @@ public class Evaluator implements EvaluationEngine {
         for (int i = 0; i < Array.getLength(iterValue); i++) {
             Object value = Array.get(iterValue, i);
             for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
-                Variable v = getLocal(forEachStmt, vdecl.getNameAsString());
-                v.setValue(value);
+                Symbol s = getLocal(forEachStmt, vdecl.getNameAsString());
+                Variable v = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
+                if (v != null) {
+                    v.setValue(value);
+                }
             }
 
             executeBlock(forEachStmt.getBody().asBlockStmt().getStatements());
@@ -1807,7 +1817,8 @@ public class Evaluator implements EvaluationEngine {
     private void executeForEachWithCollection(Collection<?> list, ForEachStmt forEachStmt) throws ReflectiveOperationException {
         for (Object value : list) {
             for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
-                Variable v = getLocal(forEachStmt, vdecl.getNameAsString());
+                Symbol s = getLocal(forEachStmt, vdecl.getNameAsString());
+                Variable v = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
                 if (v != null) {
                     v.setValue(value);
                 } else {
@@ -2076,8 +2087,11 @@ public class Evaluator implements EvaluationEngine {
 
     public List<Expression> getFieldInitializers() {
         List<Expression> fi = new ArrayList<>();
-        for (Map.Entry<String, Variable> entry : fields.entrySet()) {
-            Variable v = entry.getValue();
+        for (Map.Entry<String, Symbol> entry : fields.entrySet()) {
+            Symbol sym = entry.getValue();
+            if (!(sym instanceof Variable v)) {
+                continue;
+            }
             if (v != null && !v.getInitializer().isEmpty()) {
                 Expression first = v.getInitializer().getFirst();
                 if (first instanceof MethodCallExpr m && m.getScope().isPresent()) {

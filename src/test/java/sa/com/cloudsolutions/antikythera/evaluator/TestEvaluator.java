@@ -138,7 +138,7 @@ class TestEvaluator extends TestHelper {
     @Test
     void testResolveNonPrimitiveVariable()  {
 
-        Map<String, Variable> resolvedFields = evaluator.fields;
+        Map<String, Symbol> resolvedFields = evaluator.fields;
 
         assertNull(resolvedFields.get("stringList").getValue());
         assertTrue(resolvedFields.get("stringList").getType().isClassOrInterfaceType());
