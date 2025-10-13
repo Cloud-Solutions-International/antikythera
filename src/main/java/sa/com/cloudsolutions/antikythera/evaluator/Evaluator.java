@@ -1597,6 +1597,11 @@ public class Evaluator implements EvaluationEngine {
         return null;
     }
 
+    @Override
+    public Variable executeMethod(MethodDeclaration md) throws ReflectiveOperationException {
+        return executeMethod((CallableDeclaration<?>) md);
+    }
+
 
     /**
      * Copies the parameters from the stack into the local variable space of the method.
@@ -1629,6 +1634,11 @@ public class Evaluator implements EvaluationEngine {
             }
             executeBlock(statements);
         }
+    }
+
+    @Override
+    public void executeConstructor(ConstructorDeclaration cd) throws ReflectiveOperationException {
+        executeConstructor((CallableDeclaration<?>) cd);
     }
 
     /**

@@ -56,7 +56,7 @@ public class AKBuddy {
      * @throws ClassNotFoundException If an error occurs during reflection operations.
      */
     public static Class<?> createDynamicClass(MethodInterceptor interceptor) throws ClassNotFoundException {
-        Evaluator eval = interceptor.getEvaluator();
+        EvaluationEngine eval = interceptor.getEvaluator();
         if (eval != null) {
             return createDynamicClassBasedOnSourceCode(interceptor, eval);
         } else {
@@ -139,12 +139,12 @@ public class AKBuddy {
         return builder;
     }
 
-    private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, Evaluator eval) throws ClassNotFoundException {
+    private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, EvaluationEngine eval) throws ClassNotFoundException {
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
             return existing;
         }
-        CompilationUnit cu = eval.getCompilationUnit();
+        CompilationUnit cu = ((Evaluator) eval).getCompilationUnit();
         TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow();
         String className = eval.getClassName();
 
@@ -158,7 +158,7 @@ public class AKBuddy {
 
         if (dtoType instanceof ClassOrInterfaceDeclaration cdecl) {
             for (ClassOrInterfaceType iface : cdecl.getImplementedTypes()) {
-                TypeWrapper wrapper = AbstractCompiler.findType(eval.getCompilationUnit(), iface.getNameAsString());
+                TypeWrapper wrapper = AbstractCompiler.findType(((Evaluator) eval).getCompilationUnit(), iface.getNameAsString());
                 if (wrapper != null && wrapper.getClazz() != null) {
                     builder = builder.implement(wrapper.getClazz());
                 }

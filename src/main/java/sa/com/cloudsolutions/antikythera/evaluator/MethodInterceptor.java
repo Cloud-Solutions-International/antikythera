@@ -18,10 +18,10 @@ import java.lang.reflect.Method;
 
 @SuppressWarnings({"java:S3011", "unused"})
 public class MethodInterceptor {
-    private Evaluator evaluator;
+    private EvaluationEngine evaluator;
     private Class<?> wrappedClass = Object.class;
 
-    public MethodInterceptor(Evaluator evaluator) {
+    public MethodInterceptor(EvaluationEngine evaluator) {
         this.evaluator = evaluator;
     }
 
@@ -53,12 +53,12 @@ public class MethodInterceptor {
                 AntikytheraRunTime.push(new Variable(args[i]));
             }
 
-            Variable result = evaluator.executeMethod(methodDecl);
+            Symbol result = evaluator.executeMethod(methodDecl);
             synchronizeFieldsToInstance(instance);
 
             if (result != null) {
                 Object value = result.getValue();
-                if (value instanceof Evaluator eval) {
+                if (value instanceof EvaluationEngine eval) {
                     MethodInterceptor interceptor = new MethodInterceptor(eval);
                     Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
                     return AKBuddy.createInstance(clazz, interceptor);
@@ -87,7 +87,7 @@ public class MethodInterceptor {
         // Iterate through all fields in the type declaration
         for (FieldDeclaration field : dtoType.getFields()) {
             String fieldName = field.getVariable(0).getNameAsString();
-            Variable evaluatorFieldValue = evaluator.getField(fieldName);
+            Symbol evaluatorFieldValue = evaluator.getField(fieldName);
 
             if (evaluatorFieldValue != null) {
                 try {
@@ -95,7 +95,7 @@ public class MethodInterceptor {
                     instanceField.setAccessible(true);
 
                     Object value = evaluatorFieldValue.getValue();
-                    if (value instanceof Evaluator eval) {
+                    if (value instanceof EvaluationEngine eval) {
                         // Handle nested evaluator objects
                         MethodInterceptor nestedInterceptor = new MethodInterceptor(eval);
                         Class<?> nestedClass = AKBuddy.createDynamicClass(nestedInterceptor);
@@ -148,7 +148,7 @@ public class MethodInterceptor {
         this.wrappedClass = componentClass;
     }
 
-    public Evaluator getEvaluator() {
+    public EvaluationEngine getEvaluator() {
         return evaluator;
     }
 
