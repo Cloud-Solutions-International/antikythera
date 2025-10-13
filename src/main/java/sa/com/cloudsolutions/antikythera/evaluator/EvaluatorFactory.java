@@ -46,10 +46,16 @@ public class EvaluatorFactory {
     }
 
     /**
-     * Create an evaluator with the given context
-     * @param c the context instance which wraps a class name and an enclosing evaluator
-     * @param evaluatorType  an instance of Evaluator or one of it's subclasses
-     * @return an evaluator instance.
+     * Create an evaluator with the given context (eager mode).
+     * <p>
+     * If an auto-wired evaluator exists for the requested class, that instance is returned. Otherwise,
+     * a new evaluator of the specified type is created, its fields are discovered via the compilation
+     * unit, and dependent field evaluators are created and initialized.
+     * </p>
+     *
+     * @param c the creation context wrapping the target class name and optional enclosing evaluator
+     * @param evaluatorType the class of {@link Evaluator} (or one of its subclasses) to instantiate
+     * @return an eagerly initialized evaluator instance
      */
     private static <T extends Evaluator> T create(Context c, Class<T> evaluatorType) {
         Evaluator autoWired = findAutoWire(c);
@@ -65,6 +71,17 @@ public class EvaluatorFactory {
         return evaluatorType.cast(eval);
     }
 
+    /**
+     * Attempt to retrieve an auto-wired evaluator for the target class in the given context.
+     * <p>
+     * If an auto-wired variable exists and holds an Evaluator instance, it is returned; otherwise,
+     * {@code null} is returned. If the variable exists but does not hold an Evaluator, an
+     * {@link sa.com.cloudsolutions.antikythera.exception.AntikytheraException} is thrown.
+     * </p>
+     *
+     * @param c the creation context containing the target class name
+     * @return an auto-wired evaluator instance if available; otherwise {@code null}
+     */
     private static Evaluator findAutoWire(Context c) {
         Variable v = AntikytheraRunTime.getAutoWire(c.getClassName());
         if (v != null) {
@@ -78,16 +95,31 @@ public class EvaluatorFactory {
 
     /**
      * Lazily create an evaluator instance.
-     * In lazy mode no evaluators will be immediately created for any fields that need it.
-     * @param className the name of the class for which an evaluator is being created
-     * @param evaluatorType  an instance of Evaluator or one of it's subclasses
-     * @return an evaluator instance.
+     * <p>
+     * In lazy mode, no evaluators will be created for dependent fields at this point; field discovery
+     * and initialization are deferred.
+     * </p>
+     *
+     * @param className the fully qualified name of the class for which an evaluator is being created
+     * @param evaluatorType the class of {@link Evaluator} (or one of its subclasses) to instantiate
+     * @return a lazily initialized evaluator instance
      */
     public static <T extends Evaluator> T createLazily(String className, Class<T> evaluatorType) {
         Context c = new Context(className);
         return createLazily(c, evaluatorType);
     }
 
+    /**
+     * Lazily create an evaluator using the provided context.
+     * <p>
+     * If an auto-wired evaluator exists for the requested class, that instance is returned. Otherwise,
+     * a new evaluator of the specified type is created without triggering field discovery/initialization.
+     * </p>
+     *
+     * @param c the creation context wrapping the target class name and optional enclosing evaluator
+     * @param evaluatorType the class of {@link Evaluator} (or one of its subclasses) to instantiate
+     * @return a lazily initialized evaluator instance
+     */
     public static <T extends Evaluator> T createLazily(Context c , Class<T> evaluatorType) {
         Evaluator autoWired = findAutoWire(c);
         if (autoWired != null) {
