@@ -142,7 +142,8 @@ class TestAKBuddy extends TestHelper {
     }
 
     @ParameterizedTest
-    @CsvSource({"createPerson1, Person created: Horatio", "createPerson2, Person created: Horatio Colombo"})
+    @CsvSource({"createPerson1, Person created: Horatio", "createPerson2, Person created: Horatio Colombo",
+        "assignPersonFields, Updated via reflection: Horatio: Colombo: 12345: horatio@atropos.com"})
     void createPerson(String name, String value) throws ReflectiveOperationException {
         evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Reflective", SpringEvaluator.class);
         cu = evaluator.getCompilationUnit();
