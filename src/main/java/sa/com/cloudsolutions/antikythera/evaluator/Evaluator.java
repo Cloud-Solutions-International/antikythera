@@ -526,11 +526,10 @@ public class Evaluator implements EvaluationEngine {
         if (v != null) {
             if (v.getValue() instanceof Evaluator eval) {
                 return eval.getField(fae.getNameAsString());
-            } else if (v.getValue() != null && v.getValue().getClass().isArray()) {
-                if (fae.getNameAsString().equals("length")) {
+            } else if (v.getValue() != null ) {
+                if (v.getValue().getClass().isArray() && fae.getNameAsString().equals("length")) {
                     return new Variable(Array.getLength(v.getValue()));
                 }
-                logger.warn("Array field access {} not supported", fae.getNameAsString());
             } else {
                 Field field = v.getValue().getClass().getDeclaredField(fae.getNameAsString());
                 field.setAccessible(true);
@@ -538,8 +537,7 @@ public class Evaluator implements EvaluationEngine {
             }
         }
         logger.warn("Could not resolve {} for field access", fae.getScope());
-
-        return null;
+        return v;
     }
 
     private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, TypeDeclaration<?> td) {
