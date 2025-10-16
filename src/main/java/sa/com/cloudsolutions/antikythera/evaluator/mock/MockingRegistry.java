@@ -86,6 +86,7 @@ public class MockingRegistry {
 
     public static void reset() {
         mockedFields.clear();
+        clearCustomMockExpressions();
     }
 
     /**

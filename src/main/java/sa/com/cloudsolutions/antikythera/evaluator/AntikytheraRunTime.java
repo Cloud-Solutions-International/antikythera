@@ -123,8 +123,11 @@ public class AntikytheraRunTime {
     public static void resetAll() {
         stack.clear();
         resolved.clear();
+        resolvedTypes.clear();
         interfaces.clear();
         extensions.clear();
+        autowired.clear();
+        statics.clear();
     }
 
     public static void addSubClass(String parent, String child) {

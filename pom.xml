@@ -137,7 +137,7 @@
                 <configuration>
                     <parallel>none</parallel>
                     <runOrder>alphabetical</runOrder>
-                    <argLine>@{argLine} -XX:+EnableDynamicAgentLoading
+                    <argLine>@{argLine} -javaagent:/home/raditha/csi/Antikythera/antikythera-agent/target/antikythera-agent-1.0-SNAPSHOT.jar -XX:+EnableDynamicAgentLoading
                         --add-opens java.base/java.nio.charset=ALL-UNNAMED
                         --add-opens java.base/java.lang=ALL-UNNAMED
                         --add-opens java.base/java.util.stream=ALL-UNNAMED

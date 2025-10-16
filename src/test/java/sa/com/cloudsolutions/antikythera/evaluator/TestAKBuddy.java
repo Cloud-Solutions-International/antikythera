@@ -138,7 +138,8 @@ class TestAKBuddy extends TestHelper {
         cu = evaluator.getCompilationUnit();
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
         evaluator.executeMethod(method);
-        assertEquals("Name: Alice\nYears Old: 0\n", outContent.toString());
+        assertEquals("Source: Name: Alice; Age: 30\n" +
+                "Target: Name: Alice; Years Old: 0\n", outContent.toString());
     }
 
     @ParameterizedTest
