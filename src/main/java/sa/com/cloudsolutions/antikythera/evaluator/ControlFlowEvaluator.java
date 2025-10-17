@@ -68,8 +68,7 @@ public class ControlFlowEvaluator extends Evaluator {
         Expression key = entry.getKey();
         NameExpr nameExpr = key.isNameExpr() ? key.asNameExpr() : key.asMethodCallExpr().getArgument(0).asNameExpr();
 
-        Symbol s0 = getValue(stmt, nameExpr.getNameAsString());
-        Variable v = (s0 instanceof Variable var0) ? var0 : (s0 == null ? null : new Variable(s0.getType(), s0.getValue()));
+        Symbol v = getValue(stmt, nameExpr.getNameAsString());
         if (v != null) {
             List<Expression> expr = setupConditionThroughAssignmentForLocal(stmt, entry, v, nameExpr);
             if (expr != null) return expr;
@@ -86,7 +85,7 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     @SuppressWarnings("unchecked")
-    private List<Expression> setupConditionThroughAssignmentForLocal(Statement stmt, Map.Entry<Expression, Object> entry, Variable v, NameExpr nameExpr) {
+    private List<Expression> setupConditionThroughAssignmentForLocal(Statement stmt, Map.Entry<Expression, Object> entry, Symbol v, NameExpr nameExpr) {
         if (v.getInitializer() != null) {
             MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
 
@@ -109,7 +108,7 @@ public class ControlFlowEvaluator extends Evaluator {
         return List.of();
     }
 
-    private List<Expression> setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Variable v) {
+    private List<Expression> setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Symbol v) {
         Expression key = entry.getKey();
         NameExpr nameExpr = key.isNameExpr() ? key.asNameExpr() : key.asMethodCallExpr().getArgument(0).asNameExpr();
 
@@ -143,7 +142,7 @@ public class ControlFlowEvaluator extends Evaluator {
         return valueExpressions;
     }
 
-    private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, Variable v) {
+    private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, Symbol v) {
         if (entry.getValue() instanceof List<?> list) {
             return setupConditionForNonPrimitive(entry, list, v);
         }
@@ -159,7 +158,7 @@ public class ControlFlowEvaluator extends Evaluator {
         return List.of(new StringLiteralExpr(entry.getValue().toString()));
     }
 
-    private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, List<?> list, Variable v) {
+    private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, List<?> list, Symbol v) {
         if (list.isEmpty()) {
             if (v.getValue() instanceof List<?>) {
                 TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
@@ -178,8 +177,7 @@ public class ControlFlowEvaluator extends Evaluator {
             Expression scope = mce.getScope().orElseThrow();
             if (scope.toString().equals(TruthTable.COLLECTION_UTILS)) {
                 Expression arg = mce.getArgument(0);
-                Symbol s1 = getValue(mce, arg.asNameExpr().getNameAsString());
-                Variable vx = (s1 instanceof Variable var1) ? var1 : (s1 == null ? null : new Variable(s1.getType(), s1.getValue()));
+                Symbol vx = getValue(mce, arg.asNameExpr().getNameAsString());
                 return setupNonEmptyCollections(vx, arg.asNameExpr());
             }
         }
@@ -191,7 +189,7 @@ public class ControlFlowEvaluator extends Evaluator {
      * @param name the name of the variable
      * @return a list of expressions that can be used to set up the condition
      */
-    private List<Expression> setupNonEmptyCollections(Variable collection, NameExpr name) {
+    private List<Expression> setupNonEmptyCollections(Symbol collection, NameExpr name) {
 
         Optional<Parameter> paramByName = currentConditional.getMethodDeclaration().getParameterByName(name.getNameAsString());
         if (paramByName.isPresent()) {
@@ -202,7 +200,7 @@ public class ControlFlowEvaluator extends Evaluator {
         return List.of();
     }
 
-    protected List<Expression> setupNonEmptyCollection(Type type, Variable wrappedCollection, NameExpr name) {
+    protected List<Expression> setupNonEmptyCollection(Type type, Symbol wrappedCollection, NameExpr name) {
         NodeList<Type> typeArgs = getTypeArgs(type);
         Type primaryType = typeArgs.getFirst().orElseThrow();
         VariableDeclarator vdecl = new VariableDeclarator(primaryType, name.getNameAsString());
@@ -257,8 +255,8 @@ public class ControlFlowEvaluator extends Evaluator {
         return typeArgs;
     }
 
-    private List<Expression> createSingleItemCollectionWithInitializer(Type type, Variable member,
-                                                                       Variable wrappedCollection, NameExpr name, Evaluator eval) throws ReflectiveOperationException {
+    private List<Expression> createSingleItemCollectionWithInitializer(Type type, Symbol member,
+                                                                       Symbol wrappedCollection, NameExpr name, Evaluator eval) throws ReflectiveOperationException {
         NodeList<Type> typeArgs = getTypeArgs(type);
         Type pimaryType = typeArgs.getFirst().orElseThrow();
         List<Expression> fieldIntializers = eval.getFieldInitializers();
@@ -296,8 +294,8 @@ public class ControlFlowEvaluator extends Evaluator {
         }
     }
 
-    private Expression createSingleItemCollection(Type type, Variable member,
-                                                  Variable wrappedCollection, NameExpr name) throws ReflectiveOperationException {
+    private Expression createSingleItemCollection(Type type, Symbol member,
+                                                  Symbol wrappedCollection, NameExpr name) throws ReflectiveOperationException {
         NodeList<Type> typeArgs = getTypeArgs(type);
         List<Expression> initializer = member.getInitializer();
         if (initializer.getFirst() instanceof ObjectCreationExpr && member.getValue() instanceof Evaluator eval) {
@@ -333,19 +331,19 @@ public class ControlFlowEvaluator extends Evaluator {
         return resolved2;
     }
 
-    private static void addToSet(Variable member, Set<?> set) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+    private static void addToSet(Symbol member, Set<?> set) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
         Method m = Set.class.getMethod("add", Object.class);
         m.invoke(set, member.getValue());
         TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
     }
 
-    private static void addToMap(Variable key, Variable value, Map<?,?> map) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+    private static void addToMap(Symbol key, Variable value, Map<?,?> map) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
         Method m = Map.class.getMethod("put", Object.class, Object.class);
         m.invoke(map,  key.getValue(), value.getValue());
         TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
     }
 
-    private static void addToList(Variable member, Variable collection) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+    private static void addToList(Symbol member, Symbol collection) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
         try {
             List<?> list = (List<?>) collection.getValue();
             Method m = List.class.getMethod("add", Object.class);
@@ -391,8 +389,7 @@ public class ControlFlowEvaluator extends Evaluator {
 
     private void setupConditionThroughMethodCalls(Statement stmt, Map.Entry<Expression, Object> entry, Expression expr) {
 
-        Symbol s2 = getValue(stmt, expr.toString());
-        Variable v = (s2 instanceof Variable var2) ? var2 : (s2 == null ? null : new Variable(s2.getType(), s2.getValue()));
+        Symbol v = getValue(stmt, expr.toString());
         if (v == null ) {
             if (expr.isNameExpr()) {
                 /*
@@ -414,8 +411,7 @@ public class ControlFlowEvaluator extends Evaluator {
                     }
                 }
             } else if (expr instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
-                Symbol s3 = getValue(stmt, mce.getScope().orElseThrow().toString());
-                v = (s3 instanceof Variable var3) ? var3 : (s3 == null ? null : new Variable(s3.getType(), s3.getValue()));
+                v = getValue(stmt, mce.getScope().orElseThrow().toString());
             } else if (expr.isObjectCreationExpr()) {
                 ObjectCreationExpr oce = expr.asObjectCreationExpr();
                 addPreCondition(stmt, oce);
@@ -482,8 +478,7 @@ public class ControlFlowEvaluator extends Evaluator {
         if (side.isLiteralExpr()) {
             setter.addArgument(side.asLiteralExpr());
         } else if (side.isNameExpr()) {
-            Symbol s4 = getValue(side, side.asNameExpr().getNameAsString());
-            Variable v = (s4 instanceof Variable var4) ? var4 : (s4 == null ? null : new Variable(s4.getType(), s4.getValue()));
+            Symbol v = getValue(side, side.asNameExpr().getNameAsString());
             if (v != null) {
                 setter.addArgument(v.getInitializer().getFirst());
             }
@@ -519,8 +514,7 @@ public class ControlFlowEvaluator extends Evaluator {
         MethodCallExpr mce = entry.getKey().asMethodCallExpr();
         String value = "\"T\"";
         if (mce.getScope().isPresent()) {
-            Symbol s5 = getValue(stmt, mce.getScope().orElseThrow().toString());
-            Variable scopeVar = (s5 instanceof Variable var5) ? var5 : (s5 == null ? null : new Variable(s5.getType(), s5.getValue()));
+            Symbol scopeVar = getValue(stmt, mce.getScope().orElseThrow().toString());
             if (scopeVar != null && scopeVar.getValue() instanceof Evaluator evaluator) {
                 value = findSuitableNotNullValue(name, evaluator, value);
             }
@@ -745,7 +739,7 @@ public class ControlFlowEvaluator extends Evaluator {
         return null;
     }
 
-    void parameterAssignment(AssignExpr assignExpr, Variable va) {
+    void parameterAssignment(AssignExpr assignExpr, Symbol va) {
         Expression value = assignExpr.getValue();
         Object result = switch (va.getClazz().getSimpleName()) {
             case "Integer" -> {
