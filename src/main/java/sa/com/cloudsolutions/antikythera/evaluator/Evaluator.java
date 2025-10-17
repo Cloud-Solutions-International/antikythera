@@ -524,19 +524,19 @@ public class Evaluator implements EvaluationEngine {
         }
         Variable v = evaluateExpression(fae.getScope());
         if (v != null) {
-            if (v.getValue() instanceof Evaluator eval) {
+            Object value = v.getValue();
+            if (value instanceof Evaluator eval) {
                 return eval.getField(fae.getNameAsString());
-            } else if (v.getValue() != null ) {
-                if (v.getValue().getClass().isArray() && fae.getNameAsString().equals("length")) {
+            } else if (value != null ) {
+                if (value.getClass().isArray() && fae.getNameAsString().equals("length")) {
                     return new Variable(Array.getLength(v.getValue()));
+                } else {
+                    Field field = v.getValue().getClass().getDeclaredField(fae.getNameAsString());
+                    field.setAccessible(true);
+                    return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), field.get(v.getValue()));
                 }
-            } else {
-                Field field = v.getValue().getClass().getDeclaredField(fae.getNameAsString());
-                field.setAccessible(true);
-                return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), field.get(v.getValue()));
             }
         }
-        logger.warn("Could not resolve {} for field access", fae.getScope());
         return v;
     }
 

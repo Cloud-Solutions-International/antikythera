@@ -46,7 +46,8 @@ class TestLocals extends TestHelper {
 
 
     @ParameterizedTest
-    @CsvSource({"mce, []", "arrayAccess, HELLOWORLD9.1", "people, Bertie and Biggles"})
+    @CsvSource({"mce, []", "arrayAccess, HELLOWORLD9.1", "people, Bertie and Biggles",
+        "cleanEmail, baggins@shire.com"})
     void testVarious(String name, String output) throws ReflectiveOperationException {
         MethodDeclaration mce = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();
