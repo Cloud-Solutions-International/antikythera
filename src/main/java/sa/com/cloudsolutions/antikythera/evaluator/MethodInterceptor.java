@@ -33,7 +33,7 @@ public class MethodInterceptor {
     @RuntimeType
     public Object intercept(@This Object instance,
                             Constructor<?> constructor, Object[] args, ConstructorDeclaration constructorDecl) throws ReflectiveOperationException {
-        if (evaluator != null ) {
+        if (evaluator != null) {
             if (constructorDecl != null) {
                 pushArgs(args);
                 evaluator.executeConstructor(constructorDecl);
@@ -50,62 +50,63 @@ public class MethodInterceptor {
     @RuntimeType
     @SuppressWarnings("java:S3011")
     public Object intercept(@This Object instance, Method method, Object[] args, MethodDeclaration methodDecl) throws ReflectiveOperationException {
-        if (evaluator != null) {
-            // For simple getters, read field value from evaluator's field map or instance
-            if (args.length == 0 && methodDecl != null && isSimpleGetter(methodDecl)) {
-                String fieldName = getFieldNameFromGetter(method.getName());
-                
-                // First try to get from evaluator
-                Symbol fieldValue = evaluator.getField(fieldName);
-                if (fieldValue != null) {
-                    return wrapIfEvaluator(fieldValue.getValue());
-                }
-                
-                // Fallback: read directly from instance field
-                try {
-                    Field field = instance.getClass().getDeclaredField(fieldName);
-                    field.setAccessible(true);
-                    return field.get(instance);
-                } catch (NoSuchFieldException e) {
-                    logger.debug("Getter fallback: field '{}' not found on {}", fieldName, instance.getClass().getName());
-                }
-            }
-            
-            // For setters, write directly to both instance and evaluator  
-            if (args.length == 1 && method.getName().startsWith("set") && 
-                (method.getReturnType().equals(void.class) || method.getReturnType().equals(Void.class))) {
-                String fieldName = getFieldNameFromSetter(method.getName());
-                try {
-                    // Update instance field
-                    Field field = instance.getClass().getDeclaredField(fieldName);
-                    field.setAccessible(true);
-                    field.set(instance, args[0]);
-                    
-                    // Update evaluator field
-                    evaluator.setField(fieldName, new Variable(args[0]));
-                    
-                    // Still execute the method body in case there's additional logic
-                    if (methodDecl != null) {
-                        pushArgs(args);
-                        evaluator.executeMethod(methodDecl);
-                    }
-                    return null; // setters return void
-                } catch (NoSuchFieldException e) {
-                    logger.debug("Setter fallback: field '{}' not found on {}", fieldName, instance.getClass().getName());
-                }
-            }
-            
-            pushArgs(args);
-
-            Symbol result = evaluator.executeMethod(methodDecl);
-            synchronizeFieldsToInstance(instance);
-
-            if (result != null) {
-                return wrapIfEvaluator(result.getValue());
-            }
-            return null;
+        if (evaluator == null) {
+            return intercept(method, args);
         }
-        return intercept(method, args);
+        // For simple getters, read field value from evaluator's field map or instance
+        if (args.length == 0 && methodDecl != null && isSimpleGetter(methodDecl)) {
+            String fieldName = getFieldNameFromGetter(method.getName());
+
+            // First try to get from evaluator
+            Symbol fieldValue = evaluator.getField(fieldName);
+            if (fieldValue != null) {
+                return wrapIfEvaluator(fieldValue.getValue());
+            }
+
+            // Fallback: read directly from instance field
+            try {
+                Field field = instance.getClass().getDeclaredField(fieldName);
+                field.setAccessible(true);
+                return field.get(instance);
+            } catch (NoSuchFieldException e) {
+                logger.debug("Getter fallback: field '{}' not found on {}", fieldName, instance.getClass().getName());
+            }
+        }
+
+        // For setters, write directly to both instance and evaluator
+        if (args.length == 1 && method.getName().startsWith("set") &&
+                (method.getReturnType().equals(void.class) || method.getReturnType().equals(Void.class))) {
+            String fieldName = getFieldNameFromSetter(method.getName());
+            try {
+                // Update instance field
+                Field field = instance.getClass().getDeclaredField(fieldName);
+                field.setAccessible(true);
+                field.set(instance, args[0]);
+
+                // Update evaluator field
+                evaluator.setField(fieldName, new Variable(args[0]));
+
+                // Still execute the method body in case there's additional logic
+                if (methodDecl != null) {
+                    pushArgs(args);
+                    evaluator.executeMethod(methodDecl);
+                }
+                return null; // setters return void
+            } catch (NoSuchFieldException e) {
+                logger.debug("Setter fallback: field '{}' not found on {}", fieldName, instance.getClass().getName());
+            }
+        }
+
+        pushArgs(args);
+
+        Symbol result = evaluator.executeMethod(methodDecl);
+        synchronizeFieldsToInstance(instance);
+
+        if (result != null) {
+            return wrapIfEvaluator(result.getValue());
+        }
+        return null;
+
     }
 
     /**
@@ -129,7 +130,7 @@ public class MethodInterceptor {
                 Field instanceField = instance.getClass().getDeclaredField(fieldName);
                 instanceField.setAccessible(true);
                 Object value = instanceField.get(instance);
-                
+
                 // Only update if instance has a non-null value and evaluator doesn't
                 if (value != null) {
                     Symbol existingValue = evaluator.getField(fieldName);
@@ -142,7 +143,7 @@ public class MethodInterceptor {
             }
         }
     }
-    
+
     /**
      * Synchronizes field changes from the evaluator back to the specific instance
      */
@@ -224,7 +225,7 @@ public class MethodInterceptor {
     public EvaluationEngine getEvaluator() {
         return evaluator;
     }
-    
+
     private void pushArgs(Object[] args) {
         if (args == null || args.length == 0) {
             return;
@@ -233,7 +234,7 @@ public class MethodInterceptor {
             AntikytheraRunTime.push(new Variable(args[i]));
         }
     }
-    
+
     private Object wrapIfEvaluator(Object value) throws ReflectiveOperationException {
         if (value instanceof EvaluationEngine eval) {
             MethodInterceptor interceptor = new MethodInterceptor(eval);
@@ -242,7 +243,8 @@ public class MethodInterceptor {
         }
         return value;
     }
-    
+
+    @SuppressWarnings("java:S3655")
     private boolean isSimpleGetter(MethodDeclaration methodDecl) {
         String methodName = methodDecl.getNameAsString();
         if (!methodName.startsWith("get") && !methodName.startsWith("is")) {
@@ -275,7 +277,7 @@ public class MethodInterceptor {
         }
         return false;
     }
-    
+
     private String getFieldNameFromGetter(String methodName) {
         if (methodName.startsWith("get")) {
             String fieldName = methodName.substring(3);
@@ -286,8 +288,7 @@ public class MethodInterceptor {
         }
         return methodName;
     }
-    
-    
+
     private String getFieldNameFromSetter(String methodName) {
         if (methodName.startsWith("set")) {
             String fieldName = methodName.substring(3);
@@ -318,7 +319,7 @@ public class MethodInterceptor {
                     logger.debug("MethodDeclarationSupport: field '{}' not found on {} (setter path)", fieldName, instance.getClass().getName());
                 }
             }
-            
+
             Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
             f.setAccessible(true);
             MethodInterceptor parent = (MethodInterceptor) f.get(instance);
