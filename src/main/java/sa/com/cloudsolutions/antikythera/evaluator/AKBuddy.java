@@ -33,28 +33,58 @@ import java.util.Map;
 
 
 /**
- * Create fake objects using Byte Buddy for DTOs, Entities and possibly other types of classes.
- * This will be primarily used in mocking.
+ * <p>AKBuddy builds on Byte Buddy to generate dynamic classes from sources.</p>
+ *
+ * Responsibilities:
+ * - When source code is available via JavaParser/Evaluator, it synthesizes a new class that:
+ *   - Declares fields so that reflective inspections see them.
+ *   - Declares methods mirroring MethodDeclarations found in sources.
+ *   - Optionally declares Lombok-style accessors when Lombok annotations (@Getter/@Setter/@Data) are present.
+ *   - Intercepts all methods and routes them to MethodInterceptor.
+ * - When only bytecode is available, it creates a subclass that delegates all method calls to the provided
+ *   MethodInterceptor while keeping the original constructors.
+ *
+ * The generated classes are cached in a simple in-memory registry keyed by the fully-qualified class name in order
+ * to avoid regenerating the same type multiple times within the same run.
+ *
+ * Usage overview:
+ * - Call createDynamicClass(interceptor) to build/load the dynamic type for a target.
+ * - Then call createInstance(dynamicClass, interceptor) to obtain an instance with the interceptor injected so that
+ *   calls can be handled by the evaluation engine/mocking subsystem.
+ *
+ * Note: This class focuses on code generation wiring. The runtime behavior of method and constructor calls is
+ * owned by MethodInterceptor and the associated EvaluationEngine.
  */
 public class AKBuddy {
+    /** The field name used in generated classes to store the per-instance interceptor. */
     public static final String INSTANCE_INTERCEPTOR = "instanceInterceptor";
+    /** Cache of generated classes keyed by the source/wrapped class name. */
     private static final Map<String, Class<?>> registry = new HashMap<>();
+    /** Logger for diagnostic messages during class generation. */
     private static final Logger logger = LoggerFactory.getLogger(AKBuddy.class);
+    /**
+     * The method name on MethodInterceptor used as the entry point for delegation. We filter on this signature to
+     * avoid accidentally matching other overloads.
+     */
     public static final String INTERCEPT = "intercept";
 
+    /** Utility class; not intended to be instantiated. */
     protected AKBuddy() {
     }
 
     /**
-     * <p>Dynamically create a class matching a given type declaration and then create an instance</p>
-     * <p>
-     * We will iterate through all the fields declared in the source code and make fake fields
-     * accordingly so that they show up in reflective inspections. Similarly, we will add fake
-     * methods for all the method declarations in the source code
+     * Builds (or retrieves from cache) a dynamic subclass for the target associated with the given interceptor.
      *
-     * @param interceptor the MethodInterceptor to be used for the dynamic class.
-     * @return an instance of the class that was faked.
-     * @throws ClassNotFoundException If an error occurs during reflection operations.
+     * Behavior:
+     * - If the interceptor has an EvaluationEngine, we generate the subtype based on parsed source declarations
+     *   so fields and methods visible to reflection mirror source code. Lombok accessors may be synthesized.
+     * - Otherwise, we fall back to a bytecode-only strategy that delegates all methods to the interceptor.
+     *
+     * The resulting class is cached per fully-qualified name to avoid duplicate generation.
+     *
+     * @param interceptor the MethodInterceptor that will receive all method and constructor invocations.
+     * @return the generated Class object for the dynamic type.
+     * @throws ClassNotFoundException if referenced, types cannot be resolved during source-based generation.
      */
     public static Class<?> createDynamicClass(MethodInterceptor interceptor) throws ClassNotFoundException {
         EvaluationEngine eval = interceptor.getEvaluator();
@@ -65,6 +95,14 @@ public class AKBuddy {
         }
     }
 
+    /**
+     * Generate a subclass using only bytecode information from the wrapped class.
+     * All methods are intercepted and delegated to the provided MethodInterceptor; constructors
+     * are preserved, and a private INSTANCE_INTERCEPTOR field is defined for per-instance routing.
+     *
+     * @param interceptor the interceptor bound to the generated subclass.
+     * @return the generated and loaded class (cached on subsequent calls).
+     */
     private static Class<?> createDynamicClassBasedOnByteCode(MethodInterceptor interceptor) {
         Class<?> wrappedClass = interceptor.getWrappedClass();
         Class<?> existing = registry.get(wrappedClass.getName());
@@ -91,6 +129,20 @@ public class AKBuddy {
         return clazz;
     }
 
+    /**
+     * Adds constructor interception for the target type.
+     * <ul>
+     *   <li>If no constructors are declared in source, the implicit default constructor is intercepted.</li>
+     *   <li>For explicitly declared constructors, signatures are resolved and individually intercepted.</li>
+     * </ul>
+     * Interception delegates to MethodInterceptor.ConstructorDeclarationSupport so tests/mocking can
+     * observe construction.
+     *
+     * @param dtoType the source-level type declaration.
+     * @param cu the compilation unit for type/method resolution.
+     * @param builder the current Byte Buddy builder chain.
+     * @return updated builder with constructor interception applied.
+     */
     private static DynamicType.Builder<?> addConstructors(TypeDeclaration<?> dtoType, CompilationUnit cu,
                                                           DynamicType.Builder<?> builder) {
         List<com.github.javaparser.ast.body.ConstructorDeclaration> constructors = dtoType.getConstructors();
@@ -118,6 +170,17 @@ public class AKBuddy {
         return builder;
     }
 
+    /**
+     * Helper to apply constructor interception for a specific constructor signature.
+     * If no parameter types are supplied, the existing default constructor is intercepted; otherwise a
+     * new constructor with the supplied signature is defined and intercepted.
+     *
+     * @param builder current builder chain.
+     * @param constructor the source constructor declaration this interception represents.
+     * @param parameterTypes resolved parameter types; empty for default constructor.
+     * @return updated builder with interception configured.
+     * @throws AntikytheraException if base Object constructor cannot be resolved (should not happen).
+     */
     private static DynamicType.Builder<?> interceptConstructor(DynamicType.Builder<?> builder,
                                                                com.github.javaparser.ast.body.ConstructorDeclaration constructor,
                                                                Class<?>... parameterTypes) {
@@ -137,6 +200,17 @@ public class AKBuddy {
         }
     }
 
+    /**
+     * Defines a public method on the Byte Buddy builder and wires it to delegate to the provided
+     * MethodDeclarationSupport instance through MethodInterceptor.
+     *
+     * @param builder the current builder chain.
+     * @param methodName name of the method to define.
+     * @param returnType resolved return type.
+     * @param support adapter that encapsulates the JavaParser MethodDeclaration for delegation.
+     * @param parameterTypes zero or more parameter types for the method.
+     * @return updated builder with the defined method.
+     */
     private static DynamicType.Builder<?> defineInterceptedMethod(DynamicType.Builder<?> builder,
                                                                   String methodName,
                                                                   Class<?> returnType,
@@ -151,6 +225,16 @@ public class AKBuddy {
                 .to(support));
     }
 
+    /**
+     * Generates a subclass based on parsed source code for the target type. Fields, methods, implemented interfaces,
+     * constructors, and Lombok-derived accessors are synthesized so reflective consumers see a shape that matches
+     * the source. All invocations delegate to the provided MethodInterceptor.
+     *
+     * @param interceptor the interceptor that will handle all invocations.
+     * @param eval evaluation engine holding the CompilationUnit and class meta.
+     * @return the generated and loaded class (cached).
+     * @throws ClassNotFoundException if referenced types in source cannot be resolved.
+     */
     private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, EvaluationEngine eval) throws ClassNotFoundException {
         Class<?> existing = registry.get(eval.getClassName());
         if (existing != null) {
@@ -196,6 +280,15 @@ public class AKBuddy {
         }
     }
 
+    /**
+     * Defines methods discovered in the source TypeDeclaration, wiring each to the interceptor.
+     * Parameter and return types are resolved against the CompilationUnit.
+     *
+     * @param methods list of source-level method declarations.
+     * @param cu compilation unit used for type resolution.
+     * @param builder the current Byte Buddy builder chain.
+     * @return updated builder with defined methods.
+     */
     private static DynamicType.Builder<?> addMethods(List<MethodDeclaration> methods, CompilationUnit cu,
                                                      DynamicType.Builder<?> builder) {
 
@@ -219,6 +312,14 @@ public class AKBuddy {
         return builder;
     }
 
+    /**
+     * Resolves a JavaParser Parameter to a runtime Class, including arrays and primitives.
+     * Falls back to Object.class if resolution fails to keep generation resilient.
+     *
+     * @param cu compilation unit for name resolution.
+     * @param p the parameter to resolve.
+     * @return the resolved Class for the parameter type, or Object.class on failure.
+     */
     private static Class<?> getParameterType(CompilationUnit cu, Parameter p) {
         try {
             if (p.getType().isArrayType()) {
@@ -262,6 +363,16 @@ public class AKBuddy {
         }
     }
 
+    /**
+     * Defines fields from the source TypeDeclaration so that reflection can see them on the generated class.
+     * Field annotations (except Lombok) are copied when available in binary form.
+     *
+     * @param fields source-level fields to define.
+     * @param cu compilation unit used for type resolution.
+     * @param builder current Byte Buddy builder chain.
+     * @return updated builder with defined fields.
+     * @throws ClassNotFoundException if a field type cannot be resolved.
+     */
     private static DynamicType.Builder<?> addFields(List<FieldDeclaration> fields, CompilationUnit cu, DynamicType.Builder<?> builder) throws ClassNotFoundException {
         for (FieldDeclaration field : fields) {
             VariableDeclarator vd = field.getVariable(0);
@@ -285,6 +396,17 @@ public class AKBuddy {
     }
 
     @SuppressWarnings("unchecked")
+    /**
+     * Applies non-Lombok field annotations to the defined field when the annotation types are available at runtime.
+     * Invalid/unsupported annotations are skipped with a warning rather than failing generation.
+     *
+     * @param cu compilation unit for annotation type resolution.
+     * @param builder current builder chain.
+     * @param field the source field.
+     * @param fieldName simple name of the field.
+     * @param fieldType resolved field type.
+     * @return updated builder possibly with annotations applied.
+     */
     private static DynamicType.Builder<?> addFieldAnnotations(CompilationUnit cu, DynamicType.Builder<?> builder, FieldDeclaration field, String fieldName, Class<?> fieldType) {
         DynamicType.Builder.FieldDefinition.Optional.Valuable<?> fieldDef = builder.defineField(fieldName, fieldType, Visibility.PRIVATE);
         builder = fieldDef;
@@ -309,7 +431,14 @@ public class AKBuddy {
     }
 
     /**
-     * Add getter/setter methods for fields based on Lombok annotations (@Getter, @Setter, @Data)
+     * Adds Lombok-derived getters and setters when the class/field has @Getter, @Setter or @Data annotations
+     * and no explicit method with the same name exists. These synthetic methods are delegated through the
+     * same interception pipeline as regular methods.
+     *
+     * @param dtoType the source-level type declaration.
+     * @param cu compilation unit for resolving field types.
+     * @param builder the current Byte Buddy builder chain.
+     * @return updated builder with Lombok-style accessors defined when applicable.
      */
     private static DynamicType.Builder<?> addLombokAccessors(TypeDeclaration<?> dtoType, CompilationUnit cu, DynamicType.Builder<?> builder) {
         boolean classHasGetter = dtoType.getAnnotationByName("Getter").isPresent();
@@ -368,6 +497,13 @@ public class AKBuddy {
         return builder;
     }
 
+    /**
+     * Resolves a field's declared type to a runtime Class, defaulting to Object.class if resolution fails.
+     *
+     * @param cu compilation unit used for resolving type names.
+     * @param vd the variable declarator representing the field.
+     * @return resolved field type or Object.class when unavailable.
+     */
     private static Class<?> getFieldType(CompilationUnit cu, VariableDeclarator vd) {
         try {
             if (vd.getType().isPrimitiveType()) {
@@ -383,6 +519,14 @@ public class AKBuddy {
         }
     }
 
+    /**
+     * Resolves a method's declared return type to a runtime Class, including primitives and void.
+     * Defaults to Object.class when resolution fails to keep generation tolerant of missing types.
+     *
+     * @param cu compilation unit used for resolving type names.
+     * @param method the source-level method declaration.
+     * @return resolved return type class, void.class for void, or Object.class on failure.
+     */
     private static Class<?> getReturnType(CompilationUnit cu, MethodDeclaration method) {
         try {
             Type returnType = method.getType();
@@ -403,6 +547,16 @@ public class AKBuddy {
     }
 
     @SuppressWarnings("java:S3011")
+    /**
+     * Creates an instance of the previously generated class and injects the provided MethodInterceptor into
+     * the private INSTANCE_INTERCEPTOR field so that subsequent calls are routed correctly. Also synchronizes
+     * seed field values from the interceptor to the instance.
+     *
+     * @param dynamicClass a class previously created by createDynamicClass.
+     * @param interceptor the interceptor to attach to the new instance.
+     * @return a new instance with the interceptor injected.
+     * @throws ReflectiveOperationException if the default constructor or field injection fails.
+     */
     public static Object createInstance(Class<?> dynamicClass, MethodInterceptor interceptor) throws ReflectiveOperationException {
         Object instance = dynamicClass.getDeclaredConstructor().newInstance();
         Field icpt = instance.getClass().getDeclaredField(INSTANCE_INTERCEPTOR);
