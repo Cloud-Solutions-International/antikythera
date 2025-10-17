@@ -268,7 +268,7 @@ public class Evaluator implements EvaluationEngine {
             String name = expr.asNameExpr().getNameAsString();
             Symbol s = getValue(expr, name);
             if (s == null) return null;
-            if (s instanceof Variable var) return var;
+            if (s instanceof Variable v) return v;
             return new Variable(s.getType(), s.getValue());
         } else if (expr.isMethodCallExpr()) {
 
@@ -515,11 +515,10 @@ public class Evaluator implements EvaluationEngine {
                 Field field = wrapper.getClazz().getDeclaredField(fae.getNameAsString());
                 field.setAccessible(true);
                 return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), field.get(null));
-            } else {
-                Variable v = evaluateFieldAccessExpression(fae, wrapper.getType());
-                if (v != null) {
-                    return v;
-                }
+            }
+            Variable v = evaluateFieldAccessExpression(fae, wrapper.getType());
+            if (v != null) {
+                return v;
             }
         }
         Variable v = evaluateExpression(fae.getScope());
@@ -1015,7 +1014,7 @@ public class Evaluator implements EvaluationEngine {
             variable = new Variable(field.get(null));
         } else if (variable.getValue() instanceof Evaluator eval) {
             Symbol s = eval.getValue(expr2, expr2.asFieldAccessExpr().getNameAsString());
-            variable = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
+            variable = (Variable) s;
         } else {
             if (variable.getValue() instanceof Evaluator eval) {
                 variable = eval.evaluateFieldAccessExpression(expr2.asFieldAccessExpr());
@@ -1821,8 +1820,7 @@ public class Evaluator implements EvaluationEngine {
     private void executeForEachWithCollection(Collection<?> list, ForEachStmt forEachStmt) throws ReflectiveOperationException {
         for (Object value : list) {
             for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
-                Symbol s = getLocal(forEachStmt, vdecl.getNameAsString());
-                Variable v = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
+                Symbol v = getLocal(forEachStmt, vdecl.getNameAsString());
                 if (v != null) {
                     v.setValue(value);
                 } else {
