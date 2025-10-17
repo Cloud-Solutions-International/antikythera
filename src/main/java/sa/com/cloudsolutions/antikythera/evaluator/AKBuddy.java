@@ -40,6 +40,7 @@ public class AKBuddy {
     public static final String INSTANCE_INTERCEPTOR = "instanceInterceptor";
     private static final Map<String, Class<?>> registry = new HashMap<>();
     private static final Logger logger = LoggerFactory.getLogger(AKBuddy.class);
+    public static final String INTERCEPT = "intercept";
 
     protected AKBuddy() {
     }
@@ -76,7 +77,7 @@ public class AKBuddy {
         Class<?> clazz = byteBuddy.subclass(wrappedClass)
                 .method(ElementMatchers.any())
                 .intercept(MethodDelegation.withDefaultConfiguration()
-                        .filter(ElementMatchers.named("intercept")
+                        .filter(ElementMatchers.named(INTERCEPT)
                                 .and(ElementMatchers.takesArguments(Method.class, Object[].class)))
                         .to(interceptor))
                 .constructor(ElementMatchers.any())
@@ -102,13 +103,7 @@ public class AKBuddy {
             defaultConstructor.setName(dtoType.getNameAsString());
 
             // Don't define a new constructor, just intercept the existing default one
-            try {
-                builder = builder.constructor(ElementMatchers.takesArguments(0))
-                        .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
-                                MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(defaultConstructor))));
-            } catch (NoSuchMethodException e) {
-                throw new AntikytheraException(e);
-            }
+            builder = interceptConstructor(builder, defaultConstructor);
         } else {
             // Handle explicitly declared constructors
             for (com.github.javaparser.ast.body.ConstructorDeclaration constructor : constructors) {
@@ -116,27 +111,44 @@ public class AKBuddy {
                         .map(p -> getParameterType(cu, p))
                         .toArray(Class<?>[]::new);
 
-                try {
-                    // Check if this is a no-args constructor
-                    if (parameterTypes.length == 0) {
-                        // Intercept the existing default constructor instead of defining a new one
-                        builder = builder.constructor(ElementMatchers.takesArguments(0))
-                                .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
-                                        MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
-                    } else {
-                        // Define new constructor for non-default constructors
-                        builder = builder.defineConstructor(Visibility.PUBLIC)
-                                .withParameters(parameterTypes)
-                                .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
-                                        MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
-                    }
-                } catch (NoSuchMethodException e) {
-                    throw new AntikytheraException(e);
-                }
+                builder = interceptConstructor(builder, constructor, parameterTypes);
             }
         }
 
         return builder;
+    }
+
+    private static DynamicType.Builder<?> interceptConstructor(DynamicType.Builder<?> builder,
+                                                               com.github.javaparser.ast.body.ConstructorDeclaration constructor,
+                                                               Class<?>... parameterTypes) {
+        try {
+            if (parameterTypes == null || parameterTypes.length == 0) {
+                return builder.constructor(ElementMatchers.takesArguments(0))
+                        .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
+                                MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
+            } else {
+                return builder.defineConstructor(Visibility.PUBLIC)
+                        .withParameters(parameterTypes)
+                        .intercept(MethodCall.invoke(Object.class.getDeclaredConstructor()).andThen(
+                                MethodDelegation.to(new MethodInterceptor.ConstructorDeclarationSupport(constructor))));
+            }
+        } catch (NoSuchMethodException e) {
+            throw new AntikytheraException(e);
+        }
+    }
+
+    private static DynamicType.Builder<?> defineInterceptedMethod(DynamicType.Builder<?> builder,
+                                                                  String methodName,
+                                                                  Class<?> returnType,
+                                                                  MethodInterceptor.MethodDeclarationSupport support,
+                                                                  Class<?>... parameterTypes) {
+        var methodDef = builder.defineMethod(methodName, returnType, Visibility.PUBLIC);
+        var implDef = (parameterTypes != null && parameterTypes.length > 0)
+                ? methodDef.withParameters(parameterTypes)
+                : methodDef;
+        return implDef.intercept(MethodDelegation.withDefaultConfiguration()
+                .filter(ElementMatchers.named(INTERCEPT))
+                .to(support));
     }
 
     private static Class<?> createDynamicClassBasedOnSourceCode(MethodInterceptor interceptor, EvaluationEngine eval) throws ClassNotFoundException {
@@ -198,13 +210,11 @@ public class AKBuddy {
             // Get return type
             Class<?> returnType = getReturnType(cu, method);
 
-            builder = builder.defineMethod(methodName,
+            builder = defineInterceptedMethod(builder,
+                            methodName,
                             returnType,
-                            net.bytebuddy.description.modifier.Visibility.PUBLIC)
-                    .withParameters(parameterTypes)
-                    .intercept(MethodDelegation.withDefaultConfiguration()
-                            .filter(ElementMatchers.named("intercept"))
-                            .to(new MethodInterceptor.MethodDeclarationSupport(method)));
+                            new MethodInterceptor.MethodDeclarationSupport(method),
+                            parameterTypes);
         }
         return builder;
     }
@@ -330,10 +340,10 @@ public class AKBuddy {
                 body.addStatement("return this." + fieldName + ";");
                 syntheticGetter.setBody(body);
                 
-                builder = builder.defineMethod(getterName, returnType, Visibility.PUBLIC)
-                        .intercept(MethodDelegation.withDefaultConfiguration()
-                                .filter(ElementMatchers.named("intercept"))
-                                .to(new MethodInterceptor.MethodDeclarationSupport(syntheticGetter)));
+                builder = defineInterceptedMethod(builder,
+                        getterName,
+                        returnType,
+                        new MethodInterceptor.MethodDeclarationSupport(syntheticGetter));
             }
             // Only add Lombok setter if not already present and field is not final
             if (needSetter && !field.isFinal() && dtoType.getMethods().stream().noneMatch(m -> m.getNameAsString().equals(setterName))) {
@@ -348,11 +358,11 @@ public class AKBuddy {
                 setterBody.addStatement("this." + fieldName + " = " + fieldName + ";");
                 syntheticSetter.setBody(setterBody);
                 
-                builder = builder.defineMethod(setterName, void.class, Visibility.PUBLIC)
-                        .withParameters(paramType)
-                        .intercept(MethodDelegation.withDefaultConfiguration()
-                                .filter(ElementMatchers.named("intercept"))
-                                .to(new MethodInterceptor.MethodDeclarationSupport(syntheticSetter)));
+                builder = defineInterceptedMethod(builder,
+                        setterName,
+                        void.class,
+                        new MethodInterceptor.MethodDeclarationSupport(syntheticSetter),
+                        paramType);
             }
         }
         return builder;
