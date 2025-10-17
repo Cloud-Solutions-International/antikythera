@@ -195,9 +195,11 @@ public class AKBuddy {
                     .map(p -> getParameterType(cu, p))
                     .toArray(Class<?>[]::new);
 
+            // Get return type
+            Class<?> returnType = getReturnType(cu, method);
 
             builder = builder.defineMethod(methodName,
-                            Object.class,
+                            returnType,
                             net.bytebuddy.description.modifier.Visibility.PUBLIC)
                     .withParameters(parameterTypes)
                     .intercept(MethodDelegation.withDefaultConfiguration()
@@ -315,18 +317,42 @@ public class AKBuddy {
             boolean needGetter = classHasGetter || classHasData || fieldHasGetter;
             boolean needSetter = classHasSetter || classHasData || fieldHasSetter;
 
-            // Only add getter if not already present
+            // Only add Lombok getter if not already present in explicit methods
+            // Explicit methods use MethodDeclarationSupport which goes through the interceptor
             if (needGetter && dtoType.getMethods().stream().noneMatch(m -> m.getNameAsString().equals(getterName))) {
                 Class<?> returnType = getFieldType(cu, vd);
+                // Create a synthetic MethodDeclaration for Lombok getters
+                com.github.javaparser.ast.body.MethodDeclaration syntheticGetter = 
+                        new com.github.javaparser.ast.body.MethodDeclaration();
+                syntheticGetter.setName(getterName);
+                syntheticGetter.setType(vd.getType());
+                com.github.javaparser.ast.stmt.BlockStmt body = new com.github.javaparser.ast.stmt.BlockStmt();
+                body.addStatement("return this." + fieldName + ";");
+                syntheticGetter.setBody(body);
+                
                 builder = builder.defineMethod(getterName, returnType, Visibility.PUBLIC)
-                        .intercept(net.bytebuddy.implementation.FieldAccessor.ofField(fieldName));
+                        .intercept(MethodDelegation.withDefaultConfiguration()
+                                .filter(ElementMatchers.named("intercept"))
+                                .to(new MethodInterceptor.MethodDeclarationSupport(syntheticGetter)));
             }
-            // Only add setter if not already present and field is not final
+            // Only add Lombok setter if not already present and field is not final
             if (needSetter && !field.isFinal() && dtoType.getMethods().stream().noneMatch(m -> m.getNameAsString().equals(setterName))) {
                 Class<?> paramType = getFieldType(cu, vd);
+                // Create a synthetic MethodDeclaration for Lombok setters
+                com.github.javaparser.ast.body.MethodDeclaration syntheticSetter = 
+                        new com.github.javaparser.ast.body.MethodDeclaration();
+                syntheticSetter.setName(setterName);
+                syntheticSetter.setType(new com.github.javaparser.ast.type.VoidType());
+                syntheticSetter.addParameter(vd.getType(), fieldName);
+                com.github.javaparser.ast.stmt.BlockStmt setterBody = new com.github.javaparser.ast.stmt.BlockStmt();
+                setterBody.addStatement("this." + fieldName + " = " + fieldName + ";");
+                syntheticSetter.setBody(setterBody);
+                
                 builder = builder.defineMethod(setterName, void.class, Visibility.PUBLIC)
                         .withParameters(paramType)
-                        .intercept(net.bytebuddy.implementation.FieldAccessor.ofField(fieldName));
+                        .intercept(MethodDelegation.withDefaultConfiguration()
+                                .filter(ElementMatchers.named("intercept"))
+                                .to(new MethodInterceptor.MethodDeclarationSupport(syntheticSetter)));
             }
         }
         return builder;
@@ -338,6 +364,25 @@ public class AKBuddy {
                 return Reflect.getComponentClass(vd.getTypeAsString());
             }
             TypeWrapper wrapper = AbstractCompiler.findType(cu, vd.getType());
+            if (wrapper != null && wrapper.getClazz() != null) {
+                return wrapper.getClazz();
+            }
+            return Object.class;
+        } catch (Exception e) {
+            return Object.class;
+        }
+    }
+
+    private static Class<?> getReturnType(CompilationUnit cu, MethodDeclaration method) {
+        try {
+            Type returnType = method.getType();
+            if (returnType.isVoidType()) {
+                return void.class;
+            }
+            if (returnType.isPrimitiveType()) {
+                return Reflect.getComponentClass(returnType.asString());
+            }
+            TypeWrapper wrapper = AbstractCompiler.findType(cu, returnType);
             if (wrapper != null && wrapper.getClazz() != null) {
                 return wrapper.getClazz();
             }
