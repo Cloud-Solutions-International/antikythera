@@ -16,9 +16,9 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-@SuppressWarnings({"java:S3011", "unused"})
 public class MethodInterceptor {
-    private EvaluationEngine evaluator;
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MethodInterceptor.class);
+    private final EvaluationEngine evaluator;
     private Class<?> wrappedClass = Object.class;
 
     public MethodInterceptor(EvaluationEngine evaluator) {
@@ -26,7 +26,8 @@ public class MethodInterceptor {
     }
 
     public MethodInterceptor(Class<?> clazz) {
-        wrappedClass = clazz;
+        this.evaluator = null;
+        this.wrappedClass = clazz;
     }
 
     @RuntimeType
@@ -34,9 +35,7 @@ public class MethodInterceptor {
                             Constructor<?> constructor, Object[] args, ConstructorDeclaration constructorDecl) throws ReflectiveOperationException {
         if (evaluator != null ) {
             if (constructorDecl != null) {
-                for (int i = args.length - 1; i >= 0; i--) {
-                    AntikytheraRunTime.push(new Variable(args[i]));
-                }
+                pushArgs(args);
                 evaluator.executeConstructor(constructorDecl);
             }
 
@@ -49,22 +48,17 @@ public class MethodInterceptor {
     }
 
     @RuntimeType
+    @SuppressWarnings("java:S3011")
     public Object intercept(@This Object instance, Method method, Object[] args, MethodDeclaration methodDecl) throws ReflectiveOperationException {
         if (evaluator != null) {
             // For simple getters, read field value from evaluator's field map or instance
-            if (args.length == 0 && isSimpleGetter(methodDecl)) {
+            if (args.length == 0 && methodDecl != null && isSimpleGetter(methodDecl)) {
                 String fieldName = getFieldNameFromGetter(method.getName());
                 
                 // First try to get from evaluator
                 Symbol fieldValue = evaluator.getField(fieldName);
                 if (fieldValue != null) {
-                    Object value = fieldValue.getValue();
-                    if (value instanceof EvaluationEngine eval) {
-                        MethodInterceptor interceptor = new MethodInterceptor(eval);
-                        Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
-                        return AKBuddy.createInstance(clazz, interceptor);
-                    }
-                    return value;
+                    return wrapIfEvaluator(fieldValue.getValue());
                 }
                 
                 // Fallback: read directly from instance field
@@ -73,7 +67,7 @@ public class MethodInterceptor {
                     field.setAccessible(true);
                     return field.get(instance);
                 } catch (NoSuchFieldException e) {
-                    // Fall through to normal execution
+                    logger.debug("Getter fallback: field '{}' not found on {}", fieldName, instance.getClass().getName());
                 }
             }
             
@@ -92,32 +86,22 @@ public class MethodInterceptor {
                     
                     // Still execute the method body in case there's additional logic
                     if (methodDecl != null) {
-                        for (int i = args.length - 1; i >= 0; i--) {
-                            AntikytheraRunTime.push(new Variable(args[i]));
-                        }
+                        pushArgs(args);
                         evaluator.executeMethod(methodDecl);
                     }
                     return null; // setters return void
                 } catch (NoSuchFieldException e) {
-                    // Fall through to normal execution
+                    logger.debug("Setter fallback: field '{}' not found on {}", fieldName, instance.getClass().getName());
                 }
             }
             
-            for (int i = args.length - 1; i >= 0; i--) {
-                AntikytheraRunTime.push(new Variable(args[i]));
-            }
+            pushArgs(args);
 
             Symbol result = evaluator.executeMethod(methodDecl);
             synchronizeFieldsToInstance(instance);
 
             if (result != null) {
-                Object value = result.getValue();
-                if (value instanceof EvaluationEngine eval) {
-                    MethodInterceptor interceptor = new MethodInterceptor(eval);
-                    Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
-                    return AKBuddy.createInstance(clazz, interceptor);
-                }
-                return value;
+                return wrapIfEvaluator(result.getValue());
             }
             return null;
         }
@@ -154,7 +138,7 @@ public class MethodInterceptor {
                     }
                 }
             } catch (NoSuchFieldException e) {
-                // Field doesn't exist in the dynamic class, skip it
+                logger.debug("Sync to evaluator: field '{}' not found on {} (skipping)", fieldName, instance.getClass().getName());
             }
         }
     }
@@ -194,7 +178,7 @@ public class MethodInterceptor {
                         instanceField.set(instance, value);
                     }
                 } catch (NoSuchFieldException e) {
-                    // Field doesn't exist in the dynamic class, skip it
+                    logger.debug("Sync to instance: field '{}' not found on {} (skipping)", fieldName, instance.getClass().getName());
                 }
             }
         }
@@ -218,7 +202,7 @@ public class MethodInterceptor {
                 }
                 return targetMethod.invoke(null, args);
             } catch (NoSuchMethodException e) {
-                // Method not found in wrapped class, fall through to default behavior
+                logger.debug("Wrapped class '{}' does not declare method '{}' with given signature", wrappedClass.getName(), method.getName());
             }
         }
 
@@ -239,6 +223,24 @@ public class MethodInterceptor {
 
     public EvaluationEngine getEvaluator() {
         return evaluator;
+    }
+    
+    private void pushArgs(Object[] args) {
+        if (args == null || args.length == 0) {
+            return;
+        }
+        for (int i = args.length - 1; i >= 0; i--) {
+            AntikytheraRunTime.push(new Variable(args[i]));
+        }
+    }
+    
+    private Object wrapIfEvaluator(Object value) throws ReflectiveOperationException {
+        if (value instanceof EvaluationEngine eval) {
+            MethodInterceptor interceptor = new MethodInterceptor(eval);
+            Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
+            return AKBuddy.createInstance(clazz, interceptor);
+        }
+        return value;
     }
     
     private boolean isSimpleGetter(MethodDeclaration methodDecl) {
@@ -285,29 +287,6 @@ public class MethodInterceptor {
         return methodName;
     }
     
-    private boolean isSimpleSetter(MethodDeclaration methodDecl) {
-        String methodName = methodDecl.getNameAsString();
-        if (!methodName.startsWith("set")) {
-            return false;
-        }
-        // Check if method body just sets a field
-        if (methodDecl.getBody().isEmpty()) {
-            return false;
-        }
-        var statements = methodDecl.getBody().get().getStatements();
-        if (statements.size() != 1) {
-            return false;
-        }
-        var stmt = statements.get(0);
-        if (!stmt.isExpressionStmt()) {
-            return false;
-        }
-        var expr = stmt.asExpressionStmt().getExpression();
-        if (!expr.isAssignExpr()) {
-            return false;
-        }
-        return true;
-    }
     
     private String getFieldNameFromSetter(String methodName) {
         if (methodName.startsWith("set")) {
@@ -325,6 +304,7 @@ public class MethodInterceptor {
         }
 
         @RuntimeType
+        @SuppressWarnings("java:S3011")
         public Object intercept(@This Object instance, @Origin Method method, @AllArguments Object[] args) throws ReflectiveOperationException {
             // Handle setters directly first to ensure instance fields are always updated
             if (args.length == 1 && method.getName().startsWith("set") && method.getReturnType().equals(void.class)) {
@@ -335,7 +315,7 @@ public class MethodInterceptor {
                     field.setAccessible(true);
                     field.set(instance, args[0]);
                 } catch (NoSuchFieldException e) {
-                    // Field might not exist, continue to normal processing
+                    logger.debug("MethodDeclarationSupport: field '{}' not found on {} (setter path)", fieldName, instance.getClass().getName());
                 }
             }
             
@@ -354,6 +334,7 @@ public class MethodInterceptor {
         }
 
         @RuntimeType
+        @SuppressWarnings("java:S3011")
         public Object intercept(@This Object instance, @Origin Constructor<?> constructor, @AllArguments Object[] args) throws ReflectiveOperationException {
             Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
             f.setAccessible(true);
