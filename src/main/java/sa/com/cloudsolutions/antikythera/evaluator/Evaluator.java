@@ -582,10 +582,9 @@ public class Evaluator implements EvaluationEngine {
             String fieldName = fae.getNameAsString();
 
 
-            Symbol symb = fae.getScope().toString().equals("this")
+            Symbol variable = fae.getScope().toString().equals("this")
                     ? getValue(expr, fieldName)
                     : getValue(expr, fae.getScope().toString());
-            Variable variable = (symb instanceof Variable var) ? var : (symb == null ? null : new Variable(symb.getType(), symb.getValue()));
 
             if (variable == null) {
                 setField(fae.getNameAsString(), v);
@@ -1054,8 +1053,7 @@ public class Evaluator implements EvaluationEngine {
             variable.setClazz(System.class);
             return variable;
         } else {
-            Symbol s = getValue(expr, expr.asNameExpr().getNameAsString());
-            Variable v = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
+            Symbol v = getValue(expr, expr.asNameExpr().getNameAsString());
             if (v == null) {
                 /*
                  * We know that we don't have a matching local variable or field. That indicates the
@@ -1065,7 +1063,7 @@ public class Evaluator implements EvaluationEngine {
                 v = resolveExpressionAsUtilityClass(expr);
             }
 
-            return v;
+            return (Variable) v;
         }
     }
 
@@ -1557,12 +1555,11 @@ public class Evaluator implements EvaluationEngine {
 
     @Override
     public Variable getField(String name) {
-        Symbol s = fields.get(name);
-        Variable v = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
+        Symbol v = fields.get(name);
         if (v == null && typeDeclaration != null && typeDeclaration.isEnumDeclaration()) {
             return AntikytheraRunTime.getStaticVariable(typeDeclaration.getFullyQualifiedName().orElseThrow(), name);
         }
-        return v;
+        return (Variable) v;
     }
 
     @Override
@@ -1811,8 +1808,7 @@ public class Evaluator implements EvaluationEngine {
         for (int i = 0; i < Array.getLength(iterValue); i++) {
             Object value = Array.get(iterValue, i);
             for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
-                Symbol s = getLocal(forEachStmt, vdecl.getNameAsString());
-                Variable v = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
+                Symbol v = getLocal(forEachStmt, vdecl.getNameAsString());
                 if (v != null) {
                     v.setValue(value);
                 }
@@ -2100,7 +2096,7 @@ public class Evaluator implements EvaluationEngine {
             if (!(sym instanceof Variable v)) {
                 continue;
             }
-            if (v != null && !v.getInitializer().isEmpty()) {
+            if (!v.getInitializer().isEmpty()) {
                 Expression first = v.getInitializer().getFirst();
                 if (first instanceof MethodCallExpr m && m.getScope().isPresent()) {
                     MethodCallExpr mce = new MethodCallExpr().setName("set" + ClassProcessor.instanceToClassName(entry.getKey()));
