@@ -35,7 +35,7 @@ class TestConditionVisitor {
 
     @BeforeEach
     void loadCompilationUnitAndMethod() {
-        String cls = "sa.com.cloudsolutions.antikythera.evaluator.Conditional";
+        String cls = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Conditional";
         cu = AntikytheraRunTime.getCompilationUnit(cls);
         Branching.clear();
     }

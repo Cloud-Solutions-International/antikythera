@@ -25,10 +25,10 @@ public class InnerClassEvaluator extends Evaluator {
     }
 
     @Override
-    public Variable getValue(Node n, String name) {
-        Variable v = super.getValue(n, name);
+    public Symbol getValue(Node n, String name) {
+        Symbol v = super.getValue(n, name);
         if (v == null) {
-            for (Map<String, Variable> local : enclosure.getLocals().values()) {
+            for (Map<String, Symbol> local : enclosure.getLocals().values()) {
                 v = local.get(name);
                 if (v != null) {
                     return v;

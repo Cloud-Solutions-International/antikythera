@@ -25,8 +25,8 @@ import com.github.javaparser.ast.expr.Expression;
 
 class TestConditional extends TestHelper {
 
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Conditional";
-    public static final String PERSON_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Person";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Conditional";
+    public static final String PERSON_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person";
     CompilationUnit cu;
 
     @BeforeAll
@@ -239,7 +239,7 @@ class TestConditional extends TestHelper {
 }
 
 class TestConditionalWithOptional extends TestHelper {
-    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Opt";
+    public static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Opt";
     CompilationUnit cu;
 
     @BeforeAll

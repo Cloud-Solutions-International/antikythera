@@ -24,7 +24,7 @@ class InterfaceSolverTest {
     @Test
     void testSerialiazble() throws IOException {
         InterfaceSolver solver = new InterfaceSolver();
-        solver.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.antikythera.evaluator.Employee.java"));
+        solver.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee.java"));
         assertEquals(3, AntikytheraRunTime.findImplementations("java.io.Serializable").size());
 
     }
@@ -32,16 +32,16 @@ class InterfaceSolverTest {
     @Test
     void testClonable() throws IOException {
         InterfaceSolver solver = new InterfaceSolver();
-        solver.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.antikythera.evaluator.Hello.java"));
+        solver.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Hello.java"));
         assertEquals(1, AntikytheraRunTime.findImplementations("java.lang.Cloneable").size());
     }
 
     @Test
     void testDeep() throws IOException {
         AbstractCompiler.preProcess();
-        Set<String> impl = AntikytheraRunTime.findImplementations("sa.com.cloudsolutions.antikythera.evaluator.IPerson");
+        Set<String> impl = AntikytheraRunTime.findImplementations("sa.com.cloudsolutions.antikythera.testhelper.evaluator.IPerson");
         assertEquals(2, impl.size());
-        assertTrue(impl.contains("sa.com.cloudsolutions.antikythera.evaluator.Contact"));
+        assertTrue(impl.contains("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Contact"));
     }
 }
 

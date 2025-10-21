@@ -19,7 +19,7 @@ import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestLocals extends TestHelper {
-    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Locals";
+    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Locals";
     CompilationUnit cu;
 
     @BeforeAll
@@ -46,7 +46,8 @@ class TestLocals extends TestHelper {
 
 
     @ParameterizedTest
-    @CsvSource({"mce, []", "arrayAccess, HELLOWORLD9.1", "people, Bertie and Biggles"})
+    @CsvSource({"mce, []", "arrayAccess, HELLOWORLD9.1", "people, Bertie and Biggles",
+        "cleanEmail, baggins@shire.com"})
     void testVarious(String name, String output) throws ReflectiveOperationException {
         MethodDeclaration mce = cu
                 .findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();

@@ -993,7 +993,14 @@ public class TruthTable {
                 }
             }
             else {
-                if (isInequalityPresent()) {
+                // Handle equals where the other side is a toString() chain by assigning string domains
+                if (compareWith.isMethodCallExpr() && compareWith.asMethodCallExpr().getNameAsString().equals("toString")) {
+                    // Use two distinct sample strings to allow equality to be both true and false across combinations
+                    // Assign domain only to the left-hand expression to avoid forcing preconditions on method calls
+                    Domain stringDomain = new Domain("A", "B");
+                    collector.put(nameExpression, stringDomain);
+                }
+                else if (isInequalityPresent()) {
                     collector.put(nameExpression, new Domain(0, 1));
                 }
                 else {

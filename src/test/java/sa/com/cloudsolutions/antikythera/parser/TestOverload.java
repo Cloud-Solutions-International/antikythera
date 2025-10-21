@@ -23,7 +23,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestOverlord extends TestHelper {
-    private static final String CLASS_NAME = "sa.com.cloudsolutions.antikythera.evaluator.Overlord";
+    private static final String CLASS_NAME = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Overlord";
     private CompilationUnit compilationUnit;
     @BeforeAll
     static void setUp() throws IOException {

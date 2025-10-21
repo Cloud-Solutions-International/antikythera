@@ -34,7 +34,7 @@ class GraphNodeTest  {
     @Test
     void testGraphNode() throws AntikytheraException {
         assertTrue(Graph.getNodes().isEmpty());
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.ReturnValue");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.ReturnValue");
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("returnConditionally")).orElseThrow();
 
@@ -47,7 +47,7 @@ class GraphNodeTest  {
     @Test
     void testKitchenSink() throws AntikytheraException {
         assertTrue(Graph.getNodes().isEmpty());
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.KitchenSink");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.KitchenSink");
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("getSomething")).orElseThrow();
 
@@ -73,7 +73,7 @@ class GraphNodeTest  {
 
     @Test
     void testKitchenSinkSimple() throws AntikytheraException {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.KitchenSink");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.KitchenSink");
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
                 m -> m.getNameAsString().equals("getSomething")).orElseThrow();
 

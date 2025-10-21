@@ -36,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestEvaluator extends TestHelper {
 
-    public static final String CLASS_UNDER_TEST = "sa.com.cloudsolutions.antikythera.evaluator.KitchenSink";
+    public static final String CLASS_UNDER_TEST = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.KitchenSink";
 
     @BeforeAll
     static void setup() throws IOException {
@@ -138,7 +138,7 @@ class TestEvaluator extends TestHelper {
     @Test
     void testResolveNonPrimitiveVariable()  {
 
-        Map<String, Variable> resolvedFields = evaluator.fields;
+        Map<String, Symbol> resolvedFields = evaluator.fields;
 
         assertNull(resolvedFields.get("stringList").getValue());
         assertTrue(resolvedFields.get("stringList").getType().isClassOrInterfaceType());
@@ -160,7 +160,7 @@ class TestEvaluator extends TestHelper {
         Variable v = evaluator.getField("id");
         assertEquals(43, v.getValue());
 
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.FakeEntity",
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeEntity",
                 Evaluator.class);
         v = evaluator.getField("id");
         assertTrue(0 < (long) v.getValue());
@@ -181,7 +181,7 @@ class TestEvaluator extends TestHelper {
         assertEquals(String.class, result.getValue());
 
         // Test with a class from the project
-        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.evaluator.Evaluator"));
+        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Evaluator"));
         result = eval.evaluateClassExpression(evaluatorClassExpr);
         assertNull(result);
 
@@ -189,21 +189,21 @@ class TestEvaluator extends TestHelper {
 
     @Test
     void evaluateClassExpressionReturnsClassObject2() throws AntikytheraException, ReflectiveOperationException {
-        evaluator.getCompilationUnit().addImport("sa.com.cloudsolutions.antikythera.evaluator.Evaluator");
-        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.evaluator.Evaluator"));
+        evaluator.getCompilationUnit().addImport("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Evaluator");
+        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person"));
         Variable result = evaluator.evaluateClassExpression(evaluatorClassExpr);
         assertNotNull(result);
-        assertEquals("sa.com.cloudsolutions.antikythera.evaluator.Evaluator", ((Class<?>) result.getValue()).getName());
+        assertEquals("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person", ((Class<?>) result.getValue()).getName());
     }
 
 
     @Test
     void evaluateClassExpressionReturnsClassObject3() throws AntikytheraException, ReflectiveOperationException {
-        evaluator.getCompilationUnit().addImport("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository");
-        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository"));
+        evaluator.getCompilationUnit().addImport("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeRepository");
+        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeRepository"));
         Variable result = evaluator.evaluateClassExpression(evaluatorClassExpr);
         assertNotNull(result);
-        assertEquals("sa.com.cloudsolutions.antikythera.evaluator.FakeRepository", ((Class<?>) result.getValue()).getName());
+        assertEquals("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeRepository", ((Class<?>) result.getValue()).getName());
     }
 
     @Test

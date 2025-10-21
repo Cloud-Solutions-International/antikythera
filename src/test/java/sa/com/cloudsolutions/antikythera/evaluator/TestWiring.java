@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class TestWiring extends TestHelper{
 
-    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.evaluator.Wiring";
+    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Wiring";
     CompilationUnit cu;
 
     @BeforeAll

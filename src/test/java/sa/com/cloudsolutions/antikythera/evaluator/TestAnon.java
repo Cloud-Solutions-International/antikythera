@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestAnon extends TestHelper{
 
-    public static final String CLASS_UNDER_TEST = "sa.com.cloudsolutions.antikythera.evaluator.Anon";
+    public static final String CLASS_UNDER_TEST = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Anon";
 
     @BeforeAll
     static void setup() throws IOException {

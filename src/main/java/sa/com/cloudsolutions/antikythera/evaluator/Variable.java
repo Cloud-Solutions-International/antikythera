@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Random;
 
-public class Variable {
+public class Variable implements Symbol {
     /**
      * Represents a java parser type
      */
@@ -70,14 +70,17 @@ public class Variable {
         }
     }
 
+    @Override
     public Type getType() {
         return type;
     }
 
+    @Override
     public Object getValue() {
         return value;
     }
 
+    @Override
     public void setValue(Object value) {
         this.value = value;
         if (value != null) {
@@ -85,6 +88,7 @@ public class Variable {
         }
     }
 
+    @Override
     public void setType(Type type) {
         this.type = type;
         if (this.clazz == null) {
@@ -143,9 +147,11 @@ public class Variable {
         return AbstractCompiler.classToInstanceName(className) + a + b + c;
     }
 
+    @Override
     public String getName() {
         return name;
     }
+    @Override
     public void setName(String name) {
         this.name = name;
     }

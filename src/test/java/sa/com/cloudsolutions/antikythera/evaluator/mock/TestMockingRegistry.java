@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TestMockingRegistry extends TestHelper {
 
-    public static final String CLASS_UNDER_TEST = "sa.com.cloudsolutions.antikythera.evaluator.Employee";
+    public static final String CLASS_UNDER_TEST = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee";
 
     @BeforeAll
     static void setup() throws IOException {

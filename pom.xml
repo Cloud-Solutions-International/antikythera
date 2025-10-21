@@ -28,13 +28,12 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
 
-    <distributionManagement>
+    <repositories>
         <repository>
-            <id>github</id>
-            <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Cloud-Solutions-International/antikythera</url>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
         </repository>
-    </distributionManagement>
+    </repositories>
 
     <dependencies>
         <dependency>
@@ -53,6 +52,11 @@
             <groupId>net.bytebuddy</groupId>
             <artifactId>byte-buddy</artifactId>
             <version>1.15.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.Cloud-Solutions-International</groupId>
+            <artifactId>antikythera-common</artifactId>
+            <version>0.0.4</version>
         </dependency>
 
         <dependency>
@@ -81,13 +85,13 @@
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
-            <version>5.5.1</version>
+            <version>5.5.5</version>
         </dependency>
 
         <dependency>
             <groupId>com.github.jsqlparser</groupId>
             <artifactId>jsqlparser</artifactId>
-            <version>5.0</version>
+            <version>5.3</version>
         </dependency>
 
         <dependency>
@@ -112,7 +116,6 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
             <version>2.7.14</version>
         </dependency>
-
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -122,7 +125,7 @@
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
-            <version>3.1.2</version>
+            <version>3.2.1</version>
         </dependency>
     </dependencies>
     <build>
@@ -134,7 +137,7 @@
                 <configuration>
                     <parallel>none</parallel>
                     <runOrder>alphabetical</runOrder>
-                    <argLine>@{argLine} -XX:+EnableDynamicAgentLoading
+                    <argLine>@{argLine} -javaagent:/home/raditha/csi/Antikythera/antikythera-agent/target/antikythera-agent-1.0-SNAPSHOT.jar -XX:+EnableDynamicAgentLoading
                         --add-opens java.base/java.nio.charset=ALL-UNNAMED
                         --add-opens java.base/java.lang=ALL-UNNAMED
                         --add-opens java.base/java.util.stream=ALL-UNNAMED

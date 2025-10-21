@@ -18,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.InnerClassEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.evaluator.Symbol;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -142,8 +143,8 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
     }
 
     @Override
-    public Variable getValue(Node n, String name) {
-        Variable v = super.getValue(n, name);
+    public Symbol getValue(Node n, String name) {
+        Symbol v = super.getValue(n, name);
         if (v == null) {
             Optional<Node> parentNode = expr.getParentNode();
             if (parentNode.isPresent()) {
@@ -151,7 +152,7 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
                 if (v != null) {
                     return v;
                 }
-                for (Map<String, Variable> local : enclosure.getLocals().values()) {
+                for (Map<String, Symbol> local : enclosure.getLocals().values()) {
                     v = local.get(name);
                     if (v != null) {
                         return v;

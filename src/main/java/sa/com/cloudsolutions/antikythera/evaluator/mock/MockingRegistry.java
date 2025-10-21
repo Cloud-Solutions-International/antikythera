@@ -86,6 +86,7 @@ public class MockingRegistry {
 
     public static void reset() {
         mockedFields.clear();
+        clearCustomMockExpressions();
     }
 
     /**
@@ -325,7 +326,7 @@ public class MockingRegistry {
         MethodCallExpr mce = generateAnyExpression(typeName);
         TestGenerator.addImport(new ImportDeclaration(MOCKITO, false, false));
         // If it's a generic Mockito.any() call, add casting
-        if (mce.getNameAsString().equals("any") && !typeName.equals("Object")) {
+        if (mce.getNameAsString().equals("any") && !typeName.equals("Object") && !typeName.equals("Type")) {
             return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
         }
         return mce;

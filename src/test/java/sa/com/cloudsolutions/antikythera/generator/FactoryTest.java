@@ -34,7 +34,7 @@ class FactoryTest {
     @BeforeEach
     void setUp() {
         cu = new CompilationUnit();
-        cu.setPackageDeclaration("sa.com.cloudsolutions.antikythera.generator");
+        cu.setPackageDeclaration("sa.com.cloudsolutions.antikythera.testhelper.generator");
         cu.addClass("Dummy");
     }
 

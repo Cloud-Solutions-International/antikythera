@@ -54,18 +54,18 @@ class AbstractCompilerTest {
 
     @Test
     void compileCachesParsedCompilationUnit() throws IOException {
-        CompilationUnit first = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.parser.Empty");
+        CompilationUnit first = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.parser.Empty");
         AbstractCompiler.preProcess();
-        CompilationUnit second = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.parser.Empty");
+        CompilationUnit second = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.parser.Empty");
         assertSame(first, second);
     }
 
     @Test
     void testGetPublicClass() {
-        CompilationUnit outer = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting");
+        CompilationUnit outer = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Nesting");
         assertNotNull(outer);
         assertEquals("Nesting", AbstractCompiler.getPublicType(outer).getNameAsString());
-        CompilationUnit inner = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting.Inner");
+        CompilationUnit inner = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Nesting.Inner");
         assertSame(outer, inner);
     }
 
@@ -85,21 +85,21 @@ class AbstractCompilerTest {
 
     @Test
     void testWildCardImport()  {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.evaluator.Nesting");
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Nesting");
         assertNotNull(cu);
         ImportWrapper w = AbstractCompiler.findWildcardImport(cu, "List");
         assertNotNull(w);
         assertNotNull(w.getSimplified());
         assertEquals("java.util.List", w.getSimplified().getNameAsString());
-        assertNotNull(AbstractCompiler.findWildcardImport(cu, "Loops"));
+        assertNotNull(AbstractCompiler.findWildcardImport(cu, "Stack"));
     }
 
     @Test
     void testFindFullyQualifiedName() {
         CompilationUnit cu = new CompilationUnit();
-        cu.setPackageDeclaration(new PackageDeclaration().setName("sa.com.cloudsolutions.antikythera.parser"));
+        cu.setPackageDeclaration(new PackageDeclaration().setName("sa.com.cloudsolutions.antikythera.testhelper.parser"));
         cu.addImport(new ImportDeclaration("java.util.List", false, false));
-        cu.addImport(new ImportDeclaration("sa.com.cloudsolutions.antikythera.SomeClass", false, false));
+        cu.addImport(new ImportDeclaration("sa.com.cloudsolutions.antikythera.testhelper.SomeClass", false, false));
         cu.addType(new ClassOrInterfaceDeclaration().setName("TestClass"));
 
         String result = AbstractCompiler.findFullyQualifiedName(cu, "List");

@@ -32,7 +32,7 @@ class TestOptional extends TestHelper {
     @BeforeEach
     void each() throws AntikytheraException {
         System.setOut(new PrintStream(outContent));
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.evaluator.Opt", Evaluator.class);
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Opt", Evaluator.class);
     }
 
     @ParameterizedTest
