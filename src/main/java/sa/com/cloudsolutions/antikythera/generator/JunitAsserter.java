@@ -36,10 +36,18 @@ public class JunitAsserter extends Asserter {
     @Override
     public Expression assertThrows(String invocation, MethodResponse response) {
         MethodCallExpr assertThrows = new MethodCallExpr("assertThrows");
-        assertThrows.addArgument(response.getException().getCause().getClass().getName() + ".class");
-        assertThrows.addArgument(String.format("() -> %s ", invocation.replace(';', ' ')));
+        Throwable ex = response.getException();
+        String exceptionClass;
+        if (ex == null) {
+            exceptionClass = RuntimeException.class.getName();
+        } else if (ex.getCause() != null) {
+            exceptionClass = ex.getCause().getClass().getName();
+        } else {
+            exceptionClass = ex.getClass().getName();
+        }
+        assertThrows.addArgument(exceptionClass + ".class");
+        assertThrows.addArgument(String.format("() -> %s", invocation.replace(';', ' ')));
         return assertThrows;
     }
 
 }
-
