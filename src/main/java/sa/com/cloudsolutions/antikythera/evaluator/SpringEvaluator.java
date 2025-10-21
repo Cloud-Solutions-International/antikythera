@@ -317,8 +317,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @throws ReflectiveOperationException if a reflection operation fails
      */
     void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
-        Symbol s = getValue(md.getBody().orElseThrow(), p.getNameAsString());
-        Variable va = (s instanceof Variable var) ? var : (s == null ? null : new Variable(s.getType(), s.getValue()));
+        Symbol va = getValue(md.getBody().orElseThrow(), p.getNameAsString());
 
         if (currentConditional != null) {
             if (currentConditional.getStatement() instanceof IfStmt || currentConditional.getConditionalExpression() != null) {
@@ -334,7 +333,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     }
 
-    private void applyPreconditions(Parameter p, Variable va) throws ReflectiveOperationException {
+    private void applyPreconditions(Parameter p, Symbol va) throws ReflectiveOperationException {
 
         for (Precondition cond : currentConditional.getPreconditions()) {
             if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
