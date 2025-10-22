@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.type.Type;
 import net.sf.jsqlparser.JSQLParserException;
