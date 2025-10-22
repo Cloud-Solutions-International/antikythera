@@ -42,7 +42,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Parses JPARespository subclasses to identify the queries that they execute.
+ * Parses JPA Repository subclasses to identify the queries that they execute.
  *
  * These queries can then be used to determine what kind of data need to be sent
  * to the controller for a valid response.
@@ -56,7 +56,7 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * The queries that were identified in this repository
      */
-    private final Map<Callable, RepositoryQuery> queries;
+    final Map<Callable, RepositoryQuery> queries;
     /**
      * The connection to the database established using the credentials in the configuration
      */
@@ -76,16 +76,16 @@ public class RepositoryParser extends ClassProcessor {
     /**
      * The compilation unit or class associated with this entity.
      */
-    private TypeWrapper entity;
+    TypeWrapper entity;
 
     /**
      * The table name associated with the entity
      */
-    private String table;
+    String table;
     /**
      * The java parser type associated with the entity.
      */
-    private Type entityType;
+    Type entityType;
 
     /**
      * A query cache.
@@ -107,12 +107,15 @@ public class RepositoryParser extends ClassProcessor {
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
         if(db != null) {
             runQueries = db.getOrDefault("run_queries", "false").toString().equals("true");
-            String url = db.get("url").toString();
-            if(url.contains(ORACLE)) {
-                dialect = ORACLE;
-            }
-            else {
-                dialect = POSTGRESQL;
+            Object urlObj = db.get("url");
+            if (urlObj != null) {
+                String url = urlObj.toString();
+                if(url.contains(ORACLE)) {
+                    dialect = ORACLE;
+                }
+                else {
+                    dialect = POSTGRESQL;
+                }
             }
         }
     }
@@ -125,21 +128,32 @@ public class RepositoryParser extends ClassProcessor {
      *
      * @throws SQLException if the connection could not be established
      */
-    private static void createConnection() throws SQLException {
+    static void createConnection() throws SQLException {
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
         if(db != null && conn == null && runQueries) {
-            String url = db.get("url").toString();
-
-            conn = DriverManager.getConnection(url, db.get("user").toString(), db.get("password").toString());
-            try (java.sql.Statement statement = conn.createStatement()) {
-                statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + db.get("schema").toString());
+            Object urlObj = db.get("url");
+            Object userObj = db.get("user");
+            Object passwordObj = db.get("password");
+            Object schemaObj = db.get("schema");
+            
+            if (urlObj != null && userObj != null && passwordObj != null) {
+                String url = urlObj.toString();
+                String user = userObj.toString();
+                String password = passwordObj.toString();
+                
+                conn = DriverManager.getConnection(url, user, password);
+                if (schemaObj != null) {
+                    try (java.sql.Statement statement = conn.createStatement()) {
+                        statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + schemaObj.toString());
+                    }
+                }
             }
         }
     }
 
     public static void main(String[] args) throws IOException, SQLException, JSQLParserException {
         if(args.length != 1) {
-            logger.error("Please specifiy the path to a repository class");
+            logger.error("Please specify the path to a repository class");
         }
         else {
             Settings.loadConfigMap();
@@ -150,14 +164,15 @@ public class RepositoryParser extends ClassProcessor {
         }
     }
 
+    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\?");
+    
     /**
      * Count the number of parameters to bind.
      * @param sql the sql statement as a string in which we will count the number of placeholders
      * @return the number of placeholders. This can be 0
      */
-    private static int countPlaceholders(String sql) {
-        Pattern pattern = Pattern.compile("\\?");
-        Matcher matcher = pattern.matcher(sql);
+    static int countPlaceholders(String sql) {
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(sql);
         int count = 0;
         while (matcher.find()) {
             count++;
@@ -272,7 +287,7 @@ public class RepositoryParser extends ClassProcessor {
      * @param argumentCount the number of placeholders
      * @throws SQLException if the statement cannot be executed
      */
-    private void executeSimplifiedQuery(RepositoryQuery rql, MethodDeclaration method, int argumentCount) throws SQLException, JSQLParserException {
+    void executeSimplifiedQuery(RepositoryQuery rql, MethodDeclaration method, int argumentCount) throws SQLException, JSQLParserException {
         rql.buildSimplifiedQuery();
         Select simplified = (Select) rql.getSimplifiedStatement();
         String simplifiedSql = trueFalseCheck(beautify(simplified.toString()));
@@ -295,7 +310,7 @@ public class RepositoryParser extends ClassProcessor {
 
     }
 
-    private static void bindParameters(QueryMethodArgument arg, PreparedStatement prep, int i) throws SQLException {
+    static void bindParameters(QueryMethodArgument arg, PreparedStatement prep, int i) throws SQLException {
         Class<?> clazz = arg.getVariable().getClazz();
         if (clazz == null) {
             prep.setNull(i + 1, java.sql.Types.NULL);
@@ -323,24 +338,25 @@ public class RepositoryParser extends ClassProcessor {
     }
 
     /**
-     * Oracle has wierd ideas about boolean
+     * Oracle has weird ideas about boolean
      * @param sql the sql statement
      * @return the sql statement modified so that oracle can understand it.
      */
-    private static String trueFalseCheck(String sql) {
-        if(dialect.equals(ORACLE)) {
+    static String trueFalseCheck(String sql) {
+        if(ORACLE.equals(dialect)) {
             sql = sql.replaceAll("(?i)true", "1")
                     .replaceAll("(?i)false", "0");
         }
         return sql;
     }
 
-    private static String beautify(String sql) {
+    private static final Pattern AND_PATTERN = Pattern.compile("\\bAND\\b", Pattern.CASE_INSENSITIVE);
+    
+    static String beautify(String sql) {
         sql = sql.replaceAll("\\?\\d+", "?");
 
         // if the sql contains more than 1 AND clause we will delete '1' IN '1'
-        Pattern pattern = Pattern.compile("\\bAND\\b", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(sql);
+        Matcher matcher = AND_PATTERN.matcher(sql);
         int count = 0;
         while (matcher.find()) {
             count++;
@@ -383,7 +399,7 @@ public class RepositoryParser extends ClassProcessor {
         return table;
     }
 
-    private static String getNameFromType(TypeWrapper entity, String table) {
+    static String getNameFromType(TypeWrapper entity, String table) {
         Optional<AnnotationExpr> ann = entity.getType().getAnnotationByName("Table");
         if (ann.isPresent()) {
             if (ann.get().isNormalAnnotationExpr()) {
@@ -472,7 +488,7 @@ public class RepositoryParser extends ClassProcessor {
         }
     }
 
-    private void queryFromMethodDeclaration(MethodDeclaration n) {
+    void queryFromMethodDeclaration(MethodDeclaration n) {
         String query = null;
         boolean nt = false;
         AnnotationExpr ann = n.getAnnotationByName("Query").orElse(null);
@@ -544,6 +560,8 @@ public class RepositoryParser extends ClassProcessor {
 
                 if (i < components.size() - 1) {
                     next = components.get(i + 1);
+                } else {
+                    next = "";
                 }
 
                 switch (component) {
@@ -577,10 +595,12 @@ public class RepositoryParser extends ClassProcessor {
                                 sql.append(" NOT In (?) ");
                                 i++;
                             } else {
-                                if (!next.isEmpty() && !next.equals("Between") && !next.equals("GreaterThan")
+                                // Add = ? if next is empty (last component) or next is not a special operator
+                                if (next.isEmpty() || (!next.equals("Between") && !next.equals("GreaterThan")
                                         && !next.equals("LessThan") && !next.equals("LessThanEqual")
                                         && !next.equals("IsNotNull") && !next.equals("Like")
-                                        && !next.equals("GreaterThanEqual") && !next.equals("IsNull")) {
+                                        && !next.equals("GreaterThanEqual") && !next.equals("IsNull")
+                                        && !next.equals("Containing"))) {
                                     sql.append(" = ? ");
                                 }
                             }
@@ -595,7 +615,7 @@ public class RepositoryParser extends ClassProcessor {
         }
 
         if (top) {
-            if (dialect.equals(ORACLE)) {
+            if (ORACLE.equals(dialect)) {
                 sql.append(" AND ROWNUM = 1");
             } else {
                 sql.append(" LIMIT 1");
@@ -615,19 +635,21 @@ public class RepositoryParser extends ClassProcessor {
         queries.put(md, queryBuilder(result.toString(), true, md));
     }
 
+    private static final Pattern KEYWORDS_PATTERN = Pattern.compile(
+        "get|findBy|findFirstBy|findTopBy|And|OrderBy|NotIn|In|Desc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan"
+    );
+    
     /**
      * Recursively search method names for sql components
      * @param methodName name of the method
      * @return a list of components
      */
-    private List<String> extractComponents(String methodName) {
+    List<String> extractComponents(String methodName) {
         List<String> components = new ArrayList<>();
-        String keywords = "get|findBy|findFirstBy|findTopBy|And|OrderBy|NotIn|In|Desc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan";
-        Pattern pattern = Pattern.compile(keywords);
-        Matcher matcher = pattern.matcher(methodName);
+        Matcher matcher = KEYWORDS_PATTERN.matcher(methodName);
 
         // Add spaces around each keyword
-        StringBuffer sb = new StringBuffer();
+        StringBuilder sb = new StringBuilder();
         while (matcher.find()) {
             matcher.appendReplacement(sb, " " + matcher.group() + " ");
         }
@@ -645,7 +667,7 @@ public class RepositoryParser extends ClassProcessor {
     }
 
     public static boolean isOracle() {
-        return dialect.equals(ORACLE);
+        return ORACLE.equals(dialect);
     }
 
 }
