@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests the exception hierarchy and error information handling which is
  * part of the core infrastructure for JPA query conversion.
  */
-public class QueryConversionExceptionTest {
+class QueryConversionExceptionTest {
 
     @Test
     void testQueryConversionExceptionWithMessage() {

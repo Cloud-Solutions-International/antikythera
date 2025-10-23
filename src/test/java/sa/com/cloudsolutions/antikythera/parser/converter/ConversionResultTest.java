@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests the basic functionality of the ConversionResult class which is
  * part of the core infrastructure for JPA query conversion.
  */
-public class ConversionResultTest {
+class ConversionResultTest {
 
     @Test
     void testSuccessfulConversionResult() {

@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * This test validates that the EntityMetadata class works correctly
  * for storing and retrieving entity mapping information.
  */
-public class EntityMetadataTest {
+class EntityMetadataTest {
 
     @Test
     void testEmptyEntityMetadata() {

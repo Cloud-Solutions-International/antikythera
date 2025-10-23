@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * This test validates that the core converter interface works correctly
  * and provides the expected contract for query conversion.
  */
-public class JpaQueryConverterTest {
+class JpaQueryConverterTest {
 
     private JpaQueryConverter converter;
 
