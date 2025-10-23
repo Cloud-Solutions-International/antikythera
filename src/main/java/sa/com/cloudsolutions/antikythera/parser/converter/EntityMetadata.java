@@ -9,8 +9,6 @@ import java.util.Map;
  * This class provides mappings between entity names and table names,
  * property names and column names, and relationship information needed
  * to convert JPA queries to native SQL.
- * 
- * Requirements addressed: 1.4, 1.5
  */
 public class EntityMetadata {
     

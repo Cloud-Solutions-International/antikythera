@@ -1,12 +1,12 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
+import java.util.Objects;
+
 /**
  * Represents the mapping between a JPA entity property and its corresponding database column.
  * 
  * This class contains detailed information about how an entity property maps to a column,
  * including type information and constraints.
- * 
- * Requirements addressed: 1.4, 1.5
  */
 public class ColumnMapping {
     
@@ -131,11 +131,11 @@ public class ColumnMapping {
         ColumnMapping that = (ColumnMapping) o;
         
         if (nullable != that.nullable) return false;
-        if (propertyName != null ? !propertyName.equals(that.propertyName) : that.propertyName != null) return false;
-        if (columnName != null ? !columnName.equals(that.columnName) : that.columnName != null) return false;
-        if (tableName != null ? !tableName.equals(that.tableName) : that.tableName != null) return false;
-        if (javaType != null ? !javaType.equals(that.javaType) : that.javaType != null) return false;
-        return sqlType != null ? sqlType.equals(that.sqlType) : that.sqlType == null;
+        if (!Objects.equals(propertyName, that.propertyName)) return false;
+        if (!Objects.equals(columnName, that.columnName)) return false;
+        if (!Objects.equals(tableName, that.tableName)) return false;
+        if (!Objects.equals(javaType, that.javaType)) return false;
+        return Objects.equals(sqlType, that.sqlType);
     }
     
     @Override

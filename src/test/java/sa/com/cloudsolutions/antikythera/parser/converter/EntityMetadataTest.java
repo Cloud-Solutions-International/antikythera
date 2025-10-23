@@ -50,7 +50,7 @@ public class EntityMetadataTest {
         
         TableMapping retrieved = metadata.getTableMapping("User");
         assertNotNull(retrieved, "Should retrieve table mapping for User");
-        assertEquals("users", retrieved.getTableName(), "Table name should match");
+        assertEquals("users", retrieved.tableName(), "Table name should match");
     }
 
     @Test

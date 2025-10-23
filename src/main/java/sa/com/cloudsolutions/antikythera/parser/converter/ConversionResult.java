@@ -9,8 +9,6 @@ import java.util.Set;
  * 
  * This class contains the converted native SQL, parameter mappings,
  * and metadata about the conversion process.
- * 
- * Requirements addressed: 1.1, 2.1, 2.5
  */
 public class ConversionResult {
     

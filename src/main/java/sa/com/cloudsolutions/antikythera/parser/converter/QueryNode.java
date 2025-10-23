@@ -8,8 +8,6 @@ import java.util.List;
  * This interface provides the basic contract for AST nodes created during
  * HQL parsing. It supports tree traversal and manipulation operations
  * needed for query conversion.
- * 
- * Requirements addressed: 1.1, 2.2
  */
 public interface QueryNode {
     

@@ -11,8 +11,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * This class analyzes JPA entity classes and builds EntityMetadata objects
  * containing mappings between entities and tables, properties and columns,
  * and relationship information for joins.
- * 
- * Requirements addressed: 1.4, 1.5, 5.2
  */
 public class EntityMappingResolver {
     
@@ -135,12 +133,12 @@ public class EntityMappingResolver {
             
             String propertyName = field.getName();
             String columnName = getColumnName(field);
-            String fullPropertyName = tableMapping.getEntityName() + "." + propertyName;
+            String fullPropertyName = tableMapping.entityName() + "." + propertyName;
             
             ColumnMapping columnMapping = new ColumnMapping(
                 fullPropertyName,
                 columnName,
-                tableMapping.getTableName(),
+                tableMapping.tableName(),
                 field.getType(),
                 getSqlType(field.getType()),
                 isNullable(field)
@@ -161,9 +159,7 @@ public class EntityMappingResolver {
             }
             
             JoinMapping joinMapping = buildJoinMapping(field, tableMapping);
-            if (joinMapping != null) {
-                joinMappings.put(field.getName(), joinMapping);
-            }
+            joinMappings.put(field.getName(), joinMapping);
         }
         
         return joinMappings;
@@ -196,7 +192,7 @@ public class EntityMappingResolver {
             joinColumnName,
             referencedColumnName,
             joinType,
-            sourceTableMapping.getTableName(),
+            sourceTableMapping.tableName(),
             targetTableName
         );
     }
@@ -208,8 +204,7 @@ public class EntityMappingResolver {
             // For collections, we need to get the generic type
             if (Collection.class.isAssignableFrom(field.getType())) {
                 java.lang.reflect.Type genericType = field.getGenericType();
-                if (genericType instanceof java.lang.reflect.ParameterizedType) {
-                    java.lang.reflect.ParameterizedType paramType = (java.lang.reflect.ParameterizedType) genericType;
+                if (genericType instanceof java.lang.reflect.ParameterizedType paramType) {
                     return (Class<?>) paramType.getActualTypeArguments()[0];
                 }
             }

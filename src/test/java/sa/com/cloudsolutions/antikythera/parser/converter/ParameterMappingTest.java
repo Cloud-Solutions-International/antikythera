@@ -17,10 +17,10 @@ public class ParameterMappingTest {
         ParameterMapping mapping = new ParameterMapping("username", 1, String.class, "username");
         
         assertNotNull(mapping, "Parameter mapping should not be null");
-        assertEquals("username", mapping.getOriginalName(), "Original name should match");
-        assertEquals(1, mapping.getPosition(), "Position should match");
-        assertEquals(String.class, mapping.getType(), "Type should match");
-        assertEquals("username", mapping.getColumnName(), "Column name should match");
+        assertEquals("username", mapping.originalName(), "Original name should match");
+        assertEquals(1, mapping.position(), "Position should match");
+        assertEquals(String.class, mapping.type(), "Type should match");
+        assertEquals("username", mapping.columnName(), "Column name should match");
     }
 
     @Test
@@ -50,10 +50,10 @@ public class ParameterMappingTest {
     void testParameterMappingWithNullValues() {
         ParameterMapping mapping = new ParameterMapping(null, 0, null, null);
         
-        assertNull(mapping.getOriginalName(), "Original name can be null");
-        assertEquals(0, mapping.getPosition(), "Position should be 0");
-        assertNull(mapping.getType(), "Type can be null");
-        assertNull(mapping.getColumnName(), "Column name can be null");
+        assertNull(mapping.originalName(), "Original name can be null");
+        assertEquals(0, mapping.position(), "Position should be 0");
+        assertNull(mapping.type(), "Type can be null");
+        assertNull(mapping.columnName(), "Column name can be null");
         
         // Test toString with null values
         String toString = mapping.toString();

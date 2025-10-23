@@ -13,8 +13,6 @@ import java.util.regex.Matcher;
  * This implementation uses Hibernate's HQL parser to convert JPA/HQL queries
  * to native SQL queries. It provides robust parsing and conversion capabilities
  * by leveraging Hibernate's own query processing infrastructure.
- * 
- * Requirements addressed: 1.1, 2.2, 3.1
  */
 public class HibernateQueryConverter implements JpaQueryConverter {
     
@@ -293,7 +291,7 @@ public class HibernateQueryConverter implements JpaQueryConverter {
                 if (entityName != null) {
                     TableMapping tableMapping = entityMetadata.getTableMapping(entityName);
                     if (tableMapping != null) {
-                        tables.add(tableMapping.getTableName());
+                        tables.add(tableMapping.tableName());
                     }
                 }
             }

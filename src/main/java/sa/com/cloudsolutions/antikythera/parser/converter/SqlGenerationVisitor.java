@@ -86,7 +86,7 @@ public class SqlGenerationVisitor {
             throw new IllegalArgumentException("Query node cannot be null");
         }
         
-        logger.debug("Converting query node to SQL for dialect: {}", context.getDialect());
+        logger.debug("Converting query node to SQL for dialect: {}", context.dialect());
         
         // For the initial implementation, we'll work with the original query text
         // In a full implementation, this would traverse the actual AST
@@ -123,7 +123,7 @@ public class SqlGenerationVisitor {
         String sqlWithPositionalParams = convertNamedParameters(sqlWithSubqueries);
         
         // Step 11: Apply dialect-specific transformations
-        String finalSql = DialectTransformer.transform(sqlWithPositionalParams, context.getDialect());
+        String finalSql = DialectTransformer.transform(sqlWithPositionalParams, context.dialect());
         
         logger.debug("Converted SQL: {}", finalSql);
         return finalSql;
@@ -142,9 +142,9 @@ public class SqlGenerationVisitor {
             String alias = matcher.group(3); // Optional alias
             
             // Get table mapping for the entity
-            TableMapping tableMapping = context.getEntityMetadata().getTableMapping(entityName);
+            TableMapping tableMapping = context.entityMetadata().getTableMapping(entityName);
             if (tableMapping != null) {
-                String tableName = tableMapping.getTableName();
+                String tableName = tableMapping.tableName();
                 String replacement = clause + " " + tableName;
                 if (alias != null && !alias.isEmpty()) {
                     replacement += " " + alias;
@@ -423,13 +423,13 @@ public class SqlGenerationVisitor {
      */
     private String convertEntityJoin(String joinType, String entityName, String alias, String onClause, SqlConversionContext context) {
         // Get table mapping for the entity
-        TableMapping tableMapping = context.getEntityMetadata().getTableMapping(entityName);
+        TableMapping tableMapping = context.entityMetadata().getTableMapping(entityName);
         if (tableMapping == null) {
             logger.warn("No table mapping found for entity: {}", entityName);
             return joinType + " " + entityName + " " + alias + (onClause != null ? " ON " + onClause : "");
         }
         
-        String tableName = tableMapping.getTableName();
+        String tableName = tableMapping.tableName();
         StringBuilder joinBuilder = new StringBuilder();
         joinBuilder.append(joinType).append(" ").append(tableName).append(" ").append(alias);
         
@@ -461,14 +461,14 @@ public class SqlGenerationVisitor {
      * Generates JOIN ON clause from relationship mappings.
      */
     private String generateJoinOnClause(String entityName, String alias, SqlConversionContext context) {
-        EntityMetadata metadata = context.getEntityMetadata();
+        EntityMetadata metadata = context.entityMetadata();
         
         // Look for relationship mappings that involve this entity
         for (JoinMapping joinMapping : metadata.getRelationshipMappings().values()) {
-            if (entityName.equals(joinMapping.getTargetEntity())) {
+            if (entityName.equals(joinMapping.targetEntity())) {
                 // Generate ON clause based on join mapping
-                String joinColumn = joinMapping.getJoinColumn();
-                String referencedColumn = joinMapping.getReferencedColumn();
+                String joinColumn = joinMapping.joinColumn();
+                String referencedColumn = joinMapping.referencedColumn();
                 
                 // This is a simplified approach - in practice, we'd need to track
                 // the source alias from the query context
@@ -498,7 +498,7 @@ public class SqlGenerationVisitor {
             String targetProperty = matcher.group(3);
             
             // Check if this relationship needs a JOIN
-            JoinMapping joinMapping = context.getEntityMetadata().getJoinMapping(relationshipProperty);
+            JoinMapping joinMapping = context.entityMetadata().getJoinMapping(relationshipProperty);
             if (joinMapping != null && !processedJoins.contains(relationshipProperty)) {
                 String implicitJoin = generateImplicitJoin(sourceAlias, relationshipProperty, joinMapping, context);
                 if (implicitJoin != null) {
@@ -524,21 +524,21 @@ public class SqlGenerationVisitor {
      * Generates an implicit JOIN clause from a relationship mapping.
      */
     private String generateImplicitJoin(String sourceAlias, String relationshipProperty, JoinMapping joinMapping, SqlConversionContext context) {
-        String targetEntity = joinMapping.getTargetEntity();
-        TableMapping targetTable = context.getEntityMetadata().getTableMapping(targetEntity);
+        String targetEntity = joinMapping.targetEntity();
+        TableMapping targetTable = context.entityMetadata().getTableMapping(targetEntity);
         
         if (targetTable == null) {
             return null;
         }
         
-        String joinTypeStr = convertJoinType(joinMapping.getJoinType());
+        String joinTypeStr = convertJoinType(joinMapping.joinType());
         String targetAlias = relationshipProperty; // Use relationship property as alias
-        String joinColumn = joinMapping.getJoinColumn();
-        String referencedColumn = joinMapping.getReferencedColumn();
+        String joinColumn = joinMapping.joinColumn();
+        String referencedColumn = joinMapping.referencedColumn();
         
         return String.format("%s %s %s ON %s.%s = %s.%s",
                 joinTypeStr,
-                targetTable.getTableName(),
+                targetTable.tableName(),
                 targetAlias,
                 sourceAlias,
                 referencedColumn,
@@ -628,7 +628,7 @@ public class SqlGenerationVisitor {
      * entity-alias relationships to determine the correct mapping.
      */
     private String findColumnMapping(String propertyName, SqlConversionContext context) {
-        EntityMetadata metadata = context.getEntityMetadata();
+        EntityMetadata metadata = context.entityMetadata();
         
         // Try to find the property in any of the table mappings
         for (TableMapping tableMapping : metadata.getAllTableMappings()) {
@@ -729,7 +729,7 @@ public class SqlGenerationVisitor {
      * Handles specific aggregate function conversions and dialect-specific transformations.
      */
     private String convertSpecificAggregateFunction(String functionName, String argument, SqlConversionContext context) {
-        DatabaseDialect dialect = context.getDialect();
+        DatabaseDialect dialect = context.dialect();
         
         switch (functionName) {
             case "COUNT":
@@ -1041,8 +1041,8 @@ public class SqlGenerationVisitor {
         // Create a new context that inherits from the parent but allows for
         // independent entity alias resolution within the subquery scope
         return new SqlConversionContext(
-            parentContext.getEntityMetadata(),
-            parentContext.getDialect()
+            parentContext.entityMetadata(),
+            parentContext.dialect()
         );
     }
     

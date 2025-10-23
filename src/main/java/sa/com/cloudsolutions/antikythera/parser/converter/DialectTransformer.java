@@ -12,8 +12,6 @@ import java.util.regex.Pattern;
  * This class provides advanced transformation capabilities beyond basic boolean
  * handling, including function mapping, syntax conversion, and data type handling
  * for different database dialects.
- * 
- * Requirements addressed: 4.1, 4.2, 4.3
  */
 public class DialectTransformer {
     

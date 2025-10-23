@@ -12,8 +12,6 @@ import java.util.Map;
  * This class provides integration between the existing RepositoryParser
  * dialect detection logic and the new DatabaseDialect enum, enabling
  * dialect-specific SQL generation and transformations.
- * 
- * Requirements addressed: 4.1, 4.2, 4.3
  */
 public class DialectHandler {
     
