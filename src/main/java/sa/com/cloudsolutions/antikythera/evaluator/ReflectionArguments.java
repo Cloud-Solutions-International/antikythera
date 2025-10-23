@@ -99,8 +99,8 @@ public class ReflectionArguments {
             return true;
         }
 
-        // Handle Arrays.stream and Arrays.sort which take array parameters
-        if (("stream".equals(name) || "sort".equals(name)) &&
+        // Handle Arrays.stream, Arrays.sort, and Arrays.toString which take array parameters
+        if (("stream".equals(name) || "sort".equals(name) || "toString".equals(name) || "deepToString".equals(name)) &&
                 paramTypes.length == 1 && paramTypes[0].isArray()) {
             finalArgs = args;
             return true;

@@ -1150,13 +1150,124 @@ public class Evaluator implements EvaluationEngine {
 
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
-            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
+            Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
+            returnValue = new Variable(method.invoke(target, finalArgs));
             if (returnValue.getValue() == null && returnValue.getClazz() == null) {
                 returnValue.setClazz(method.getReturnType());
             }
         } catch (IllegalAccessException e) {
             invokeinAccessibleMethod(v, reflectionArguments);
+        } catch (IllegalArgumentException e) {
+            // Attempt robust fallback by re-resolving method based on runtime argument types
+            try {
+                Object[] argsNow = finalArgs;
+                Class<?>[] runtimeTypes = new Class<?>[argsNow.length];
+                for (int i = 0; i < argsNow.length; i++) {
+                    runtimeTypes[i] = argsNow[i] == null ? Object.class : argsNow[i].getClass();
+                }
+
+                ReflectionArguments retryArgs = new ReflectionArguments(reflectionArguments.getMethodName(), argsNow, runtimeTypes);
+                retryArgs.setScope(reflectionArguments.getScope());
+                Method retry = Reflect.findMethod(method.getDeclaringClass(), retryArgs);
+                if (retry != null) {
+                    Object target2 = java.lang.reflect.Modifier.isStatic(retry.getModifiers()) ? null : v.getValue();
+                    retryArgs.setMethod(retry);
+                    retryArgs.finalizeArguments();
+                    Object[] retryFinal = retryArgs.getFinalArgs();
+                    returnValue = new Variable(retry.invoke(target2, retryFinal));
+                    if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                        returnValue.setClazz(retry.getReturnType());
+                    }
+                    return;
+                }
+            } catch (Exception ignored) {
+                // fall through to specialized Arrays handling
+            }
+
+            // Handle potential primitive vs wrapper array mismatches for Arrays.* methods
+            Class<?> declaring = method.getDeclaringClass();
+            if (declaring != null && declaring.getName().equals("java.util.Arrays")) {
+                Class<?>[] paramTypes = method.getParameterTypes();
+                if (paramTypes.length == 1 && paramTypes[0].isArray() && finalArgs.length == 1 && finalArgs[0] != null && finalArgs[0].getClass().isArray()) {
+                    Class<?> pComp = paramTypes[0].getComponentType();
+                    Object srcArray = finalArgs[0];
+                    Class<?> aComp = srcArray.getClass().getComponentType();
+                    // If parameter expects primitive and argument is boxed array, try converting
+                    if (pComp.isPrimitive() && !aComp.isPrimitive()) {
+                        Object converted = convertToPrimitiveArray(srcArray, pComp);
+                        if (converted != null) {
+                            Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
+                            returnValue = new Variable(method.invoke(target, new Object[]{converted}));
+                            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                                returnValue.setClazz(method.getReturnType());
+                            }
+                            return;
+                        }
+                    }
+                }
+            }
+            // Log details to help diagnose mismatch without affecting System.out
+            try {
+                Class<?>[] ptypes = method.getParameterTypes();
+                StringBuilder sb = new StringBuilder();
+                sb.append("Reflection invoke arg mismatch on ")
+                  .append(method.getDeclaringClass().getName()).append("::")
+                  .append(method.getName()).append("( ");
+                for (int i = 0; i < ptypes.length; i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append(ptypes[i].getTypeName());
+                }
+                sb.append(" ) with args [");
+                for (int i = 0; i < finalArgs.length; i++) {
+                    if (i > 0) sb.append(", ");
+                    Object a = finalArgs[i];
+                    sb.append(a == null ? "null" : a.getClass().getTypeName());
+                }
+                sb.append("]");
+                logger.warn(sb.toString());
+            } catch (Throwable ignored2) {
+                // ignore logging issues
+            }
+            throw e;
         }
+    }
+
+    private Object convertToPrimitiveArray(Object boxedArray, Class<?> primitiveComponent) {
+        int length = Array.getLength(boxedArray);
+        if (primitiveComponent.equals(int.class)) {
+            int[] arr = new int[length];
+            for (int i = 0; i < length; i++) arr[i] = (Integer) Array.get(boxedArray, i);
+            return arr;
+        } else if (primitiveComponent.equals(long.class)) {
+            long[] arr = new long[length];
+            for (int i = 0; i < length; i++) arr[i] = (Long) Array.get(boxedArray, i);
+            return arr;
+        } else if (primitiveComponent.equals(double.class)) {
+            double[] arr = new double[length];
+            for (int i = 0; i < length; i++) arr[i] = (Double) Array.get(boxedArray, i);
+            return arr;
+        } else if (primitiveComponent.equals(float.class)) {
+            float[] arr = new float[length];
+            for (int i = 0; i < length; i++) arr[i] = (Float) Array.get(boxedArray, i);
+            return arr;
+        } else if (primitiveComponent.equals(short.class)) {
+            short[] arr = new short[length];
+            for (int i = 0; i < length; i++) arr[i] = (Short) Array.get(boxedArray, i);
+            return arr;
+        } else if (primitiveComponent.equals(byte.class)) {
+            byte[] arr = new byte[length];
+            for (int i = 0; i < length; i++) arr[i] = (Byte) Array.get(boxedArray, i);
+            return arr;
+        } else if (primitiveComponent.equals(char.class)) {
+            char[] arr = new char[length];
+            for (int i = 0; i < length; i++) arr[i] = (Character) Array.get(boxedArray, i);
+            return arr;
+        } else if (primitiveComponent.equals(boolean.class)) {
+            boolean[] arr = new boolean[length];
+            for (int i = 0; i < length; i++) arr[i] = (Boolean) Array.get(boxedArray, i);
+            return arr;
+        }
+        return null;
     }
 
     @SuppressWarnings("java:S3011")
@@ -1165,7 +1276,8 @@ public class Evaluator implements EvaluationEngine {
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
             method.setAccessible(true);
-            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
+            Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
+            returnValue = new Variable(method.invoke(target, finalArgs));
             if (returnValue.getValue() == null && returnValue.getClazz() == null) {
                 returnValue.setClazz(method.getReturnType());
             }
@@ -1178,7 +1290,8 @@ public class Evaluator implements EvaluationEngine {
                         reflectionArguments.getMethodName(),
                         reflectionArguments.getArgumentTypes());
                 if (publicMethod != null) {
-                    returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
+                    Object publicTarget = java.lang.reflect.Modifier.isStatic(publicMethod.getModifiers()) ? null : v.getValue();
+                    returnValue = new Variable(publicMethod.invoke(publicTarget, finalArgs));
                     if (returnValue.getValue() == null && returnValue.getClazz() == null) {
                         returnValue.setClazz(publicMethod.getReturnType());
                     }
@@ -1802,6 +1915,7 @@ public class Evaluator implements EvaluationEngine {
     }
 
     private void executeForEachWithArray(ForEachStmt forEachStmt, Object iterValue) throws ReflectiveOperationException {
+        // Ensure the loop variable is declared in the current scope
         evaluateExpression(forEachStmt.getVariable());
 
         for (int i = 0; i < Array.getLength(iterValue); i++) {
@@ -1810,6 +1924,10 @@ public class Evaluator implements EvaluationEngine {
                 Symbol v = getLocal(forEachStmt, vdecl.getNameAsString());
                 if (v != null) {
                     v.setValue(value);
+                } else {
+                    // Mirror collection behavior: create the local variable when missing
+                    v = new Variable(value);
+                    setLocal(forEachStmt, vdecl.getNameAsString(), v);
                 }
             }
 
@@ -1915,7 +2033,7 @@ public class Evaluator implements EvaluationEngine {
     protected void handleApplicationException(Exception e, BlockStmt parent) throws ReflectiveOperationException {
         returnValue = null;
         if (catching.isEmpty()) {
-            throw new AUTException("Unhandled exception", e);
+            throw new AUTException("Unhandled exception: " + e.getClass().getName() + ": " + (e.getMessage() == null ? "" : e.getMessage()), e);
         }
 
         TryStmt t = catching.pollLast();
@@ -1951,7 +2069,7 @@ public class Evaluator implements EvaluationEngine {
         }
 
         if (!matchFound && t.getFinallyBlock().isEmpty()) {
-            throw new AUTException("Unhandled exception", e);
+            throw new AUTException("Unhandled exception: " + e.getClass().getName() + ": " + (e.getMessage() == null ? "" : e.getMessage()), e);
         }
     }
 
