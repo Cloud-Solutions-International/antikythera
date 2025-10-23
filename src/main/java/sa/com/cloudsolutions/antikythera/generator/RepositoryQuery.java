@@ -512,6 +512,10 @@ public class RepositoryQuery {
         this.isNative = isNative;
     }
 
+    public boolean isNative() {
+        return isNative;
+    }
+
 
     /**
      * Change the where clause so that the query is likely to be executed with success.

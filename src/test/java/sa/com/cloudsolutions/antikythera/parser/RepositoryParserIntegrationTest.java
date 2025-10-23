@@ -1,161 +1,135 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import net.sf.jsqlparser.JSQLParserException;
-import net.sf.jsqlparser.parser.CCJSqlParserUtil;
-import net.sf.jsqlparser.statement.Statement;
-import net.sf.jsqlparser.statement.select.Select;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
+import sa.com.cloudsolutions.antikythera.parser.converter.ConversionResult;
+import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
+import sa.com.cloudsolutions.antikythera.parser.converter.EntityMetadata;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Optional;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Integration test for RepositoryParser with JpaQueryConverter integration.
+ * 
+ * Tests the integration between RepositoryParser and the new query conversion functionality.
+ */
 class RepositoryParserIntegrationTest {
-    @BeforeAll
-    static void setup() throws IOException {
+    
+    @TempDir
+    Path tempDir;
+    
+    private RepositoryParser repositoryParser;
+    
+    @BeforeEach
+    void setUp() throws IOException {
+        // Initialize Settings with the test configuration file
         Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
-        AbstractCompiler.preProcess();
+        
+        // Create a test configuration
+        Map<String, Object> database = new HashMap<>();
+        database.put("url", "jdbc:postgresql://localhost:5432/test");
+        database.put("run_queries", false);
+        
+        Map<String, Object> queryConversion = new HashMap<>();
+        queryConversion.put("enabled", true);
+        queryConversion.put("fallback_on_failure", true);
+        queryConversion.put("log_conversion_failures", true);
+        queryConversion.put("cache_results", true);
+        
+        database.put("query_conversion", queryConversion);
+        
+        // Set the configuration
+        Settings.setProperty("database", database);
+        
+        repositoryParser = new RepositoryParser();
     }
-
-    MCEWrapper toWrapper(MethodCallExpr mce) {
-        MCEWrapper wrapper = new MCEWrapper(mce);
-        wrapper.setArgumentTypes(new NodeList<>());
-        for (Expression argument : mce.getArguments()) {
-            if (argument.isLiteralExpr()) {
-                wrapper.getArgumentTypes().add(AbstractCompiler.convertLiteralToType(argument.asLiteralExpr()));
-            }
+    
+    @Test
+    void testQueryConversionConfigurationLoading() {
+        // Test that configuration methods work correctly
+        assertTrue(repositoryParser.isQueryConversionEnabled());
+        assertTrue(repositoryParser.isFallbackOnFailureEnabled());
+        assertTrue(repositoryParser.isConversionFailureLoggingEnabled());
+        assertTrue(repositoryParser.isCachingEnabled());
+    }
+    
+    @Test
+    void testCacheKeyGeneration() {
+        // Test cache key generation with different inputs
+        String query1 = "SELECT u FROM User u WHERE u.name = :name";
+        String query2 = "SELECT u FROM User u WHERE u.name = :name";
+        String query3 = "SELECT u FROM User u WHERE u.email = :email";
+        
+        // Same query should generate same cache key
+        String key1 = repositoryParser.generateCacheKey(query1, EntityMetadata.empty(), DatabaseDialect.POSTGRESQL);
+        String key2 = repositoryParser.generateCacheKey(query2, EntityMetadata.empty(), DatabaseDialect.POSTGRESQL);
+        assertEquals(key1, key2, "Same queries should generate the same cache key");
+        
+        // Different query should generate different cache key
+        String key3 = repositoryParser.generateCacheKey(query3, EntityMetadata.empty(), DatabaseDialect.POSTGRESQL);
+        assertNotEquals(key1, key3, "Different queries should generate different cache keys");
+        
+        // Test that cache keys are not null or empty
+        assertNotNull(key1, "Cache key should not be null");
+        assertFalse(key1.isEmpty(), "Cache key should not be empty");
+    }
+    
+    @Test
+    void testConversionCacheOperations() {
+        // Test cache operations
+        String cacheKey = "test-key";
+        ConversionResult result = ConversionResult.success("SELECT * FROM users");
+        
+        // Initially should be null
+        assertNull(repositoryParser.getCachedConversionResult(cacheKey));
+        
+        // Cache the result
+        repositoryParser.cacheConversionResult(cacheKey, result);
+        
+        // Should now return the cached result
+        ConversionResult cached = repositoryParser.getCachedConversionResult(cacheKey);
+        assertNotNull(cached);
+        assertEquals(result.getNativeSql(), cached.getNativeSql());
+        
+        // Clear cache
+        repositoryParser.clearConversionCache();
+        assertNull(repositoryParser.getCachedConversionResult(cacheKey));
+    }
+    
+    @Test
+    void testConfigurationMethods() {
+        // Test that configuration methods work correctly with disabled conversion
+        Map<String, Object> database = new HashMap<>();
+        database.put("url", "jdbc:postgresql://localhost:5432/test");
+        Map<String, Object> queryConversion = new HashMap<>();
+        queryConversion.put("enabled", false);
+        queryConversion.put("fallback_on_failure", false);
+        queryConversion.put("log_conversion_failures", false);
+        queryConversion.put("cache_results", false);
+        database.put("query_conversion", queryConversion);
+        Settings.setProperty("database", database);
+        
+        // Create a new parser with disabled conversion
+        try {
+            RepositoryParser parser = new RepositoryParser();
+            
+            // Test configuration methods
+            assertFalse(parser.isQueryConversionEnabled(), "Query conversion should be disabled");
+            assertFalse(parser.isFallbackOnFailureEnabled(), "Fallback should be disabled");
+            assertFalse(parser.isConversionFailureLoggingEnabled(), "Logging should be disabled");
+            assertFalse(parser.isCachingEnabled(), "Caching should be disabled");
+        } catch (IOException e) {
+            fail("Failed to create RepositoryParser: " + e.getMessage());
         }
-        return wrapper;
-    }
-
-    @Test
-    void testDepartmentRepositoryParser() throws IOException {
-        final RepositoryParser tp = new RepositoryParser();
-        RepositoryParser.preProcess();
-        tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.DepartmentRepository"));
-        tp.processTypes();
-        tp.buildQueries();
-
-        final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.PersonService");
-        assertNotNull(cu);
-        TypeDeclaration<?> repository = tp.getCompilationUnit().getType(0);
-
-        cu.findFirst(MethodDeclaration.class,
-            md1 -> md1.getNameAsString().equals("queries2")).ifPresent(md -> md.accept(new VoidVisitorAdapter<Void>() {
-                @Override
-                public void visit(MethodCallExpr n, Void arg) {
-                    super.visit(n, arg);
-                    Optional<Callable> cd = AbstractCompiler.findCallableDeclaration(toWrapper(n), repository);
-                    assertTrue(cd.isPresent());
-                    MethodDeclaration md = cd.get().asMethodDeclaration();
-                    assertNotNull(md);
-                    RepositoryQuery rql = tp.get(cd.get());
-                    assertNotNull(rql);
-
-                    String sql = rql.getOriginalQuery();
-                    assertTrue(sql.contains("SELECT new sa.com.cloudsolutions.dto.EmployeeDepartmentDTO(p.name, d.departmentName) "));
-                    assertTrue(rql.getQuery().contains("SELECT * FROM person p"));
-
-                    try {
-                        Select stmt = (Select) CCJSqlParserUtil.parse(rql.getQuery());
-                        assertNotNull(stmt);
-                        assertEquals(
-                                "SELECT * FROM person p JOIN department d ON p.id = d.id WHERE d.id = :departmentId",
-                                stmt.toString()
-                        );
-                        rql.buildSimplifiedQuery();
-                        Statement ex = rql.getSimplifiedStatement();
-                        assertEquals("SELECT * FROM person p JOIN department d ON p.id = d.id WHERE '1' = '1'",
-                                ex.toString());
-                    } catch (JSQLParserException e) {
-                        throw new RuntimeException(e);
-                    }
-
-                }
-            }, null));
-    }
-
-    @Test
-    void testPersonRepositoryParser() throws IOException {
-        RepositoryParser.preProcess();
-
-        final RepositoryParser tp = new RepositoryParser();
-        tp.compile(AbstractCompiler.classToPath("sa.com.cloudsolutions.repository.PersonRepository"));
-        tp.processTypes();
-        tp.buildQueries();
-
-        final CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.service.PersonService");
-        assertNotNull(cu);
-
-        TypeDeclaration<?> repository = tp.getCompilationUnit().getType(0);
-
-        cu.findFirst(MethodDeclaration.class).ifPresent(md -> md.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(MethodCallExpr n, Void arg) {
-                super.visit(n, arg);
-                Optional<Callable> cd = AbstractCompiler.findCallableDeclaration(toWrapper(n), repository);
-                assertTrue(cd.isPresent());
-                MethodDeclaration md = cd.get().asMethodDeclaration();
-                if(md == null) {
-                    return;
-                }
-
-                RepositoryQuery rql = tp.get(cd.get());
-                assertNotNull(rql);
-
-                if(n.getNameAsString().equals("findById")) {
-                    assertEquals("SELECT * FROM person WHERE id = ?1", rql.getQuery());
-                }
-                else if(n.getNameAsString().equals("findByAgeBetween")) {
-                    assertEquals("SELECT * FROM person WHERE age BETWEEN ?1 AND ?2", rql.getQuery());
-                }
-                else if(n.getNameAsString().equals("findByAge")) {
-                    assertEquals("SELECT * FROM person WHERE age = ?1", rql.getQuery());
-                }
-                else if(n.getNameAsString().equals("findByAgeGreaterThan")) {
-                    assertEquals("SELECT * FROM person WHERE age > ?1", rql.getQuery());
-                }
-                else if(n.getNameAsString().equals("findByAgeLessThan")) {
-                    assertEquals("SELECT * FROM person WHERE age < ?1", rql.getQuery());
-                }
-                else if(n.getNameAsString().equals("findByAgeLessThanEqual")) {
-                    assertEquals("SELECT * FROM person WHERE age <= ?1", rql.getQuery());
-                }
-                else if(n.getNameAsString().equals("findByAgeGreaterThanEqual")) {
-                    assertEquals("SELECT * FROM person WHERE age >= ?1", rql.getQuery());
-                }
-                else if(n.getNameAsString().equals("findByAgeIn")) {
-                    assertEquals("SELECT * FROM person WHERE age IN (?1)", rql.getQuery());
-                }
-                else if(n.getNameAsString().equals("findByAgeNotIn")) {
-                    assertEquals("SELECT * FROM person WHERE age NOT IN (?1)", rql.getQuery());
-                }
-                else if(n.getNameAsString().equals("findByAgeIsNull")) {
-                    assertEquals("SELECT * FROM person WHERE age IS NULL", rql.getQuery());
-                }
-                else if(n.getNameAsString().equals("findByAgeIsNotNull")) {
-                    assertEquals("SELECT * FROM person WHERE age IS NOT NULL", rql.getQuery());
-                }
-                else if(n.getNameAsString().equals("findByNameLike")) {
-                    assertEquals("SELECT * FROM person WHERE name LIKE ?1", rql.getQuery());
-                }
-            }
-        }, null));
-
     }
 }

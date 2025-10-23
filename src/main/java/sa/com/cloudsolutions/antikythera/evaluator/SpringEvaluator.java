@@ -948,5 +948,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             gen.setArgumentGenerator(argumentGenerator);
         }
     }
+
+    /**
+     * Gets the map of parsed repositories.
+     * 
+     * @return map of fully qualified class names to RepositoryParser instances
+     */
+    public static Map<String, RepositoryParser> getRepositories() {
+        return repositories;
+    }
 }
 

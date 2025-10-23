@@ -12,6 +12,12 @@ import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.parser.converter.JpaQueryConverter;
+import sa.com.cloudsolutions.antikythera.parser.converter.HibernateQueryConverter;
+import sa.com.cloudsolutions.antikythera.parser.converter.ConversionResult;
+import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
+import sa.com.cloudsolutions.antikythera.parser.converter.EntityMetadata;
+import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 
@@ -72,6 +78,16 @@ public class RepositoryParser extends ClassProcessor {
      * As determined by the configurations
      */
     private static boolean runQueries;
+    
+    /**
+     * The JPA query converter for converting non-native queries to SQL
+     */
+    private final JpaQueryConverter queryConverter;
+    
+    /**
+     * Entity mapping resolver for extracting metadata from JPA annotations
+     */
+    private final EntityMappingResolver entityMappingResolver;
 
     /**
      * The compilation unit or class associated with this entity.
@@ -99,10 +115,20 @@ public class RepositoryParser extends ClassProcessor {
      * A cache for the simplified queries.
      */
     private final Map<MethodDeclaration, ResultSet> happyCache = new HashMap<>();
+    
+    /**
+     * Cache for conversion results to avoid re-converting the same queries.
+     * Key is generated from query string and entity metadata.
+     */
+    private final Map<String, ConversionResult> conversionCache = new HashMap<>();
 
     public RepositoryParser() throws IOException {
         super();
         queries = new HashMap<>();
+        
+        // Initialize the query converter and entity mapping resolver
+        this.entityMappingResolver = new EntityMappingResolver();
+        this.queryConverter = new HibernateQueryConverter();
 
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
         if(db != null) {
@@ -533,10 +559,70 @@ public class RepositoryParser extends ClassProcessor {
     RepositoryQuery queryBuilder(String query, boolean isNative, Callable md) {
         RepositoryQuery rql = new RepositoryQuery();
         rql.setMethodDeclaration(md);
-        rql.setIsNative(isNative);
         rql.setEntityType(entityType);
         rql.setTable(table);
-        rql.setQuery(query);
+        
+        // Use the new converter for non-native queries if enabled
+        if (!isNative && isQueryConversionEnabled()) {
+            try {
+                EntityMetadata entityMetadata = buildEntityMetadata();
+                DatabaseDialect targetDialect = detectDatabaseDialect();
+                
+                // Check cache first
+                String cacheKey = generateCacheKey(query, entityMetadata, targetDialect);
+                ConversionResult result = getCachedConversionResult(cacheKey);
+                
+                if (result == null) {
+                    // Not in cache, perform conversion
+                    result = queryConverter.convertToNativeSQL(query, entityMetadata, targetDialect);
+                    
+                    // Cache the result (both successful and failed results)
+                    cacheConversionResult(cacheKey, result);
+                } else {
+                    logger.debug("Using cached conversion result for query");
+                }
+                
+                if (result.isSuccessful()) {
+                    logger.debug("Successfully converted JPA query to native SQL: {}", result.getNativeSql());
+                    rql.setQuery(result.getNativeSql());
+                    rql.setIsNative(true); // Mark as native after successful conversion
+                } else {
+                    if (isConversionFailureLoggingEnabled()) {
+                        logger.warn("Query conversion failed: {}. Failure reason: {}", 
+                                   result.getErrorMessage(), result.getFailureReason());
+                    }
+                    
+                    if (isFallbackOnFailureEnabled()) {
+                        logger.debug("Falling back to existing logic for query conversion failure");
+                        rql.setQuery(query);
+                        rql.setIsNative(isNative);
+                    } else {
+                        // If fallback is disabled, we could throw an exception or handle differently
+                        logger.error("Query conversion failed and fallback is disabled. Query: {}", query);
+                        rql.setQuery(query);
+                        rql.setIsNative(isNative);
+                    }
+                }
+            } catch (Exception e) {
+                if (isConversionFailureLoggingEnabled()) {
+                    logger.warn("Exception during query conversion: {}. Falling back to existing logic.", e.getMessage());
+                }
+                
+                if (isFallbackOnFailureEnabled()) {
+                    rql.setQuery(query);
+                    rql.setIsNative(isNative);
+                } else {
+                    logger.error("Exception during query conversion and fallback is disabled. Query: {}", query, e);
+                    rql.setQuery(query);
+                    rql.setIsNative(isNative);
+                }
+            }
+        } else {
+            // Use original query for native queries or when conversion is disabled
+            rql.setQuery(query);
+            rql.setIsNative(isNative);
+        }
+        
         return rql;
     }
 
@@ -668,6 +754,150 @@ public class RepositoryParser extends ClassProcessor {
 
     public static boolean isOracle() {
         return ORACLE.equals(dialect);
+    }
+    
+    /**
+     * Checks if query conversion is enabled in the configuration.
+     * 
+     * @return true if query conversion is enabled, false otherwise
+     */
+    boolean isQueryConversionEnabled() {
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        if (db != null) {
+            Map<String, Object> queryConversion = (Map<String, Object>) db.get("query_conversion");
+            if (queryConversion != null) {
+                return Boolean.parseBoolean(queryConversion.getOrDefault("enabled", "false").toString());
+            }
+        }
+        return false; // Default to disabled
+    }
+    
+    /**
+     * Checks if fallback to existing logic is enabled on conversion failure.
+     * 
+     * @return true if fallback is enabled, false otherwise
+     */
+    boolean isFallbackOnFailureEnabled() {
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        if (db != null) {
+            Map<String, Object> queryConversion = (Map<String, Object>) db.get("query_conversion");
+            if (queryConversion != null) {
+                return Boolean.parseBoolean(queryConversion.getOrDefault("fallback_on_failure", "true").toString());
+            }
+        }
+        return true; // Default to enabled for safety
+    }
+    
+    /**
+     * Checks if conversion failure logging is enabled.
+     * 
+     * @return true if logging conversion failures is enabled, false otherwise
+     */
+    boolean isConversionFailureLoggingEnabled() {
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        if (db != null) {
+            Map<String, Object> queryConversion = (Map<String, Object>) db.get("query_conversion");
+            if (queryConversion != null) {
+                return Boolean.parseBoolean(queryConversion.getOrDefault("log_conversion_failures", "true").toString());
+            }
+        }
+        return true; // Default to enabled
+    }
+    
+    /**
+     * Checks if conversion result caching is enabled.
+     * 
+     * @return true if caching is enabled, false otherwise
+     */
+    boolean isCachingEnabled() {
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        if (db != null) {
+            Map<String, Object> queryConversion = (Map<String, Object>) db.get("query_conversion");
+            if (queryConversion != null) {
+                return Boolean.parseBoolean(queryConversion.getOrDefault("cache_results", "true").toString());
+            }
+        }
+        return true; // Default to enabled
+    }
+    
+    /**
+     * Generates a cache key for the given query and entity metadata.
+     * 
+     * @param query The JPA query string
+     * @param entityMetadata The entity metadata
+     * @param dialect The database dialect
+     * @return A unique cache key string
+     */
+    String generateCacheKey(String query, EntityMetadata entityMetadata, DatabaseDialect dialect) {
+        // Create a simple hash-based key combining query, entity info, and dialect
+        StringBuilder keyBuilder = new StringBuilder();
+        keyBuilder.append(query.trim().replaceAll("\\s+", " ")); // Normalize whitespace
+        keyBuilder.append("|");
+        keyBuilder.append(entityMetadata.hashCode());
+        keyBuilder.append("|");
+        keyBuilder.append(dialect.name());
+        
+        return String.valueOf(keyBuilder.toString().hashCode());
+    }
+    
+    /**
+     * Gets a cached conversion result if available.
+     * 
+     * @param cacheKey The cache key
+     * @return The cached ConversionResult, or null if not found
+     */
+    ConversionResult getCachedConversionResult(String cacheKey) {
+        if (isCachingEnabled()) {
+            return conversionCache.get(cacheKey);
+        }
+        return null;
+    }
+    
+    /**
+     * Caches a conversion result.
+     * 
+     * @param cacheKey The cache key
+     * @param result The conversion result to cache
+     */
+    void cacheConversionResult(String cacheKey, ConversionResult result) {
+        if (isCachingEnabled()) {
+            conversionCache.put(cacheKey, result);
+            logger.debug("Cached conversion result for key: {}", cacheKey);
+        }
+    }
+    
+    /**
+     * Clears the conversion cache. Useful for testing or when entity metadata changes.
+     */
+    public void clearConversionCache() {
+        conversionCache.clear();
+        logger.debug("Conversion cache cleared");
+    }
+    
+    /**
+     * Builds entity metadata for the current entity being processed.
+     * 
+     * @return EntityMetadata containing mapping information for the entity
+     */
+    private EntityMetadata buildEntityMetadata() {
+        if (entity != null && entity.getClazz() != null) {
+            return entityMappingResolver.resolveEntityMetadata(entity.getClazz());
+        }
+        return EntityMetadata.empty(); // Return empty metadata if no entity context
+    }
+    
+    /**
+     * Detects the database dialect from the current configuration.
+     * 
+     * @return DatabaseDialect enum value for the configured database
+     */
+    private DatabaseDialect detectDatabaseDialect() {
+        if (ORACLE.equals(dialect)) {
+            return DatabaseDialect.ORACLE;
+        } else if (POSTGRESQL.equals(dialect)) {
+            return DatabaseDialect.POSTGRESQL;
+        }
+        return DatabaseDialect.POSTGRESQL; // Default to PostgreSQL
     }
 
 }
