@@ -1150,12 +1150,33 @@ public class Evaluator implements EvaluationEngine {
 
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
-            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
+            Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
+            returnValue = new Variable(method.invoke(target, finalArgs));
             if (returnValue.getValue() == null && returnValue.getClazz() == null) {
                 returnValue.setClazz(method.getReturnType());
             }
         } catch (IllegalAccessException e) {
             invokeinAccessibleMethod(v, reflectionArguments);
+        } catch (IllegalArgumentException e) {
+            // Attempt robust fallback by re-resolving method based on runtime argument types
+            Class<?>[] runtimeTypes = new Class<?>[finalArgs.length];
+            for (int i = 0; i < finalArgs.length; i++) {
+                runtimeTypes[i] = finalArgs[i] == null ? Object.class : finalArgs[i].getClass();
+            }
+
+            ReflectionArguments retryArgs = new ReflectionArguments(reflectionArguments.getMethodName(), finalArgs, runtimeTypes);
+            retryArgs.setScope(reflectionArguments.getScope());
+            Method retry = Reflect.findMethod(method.getDeclaringClass(), retryArgs);
+            if (retry != null) {
+                Object target2 = java.lang.reflect.Modifier.isStatic(retry.getModifiers()) ? null : v.getValue();
+                retryArgs.setMethod(retry);
+                retryArgs.finalizeArguments();
+                Object[] retryFinal = retryArgs.getFinalArgs();
+                returnValue = new Variable(retry.invoke(target2, retryFinal));
+                if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                    returnValue.setClazz(retry.getReturnType());
+                }
+            }
         }
     }
 
@@ -1165,7 +1186,8 @@ public class Evaluator implements EvaluationEngine {
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
             method.setAccessible(true);
-            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
+            Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
+            returnValue = new Variable(method.invoke(target, finalArgs));
             if (returnValue.getValue() == null && returnValue.getClazz() == null) {
                 returnValue.setClazz(method.getReturnType());
             }
@@ -1178,7 +1200,8 @@ public class Evaluator implements EvaluationEngine {
                         reflectionArguments.getMethodName(),
                         reflectionArguments.getArgumentTypes());
                 if (publicMethod != null) {
-                    returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
+                    Object publicTarget = java.lang.reflect.Modifier.isStatic(publicMethod.getModifiers()) ? null : v.getValue();
+                    returnValue = new Variable(publicMethod.invoke(publicTarget, finalArgs));
                     if (returnValue.getValue() == null && returnValue.getClazz() == null) {
                         returnValue.setClazz(publicMethod.getReturnType());
                     }
@@ -1802,6 +1825,7 @@ public class Evaluator implements EvaluationEngine {
     }
 
     private void executeForEachWithArray(ForEachStmt forEachStmt, Object iterValue) throws ReflectiveOperationException {
+        // Ensure the loop variable is declared in the current scope
         evaluateExpression(forEachStmt.getVariable());
 
         for (int i = 0; i < Array.getLength(iterValue); i++) {
@@ -1810,6 +1834,10 @@ public class Evaluator implements EvaluationEngine {
                 Symbol v = getLocal(forEachStmt, vdecl.getNameAsString());
                 if (v != null) {
                     v.setValue(value);
+                } else {
+                    // Mirror collection behavior: create the local variable when missing
+                    v = new Variable(value);
+                    setLocal(forEachStmt, vdecl.getNameAsString(), v);
                 }
             }
 
@@ -1915,7 +1943,7 @@ public class Evaluator implements EvaluationEngine {
     protected void handleApplicationException(Exception e, BlockStmt parent) throws ReflectiveOperationException {
         returnValue = null;
         if (catching.isEmpty()) {
-            throw new AUTException("Unhandled exception", e);
+            throw new AUTException("Unhandled exception: ", e);
         }
 
         TryStmt t = catching.pollLast();
@@ -1951,7 +1979,7 @@ public class Evaluator implements EvaluationEngine {
         }
 
         if (!matchFound && t.getFinallyBlock().isEmpty()) {
-            throw new AUTException("Unhandled exception", e);
+            throw new AUTException("Unhandled exception: " + e.getClass().getName() + ": " + (e.getMessage() == null ? "" : e.getMessage()), e);
         }
     }
 
