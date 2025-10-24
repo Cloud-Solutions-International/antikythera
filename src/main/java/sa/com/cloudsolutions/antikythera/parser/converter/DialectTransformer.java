@@ -178,7 +178,7 @@ public class DialectTransformer {
      */
     private static String transformConcatToOracleStyle(String sql) {
         Matcher matcher = CONCAT_FUNCTION_PATTERN.matcher(sql);
-        StringBuffer result = new StringBuffer();
+        StringBuilder result = new StringBuilder();
         
         while (matcher.find()) {
             String arguments = matcher.group(1);
@@ -242,7 +242,7 @@ public class DialectTransformer {
     private static String transformCaseInsensitiveToOracle(String sql) {
         // Transform ILIKE to UPPER(...) LIKE UPPER(...)
         Matcher matcher = ILIKE_PATTERN.matcher(sql);
-        StringBuffer result = new StringBuffer();
+        StringBuilder result = new StringBuilder();
         
         while (matcher.find()) {
             // This is a simplified transformation - in practice, we'd need to
@@ -260,7 +260,7 @@ public class DialectTransformer {
     private static String transformNullHandlingToOracle(String sql) {
         // Transform COALESCE with two arguments to NVL
         Matcher matcher = COALESCE_FUNCTION_PATTERN.matcher(sql);
-        StringBuffer result = new StringBuffer();
+        StringBuilder result = new StringBuilder();
         
         while (matcher.find()) {
             String arguments = matcher.group(1);
@@ -301,7 +301,7 @@ public class DialectTransformer {
     private static String transformSequencesToPostgreSQL(String sql) {
         // Transform Oracle sequence syntax to PostgreSQL
         Matcher matcher = ORACLE_SEQUENCE_PATTERN.matcher(sql);
-        StringBuffer result = new StringBuffer();
+        StringBuilder result = new StringBuilder();
         
         while (matcher.find()) {
             String sequenceName = matcher.group(1);
@@ -331,7 +331,7 @@ public class DialectTransformer {
     private static String transformNullHandlingToPostgreSQL(String sql) {
         // Transform NVL to COALESCE
         Matcher matcher = NVL_FUNCTION_PATTERN.matcher(sql);
-        StringBuffer result = new StringBuffer();
+        StringBuilder result = new StringBuilder();
         
         while (matcher.find()) {
             String arg1 = matcher.group(1);
