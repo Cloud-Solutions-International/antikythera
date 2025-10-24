@@ -267,7 +267,17 @@ public class Evaluator implements EvaluationEngine {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
             Symbol s = getValue(expr, name);
-            if (s == null) return null;
+            if (s == null) {
+                ImportWrapper wrapper = AbstractCompiler.findImport(cu, expr.toString());
+                if (wrapper != null && wrapper.getField() != null) {
+                    VariableDeclarator vdecl = wrapper.getField().getVariable(0);
+                    if (vdecl != null && vdecl.getInitializer().isPresent()) {
+                        return evaluateExpression(vdecl.getInitializer().get());
+                    }
+                    System.out.println(wrapper);
+                }
+                return null;
+            }
             if (s instanceof Variable v) return v;
             return new Variable(s.getType(), s.getValue());
         } else if (expr.isMethodCallExpr()) {
