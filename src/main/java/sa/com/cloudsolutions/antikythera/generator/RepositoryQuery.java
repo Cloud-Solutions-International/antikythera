@@ -657,4 +657,8 @@ public class RepositoryQuery {
     public boolean isWriteOps() {
         return writeOps;
     }
+
+    public Callable getMethodDeclaration() {
+        return methodDeclaration;
+    }
 }
