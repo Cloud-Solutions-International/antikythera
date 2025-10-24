@@ -34,6 +34,7 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.expr.TextBlockLiteralExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
@@ -166,6 +167,8 @@ public class Evaluator implements EvaluationEngine {
                     new Variable(AbstractCompiler.convertLiteralToType(integerLiteralExpr), Integer.parseInt(integerLiteralExpr.getValue()));
             case StringLiteralExpr stringLiteralExpr ->
                     new Variable(AbstractCompiler.convertLiteralToType(stringLiteralExpr), stringLiteralExpr.getValue());
+            case TextBlockLiteralExpr textBlockLiteralExpr ->
+                    new Variable(new com.github.javaparser.ast.type.ClassOrInterfaceType(null, "String"), textBlockLiteralExpr.getValue());
             case CharLiteralExpr charLiteralExpr ->
                     new Variable(AbstractCompiler.convertLiteralToType(charLiteralExpr), charLiteralExpr.getValue());
             case LongLiteralExpr longLiteralExpr -> {
