@@ -1112,4 +1112,9 @@ public class AbstractCompiler {
     public static ClassLoader getClassLoader() {
         return loader;
     }
+
+    public static String instanceToClassName(String string) {
+        return string.substring(0, 1).toUpperCase() + string.substring(1);
+    }
+
 }

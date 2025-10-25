@@ -97,10 +97,6 @@ public class ClassProcessor extends AbstractCompiler {
         super();
     }
 
-    public static String instanceToClassName(String string) {
-        return string.substring(0, 1).toUpperCase() + string.substring(1);
-    }
-
     /**
      * Copy a dependency from the application under test.
      *
