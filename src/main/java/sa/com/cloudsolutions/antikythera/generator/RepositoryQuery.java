@@ -661,4 +661,12 @@ public class RepositoryQuery {
     public Callable getMethodDeclaration() {
         return methodDeclaration;
     }
+
+    public Type getEntityType() {
+        return entityType;
+    }
+
+    public String getTable() {
+        return table;
+    }
 }
