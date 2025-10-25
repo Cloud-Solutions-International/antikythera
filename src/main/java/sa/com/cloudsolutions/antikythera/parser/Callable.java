@@ -34,9 +34,11 @@ public class Callable {
      * criteria that resulted in this instance being created.
      */
     MCEWrapper mce;
+
     public Callable(CallableDeclaration<?> callableDeclaration, MCEWrapper mce) {
         this.callableDeclaration = callableDeclaration;
-        this.classOrInterfaceDeclaration = callableDeclaration.findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow();
+        callableDeclaration.findAncestor(ClassOrInterfaceDeclaration.class)
+                .ifPresent(orInterfaceDeclaration -> this.classOrInterfaceDeclaration = orInterfaceDeclaration);
         this.mce = mce;
     }
 
@@ -125,6 +127,7 @@ public class Callable {
         return mce;
     }
 
+    @SuppressWarnings("unused")
     public ClassOrInterfaceDeclaration getClassOrInterfaceDeclaration() {
         return classOrInterfaceDeclaration;
     }
