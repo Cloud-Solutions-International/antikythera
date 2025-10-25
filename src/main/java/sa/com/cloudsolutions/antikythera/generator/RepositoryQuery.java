@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.type.Type;
@@ -664,6 +665,14 @@ public class RepositoryQuery {
 
     public Type getEntityType() {
         return entityType;
+    }
+
+    public String getMethodName() {
+        return methodDeclaration.getNameAsString();
+    }
+
+    public String getClassname() {
+        return methodDeclaration.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow().getNameAsString();
     }
 
     public String getTable() {

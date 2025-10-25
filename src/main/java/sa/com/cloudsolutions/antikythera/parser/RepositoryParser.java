@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import net.sf.jsqlparser.JSQLParserException;
-import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
@@ -53,7 +52,7 @@ import java.util.stream.Collectors;
  * These queries can then be used to determine what kind of data need to be sent
  * to the controller for a valid response.
  */
-public class RepositoryParser extends ClassProcessor {
+public class RepositoryParser extends AbstractCompiler {
     private static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
     public static final String JPA_REPOSITORY = "JpaRepository";
     public static final String SELECT_STAR = "SELECT * FROM ";
@@ -121,6 +120,8 @@ public class RepositoryParser extends ClassProcessor {
      * Key is generated from query string and entity metadata.
      */
     private final Map<String, ConversionResult> conversionCache = new HashMap<>();
+
+    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\?");
 
     public RepositoryParser() throws IOException {
         super();
@@ -190,7 +191,6 @@ public class RepositoryParser extends ClassProcessor {
         }
     }
 
-    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\?");
     
     /**
      * Count the number of parameters to bind.
