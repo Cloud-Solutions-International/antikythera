@@ -289,7 +289,7 @@ class TestRepositoryParser {
     }
 
     @Test
-    void testGetMethod() {
+    void testGetQueryFromRepositoryMethodMethod() {
         CompilationUnit repoUnit = StaticJavaParser.parse("""
                 public interface UserRepository extends JpaRepository<User, Long> {
                     User findByUsername(String username);
@@ -312,11 +312,11 @@ class TestRepositoryParser {
         MethodDeclaration method = repoUnit.findAll(MethodDeclaration.class).get(0);
         Callable callable = new Callable(method, null);
         
-        RepositoryQuery query = parser.get(callable);
+        RepositoryQuery query = parser.getQueryFromRepositoryMethod(callable);
         assertNotNull(query);
         
         // Test getting the same query again (should return cached version)
-        RepositoryQuery query2 = parser.get(callable);
+        RepositoryQuery query2 = parser.getQueryFromRepositoryMethod(callable);
         assertSame(query, query2);
     }
 }

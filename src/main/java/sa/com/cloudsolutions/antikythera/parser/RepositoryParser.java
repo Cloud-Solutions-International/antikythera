@@ -131,7 +131,7 @@ public class RepositoryParser extends AbstractCompiler {
         this.entityMappingResolver = new EntityMappingResolver();
         this.queryConverter = new HibernateQueryConverter();
 
-        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
         if(db != null) {
             runQueries = db.getOrDefault("run_queries", "false").toString().equals("true");
             Object urlObj = db.get("url");
@@ -156,7 +156,7 @@ public class RepositoryParser extends AbstractCompiler {
      * @throws SQLException if the connection could not be established
      */
     static void createConnection() throws SQLException {
-        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
         if(db != null && conn == null && runQueries) {
             Object urlObj = db.get("url");
             Object userObj = db.get("user");
@@ -171,7 +171,7 @@ public class RepositoryParser extends AbstractCompiler {
                 conn = DriverManager.getConnection(url, user, password);
                 if (schemaObj != null) {
                     try (java.sql.Statement statement = conn.createStatement()) {
-                        statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + schemaObj.toString());
+                        statement.execute("ALTER SESSION SET CURRENT_SCHEMA = " + schemaObj);
                     }
                 }
             }
@@ -481,7 +481,7 @@ public class RepositoryParser extends AbstractCompiler {
         return CAMEL_TO_SNAKE_PATTERN.matcher(str).replaceAll("$1_$2").toLowerCase();
     }
 
-    public RepositoryQuery get(Callable repoMethod) {
+    public RepositoryQuery getQueryFromRepositoryMethod(Callable repoMethod) {
         RepositoryQuery q = queries.get(repoMethod);
         if (q == null) {
             if (repoMethod.isMethodDeclaration()) {
@@ -762,9 +762,9 @@ public class RepositoryParser extends AbstractCompiler {
      * @return true if query conversion is enabled, false otherwise
      */
     boolean isQueryConversionEnabled() {
-        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
         if (db != null) {
-            Map<String, Object> queryConversion = (Map<String, Object>) db.get("query_conversion");
+            Map<String, Object> queryConversion = (Map<String, Object>) db.get(Settings.SQL_QUERY_CONVERSION);
             if (queryConversion != null) {
                 return Boolean.parseBoolean(queryConversion.getOrDefault("enabled", "false").toString());
             }
@@ -778,9 +778,9 @@ public class RepositoryParser extends AbstractCompiler {
      * @return true if fallback is enabled, false otherwise
      */
     boolean isFallbackOnFailureEnabled() {
-        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
         if (db != null) {
-            Map<String, Object> queryConversion = (Map<String, Object>) db.get("query_conversion");
+            Map<String, Object> queryConversion = (Map<String, Object>) db.get(Settings.SQL_QUERY_CONVERSION);
             if (queryConversion != null) {
                 return Boolean.parseBoolean(queryConversion.getOrDefault("fallback_on_failure", "true").toString());
             }
@@ -794,9 +794,9 @@ public class RepositoryParser extends AbstractCompiler {
      * @return true if logging conversion failures is enabled, false otherwise
      */
     boolean isConversionFailureLoggingEnabled() {
-        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
         if (db != null) {
-            Map<String, Object> queryConversion = (Map<String, Object>) db.get("query_conversion");
+            Map<String, Object> queryConversion = (Map<String, Object>) db.get(Settings.SQL_QUERY_CONVERSION);
             if (queryConversion != null) {
                 return Boolean.parseBoolean(queryConversion.getOrDefault("log_conversion_failures", "true").toString());
             }
@@ -810,9 +810,9 @@ public class RepositoryParser extends AbstractCompiler {
      * @return true if caching is enabled, false otherwise
      */
     boolean isCachingEnabled() {
-        Map<String, Object> db = (Map<String, Object>) Settings.getProperty("database");
+        Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
         if (db != null) {
-            Map<String, Object> queryConversion = (Map<String, Object>) db.get("query_conversion");
+            Map<String, Object> queryConversion = (Map<String, Object>) db.get(Settings.SQL_QUERY_CONVERSION);
             if (queryConversion != null) {
                 return Boolean.parseBoolean(queryConversion.getOrDefault("cache_results", "true").toString());
             }
@@ -899,6 +899,5 @@ public class RepositoryParser extends AbstractCompiler {
         }
         return DatabaseDialect.POSTGRESQL; // Default to PostgreSQL
     }
-
 }
 

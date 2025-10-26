@@ -11,28 +11,4 @@ import java.util.Objects;
  * Requirements addressed: 3.5
  */
 public record ParameterMapping(String originalName, int position, Class<?> type, String columnName) {
-
-    @Override
-    public String toString() {
-        return "ParameterMapping{" +
-                "originalName='" + originalName + '\'' +
-                ", position=" + position +
-                ", type=" + (type != null ? type.getSimpleName() : "null") +
-                ", columnName='" + columnName + '\'' +
-                '}';
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        ParameterMapping that = (ParameterMapping) o;
-
-        if (position != that.position) return false;
-        if (!Objects.equals(originalName, that.originalName)) return false;
-        if (!Objects.equals(type, that.type)) return false;
-        return Objects.equals(columnName, that.columnName);
-    }
-
 }

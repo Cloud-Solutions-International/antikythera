@@ -403,7 +403,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             Optional<Callable> callable = AbstractCompiler.findCallableDeclaration(
                     methodCallWrapper, repository.getCompilationUnit().getType(0));
             if (callable.isPresent()) {
-                RepositoryQuery q = repository.get(callable.get());
+                RepositoryQuery q = repository.getQueryFromRepositoryMethod(callable.get());
 
                 try {
                     /*

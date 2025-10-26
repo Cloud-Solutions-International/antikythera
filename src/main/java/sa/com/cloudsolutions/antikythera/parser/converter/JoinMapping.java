@@ -24,35 +24,4 @@ public record JoinMapping(String propertyName, String targetEntity, String joinC
                 targetTable,
                 referencedColumn);
     }
-
-    @Override
-    public String toString() {
-        return "JoinMapping{" +
-                "propertyName='" + propertyName + '\'' +
-                ", targetEntity='" + targetEntity + '\'' +
-                ", joinColumn='" + joinColumn + '\'' +
-                ", referencedColumn='" + referencedColumn + '\'' +
-                ", joinType=" + joinType +
-                ", sourceTable='" + sourceTable + '\'' +
-                ", targetTable='" + targetTable + '\'' +
-                '}';
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        JoinMapping that = (JoinMapping) o;
-
-        if (!Objects.equals(propertyName, that.propertyName)) return false;
-        if (!Objects.equals(targetEntity, that.targetEntity)) return false;
-        if (!Objects.equals(joinColumn, that.joinColumn)) return false;
-        if (!Objects.equals(referencedColumn, that.referencedColumn))
-            return false;
-        if (joinType != that.joinType) return false;
-        if (!Objects.equals(sourceTable, that.sourceTable)) return false;
-        return Objects.equals(targetTable, that.targetTable);
-    }
-
 }

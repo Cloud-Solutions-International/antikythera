@@ -47,7 +47,8 @@ public class Settings {
     public static final String SERVICES = "services";
     private static final String ARTIFACT_IDS = "artifact_ids";
     private static final String JAR_FILES = "jar_files";
-
+    public static final String DATABASE = "database";
+    public static final String SQL_QUERY_CONVERSION = "query_conversion";
     /**
      * HashMap to store the configurations.
      */
