@@ -282,19 +282,39 @@ public class RepositoryQuery {
     private static void generalProjections(List<SelectItem<?>> items) {
         for (int i = 0; i < items.size(); i++) {
             SelectItem<?> item = items.get(i);
-            String itemStr = item.toString();
-            String[] parts = itemStr.split("\\.");
+            
+            // Get the expression from the SelectItem
+            if (item.getExpression() != null) {
+                // Convert the expression using the existing convertExpressionToSnakeCase method
+                net.sf.jsqlparser.expression.Expression convertedExpression = 
+                    convertExpressionToSnakeCase(item.getExpression());
+                
+                // Create a new SelectItem with the converted expression
+                SelectItem<?> convertedItem = SelectItem.from(convertedExpression);
+                
+                // Preserve alias if it exists
+                if (item.getAlias() != null) {
+                    convertedItem.setAlias(item.getAlias());
+                }
+                
+                items.set(i, convertedItem);
+            } else {
+                // Fallback to the old logic for simple cases
+                String itemStr = item.toString();
+                String[] parts = itemStr.split("\\.");
 
-            if (itemStr.contains(".") && parts.length == 2) {
-                String field = parts[1];
-                String snakeCaseField = RepositoryParser.camelToSnake(field);
-                SelectItem<?> col = SelectItem.from(new Column(parts[0] + "." + snakeCaseField));
-                items.set(i, col);
-            }
-            else {
-                String snakeCaseField = RepositoryParser.camelToSnake(parts[0]);
-                SelectItem<?> col = SelectItem.from(new Column(snakeCaseField));
-                items.set(i, col);
+                if (itemStr.contains(".") && parts.length == 2 && !itemStr.contains("(")) {
+                    String field = parts[1];
+                    String snakeCaseField = RepositoryParser.camelToSnake(field);
+                    SelectItem<?> col = SelectItem.from(new Column(parts[0] + "." + snakeCaseField));
+                    items.set(i, col);
+                }
+                else if (!itemStr.contains("(") && !itemStr.contains("*")) {
+                    String snakeCaseField = RepositoryParser.camelToSnake(parts[0]);
+                    SelectItem<?> col = SelectItem.from(new Column(snakeCaseField));
+                    items.set(i, col);
+                }
+                // If it contains functions or complex expressions, leave it as-is
             }
         }
     }
@@ -616,16 +636,28 @@ public class RepositoryQuery {
                 pel.getExpressions().set(i, convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) pel.get(i)));
             }
         } else if (expr instanceof CaseExpression ce) {
+            // Convert switch expression if present
+            if (ce.getSwitchExpression() != null) {
+                ce.setSwitchExpression(convertExpressionToSnakeCase(ce.getSwitchExpression()));
+            }
+            
+            // Convert WHEN clauses
             for (int i = 0; i < ce.getWhenClauses().size(); i++) {
                 WhenClause when = ce.getWhenClauses().get(i);
                 when.setWhenExpression(convertExpressionToSnakeCase(when.getWhenExpression()));
                 when.setThenExpression(convertExpressionToSnakeCase(when.getThenExpression()));
             }
+            
+            // Convert ELSE expression if present
+            if (ce.getElseExpression() != null) {
+                ce.setElseExpression(convertExpressionToSnakeCase(ce.getElseExpression()));
+            }
         } else if (expr instanceof WhenClause wh) {
             wh.setWhenExpression(convertExpressionToSnakeCase(wh.getWhenExpression()));
         } else if (expr instanceof Function function) {
-            ExpressionList params = (ExpressionList) function.getParameters().getExpressions();
-            if (params != null) {
+            // Handle function parameters
+            if (function.getParameters() != null && function.getParameters().getExpressions() != null) {
+                ExpressionList params = (ExpressionList) function.getParameters().getExpressions();
                 for (int i = 0; i < params.size(); i++) {
                     params.getExpressions().set(i, convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) params.get(i)));
                 }

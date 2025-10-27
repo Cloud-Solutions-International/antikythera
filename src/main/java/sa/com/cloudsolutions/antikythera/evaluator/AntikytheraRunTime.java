@@ -2,14 +2,12 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.printer.lexicalpreservation.LexicalPreservingPrinter;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -77,12 +75,6 @@ public class AntikytheraRunTime {
     }
 
     public static void addCompilationUnit(String className, CompilationUnit cu) {
-        // Initialize lexical preservation as early as possible to better retain original whitespace (including blank lines)
-        try {
-            LexicalPreservingPrinter.setup(cu);
-        } catch (IllegalStateException ignored) {
-            // Already set up; safe to ignore
-        }
         resolved.put(className, cu);
     }
 

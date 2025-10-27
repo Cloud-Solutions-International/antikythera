@@ -1,5 +1,25 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.expression.BinaryExpression;
+import net.sf.jsqlparser.expression.CaseExpression;
+import net.sf.jsqlparser.expression.WhenClause;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.schema.Column;
+import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.delete.Delete;
+import net.sf.jsqlparser.statement.select.FromItem;
+import net.sf.jsqlparser.statement.select.GroupByElement;
+import net.sf.jsqlparser.statement.select.Join;
+import net.sf.jsqlparser.statement.select.OrderByElement;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import net.sf.jsqlparser.statement.select.Select;
+import net.sf.jsqlparser.statement.select.SelectItem;
+import net.sf.jsqlparser.statement.update.Update;
+import net.sf.jsqlparser.statement.update.UpdateSet;
+import net.sf.jsqlparser.expression.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,6 +112,56 @@ public class SqlGenerationVisitor {
         // In a full implementation, this would traverse the actual AST
         String originalQuery = queryNode.getText();
         
+        try {
+            // Use JSQLParser to parse and convert the query properly
+            Statement statement = CCJSqlParserUtil.parse(originalQuery);
+            
+            if (statement instanceof Select select) {
+                // Convert the parsed statement using proper AST traversal
+                convertSelectStatement(select, context);
+                return statement.toString();
+            } else if (statement instanceof net.sf.jsqlparser.statement.update.Update update) {
+                // Convert UPDATE statement
+                convertUpdateStatement(update, context);
+                return statement.toString();
+            } else if (statement instanceof net.sf.jsqlparser.statement.delete.Delete delete) {
+                // Convert DELETE statement
+                convertDeleteStatement(delete, context);
+                return statement.toString();
+            } else {
+                // Fallback to string-based conversion for other statement types
+                return convertQueryStringBased(originalQuery, context);
+            }
+        } catch (JSQLParserException e) {
+            logger.warn("Failed to parse query with JSQLParser, falling back to string-based conversion: {}", e.getMessage());
+            // Fallback to the original string-based approach
+            return convertQueryStringBased(originalQuery, context);
+        }
+    }
+    
+    /**
+     * String-based query conversion (fallback method).
+     */
+    private String convertQueryStringBased(String originalQuery, SqlConversionContext context) {
+        String trimmedQuery = originalQuery.trim().toLowerCase();
+        
+        // Determine query type and apply appropriate conversions
+        if (trimmedQuery.startsWith("select") || trimmedQuery.startsWith("from")) {
+            return convertSelectQueryStringBased(originalQuery, context);
+        } else if (trimmedQuery.startsWith("update")) {
+            return convertUpdateQueryStringBased(originalQuery, context);
+        } else if (trimmedQuery.startsWith("delete")) {
+            return convertDeleteQueryStringBased(originalQuery, context);
+        } else {
+            // Unknown query type, apply basic conversions
+            return convertGenericQueryStringBased(originalQuery, context);
+        }
+    }
+    
+    /**
+     * String-based conversion for SELECT queries.
+     */
+    private String convertSelectQueryStringBased(String originalQuery, SqlConversionContext context) {
         // Step 1: Process SELECT statement conversion
         String sqlWithSelect = convertSelectStatement(originalQuery, context);
         
@@ -125,8 +195,395 @@ public class SqlGenerationVisitor {
         // Step 11: Apply dialect-specific transformations
         String finalSql = DialectTransformer.transform(sqlWithPositionalParams, context.dialect());
         
-        logger.debug("Converted SQL: {}", finalSql);
+        logger.debug("Converted SELECT SQL: {}", finalSql);
         return finalSql;
+    }
+    
+    /**
+     * String-based conversion for UPDATE queries.
+     */
+    private String convertUpdateQueryStringBased(String originalQuery, SqlConversionContext context) {
+        // Step 1: Convert entity references to table references
+        String sqlWithTables = convertEntityReferences(originalQuery, context);
+        
+        // Step 2: Convert property references to column references (in SET and WHERE clauses)
+        String sqlWithColumns = convertPropertyReferences(sqlWithTables, context);
+        
+        // Step 3: Process JOIN operations conversion (if any)
+        String sqlWithJoins = convertJoinOperations(sqlWithColumns, context);
+        
+        // Step 4: Process WHERE clause conversion
+        String sqlWithWhere = convertWhereClause(sqlWithJoins, context);
+        
+        // Step 5: Convert SET clause property references
+        String sqlWithSetClause = convertUpdateSetClause(sqlWithWhere, context);
+        
+        // Step 6: Convert named parameters to positional parameters
+        String sqlWithPositionalParams = convertNamedParameters(sqlWithSetClause);
+        
+        // Step 7: Apply dialect-specific transformations
+        String finalSql = DialectTransformer.transform(sqlWithPositionalParams, context.dialect());
+        
+        logger.debug("Converted UPDATE SQL: {}", finalSql);
+        return finalSql;
+    }
+    
+    /**
+     * String-based conversion for DELETE queries.
+     */
+    private String convertDeleteQueryStringBased(String originalQuery, SqlConversionContext context) {
+        // Step 1: Convert entity references to table references
+        String sqlWithTables = convertEntityReferences(originalQuery, context);
+        
+        // Step 2: Convert property references to column references
+        String sqlWithColumns = convertPropertyReferences(sqlWithTables, context);
+        
+        // Step 3: Process JOIN operations conversion (if any)
+        String sqlWithJoins = convertJoinOperations(sqlWithColumns, context);
+        
+        // Step 4: Process WHERE clause conversion
+        String sqlWithWhere = convertWhereClause(sqlWithJoins, context);
+        
+        // Step 5: Convert named parameters to positional parameters
+        String sqlWithPositionalParams = convertNamedParameters(sqlWithWhere);
+        
+        // Step 6: Apply dialect-specific transformations
+        String finalSql = DialectTransformer.transform(sqlWithPositionalParams, context.dialect());
+        
+        logger.debug("Converted DELETE SQL: {}", finalSql);
+        return finalSql;
+    }
+    
+    /**
+     * String-based conversion for generic/unknown query types.
+     */
+    private String convertGenericQueryStringBased(String originalQuery, SqlConversionContext context) {
+        // Apply basic conversions for unknown query types
+        
+        // Step 1: Convert entity references to table references
+        String sqlWithTables = convertEntityReferences(originalQuery, context);
+        
+        // Step 2: Convert property references to column references
+        String sqlWithColumns = convertPropertyReferences(sqlWithTables, context);
+        
+        // Step 3: Process WHERE clause conversion (if any)
+        String sqlWithWhere = convertWhereClause(sqlWithColumns, context);
+        
+        // Step 4: Convert named parameters to positional parameters
+        String sqlWithPositionalParams = convertNamedParameters(sqlWithWhere);
+        
+        // Step 5: Apply dialect-specific transformations
+        String finalSql = DialectTransformer.transform(sqlWithPositionalParams, context.dialect());
+        
+        logger.debug("Converted generic SQL: {}", finalSql);
+        return finalSql;
+    }
+    
+    /**
+     * Converts SET clause in UPDATE statements, handling property to column mapping.
+     */
+    private String convertUpdateSetClause(String query, SqlConversionContext context) {
+        // Pattern to match SET clause: SET property = value, property2 = value2
+        Pattern setPattern = Pattern.compile(
+            "(SET\\s+)([^\\s]+(?:\\s*,\\s*[^\\s]+)*?)(?=\\s+WHERE|$)",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+        );
+        
+        Matcher matcher = setPattern.matcher(query);
+        if (matcher.find()) {
+            String setKeyword = matcher.group(1);
+            String setClause = matcher.group(2);
+            
+            // Convert property references in SET clause
+            String convertedSetClause = convertSetClauseProperties(setClause, context);
+            
+            return matcher.replaceFirst(setKeyword + convertedSetClause);
+        }
+        
+        return query;
+    }
+    
+    /**
+     * Converts property references within SET clause assignments.
+     */
+    private String convertSetClauseProperties(String setClause, SqlConversionContext context) {
+        // Pattern to match property assignments: property = value
+        Pattern assignmentPattern = Pattern.compile(
+            "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*=",
+            Pattern.CASE_INSENSITIVE
+        );
+        
+        StringBuffer result = new StringBuffer();
+        Matcher matcher = assignmentPattern.matcher(setClause);
+        
+        while (matcher.find()) {
+            String propertyName = matcher.group(1);
+            
+            // Find column mapping for the property
+            String columnName = findColumnMapping(propertyName, context);
+            
+            if (columnName != null) {
+                String replacement = columnName + " =";
+                matcher.appendReplacement(result, replacement);
+                logger.debug("Converted SET clause property: {} -> {}", propertyName, columnName);
+            } else {
+                // If no mapping found, keep original
+                matcher.appendReplacement(result, matcher.group(0));
+            }
+        }
+        matcher.appendTail(result);
+        
+        return result.toString();
+    }
+    
+    /**
+     * Converts a parsed SELECT statement using proper AST traversal.
+     */
+    private void convertSelectStatement(Select select, SqlConversionContext context) {
+        PlainSelect plainSelect = select.getPlainSelect();
+        
+        // Convert SELECT items
+        if (plainSelect.getSelectItems() != null) {
+            for (int i = 0; i < plainSelect.getSelectItems().size(); i++) {
+                SelectItem<?> item = plainSelect.getSelectItems().get(i);
+                if (item.getExpression() != null) {
+                    net.sf.jsqlparser.expression.Expression convertedExpr = 
+                        convertExpressionToSnakeCase(item.getExpression(), context);
+                    SelectItem<?> newItem = SelectItem.from(convertedExpr);
+                    if (item.getAlias() != null) {
+                        newItem.setAlias(item.getAlias());
+                    }
+                    plainSelect.getSelectItems().set(i, newItem);
+                }
+            }
+        }
+        
+        // Convert FROM item
+        if (plainSelect.getFromItem() != null) {
+            convertFromItem(plainSelect.getFromItem(), context);
+        }
+        
+        // Convert JOINs
+        if (plainSelect.getJoins() != null) {
+            for (Join join : plainSelect.getJoins()) {
+                convertJoin(join, context);
+            }
+        }
+        
+        // Convert WHERE clause
+        if (plainSelect.getWhere() != null) {
+            plainSelect.setWhere(convertExpressionToSnakeCase(plainSelect.getWhere(), context));
+        }
+        
+        // Convert GROUP BY
+        if (plainSelect.getGroupBy() != null) {
+            GroupByElement groupBy = plainSelect.getGroupBy();
+            if (groupBy.getGroupByExpressions() != null) {
+                ExpressionList expressions = new ExpressionList();
+                for (Object obj : groupBy.getGroupByExpressions()) {
+                    if (obj instanceof net.sf.jsqlparser.expression.Expression) {
+                        net.sf.jsqlparser.expression.Expression expr = (net.sf.jsqlparser.expression.Expression) obj;
+                        expressions.add(convertExpressionToSnakeCase(expr, context));
+                    } else {
+                        expressions.add(obj);
+                    }
+                }
+                groupBy.setGroupByExpressions(expressions);
+            }
+        }
+        
+        // Convert HAVING clause
+        if (plainSelect.getHaving() != null) {
+            plainSelect.setHaving(convertExpressionToSnakeCase(plainSelect.getHaving(), context));
+        }
+        
+        // Convert ORDER BY
+        if (plainSelect.getOrderByElements() != null) {
+            for (OrderByElement orderBy : plainSelect.getOrderByElements()) {
+                orderBy.setExpression(convertExpressionToSnakeCase(orderBy.getExpression(), context));
+            }
+        }
+    }
+    
+    /**
+     * Converts a parsed UPDATE statement using proper AST traversal.
+     */
+    private void convertUpdateStatement(Update update, SqlConversionContext context) {
+        // Convert table reference
+        if (update.getTable() != null) {
+            convertFromItem(update.getTable(), context);
+        }
+        
+        // Convert SET clauses
+        if (update.getUpdateSets() != null) {
+            for (UpdateSet updateSet : update.getUpdateSets()) {
+                // Convert columns in SET clause
+                if (updateSet.getColumns() != null) {
+                    for (int i = 0; i < updateSet.getColumns().size(); i++) {
+                        Column column = updateSet.getColumns().get(i);
+                        updateSet.getColumns().set(i, (Column) convertExpressionToSnakeCase(column, context));
+                    }
+                }
+                
+                // Convert values in SET clause
+                if (updateSet.getValues() != null) {
+                    ExpressionList newValues = new ExpressionList();
+                    for (Object value : updateSet.getValues()) {
+                        if (value instanceof net.sf.jsqlparser.expression.Expression) {
+                            newValues.add(convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) value, context));
+                        } else {
+                            newValues.add(value);
+                        }
+                    }
+                    updateSet.setValues(newValues);
+                }
+            }
+        }
+        
+        // Convert WHERE clause
+        if (update.getWhere() != null) {
+            update.setWhere(convertExpressionToSnakeCase(update.getWhere(), context));
+        }
+        
+        // Convert JOINs if present
+        if (update.getJoins() != null) {
+            for (Join join : update.getJoins()) {
+                convertJoin(join, context);
+            }
+        }
+        
+        logger.debug("Converted UPDATE statement for table: {}", 
+                    update.getTable() != null ? update.getTable().getName() : "unknown");
+    }
+    
+    /**
+     * Converts a parsed DELETE statement using proper AST traversal.
+     */
+    private void convertDeleteStatement(Delete delete, SqlConversionContext context) {
+        // Convert table reference
+        if (delete.getTable() != null) {
+            convertFromItem(delete.getTable(), context);
+        }
+        
+        // Convert WHERE clause
+        if (delete.getWhere() != null) {
+            delete.setWhere(convertExpressionToSnakeCase(delete.getWhere(), context));
+        }
+        
+        // Convert JOINs if present (for DELETE with JOINs)
+        if (delete.getJoins() != null) {
+            for (Join join : delete.getJoins()) {
+                convertJoin(join, context);
+            }
+        }
+        
+        // Convert ORDER BY if present (MySQL supports ORDER BY in DELETE)
+        if (delete.getOrderByElements() != null) {
+            for (OrderByElement orderBy : delete.getOrderByElements()) {
+                orderBy.setExpression(convertExpressionToSnakeCase(orderBy.getExpression(), context));
+            }
+        }
+        
+        logger.debug("Converted DELETE statement for table: {}", 
+                    delete.getTable() != null ? delete.getTable().getName() : "unknown");
+    }
+    
+    /**
+     * Enhanced expression conversion that uses the conversion context.
+     */
+    private net.sf.jsqlparser.expression.Expression convertExpressionToSnakeCase(
+            net.sf.jsqlparser.expression.Expression expr, SqlConversionContext context) {
+        
+        if (expr instanceof Column column) {
+            // Convert column names to snake_case
+            String columnName = column.getColumnName();
+            if (columnName != null && !columnName.equals("*")) {
+                column.setColumnName(camelToSnake(columnName));
+            }
+        } else if (expr instanceof Function function) {
+            // Handle function parameters
+            if (function.getParameters() != null && function.getParameters().getExpressions() != null) {
+                ExpressionList params = (ExpressionList) function.getParameters().getExpressions();
+                for (int i = 0; i < params.size(); i++) {
+                    params.getExpressions().set(i, convertExpressionToSnakeCase(
+                        (net.sf.jsqlparser.expression.Expression) params.get(i), context));
+                }
+            }
+        } else if (expr instanceof CaseExpression ce) {
+            // Convert switch expression if present
+            if (ce.getSwitchExpression() != null) {
+                ce.setSwitchExpression(convertExpressionToSnakeCase(ce.getSwitchExpression(), context));
+            }
+            
+            // Convert WHEN clauses
+            for (WhenClause when : ce.getWhenClauses()) {
+                when.setWhenExpression(convertExpressionToSnakeCase(when.getWhenExpression(), context));
+                when.setThenExpression(convertExpressionToSnakeCase(when.getThenExpression(), context));
+            }
+            
+            // Convert ELSE expression if present
+            if (ce.getElseExpression() != null) {
+                ce.setElseExpression(convertExpressionToSnakeCase(ce.getElseExpression(), context));
+            }
+        } else if (expr instanceof BinaryExpression binaryExpr) {
+            binaryExpr.setLeftExpression(convertExpressionToSnakeCase(binaryExpr.getLeftExpression(), context));
+            binaryExpr.setRightExpression(convertExpressionToSnakeCase(binaryExpr.getRightExpression(), context));
+        }
+        
+        return expr;
+    }
+    
+    /**
+     * Converts FROM item (table references).
+     */
+    private void convertFromItem(FromItem fromItem, SqlConversionContext context) {
+        if (fromItem instanceof Table table) {
+            // Convert entity name to table name if needed
+            String tableName = table.getName();
+            TableMapping tableMapping = context.entityMetadata().getTableMapping(tableName);
+            if (tableMapping != null) {
+                table.setName(tableMapping.tableName());
+            }
+        }
+    }
+    
+    /**
+     * Converts JOIN clauses.
+     */
+    private void convertJoin(Join join, SqlConversionContext context) {
+        // Convert the right item (joined table)
+        if (join.getRightItem() != null) {
+            convertFromItem(join.getRightItem(), context);
+        }
+        
+        // Convert ON expressions
+        if (join.getOnExpressions() != null) {
+            List<net.sf.jsqlparser.expression.Expression> onExpressions = 
+                new java.util.ArrayList<>();
+            for (net.sf.jsqlparser.expression.Expression expr : join.getOnExpressions()) {
+                onExpressions.add(convertExpressionToSnakeCase(expr, context));
+            }
+            join.setOnExpressions(onExpressions);
+        }
+    }
+    
+    /**
+     * Simple camelCase to snake_case conversion.
+     */
+    private String camelToSnake(String camelCase) {
+        if (camelCase == null || camelCase.isEmpty()) {
+            return camelCase;
+        }
+        
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < camelCase.length(); i++) {
+            char c = camelCase.charAt(i);
+            if (Character.isUpperCase(c) && i > 0) {
+                result.append('_');
+            }
+            result.append(Character.toLowerCase(c));
+        }
+        return result.toString();
     }
     
     /**

@@ -66,50 +66,33 @@ public class HibernateQueryConverter implements JpaQueryConverter {
     
     @Override
     public ConversionResult convertToNativeSQL(String jpaQuery, EntityMetadata entityMetadata, DatabaseDialect dialect) {
-        if (jpaQuery == null || jpaQuery.trim().isEmpty()) {
-            return ConversionResult.failure("Query cannot be null or empty", ConversionFailureReason.PARSER_ERROR);
-        }
-        
         if (!supportsDialect(dialect)) {
             return ConversionResult.failure(
                 "Unsupported database dialect: " + dialect, 
                 ConversionFailureReason.DIALECT_INCOMPATIBILITY
             );
         }
-        
-        try {
-            logger.debug("Converting HQL query: {}", jpaQuery);
-            
-            // Step 1: Parse the HQL query
-            HqlParseResult parseResult = parseHqlQuery(jpaQuery);
-            if (!parseResult.isSuccessful()) {
-                return ConversionResult.failure(parseResult.getErrorMessage(), ConversionFailureReason.PARSER_ERROR);
-            }
-            
-            // Step 2: Convert to SQL using the visitor pattern
-            SqlConversionContext context = new SqlConversionContext(entityMetadata, dialect);
-            String nativeSql = sqlVisitor.convertToSql(parseResult.getQueryNode(), context);
-            
-            // Step 3: Apply additional dialect-specific transformations
-            nativeSql = applyAdditionalDialectTransformations(nativeSql, dialect);
-            
-            // Step 4: Handle parameter conversion
-            List<ParameterMapping> parameterMappings = extractParameterMappings(jpaQuery, nativeSql);
-            
-            // Step 5: Extract referenced tables
-            Set<String> referencedTables = extractReferencedTables(entityMetadata, parseResult.getQueryNode());
-            
-            logger.debug("Successfully converted HQL to SQL: {}", nativeSql);
-            
-            return new ConversionResult(nativeSql, parameterMappings, referencedTables);
-            
-        } catch (Exception e) {
-            logger.error("Failed to convert HQL query: {}", jpaQuery, e);
-            return ConversionResult.failure(
-                "Query conversion failed: " + e.getMessage(), 
-                ConversionFailureReason.PARSER_ERROR
-            );
+
+        // Step 1: Parse the HQL query
+        HqlParseResult parseResult = parseHqlQuery(jpaQuery);
+        if (!parseResult.isSuccessful()) {
+            return ConversionResult.failure(parseResult.getErrorMessage(), ConversionFailureReason.PARSER_ERROR);
         }
+
+        // Step 2: Convert to SQL using the visitor pattern
+        SqlConversionContext context = new SqlConversionContext(entityMetadata, dialect);
+        String nativeSql = sqlVisitor.convertToSql(parseResult.getQueryNode(), context);
+
+        // Step 3: Apply additional dialect-specific transformations
+        nativeSql = applyAdditionalDialectTransformations(nativeSql, dialect);
+
+        // Step 4: Handle parameter conversion
+        List<ParameterMapping> parameterMappings = extractParameterMappings(jpaQuery);
+
+        // Step 5: Extract referenced tables
+        Set<String> referencedTables = extractReferencedTables(entityMetadata, parseResult.getQueryNode());
+
+        return new ConversionResult(nativeSql, parameterMappings, referencedTables);
     }
     
     @Override
@@ -168,33 +151,112 @@ public class HibernateQueryConverter implements JpaQueryConverter {
      * @return HqlParseResult containing the parsed query node or error information
      */
     private HqlParseResult parseHqlQuery(String hqlQuery) {
-        try {
-            // For now, implement a basic parser that can handle simple queries
-            // This will be enhanced in subsequent implementations
-            
-            // Basic validation
-            if (!hqlQuery.trim().toLowerCase().startsWith("select") && 
-                !hqlQuery.trim().toLowerCase().startsWith("from")) {
-                return HqlParseResult.failure("Only SELECT and FROM queries are currently supported");
-            }
-            
-            // Create a mock query node for basic queries
-            // In a full implementation, this would use Hibernate's actual HQL parser
-            MockQueryNode queryNode = new MockQueryNode(hqlQuery);
-            
-            return HqlParseResult.success(queryNode);
-            
-        } catch (Exception e) {
-            logger.error("Failed to parse HQL query: {}", hqlQuery, e);
-            return HqlParseResult.failure("Parse error: " + e.getMessage());
+
+        // For now, implement a basic parser that can handle simple queries
+        // This will be enhanced in subsequent implementations
+
+        String trimmedQuery = hqlQuery.trim().toLowerCase();
+        
+        // Basic validation - support SELECT, FROM, UPDATE, and DELETE queries
+        if (!trimmedQuery.startsWith("select") &&
+            !trimmedQuery.startsWith("from") &&
+            !trimmedQuery.startsWith("update") &&
+            !trimmedQuery.startsWith("delete")) {
+            return HqlParseResult.failure("Only SELECT, FROM, UPDATE, and DELETE queries are currently supported");
         }
+
+        // Validate query structure based on type
+        if (trimmedQuery.startsWith("update")) {
+            if (!validateUpdateQuery(hqlQuery)) {
+                return HqlParseResult.failure("Invalid UPDATE query structure");
+            }
+        } else if (trimmedQuery.startsWith("delete")) {
+            if (!validateDeleteQuery(hqlQuery)) {
+                return HqlParseResult.failure("Invalid DELETE query structure");
+            }
+        }
+
+        // Create a mock query node for basic queries
+        // In a full implementation, this would use Hibernate's actual HQL parser
+        MockQueryNode queryNode = new MockQueryNode(hqlQuery);
+
+        return HqlParseResult.success(queryNode);
+    }
+    
+    /**
+     * Validates the structure of an UPDATE query.
+     * 
+     * @param updateQuery The UPDATE query to validate
+     * @return true if the query structure is valid, false otherwise
+     */
+    private boolean validateUpdateQuery(String updateQuery) {
+        String trimmed = updateQuery.trim().toLowerCase();
+        
+        // Basic UPDATE query structure: UPDATE EntityName SET property = value [WHERE conditions]
+        if (!trimmed.contains("set")) {
+            logger.warn("UPDATE query missing SET clause: {}", updateQuery);
+            return false;
+        }
+        
+        // Check for entity name after UPDATE
+        String[] parts = trimmed.split("\\s+");
+        if (parts.length < 4) { // UPDATE EntityName SET property
+            logger.warn("UPDATE query has insufficient parts: {}", updateQuery);
+            return false;
+        }
+        
+        // Validate that we have an entity name (should start with uppercase in HQL)
+        String entityPart = updateQuery.trim().split("\\s+")[1];
+        if (!Character.isUpperCase(entityPart.charAt(0))) {
+            logger.warn("UPDATE query entity name should start with uppercase: {}", entityPart);
+            // Don't fail for this, just warn as it might be a table name in native SQL
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Validates the structure of a DELETE query.
+     * 
+     * @param deleteQuery The DELETE query to validate
+     * @return true if the query structure is valid, false otherwise
+     */
+    private boolean validateDeleteQuery(String deleteQuery) {
+        String trimmed = deleteQuery.trim().toLowerCase();
+        
+        // Basic DELETE query structure: DELETE FROM EntityName [WHERE conditions]
+        // or: DELETE EntityName [WHERE conditions] (HQL shorthand)
+        
+        String[] parts = trimmed.split("\\s+");
+        if (parts.length < 2) { // DELETE EntityName or DELETE FROM
+            logger.warn("DELETE query has insufficient parts: {}", deleteQuery);
+            return false;
+        }
+        
+        // Check if it's "DELETE FROM EntityName" or "DELETE EntityName"
+        boolean hasFrom = parts.length > 2 && "from".equals(parts[1]);
+        int entityIndex = hasFrom ? 2 : 1;
+        
+        if (parts.length <= entityIndex) {
+            logger.warn("DELETE query missing entity name: {}", deleteQuery);
+            return false;
+        }
+        
+        // Validate that we have an entity name (should start with uppercase in HQL)
+        String entityPart = deleteQuery.trim().split("\\s+")[entityIndex];
+        if (!Character.isUpperCase(entityPart.charAt(0))) {
+            logger.warn("DELETE query entity name should start with uppercase: {}", entityPart);
+            // Don't fail for this, just warn as it might be a table name in native SQL
+        }
+        
+        return true;
     }
     
     /**
      * Extracts parameter mappings from the original and converted queries.
      * Converts named parameters to positional parameters and maintains mapping information.
      */
-    private List<ParameterMapping> extractParameterMappings(String originalQuery, String convertedQuery) {
+    private List<ParameterMapping> extractParameterMappings(String originalQuery) {
         List<ParameterMapping> mappings = new ArrayList<>();
         Set<String> processedParams = new HashSet<>();
         

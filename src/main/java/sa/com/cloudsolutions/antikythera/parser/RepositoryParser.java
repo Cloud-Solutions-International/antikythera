@@ -58,6 +58,10 @@ public class RepositoryParser extends AbstractCompiler {
     public static final String SELECT_STAR = "SELECT * FROM ";
     private static final Pattern CAMEL_TO_SNAKE_PATTERN = Pattern.compile("([a-z])([A-Z]+)");
 
+    private static final Pattern KEYWORDS_PATTERN = Pattern.compile(
+            "get|findBy|findFirstBy|findTopBy|And|OrderBy|NotIn|In|Desc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan"
+    );
+
     /**
      * The queries that were identified in this repository
      */
@@ -587,35 +591,16 @@ public class RepositoryParser extends AbstractCompiler {
                     rql.setQuery(result.getNativeSql());
                     rql.setIsNative(true); // Mark as native after successful conversion
                 } else {
-                    if (isConversionFailureLoggingEnabled()) {
-                        logger.warn("Query conversion failed: {}. Failure reason: {}", 
-                                   result.getErrorMessage(), result.getFailureReason());
-                    }
-                    
-                    if (isFallbackOnFailureEnabled()) {
-                        logger.debug("Falling back to existing logic for query conversion failure");
-                        rql.setQuery(query);
-                        rql.setIsNative(isNative);
-                    } else {
-                        // If fallback is disabled, we could throw an exception or handle differently
-                        logger.error("Query conversion failed and fallback is disabled. Query: {}", query);
-                        rql.setQuery(query);
-                        rql.setIsNative(isNative);
-                    }
+                    logger.debug("Falling back to existing logic for query conversion failure");
+                    rql.setQuery(query);
+                    rql.setIsNative(isNative);
                 }
             } catch (Exception e) {
                 if (isConversionFailureLoggingEnabled()) {
                     logger.warn("Exception during query conversion: {}. Falling back to existing logic.", e.getMessage());
                 }
-                
-                if (isFallbackOnFailureEnabled()) {
-                    rql.setQuery(query);
-                    rql.setIsNative(isNative);
-                } else {
-                    logger.error("Exception during query conversion and fallback is disabled. Query: {}", query, e);
-                    rql.setQuery(query);
-                    rql.setIsNative(isNative);
-                }
+                rql.setQuery(query);
+                rql.setIsNative(isNative);
             }
         } else {
             // Use original query for native queries or when conversion is disabled
@@ -721,10 +706,6 @@ public class RepositoryParser extends AbstractCompiler {
         queries.put(md, queryBuilder(result.toString(), true, md));
     }
 
-    private static final Pattern KEYWORDS_PATTERN = Pattern.compile(
-        "get|findBy|findFirstBy|findTopBy|And|OrderBy|NotIn|In|Desc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan"
-    );
-    
     /**
      * Recursively search method names for sql components
      * @param methodName name of the method
