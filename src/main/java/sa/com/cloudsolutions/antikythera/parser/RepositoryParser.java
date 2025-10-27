@@ -54,8 +54,6 @@ import java.util.stream.Collectors;
  */
 public class RepositoryParser extends BaseRepositoryParser {
     protected static final Logger logger = LoggerFactory.getLogger(RepositoryParser.class);
-    public static final String JPA_REPOSITORY = "JpaRepository";
-
     /**
      * The connection to the database established using the credentials in the configuration
      */
@@ -145,28 +143,6 @@ public class RepositoryParser extends BaseRepositoryParser {
             parser.compile(AbstractCompiler.classToPath(args[0]));
             parser.processTypes();
             parser.executeAllQueries();
-        }
-    }
-
-    /**
-     * Process the CompilationUnit to identify all the queries.
-     */
-    public void processTypes()  {
-        for(var tp : cu.getTypes()) {
-            if(tp.isClassOrInterfaceDeclaration()) {
-                var cls = tp.asClassOrInterfaceDeclaration();
-
-                for(var parent : cls.getExtendedTypes()) {
-                    if (parent.toString().startsWith(JPA_REPOSITORY)) {
-
-                        parent.getTypeArguments().ifPresent(t -> {
-                            entityType = t.getFirst().orElseThrow();
-                            entity = findEntity(entityType);
-                            table = findTableName(entity);
-                        });
-                    }
-                }
-            }
         }
     }
 

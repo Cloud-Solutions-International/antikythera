@@ -34,6 +34,7 @@ import java.util.regex.Pattern;
 public class BaseRepositoryParser extends AbstractCompiler {
     protected static final Logger logger = LoggerFactory.getLogger(BaseRepositoryParser.class);
 
+    public static final String JPA_REPOSITORY = "JpaRepository";
     public static final String SELECT_STAR = "SELECT * FROM ";
     protected static final Pattern CAMEL_TO_SNAKE_PATTERN = Pattern.compile("([a-z])([A-Z]+)");
 
@@ -590,6 +591,28 @@ public class BaseRepositoryParser extends AbstractCompiler {
         public void visit(MethodDeclaration n, Void arg) {
             super.visit(n, arg);
             queryFromMethodDeclaration(n);
+        }
+    }
+
+    /**
+     * Process the CompilationUnit to identify all the queries.
+     */
+    public void processTypes()  {
+        for(var tp : cu.getTypes()) {
+            if(tp.isClassOrInterfaceDeclaration()) {
+                var cls = tp.asClassOrInterfaceDeclaration();
+
+                for(var parent : cls.getExtendedTypes()) {
+                    if (parent.toString().startsWith(JPA_REPOSITORY)) {
+
+                        parent.getTypeArguments().ifPresent(t -> {
+                            entityType = t.getFirst().orElseThrow();
+                            entity = findEntity(entityType);
+                            table = findTableName(entity);
+                        });
+                    }
+                }
+            }
         }
     }
 
