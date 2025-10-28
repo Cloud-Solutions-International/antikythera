@@ -115,6 +115,12 @@ public class RepositoryQuery {
      */
     private String originalQuery;
     private boolean writeOps;
+    
+    /**
+     * The fully qualified name of the repository class that contains this query.
+     * This is set during query creation to avoid AST traversal issues later.
+     */
+    private String repositoryClassName;
 
 
     public RepositoryQuery() {
@@ -704,10 +710,26 @@ public class RepositoryQuery {
     }
 
     public String getClassname() {
+        // First try to get from stored repository class name (avoids AST traversal issues)
+        if (repositoryClassName != null) {
+            // Extract simple class name from fully qualified name
+            int lastDotIndex = repositoryClassName.lastIndexOf('.');
+            return lastDotIndex >= 0 ? repositoryClassName.substring(lastDotIndex + 1) : repositoryClassName;
+        }
+        
+        // Fallback to AST traversal (original approach)
         return methodDeclaration.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow().getNameAsString();
     }
 
     public String getTable() {
         return table;
+    }
+
+    public String getRepositoryClassName() {
+        return repositoryClassName;
+    }
+
+    public void setRepositoryClassName(String repositoryClassName) {
+        this.repositoryClassName = repositoryClassName;
     }
 }

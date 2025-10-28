@@ -24,6 +24,7 @@ import sa.com.cloudsolutions.antikythera.parser.converter.JpaQueryConverter;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -314,6 +315,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         rql.setMethodDeclaration(md);
         rql.setEntityType(entityType);
         rql.setTable(table);
+        rql.setRepositoryClassName(className);
 
         // Use the new converter for non-native queries if enabled
         if (!isNative && isQueryConversionEnabled()) {
@@ -439,6 +441,15 @@ public class BaseRepositoryParser extends AbstractCompiler {
     public void clearConversionCache() {
         conversionCache.clear();
         logger.debug("Conversion cache cleared");
+    }
+
+    /**
+     * Gets all the repository queries that have been built.
+     * 
+     * @return a collection of all RepositoryQuery objects
+     */
+    public Collection<RepositoryQuery> getAllQueries() {
+        return queries.values();
     }
 
 
