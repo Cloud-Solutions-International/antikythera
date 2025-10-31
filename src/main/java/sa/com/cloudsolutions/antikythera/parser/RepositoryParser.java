@@ -1,47 +1,29 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
-import com.github.javaparser.ast.expr.AnnotationExpr;
 import net.sf.jsqlparser.JSQLParserException;
-import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
-import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
-import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
-import sa.com.cloudsolutions.antikythera.evaluator.Variable;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.parser.converter.JpaQueryConverter;
 import sa.com.cloudsolutions.antikythera.parser.converter.HibernateQueryConverter;
-import sa.com.cloudsolutions.antikythera.parser.converter.ConversionResult;
-import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
-import sa.com.cloudsolutions.antikythera.parser.converter.EntityMetadata;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
-
-import com.github.javaparser.ast.type.Type;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import net.sf.jsqlparser.statement.select.Select;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.io.IOException;
-import java.lang.annotation.Annotation;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
