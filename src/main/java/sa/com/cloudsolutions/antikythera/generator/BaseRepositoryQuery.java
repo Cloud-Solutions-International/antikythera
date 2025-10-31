@@ -4,6 +4,7 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.type.Type;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.BinaryExpression;
@@ -75,7 +76,7 @@ public class BaseRepositoryQuery {
     /**
      * The table that the entity is mapped to.
      */
-    private String table;
+    private String primaryTable;
 
     /**
      * The SQL statement that represents the query.
@@ -166,7 +167,7 @@ public class BaseRepositoryQuery {
 
                 // find if there is a join column annotation, that will tell us the column names
                 // to map for the on clause.
-
+                Optional<AnnotationExpr> annotationExpr =  member.getAnnotationByName("JoinColumn");
                 for (var ann : member.getAnnotations()) {
                     if (ann.getNameAsString().equals("JoinColumn")) {
                         if (ann.isNormalAnnotationExpr()) {
@@ -398,8 +399,8 @@ public class BaseRepositoryQuery {
         this.entityType = entityType;
     }
 
-    public void setTable(String table) {
-        this.table = table;
+    public void setPrimaryTable(String table) {
+        this.primaryTable = table;
     }
 
     public void setQuery(String query) {
@@ -430,8 +431,8 @@ public class BaseRepositoryQuery {
         /*
          * First up we replace the entity name with the table name
          */
-        if (entityType != null && table != null) {
-            sql = sql.replace(entityType.asClassOrInterfaceType().getNameAsString(), table);
+        if (entityType != null && primaryTable != null) {
+            sql = sql.replace(entityType.asClassOrInterfaceType().getNameAsString(), primaryTable);
         }
 
         /*
@@ -507,8 +508,8 @@ public class BaseRepositoryQuery {
         return methodDeclaration.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow().getNameAsString();
     }
 
-    public String getTable() {
-        return table;
+    public String getPrimaryTable() {
+        return primaryTable;
     }
 
     public String getRepositoryClassName() {

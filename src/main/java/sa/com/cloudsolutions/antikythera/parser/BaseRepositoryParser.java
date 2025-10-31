@@ -314,7 +314,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         RepositoryQuery rql = new RepositoryQuery();
         rql.setMethodDeclaration(md);
         rql.setEntityType(entityType);
-        rql.setTable(table);
+        rql.setPrimaryTable(table);
         rql.setRepositoryClassName(className);
 
         // Use the new converter for non-native queries if enabled
