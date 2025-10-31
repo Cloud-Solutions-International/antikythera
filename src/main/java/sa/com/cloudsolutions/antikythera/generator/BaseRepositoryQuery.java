@@ -98,7 +98,7 @@ public class BaseRepositoryQuery {
         methodArguments = new ArrayList<>();
     }
 
-    private static void generalProjections(List<SelectItem<?>> items) {
+    protected static void generalProjections(List<SelectItem<?>> items) {
         for (int i = 0; i < items.size(); i++) {
             SelectItem<?> item = items.get(i);
 
@@ -152,7 +152,7 @@ public class BaseRepositoryQuery {
         }
     }
 
-    private static TypeWrapper processJoin(Join j, List<TypeWrapper> units, String[] parts) throws AntikytheraException {
+    protected static TypeWrapper processJoin(Join j, List<TypeWrapper> units, String[] parts) throws AntikytheraException {
         TypeWrapper other = null;
         // the join may happen against any of the tables that we have encountered so far
         // hence the need to loop through here.
