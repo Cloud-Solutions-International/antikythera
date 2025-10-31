@@ -96,7 +96,6 @@ public class DepSolver {
 
     /**
      * Iterative Depth first search
-     * @ if any of the code inspections fails.
      */
     public void dfs()  {
         /*
