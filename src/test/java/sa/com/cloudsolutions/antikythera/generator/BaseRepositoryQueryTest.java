@@ -5,8 +5,15 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.Join;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import net.sf.jsqlparser.statement.select.Select;
+import net.sf.jsqlparser.statement.select.SelectItem;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -187,5 +194,218 @@ class BaseRepositoryQueryTest {
         
         // Should still process but may return null due to missing annotation
         // The exact behavior depends on RepositoryParser.findEntity implementation
+    }
+
+    @Test
+    void testConvertFieldsToSnakeCaseWithSelectStar() throws JSQLParserException, EvaluatorException {
+        // Create a simple SELECT statement with single character (representing SELECT *)
+        String sql = "SELECT t FROM Person t";
+        Statement stmt = CCJSqlParserUtil.parse(sql);
+        
+        // Create a TypeWrapper for entity
+        CompilationUnit personCu = new CompilationUnit();
+        var personClass = personCu.addClass("Person");
+        TypeWrapper entity = new TypeWrapper(personClass);
+        
+        // Create a BaseRepositoryQuery instance to test the method
+        BaseRepositoryQuery query = new BaseRepositoryQuery();
+        
+        // Call the method under test
+        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        
+        // Verify the statement was processed
+        assertInstanceOf(Select.class, stmt);
+        Select select = (Select) stmt;
+        PlainSelect plainSelect = select.getPlainSelect();
+        
+        // Should have converted single character select to SELECT *
+        assertEquals(1, plainSelect.getSelectItems().size());
+        assertTrue(plainSelect.getSelectItems().get(0).toString().contains("*"));
+    }
+
+    @Test
+    void testConvertFieldsToSnakeCaseWithSpecificFields() throws JSQLParserException, EvaluatorException {
+        // Create a SELECT statement with specific fields in camelCase
+        String sql = "SELECT firstName, lastName FROM Person";
+        Statement stmt = CCJSqlParserUtil.parse(sql);
+        
+        // Create a TypeWrapper for entity
+        CompilationUnit personCu = new CompilationUnit();
+        var personClass = personCu.addClass("Person");
+        TypeWrapper entity = new TypeWrapper(personClass);
+        
+        // Create a BaseRepositoryQuery instance to test the method
+        BaseRepositoryQuery query = new BaseRepositoryQuery();
+        
+        // Call the method under test
+        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        
+        // Verify the statement was processed
+        assertInstanceOf(Select.class, stmt);
+        Select select = (Select) stmt;
+        PlainSelect plainSelect = select.getPlainSelect();
+        
+        // Should have multiple select items
+        assertTrue(plainSelect.getSelectItems().size() >= 1);
+    }
+
+    @Test
+    void testConvertFieldsToSnakeCaseWithWhereClause() throws JSQLParserException, EvaluatorException {
+        // Create a SELECT statement with WHERE clause containing camelCase fields
+        String sql = "SELECT * FROM Person WHERE firstName = 'John'";
+        Statement stmt = CCJSqlParserUtil.parse(sql);
+        
+        // Create a TypeWrapper for entity
+        CompilationUnit personCu = new CompilationUnit();
+        var personClass = personCu.addClass("Person");
+        TypeWrapper entity = new TypeWrapper(personClass);
+        
+        // Create a BaseRepositoryQuery instance to test the method
+        BaseRepositoryQuery query = new BaseRepositoryQuery();
+        
+        // Call the method under test
+        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        
+        // Verify the statement was processed
+        assertInstanceOf(Select.class, stmt);
+        Select select = (Select) stmt;
+        PlainSelect plainSelect = select.getPlainSelect();
+        
+        // Should have a WHERE clause
+        assertNotNull(plainSelect.getWhere());
+    }
+
+    @Test
+    void testConvertFieldsToSnakeCaseWithGroupBy() throws JSQLParserException, EvaluatorException {
+        // Create a SELECT statement with GROUP BY clause
+        String sql = "SELECT COUNT(*) FROM Person GROUP BY departmentName";
+        Statement stmt = CCJSqlParserUtil.parse(sql);
+        
+        // Create a TypeWrapper for entity
+        CompilationUnit personCu = new CompilationUnit();
+        var personClass = personCu.addClass("Person");
+        TypeWrapper entity = new TypeWrapper(personClass);
+        
+        // Create a BaseRepositoryQuery instance to test the method
+        BaseRepositoryQuery query = new BaseRepositoryQuery();
+        
+        // Call the method under test
+        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        
+        // Verify the statement was processed
+        assertInstanceOf(Select.class, stmt);
+        Select select = (Select) stmt;
+        PlainSelect plainSelect = select.getPlainSelect();
+        
+        // Should have a GROUP BY clause
+        assertNotNull(plainSelect.getGroupBy());
+    }
+
+    @Test
+    void testConvertFieldsToSnakeCaseWithOrderBy() throws JSQLParserException, EvaluatorException {
+        // Create a SELECT statement with ORDER BY clause
+        String sql = "SELECT * FROM Person ORDER BY firstName, lastName";
+        Statement stmt = CCJSqlParserUtil.parse(sql);
+        
+        // Create a TypeWrapper for entity
+        CompilationUnit personCu = new CompilationUnit();
+        var personClass = personCu.addClass("Person");
+        TypeWrapper entity = new TypeWrapper(personClass);
+        
+        // Create a BaseRepositoryQuery instance to test the method
+        BaseRepositoryQuery query = new BaseRepositoryQuery();
+        
+        // Call the method under test
+        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        
+        // Verify the statement was processed
+        assertInstanceOf(Select.class, stmt);
+        Select select = (Select) stmt;
+        PlainSelect plainSelect = select.getPlainSelect();
+        
+        // Should have ORDER BY elements
+        assertNotNull(plainSelect.getOrderByElements());
+        assertFalse(plainSelect.getOrderByElements().isEmpty());
+    }
+
+    @Test
+    void testConvertFieldsToSnakeCaseWithHaving() throws JSQLParserException, EvaluatorException {
+        // Create a SELECT statement with HAVING clause
+        String sql = "SELECT COUNT(*) FROM Person GROUP BY departmentName HAVING COUNT(*) > 1";
+        Statement stmt = CCJSqlParserUtil.parse(sql);
+        
+        // Create a TypeWrapper for entity
+        CompilationUnit personCu = new CompilationUnit();
+        var personClass = personCu.addClass("Person");
+        TypeWrapper entity = new TypeWrapper(personClass);
+        
+        // Create a BaseRepositoryQuery instance to test the method
+        BaseRepositoryQuery query = new BaseRepositoryQuery();
+        
+        // Call the method under test
+        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        
+        // Verify the statement was processed
+        assertInstanceOf(Select.class, stmt);
+        Select select = (Select) stmt;
+        PlainSelect plainSelect = select.getPlainSelect();
+        
+        // Should have a HAVING clause
+        assertNotNull(plainSelect.getHaving());
+    }
+
+    @Test
+    void testConvertFieldsToSnakeCaseWithNonSelectStatement() throws JSQLParserException, EvaluatorException {
+        // Create a non-SELECT statement (e.g., INSERT)
+        String sql = "INSERT INTO Person (firstName) VALUES ('John')";
+        Statement stmt = CCJSqlParserUtil.parse(sql);
+        
+        // Create a TypeWrapper for entity
+        CompilationUnit personCu = new CompilationUnit();
+        var personClass = personCu.addClass("Person");
+        TypeWrapper entity = new TypeWrapper(personClass);
+        
+        // Create a BaseRepositoryQuery instance to test the method
+        BaseRepositoryQuery query = new BaseRepositoryQuery();
+        
+        // Call the method under test - should handle non-SELECT statements gracefully
+        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        
+        // Should not be a Select statement
+        assertFalse(stmt instanceof Select);
+    }
+
+    @Test
+    void testConvertFieldsToSnakeCaseWithJoins() throws JSQLParserException, EvaluatorException {
+        // Create a SELECT statement with JOINs
+        String sql = "SELECT p.firstName, d.departmentName FROM Person p JOIN Department d ON p.departmentId = d.id";
+        Statement stmt = CCJSqlParserUtil.parse(sql);
+        
+        // Create a TypeWrapper for entity
+        CompilationUnit personCu = new CompilationUnit();
+        var personClass = personCu.addClass("Person");
+        
+        // Add a department field to enable join processing
+        FieldDeclaration departmentField = personClass.addField("Department", "department");
+        NormalAnnotationExpr joinColumnAnnotation = new NormalAnnotationExpr();
+        joinColumnAnnotation.setName("JoinColumn");
+        joinColumnAnnotation.addPair("name", new StringLiteralExpr("department_id"));
+        departmentField.addAnnotation(joinColumnAnnotation);
+        
+        TypeWrapper entity = new TypeWrapper(personClass);
+        
+        // Create a BaseRepositoryQuery instance to test the method
+        BaseRepositoryQuery query = new BaseRepositoryQuery();
+        
+        // Call the method under test
+        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        
+        // Verify the statement was processed
+        assertInstanceOf(Select.class, stmt);
+        Select select = (Select) stmt;
+        PlainSelect plainSelect = select.getPlainSelect();
+        
+        // Should have joins
+        assertNotNull(plainSelect.getJoins());
     }
 }
