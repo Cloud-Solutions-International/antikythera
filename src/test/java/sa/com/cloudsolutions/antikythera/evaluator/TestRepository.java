@@ -29,7 +29,7 @@ public class TestRepository extends TestHelper {
 
     @BeforeEach
     void each() {
-        MockingRegistry.markAsMocked("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeRepository");
+        MockingRegistry.markAsMocked(FAKE_REPOSITORY);
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         System.setOut(new PrintStream(outContent));

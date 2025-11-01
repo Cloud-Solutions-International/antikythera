@@ -157,8 +157,8 @@ class DepSolverTest extends TestHelper {
         Map<String, CompilationUnit> a = Graph.getDependencies();
         assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService"));
         assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeSearchModel"));
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeEntity"));
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeRepository"));
+        assertTrue(a.containsKey(FAKE_ENTITY));
+        assertTrue(a.containsKey(FAKE_REPOSITORY));
         assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.CrazySpecification"));
 
         CompilationUnit cs = a.get("sa.com.cloudsolutions.antikythera.testhelper.evaluator.CrazySpecification");
