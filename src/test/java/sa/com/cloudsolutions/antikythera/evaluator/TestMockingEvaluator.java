@@ -31,8 +31,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TestMockingEvaluator {
 
-    public static final String FAKE_ENTITY = "sa.com.cloudsolutions.antikythera.testhelper.repository.FakeRepository";
-    public static final String FAKE_REPOSITORY = "sa.com.cloudsolutions.antikythera.testhelper.model.FakeEntity";
+    public static final String FAKE_ENTITY = "sa.com.cloudsolutions.antikythera.testhelper.model.FakeEntity";
+    public static final String FAKE_REPOSITORY = "sa.com.cloudsolutions.antikythera.testhelper.repository.FakeRepository";
     public static final String FAKE_SERVICE = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService";
     private MockingEvaluator mockingEvaluator;
     private MethodDeclaration voidMethod;
