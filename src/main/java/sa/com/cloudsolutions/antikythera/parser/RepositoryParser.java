@@ -5,7 +5,7 @@ import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.parser.converter.HibernateQueryConverter;
+import sa.com.cloudsolutions.antikythera.parser.converter.QueryConverterFactory;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
 import com.github.javaparser.ast.body.MethodDeclaration;
 
@@ -66,7 +66,7 @@ public class RepositoryParser extends BaseRepositoryParser {
         
         // Initialize the query converter and entity mapping resolver
         this.entityMappingResolver = new EntityMappingResolver();
-        this.queryConverter = new HibernateQueryConverter();
+        this.queryConverter = QueryConverterFactory.createConverter();
 
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
         if(db != null) {
