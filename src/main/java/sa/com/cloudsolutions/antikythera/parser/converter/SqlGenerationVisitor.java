@@ -96,7 +96,7 @@ public class SqlGenerationVisitor {
     
     // Pattern to match TYPE() function calls
     private static final Pattern TYPE_FUNCTION_PATTERN = Pattern.compile(
-        "\\bTYPE\\s*\\(\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\)\\s*(=|!=|<>|IN)\\s*(.+?)(?=\\s+(?:AND|OR|ORDER|GROUP|HAVING|LIMIT|$))",
+        "\\bTYPE\\s*\\(\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\)\\s*(=|!=|<>|IN)\\s*(.+?)(?=\\s+(?:AND|OR|ORDER|GROUP|HAVING|LIMIT)|$)",
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL
     );
     
@@ -112,15 +112,40 @@ public class SqlGenerationVisitor {
             throw new IllegalArgumentException("Query node cannot be null");
         }
         
-        logger.debug("Converting query node to SQL for dialect: {}", context.dialect());
+        logger.debug("convertToSql START - context id: {}, dialect: {}", System.identityHashCode(context), context.dialect());
         
         // For the initial implementation, we'll work with the original query text
         // In a full implementation, this would traverse the actual AST
         String originalQuery = queryNode.getText();
         
+        // Pre-extract entity-to-alias mappings from the original HQL query
+        // This ensures we know the actual entity names before JSQLParser converts them
+        preExtractEntityAliasesFromHql(originalQuery, context);
+        logger.debug("After pre-extraction - context id: {}, alias map size: {}", 
+                   System.identityHashCode(context), context.getAliasToEntityMap().size());
+        
+        // Check if query contains HQL-specific features that need string-based conversion
+        if (originalQuery.toUpperCase().contains("TYPE(")) {
+            logger.debug("Query contains TYPE() function, using string-based conversion");
+            return convertQueryStringBased(originalQuery, context);
+        }
+        
+        // Check if query targets inherited entities (will need discriminator filtering or inheritance joins)
+        // For now, force string-based conversion to ensure inheritance features are applied
+        Map<String, TableMapping> aliasMap = context.getAliasToEntityMap();
+        boolean targetsInheritedEntity = aliasMap.values().stream()
+            .anyMatch(tm -> tm.discriminatorColumn() != null || tm.isJoinedInheritance());
+        
+        if (targetsInheritedEntity) {
+            logger.debug("Query targets inherited entity, using string-based conversion for proper inheritance handling");
+            return convertQueryStringBased(originalQuery, context);
+        }
+        
         try {
             // Use JSQLParser to parse and convert the query properly
+            logger.info("CHECKPOINT: Attempting JSQLParser parsing");
             Statement statement = CCJSqlParserUtil.parse(originalQuery);
+            logger.info("CHECKPOINT: JSQLParser succeeded");
             
             if (statement instanceof Select select) {
                 // Convert the parsed statement using proper AST traversal
@@ -140,6 +165,12 @@ public class SqlGenerationVisitor {
             }
         } catch (JSQLParserException e) {
             logger.warn("Failed to parse query with JSQLParser, falling back to string-based conversion: {}", e.getMessage());
+            logger.info("CHECKPOINT: JSQLParser failed with JSQLParserException, using string-based");
+            // Fallback to the original string-based approach
+            return convertQueryStringBased(originalQuery, context);
+        } catch (Exception e) {
+            logger.warn("Failed to parse query with JSQLParser (non-JSQLParser exception), falling back to string-based conversion: {}", e.getMessage());
+            logger.info("CHECKPOINT: JSQLParser failed with {} exception, using string-based", e.getClass().getSimpleName());
             // Fallback to the original string-based approach
             return convertQueryStringBased(originalQuery, context);
         }
@@ -149,6 +180,8 @@ public class SqlGenerationVisitor {
      * String-based query conversion (fallback method).
      */
     private String convertQueryStringBased(String originalQuery, SqlConversionContext context) {
+        logger.debug("convertQueryStringBased START - context id: {}, alias map size: {}", 
+                   System.identityHashCode(context), context.getAliasToEntityMap().size());
         String trimmedQuery = originalQuery.trim().toLowerCase();
         
         // Determine query type and apply appropriate conversions
@@ -168,6 +201,8 @@ public class SqlGenerationVisitor {
      * String-based conversion for SELECT queries.
      */
     private String convertSelectQueryStringBased(String originalQuery, SqlConversionContext context) {
+        logger.debug("convertSelectQueryStringBased START - context id: {}, alias map size: {}", 
+                   System.identityHashCode(context), context.getAliasToEntityMap().size());
         // Step 1: Process SELECT statement conversion
         String sqlWithSelect = convertSelectStatement(originalQuery, context);
         
@@ -180,17 +215,19 @@ public class SqlGenerationVisitor {
         // Step 4: Process JOIN operations conversion
         String sqlWithJoins = convertJoinOperations(sqlWithColumns, context);
         
-        // Step 5: Add implicit inheritance JOINs for JOINED inheritance strategy
-        String sqlWithInheritanceJoins = addInheritanceJoins(sqlWithJoins, context);
+        // Step 5: Process WHERE clause conversion with proper column mapping (includes TYPE() conversion)
+        String sqlWithWhere = convertWhereClause(sqlWithJoins, context);
         
-        // Step 6: Add implicit discriminator filtering for SINGLE_TABLE inheritance
+        // Step 6: Add implicit inheritance JOINs for JOINED inheritance strategy
+        String sqlWithInheritanceJoins = addInheritanceJoins(sqlWithWhere, context);
+        
+        // Step 7: Add implicit discriminator filtering for SINGLE_TABLE inheritance
+        logger.info("CHECKPOINT: Before addImplicitDiscriminatorFiltering - query: {}", sqlWithInheritanceJoins);
         String sqlWithDiscriminator = addImplicitDiscriminatorFiltering(sqlWithInheritanceJoins, context);
-        
-        // Step 7: Process WHERE clause conversion with proper column mapping
-        String sqlWithWhere = convertWhereClause(sqlWithDiscriminator, context);
+        logger.info("CHECKPOINT: After addImplicitDiscriminatorFiltering - query: {}", sqlWithDiscriminator);
         
         // Step 8: Process aggregate functions (COUNT, SUM, AVG, MIN, MAX)
-        String sqlWithAggregates = convertAggregateFunctions(sqlWithWhere, context);
+        String sqlWithAggregates = convertAggregateFunctions(sqlWithDiscriminator, context);
         
         // Step 9: Process GROUP BY clause conversion
         String sqlWithGroupBy = convertGroupByClause(sqlWithAggregates, context);
@@ -370,9 +407,9 @@ public class SqlGenerationVisitor {
             }
         }
         
-        // Convert FROM item
+        // Convert FROM item (and register alias mappings)
         if (plainSelect.getFromItem() != null) {
-            convertFromItem(plainSelect.getFromItem(), context);
+            convertFromItemWithAliasTracking(plainSelect.getFromItem(), context);
         }
         
         // Convert JOINs
@@ -421,9 +458,9 @@ public class SqlGenerationVisitor {
      * Converts a parsed UPDATE statement using proper AST traversal.
      */
     private void convertUpdateStatement(Update update, SqlConversionContext context) {
-        // Convert table reference
+        // Convert table reference with alias tracking
         if (update.getTable() != null) {
-            convertFromItem(update.getTable(), context);
+            convertFromItemWithAliasTracking(update.getTable(), context);
         }
         
         // Convert SET clauses
@@ -472,9 +509,9 @@ public class SqlGenerationVisitor {
      * Converts a parsed DELETE statement using proper AST traversal.
      */
     private void convertDeleteStatement(Delete delete, SqlConversionContext context) {
-        // Convert table reference
+        // Convert table reference with alias tracking
         if (delete.getTable() != null) {
-            convertFromItem(delete.getTable(), context);
+            convertFromItemWithAliasTracking(delete.getTable(), context);
         }
         
         // Convert WHERE clause
@@ -546,14 +583,17 @@ public class SqlGenerationVisitor {
     }
     
     /**
-     * Converts FROM item (table references).
+     * Converts FROM item for AST-based conversion.
+     * Pre-extraction should have already registered all alias mappings via preExtractEntityAliasesFromHql.
      */
-    private void convertFromItem(FromItem fromItem, SqlConversionContext context) {
+    private void convertFromItemWithAliasTracking(FromItem fromItem, SqlConversionContext context) {
         if (fromItem instanceof Table table) {
-            // Convert entity name to table name if needed
-            String tableName = table.getName();
-            TableMapping tableMapping = context.entityMetadata().getTableMapping(tableName);
+            // Look up entity mapping by entity name and convert to table name
+            String entityName = table.getName();
+            TableMapping tableMapping = context.entityMetadata().getTableMapping(entityName);
+            
             if (tableMapping != null) {
+                // Convert entity name to table name
                 table.setName(tableMapping.tableName());
             }
         }
@@ -563,9 +603,9 @@ public class SqlGenerationVisitor {
      * Converts JOIN clauses.
      */
     private void convertJoin(Join join, SqlConversionContext context) {
-        // Convert the right item (joined table)
+        // Convert the right item (joined table) with alias tracking
         if (join.getRightItem() != null) {
-            convertFromItem(join.getRightItem(), context);
+            convertFromItemWithAliasTracking(join.getRightItem(), context);
         }
         
         // Convert ON expressions
@@ -600,6 +640,8 @@ public class SqlGenerationVisitor {
     
     /**
      * Converts entity references in FROM and JOIN clauses to table references.
+     * NOTE: Alias-to-entity mappings are already registered via preExtractEntityAliasesFromHql(),
+     * so this method only performs table name conversion, not alias registration.
      */
     private String convertEntityReferences(String query, SqlConversionContext context) {
         StringBuffer result = new StringBuffer();
@@ -619,11 +661,8 @@ public class SqlGenerationVisitor {
                     replacement += " " + alias;
                 }
                 matcher.appendReplacement(result, replacement);
-                
-                logger.debug("Converted entity reference: {} -> {}", entityName, tableName);
             } else {
                 // If no mapping found, keep original
-                logger.warn("No table mapping found for entity: {}", entityName);
                 matcher.appendReplacement(result, matcher.group(0));
             }
         }
@@ -1171,17 +1210,31 @@ public class SqlGenerationVisitor {
      * - FROM Dog d -> adds: WHERE d.dtype = 'DOG'
      * - FROM Dog d WHERE d.age > 5 -> adds: WHERE d.dtype = 'DOG' AND d.age > 5
      * 
-     * @param query The SQL query after entity reference conversion
+     * Important: This method should be called AFTER TYPE() function conversion,
+     * as TYPE() functions already handle their own discriminator filtering.
+     * This method only adds implicit filtering for direct entity queries.
+     * 
+     * @param query The SQL query after entity reference conversion and TYPE() conversion
      * @param context The conversion context with entity metadata
      * @return Query with implicit discriminator filtering added
      */
     private String addImplicitDiscriminatorFiltering(String query, SqlConversionContext context) {
+        logger.debug("=== IMPLICIT DISCRIMINATOR FILTERING START ===");
+        logger.debug("Input query: {}", query);
+        
         // Extract entity references and their aliases from FROM and JOIN clauses
         Map<String, TableMapping> aliasToTableMapping = extractAliasToTableMappings(query, context);
         
         if (aliasToTableMapping.isEmpty()) {
+            logger.debug("No aliases found in context, returning original query");
             return query; // No entities to filter
         }
+        
+        logger.debug("Found {} aliases in context", aliasToTableMapping.size());
+        
+        // Track which aliases already have discriminator filters applied (by TYPE() or other means)
+        Set<String> aliasesWithDiscriminatorFilters = findAliasesWithDiscriminatorFilters(query);
+        logger.debug("Found {} aliases already with discriminator filters", aliasesWithDiscriminatorFilters.size());
         
         // Build discriminator conditions for entities with SINGLE_TABLE inheritance
         StringBuilder discriminatorConditions = new StringBuilder();
@@ -1190,10 +1243,16 @@ public class SqlGenerationVisitor {
             String alias = entry.getKey();
             TableMapping tableMapping = entry.getValue();
             
+            logger.debug("Processing alias '{}': entity='{}', isSingleTable={}, discriminatorColumn={}, discriminatorValue={}",
+                        alias, tableMapping.entityName(), tableMapping.isSingleTableInheritance(), 
+                        tableMapping.discriminatorColumn(), tableMapping.discriminatorValue());
+            
             // Only add filtering for SINGLE_TABLE inheritance with discriminator value
+            // Skip if this alias already has a discriminator filter (from TYPE() function)
             if (tableMapping.isSingleTableInheritance() && 
                 tableMapping.discriminatorColumn() != null && 
-                tableMapping.discriminatorValue() != null) {
+                tableMapping.discriminatorValue() != null &&
+                !aliasesWithDiscriminatorFilters.contains(alias)) {
                 
                 if (discriminatorConditions.length() > 0) {
                     discriminatorConditions.append(" AND ");
@@ -1206,49 +1265,78 @@ public class SqlGenerationVisitor {
                     .append(tableMapping.discriminatorValue())
                     .append("'");
                     
-                logger.debug("Added implicit discriminator filter: {}.{} = '{}'", 
-                           alias, tableMapping.discriminatorColumn(), tableMapping.discriminatorValue());
+                logger.debug("Added implicit discriminator filter for alias {}: {}.{} = '{}'", 
+                           alias, alias, tableMapping.discriminatorColumn(), tableMapping.discriminatorValue());
+            } else {
+                if (!tableMapping.isSingleTableInheritance()) {
+                    logger.debug("Skipping alias '{}': not SINGLE_TABLE inheritance", alias);
+                } else if (tableMapping.discriminatorColumn() == null) {
+                    logger.debug("Skipping alias '{}': no discriminator column", alias);
+                } else if (tableMapping.discriminatorValue() == null) {
+                    logger.debug("Skipping alias '{}': no discriminator value (parent class?)", alias);
+                } else if (aliasesWithDiscriminatorFilters.contains(alias)) {
+                    logger.debug("Skipping alias '{}': already has discriminator filter", alias);
+                }
             }
         }
         
         // If no discriminator conditions, return original query
         if (discriminatorConditions.length() == 0) {
+            logger.debug("No discriminator conditions built, returning original query");
             return query;
         }
         
+        logger.debug("Discriminator conditions to add: {}", discriminatorConditions.toString());
+        
         // Add discriminator conditions to WHERE clause
-        return addToWhereClause(query, discriminatorConditions.toString());
+        String result = addToWhereClause(query, discriminatorConditions.toString());
+        logger.debug("Result after addToWhereClause: {}", result);
+        logger.debug("=== IMPLICIT DISCRIMINATOR FILTERING END ===");
+        return result;
     }
     
     /**
-     * Extracts alias-to-table mappings from FROM and JOIN clauses.
-     * Returns a map of alias -> TableMapping for entities that need discriminator filtering.
+     * Finds which aliases already have discriminator filters applied.
+     * This prevents duplicate filtering from TYPE() functions or other sources.
      */
-    private Map<String, TableMapping> extractAliasToTableMappings(String query, SqlConversionContext context) {
-        Map<String, TableMapping> result = new HashMap<>();
-        
-        // Pattern to match FROM and JOIN clauses after entity conversion
-        // At this point, entity names should already be converted to table names
-        Pattern fromJoinPattern = Pattern.compile(
-            "\\b(FROM|JOIN)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+    private Set<String> findAliasesWithDiscriminatorFilters(String query) {
+        Set<String> aliasesWithFilters = new HashSet<>();
+        // Pattern to match discriminator column comparisons: alias.dtype = 'VALUE'
+        Pattern discriminatorPattern = Pattern.compile(
+            "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\.(?:dtype|DTYPE|discriminator|DISCRIMINATOR)\\s*=\\s*(?:'[^']*'|\\w+)",
             Pattern.CASE_INSENSITIVE
         );
-        
-        Matcher matcher = fromJoinPattern.matcher(query);
-        
+        Matcher matcher = discriminatorPattern.matcher(query);
         while (matcher.find()) {
-            String tableName = matcher.group(2);
-            String alias = matcher.group(3);
-            
-            // Find the TableMapping for this table
-            TableMapping tableMapping = findTableMappingByTableName(tableName, context);
-            
-            if (tableMapping != null) {
-                result.put(alias, tableMapping);
-            }
+            aliasesWithFilters.add(matcher.group(1));
         }
+        return aliasesWithFilters;
+    }
+    
+    /**
+     * Extracts alias-to-table mappings from the conversion context.
+     * Returns a map of alias -> TableMapping for entities that need discriminator filtering.
+     * 
+     * The mappings are pre-registered during the convertEntityReferences phase.
+     */
+    private Map<String, TableMapping> extractAliasToTableMappings(String query, SqlConversionContext context) {
+        // Return the pre-built alias mappings from context
+        // These were registered during preExtractEntityAliasesFromHql
+        // Create a copy to avoid external modifications
+        Map<String, TableMapping> aliasMap = context.getAliasToEntityMap();
+        logger.debug("=== extractAliasToTableMappings ===");
+        logger.debug("Query: {}", query);
+        logger.debug("Alias map size: {}", aliasMap.size());
+        logger.debug("Context object id: {}", System.identityHashCode(context));
         
-        return result;
+        for (Map.Entry<String, TableMapping> entry : aliasMap.entrySet()) {
+            TableMapping tm = entry.getValue();
+            logger.debug("  Alias '{}': entity='{}', table='{}', isSingleTable={}, discriminatorColumn={}, discriminatorValue='{}'", 
+                       entry.getKey(), tm.entityName(), tm.tableName(), tm.isSingleTableInheritance(),
+                       tm.discriminatorColumn(), tm.discriminatorValue());
+        }
+        logger.debug("=== end extractAliasToTableMappings ===");
+        return new HashMap<>(aliasMap);
     }
     
     /**
@@ -1268,6 +1356,9 @@ public class SqlGenerationVisitor {
      * If WHERE clause exists, adds with AND; otherwise creates new WHERE clause.
      */
     private String addToWhereClause(String query, String conditions) {
+        logger.debug("addToWhereClause called - Query: {}", query);
+        logger.debug("addToWhereClause - Conditions to add: {}", conditions);
+        
         // Check if WHERE clause already exists
         Pattern wherePattern = Pattern.compile(
             "\\bWHERE\\b",
@@ -1277,6 +1368,7 @@ public class SqlGenerationVisitor {
         Matcher matcher = wherePattern.matcher(query);
         
         if (matcher.find()) {
+            logger.debug("WHERE clause found at position {}", matcher.start());
             // WHERE clause exists - add conditions with AND
             // Insert after WHERE keyword
             int wherePos = matcher.start();
@@ -1291,8 +1383,10 @@ public class SqlGenerationVisitor {
             result.append(" (").append(conditions).append(") AND (");
             result.append(afterWhere).append(")");
             
+            logger.debug("Modified WHERE clause result: {}", result.toString());
             return result.toString();
         } else {
+            logger.debug("No WHERE clause found, will create one");
             // No WHERE clause - add one before ORDER BY, GROUP BY, HAVING, or LIMIT
             Pattern beforePattern = Pattern.compile(
                 "\\s+(ORDER\\s+BY|GROUP\\s+BY|HAVING|LIMIT|$)",
@@ -1302,15 +1396,20 @@ public class SqlGenerationVisitor {
             Matcher beforeMatcher = beforePattern.matcher(query);
             
             if (beforeMatcher.find()) {
+                logger.debug("Found before-pattern at {}: {}", beforeMatcher.start(), beforeMatcher.group());
                 int insertPos = beforeMatcher.start();
                 StringBuilder result = new StringBuilder();
                 result.append(query.substring(0, insertPos));
                 result.append(" WHERE ").append(conditions);
                 result.append(query.substring(insertPos));
+                logger.debug("Inserted WHERE clause, result: {}", result.toString());
                 return result.toString();
             } else {
+                logger.debug("No before-pattern found, appending WHERE at end");
                 // No special clauses - append WHERE at the end
-                return query + " WHERE " + conditions;
+                String result = query + " WHERE " + conditions;
+                logger.debug("Appended WHERE clause, result: {}", result);
+                return result;
             }
         }
     }
@@ -1320,14 +1419,16 @@ public class SqlGenerationVisitor {
      * Ensures that property references in conditions are properly mapped to columns.
      */
     private String convertWhereClause(String query, SqlConversionContext context) {
+        logger.debug("convertWhereClause called with query: {}", query);
         // Pattern to match WHERE clause
         Pattern wherePattern = Pattern.compile(
-            "(WHERE\\s+)(.+?)(?=\\s+(?:ORDER\\s+BY|GROUP\\s+BY|HAVING|LIMIT|$))",
+            "(WHERE\\s+)(.+?)(?=\\s+(?:ORDER\\s+BY|GROUP\\s+BY|HAVING|LIMIT)|$)",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL
         );
         
         Matcher matcher = wherePattern.matcher(query);
         if (matcher.find()) {
+            logger.debug("WHERE clause found: {}", matcher.group(2));
             String whereKeyword = matcher.group(1);
             String whereConditions = matcher.group(2);
             
@@ -1390,26 +1491,33 @@ public class SqlGenerationVisitor {
      * @return Converted conditions with discriminator checks
      */
     private String convertTypeFunctions(String conditions, SqlConversionContext context) {
+        logger.debug("convertTypeFunctions called with conditions: {}", conditions);
         StringBuffer result = new StringBuffer();
         Matcher matcher = TYPE_FUNCTION_PATTERN.matcher(conditions);
         
+        logger.debug("TYPE_FUNCTION_PATTERN matching against: {}", conditions);
         while (matcher.find()) {
+            logger.debug("TYPE() pattern matched! Groups: alias={}, operator={}, entity={}",
+                       matcher.group(1), matcher.group(2), matcher.group(3));
             String alias = matcher.group(1);
             String operator = matcher.group(2);
             String entityValue = matcher.group(3).trim();
             
-            // Try to determine which entity this alias refers to
-            // For now, we'll look for any entity in metadata that has discriminator info
-            TableMapping tableMapping = findTableMappingForAlias(alias, context);
+            // Look up the table mapping for this alias from the pre-registered context mappings
+            TableMapping aliasedTableMapping = context.getTableMappingForAlias(alias);
             
-            if (tableMapping != null && tableMapping.discriminatorColumn() != null) {
-                String conversion = convertTypeFunction(alias, operator, entityValue, tableMapping, context);
+            if (aliasedTableMapping != null) {
+                logger.debug("Found aliased table mapping for alias {}: entity={}, table={}",
+                           alias, aliasedTableMapping.entityName(), aliasedTableMapping.tableName());
+                String conversion = convertTypeFunction(alias, operator, entityValue, aliasedTableMapping, context);
                 if (conversion != null) {
                     matcher.appendReplacement(result, Matcher.quoteReplacement(conversion));
                     logger.debug("Converted TYPE() function: TYPE({}) {} {} -> {}", 
                                alias, operator, entityValue, conversion);
                     continue;
                 }
+            } else {
+                logger.warn("No table mapping found for alias: {}", alias);
             }
             
             // If we can't convert, keep original
@@ -1506,17 +1614,18 @@ public class SqlGenerationVisitor {
     
     /**
      * Finds the TableMapping that corresponds to a given alias.
-     * This is a simplified implementation - in practice, we'd need to track
-     * the entity-to-alias mapping from the FROM clause.
+     * Uses the pre-registered alias-to-entity mappings from the context.
+     * These mappings are built during the convertEntityReferences phase.
      */
     private TableMapping findTableMappingForAlias(String alias, SqlConversionContext context) {
-        // For now, return the first table mapping that has discriminator info
-        // In a complete implementation, we'd track alias -> entity mappings
-        for (TableMapping mapping : context.entityMetadata().getAllTableMappings()) {
-            if (mapping.discriminatorColumn() != null) {
-                return mapping;
-            }
+        // Use the pre-registered alias mapping from context
+        TableMapping mapping = context.getTableMappingForAlias(alias);
+        if (mapping != null) {
+            logger.debug("Found table mapping for alias {}: {}", alias, mapping.entityName());
+            return mapping;
         }
+        
+        logger.warn("No table mapping found for alias: {}", alias);
         return null;
     }
     
@@ -1994,6 +2103,48 @@ public class SqlGenerationVisitor {
         // Note: We also skip parameter conversion as it will be done at the top level
         
         return sqlWithHaving;
+    }
+    
+    /**
+     * Pre-extracts entity-to-alias mappings from the original HQL query.
+     * This must be done before any parsing/conversion happens to preserve the original entity names.
+     * 
+     * @param originalQuery The original HQL query string
+     * @param context The conversion context to register mappings in
+     */
+    private void preExtractEntityAliasesFromHql(String originalQuery, SqlConversionContext context) {
+        logger.debug("PRE-EXTRACT START - context id: {} - HQL: {}", System.identityHashCode(context), originalQuery);
+        
+        // Use the same pattern but extract from the original HQL before any conversion
+        Matcher matcher = ENTITY_REFERENCE_PATTERN.matcher(originalQuery);
+        
+        int matchCount = 0;
+        while (matcher.find()) {
+            matchCount++;
+            String clause = matcher.group(1); // FROM or JOIN
+            String entityName = matcher.group(2); // Entity name (from original HQL)
+            String alias = matcher.group(3); // Optional alias
+            
+            logger.debug("Match #{}: clause='{}', entity='{}', alias='{}'", matchCount, clause, entityName, alias);
+            
+            if (alias != null && !alias.isEmpty()) {
+                // Look up the table mapping for this entity name
+                logger.debug("Looking up table mapping for entity: {}", entityName);
+                TableMapping tableMapping = context.entityMetadata().getTableMapping(entityName);
+                if (tableMapping != null) {
+                    // Register the alias -> entity mapping
+                    context.registerAlias(alias, tableMapping);
+                    logger.debug("✓ Registered alias mapping: {} -> entity {} (table='{}', discriminator='{}')", 
+                               alias, entityName, tableMapping.tableName(), tableMapping.discriminatorValue());
+                } else {
+                    logger.warn("✗ No table mapping found for entity: {}", entityName);
+                }
+            } else {
+                logger.debug("Skipping - no alias or empty alias for entity: {}", entityName);
+            }
+        }
+        logger.debug("PRE-EXTRACT END - context id: {}, total aliases registered: {}", 
+                   System.identityHashCode(context), context.getAliasToEntityMap().size());
     }
     
     /**

@@ -18,6 +18,8 @@ public class ConversionResult {
     private final boolean successful;
     private final String errorMessage;
     private final ConversionFailureReason failureReason;
+    private final String dtoClassName;
+    private final List<String> dtoConstructorArgs;
     
     /**
      * Creates a successful conversion result.
@@ -27,9 +29,24 @@ public class ConversionResult {
      * @param referencedTables Set of table names referenced in the converted query
      */
     public ConversionResult(String nativeSql, List<ParameterMapping> parameterMappings, Set<String> referencedTables) {
+        this(nativeSql, parameterMappings, referencedTables, null, null);
+    }
+    
+    /**
+     * Creates a successful conversion result with DTO metadata.
+     * 
+     * @param nativeSql The converted native SQL query
+     * @param parameterMappings List of parameter mappings from original to converted query
+     * @param referencedTables Set of table names referenced in the converted query
+     * @param dtoClassName The fully qualified name of the DTO class (if this is a constructor expression)
+     * @param dtoConstructorArgs The original constructor argument expressions
+     */
+    public ConversionResult(String nativeSql, List<ParameterMapping> parameterMappings, Set<String> referencedTables, String dtoClassName, List<String> dtoConstructorArgs) {
         this.nativeSql = nativeSql;
         this.parameterMappings = parameterMappings != null ? List.copyOf(parameterMappings) : Collections.emptyList();
         this.referencedTables = referencedTables != null ? Set.copyOf(referencedTables) : Collections.emptySet();
+        this.dtoClassName = dtoClassName;
+        this.dtoConstructorArgs = dtoConstructorArgs != null ? List.copyOf(dtoConstructorArgs) : Collections.emptyList();
         this.successful = true;
         this.errorMessage = null;
         this.failureReason = null;
@@ -45,6 +62,8 @@ public class ConversionResult {
         this.nativeSql = null;
         this.parameterMappings = Collections.emptyList();
         this.referencedTables = Collections.emptySet();
+        this.dtoClassName = null;
+        this.dtoConstructorArgs = Collections.emptyList();
         this.successful = false;
         this.errorMessage = errorMessage;
         this.failureReason = failureReason;
@@ -102,6 +121,33 @@ public class ConversionResult {
      */
     public ConversionFailureReason getFailureReason() {
         return failureReason;
+    }
+    
+    /**
+     * Gets the DTO class name if this conversion is for a constructor expression.
+     * 
+     * @return The fully qualified DTO class name, or null if not a constructor expression
+     */
+    public String getDtoClassName() {
+        return dtoClassName;
+    }
+    
+    /**
+     * Gets the DTO constructor arguments if this conversion is for a constructor expression.
+     * 
+     * @return Immutable list of constructor argument expressions, or empty if not a constructor expression
+     */
+    public List<String> getDtoConstructorArgs() {
+        return dtoConstructorArgs;
+    }
+    
+    /**
+     * Checks if this conversion result represents a constructor expression.
+     * 
+     * @return true if dtoClassName is not null and conversion was successful
+     */
+    public boolean isConstructorExpression() {
+        return successful && dtoClassName != null;
     }
     
     /**
