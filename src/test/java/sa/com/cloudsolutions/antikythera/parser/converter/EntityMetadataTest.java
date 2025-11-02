@@ -35,7 +35,7 @@ class EntityMetadataTest {
         Map<String, JoinMapping> relationshipMappings = new HashMap<>();
         
         // Create a simple table mapping
-        TableMapping userTable = new TableMapping("User", "users", null, null);
+        TableMapping userTable = new TableMapping("User", "users", null, null, null, null, null, null);
         entityMappings.put("User", userTable);
         
         EntityMetadata metadata = new EntityMetadata(entityMappings, propertyMappings, relationshipMappings);
@@ -56,8 +56,8 @@ class EntityMetadataTest {
     @Test
     void testGetAllTableMappings() {
         Map<String, TableMapping> entityMappings = new HashMap<>();
-        entityMappings.put("User", new TableMapping("User", "users", null, null));
-        entityMappings.put("Product", new TableMapping("Product", "products", null, null));
+        entityMappings.put("User", new TableMapping("User", "users", null, null, null, null, null, null));
+        entityMappings.put("Product", new TableMapping("Product", "products", null, null, null, null, null, null));
         
         EntityMetadata metadata = new EntityMetadata(entityMappings, null, null);
         

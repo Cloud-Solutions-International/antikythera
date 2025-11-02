@@ -1121,4 +1121,164 @@ public class AbstractCompiler {
         return string.substring(0, 1).toUpperCase() + string.substring(1);
     }
 
+    /**
+     * Extracts annotation attributes from a JavaParser annotation.
+     * Handles both single-member and normal annotations.
+     *
+     * @param annotation The annotation expression
+     * @return Map of attribute names to values
+     */
+    public static Map<String, String> extractAnnotationAttributes(AnnotationExpr annotation) {
+        Map<String, String> attributes = new HashMap<>();
+        
+        if (annotation.isSingleMemberAnnotationExpr()) {
+            String value = annotation.asSingleMemberAnnotationExpr()
+                    .getMemberValue()
+                    .toString()
+                    .replace("\"", "");
+            attributes.put("value", value);
+        } else if (annotation.isNormalAnnotationExpr()) {
+            annotation.asNormalAnnotationExpr().getPairs().forEach(pair -> {
+                String name = pair.getNameAsString();
+                String value = pair.getValue().toString().replace("\"", "");
+                attributes.put(name, value);
+            });
+        }
+        
+        return attributes;
+    }
+
+    /**
+     * Gets the table name from @Table annotation or derives from entity name.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Table name
+     */
+    public static String getTableName(TypeDeclaration<?> typeDecl) {
+        Optional<AnnotationExpr> tableAnn = typeDecl.getAnnotationByName("Table");
+        
+        if (tableAnn.isPresent()) {
+            Map<String, String> attributes = extractAnnotationAttributes(tableAnn.get());
+            String name = attributes.get("name");
+            if (name != null && !name.isEmpty()) {
+                return name;
+            }
+        }
+        
+        // Default: convert entity name to snake_case
+        return camelToSnakeCase(typeDecl.getNameAsString());
+    }
+
+    /**
+     * Gets the entity name from @Entity annotation or class name.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Entity name
+     */
+    public static String getEntityName(TypeDeclaration<?> typeDecl) {
+        Optional<AnnotationExpr> entityAnn = typeDecl.getAnnotationByName("Entity");
+        
+        if (entityAnn.isPresent()) {
+            Map<String, String> attributes = extractAnnotationAttributes(entityAnn.get());
+            String name = attributes.get("name");
+            if (name != null && !name.isEmpty()) {
+                return name;
+            }
+        }
+        
+        return typeDecl.getNameAsString();
+    }
+
+    /**
+     * Gets the discriminator column name from @DiscriminatorColumn.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Discriminator column name, or "dtype" if not specified
+     */
+    public static String getDiscriminatorColumn(TypeDeclaration<?> typeDecl) {
+        Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorColumn");
+        
+        if (discAnn.isPresent()) {
+            Map<String, String> attributes = extractAnnotationAttributes(discAnn.get());
+            String name = attributes.get("name");
+            if (name != null && !name.isEmpty()) {
+                return name;
+            }
+        }
+        
+        return "dtype"; // Default discriminator column
+    }
+
+    /**
+     * Gets the discriminator value from @DiscriminatorValue.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Discriminator value, or null if not specified
+     */
+    public static String getDiscriminatorValue(TypeDeclaration<?> typeDecl) {
+        Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorValue");
+        
+        if (discAnn.isPresent()) {
+            Map<String, String> attributes = extractAnnotationAttributes(discAnn.get());
+            String value = attributes.get("value");
+            if (value != null) {
+                return value;
+            }
+        }
+        
+        // Default: entity name
+        return getEntityName(typeDecl);
+    }
+
+    /**
+     * Gets the inheritance strategy from @Inheritance annotation.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Inheritance strategy ("SINGLE_TABLE", "JOINED", "TABLE_PER_CLASS"), or null
+     */
+    public static String getInheritanceStrategy(TypeDeclaration<?> typeDecl) {
+        Optional<AnnotationExpr> inhAnn = typeDecl.getAnnotationByName("Inheritance");
+        
+        if (inhAnn.isPresent()) {
+            Map<String, String> attributes = extractAnnotationAttributes(inhAnn.get());
+            String strategy = attributes.get("strategy");
+            if (strategy != null) {
+                // Extract enum value: InheritanceType.SINGLE_TABLE -> SINGLE_TABLE
+                if (strategy.contains(".")) {
+                    return strategy.substring(strategy.lastIndexOf('.') + 1);
+                }
+                return strategy;
+            }
+        }
+        
+        return null; // No inheritance specified
+    }
+
+    /**
+     * Converts camelCase string to snake_case.
+     *
+     * @param camelCase The camelCase string
+     * @return snake_case string
+     */
+    private static String camelToSnakeCase(String camelCase) {
+        if (camelCase == null || camelCase.isEmpty()) {
+            return camelCase;
+        }
+        
+        StringBuilder result = new StringBuilder();
+        result.append(Character.toLowerCase(camelCase.charAt(0)));
+        
+        for (int i = 1; i < camelCase.length(); i++) {
+            char ch = camelCase.charAt(i);
+            if (Character.isUpperCase(ch)) {
+                result.append('_');
+                result.append(Character.toLowerCase(ch));
+            } else {
+                result.append(ch);
+            }
+        }
+        
+        return result.toString();
+    }
+
 }

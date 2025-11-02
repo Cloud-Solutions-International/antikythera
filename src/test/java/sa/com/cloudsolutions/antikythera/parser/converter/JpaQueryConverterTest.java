@@ -126,9 +126,9 @@ class JpaQueryConverterTest {
         Map<String, JoinMapping> relationshipMappings = new HashMap<>();
         
         // Add table mappings for the entities in our test query
-        entityToTableMappings.put("Shipment", new TableMapping("Shipment", "shipment", null, new HashMap<>()));
-        entityToTableMappings.put("Container", new TableMapping("Container", "container", null, new HashMap<>()));
-        entityToTableMappings.put("User", new TableMapping("User", "users", null, new HashMap<>()));
+        entityToTableMappings.put("Shipment", new TableMapping("Shipment", "shipment", null, new HashMap<>(), null, null, null, null));
+        entityToTableMappings.put("Container", new TableMapping("Container", "container", null, new HashMap<>(), null, null, null, null));
+        entityToTableMappings.put("User", new TableMapping("User", "users", null, new HashMap<>(), null, null, null, null));
         
         // Add some basic column mappings
         propertyToColumnMappings.put("bookingId", new ColumnMapping("bookingId", "booking_id", "shipment"));

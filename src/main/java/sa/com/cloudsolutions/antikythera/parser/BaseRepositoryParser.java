@@ -15,11 +15,13 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
+import sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping;
 import sa.com.cloudsolutions.antikythera.parser.converter.ConversionResult;
 import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMetadata;
 import sa.com.cloudsolutions.antikythera.parser.converter.JpaQueryConverter;
+import sa.com.cloudsolutions.antikythera.parser.converter.TableMapping;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
@@ -364,14 +366,177 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
     /**
      * Builds entity metadata for the current entity being processed.
+     * Tries to use Antikythera's parsed source first, falls back to reflection.
      *
      * @return EntityMetadata containing mapping information for the entity
      */
     private EntityMetadata buildEntityMetadata() {
+        // Try to build from Antikythera's parsed source first
+        EntityMetadata metadata = buildEntityMetadataFromAntikythera();
+        if (metadata != null && !metadata.getEntityToTableMappings().isEmpty()) {
+            return metadata;
+        }
+        
+        // Fallback to reflection-based approach
         if (entity != null && entity.getClazz() != null) {
             return entityMappingResolver.resolveEntityMetadata(entity.getClazz());
         }
         return EntityMetadata.empty(); // Return empty metadata if no entity context
+    }
+
+    /**
+     * Builds entity metadata using Antikythera's TypeWrapper and AbstractCompiler.
+     * This avoids reflection and works directly with parsed source code.
+     *
+     * @return EntityMetadata from parsed source, or null if not available
+     */
+    private EntityMetadata buildEntityMetadataFromAntikythera() {
+        if (entity == null || entity.getType() == null) {
+            return null; // No parsed type available
+        }
+
+        com.github.javaparser.ast.body.TypeDeclaration<?> typeDecl = entity.getType();
+        
+        // Check if this is a JPA entity
+        if (!typeDecl.getAnnotationByName("Entity").isPresent()) {
+            return null; // Not an entity
+        }
+
+        try {
+            // Extract entity information using AbstractCompiler helpers
+            String entityName = AbstractCompiler.getEntityName(typeDecl);
+            String tableName = AbstractCompiler.getTableName(typeDecl);
+            String discriminatorColumn = AbstractCompiler.getDiscriminatorColumn(typeDecl);
+            String discriminatorValue = AbstractCompiler.getDiscriminatorValue(typeDecl);
+            String inheritanceType = AbstractCompiler.getInheritanceStrategy(typeDecl);
+
+            // Build property to column map
+            Map<String, String> propertyToColumnMap = buildPropertyToColumnMapFromAST(typeDecl);
+
+            // For now, no parent table support (could be added later)
+            TableMapping tableMapping = new TableMapping(
+                entityName, tableName, null, propertyToColumnMap,
+                discriminatorColumn, discriminatorValue, inheritanceType, null
+            );
+
+            Map<String, TableMapping> entityToTableMappings = Map.of(entityName, tableMapping);
+            
+            // Build property to column mappings
+            Map<String, ColumnMapping> propertyToColumnMappings = 
+                buildPropertyToColumnMappingsFromAST(typeDecl, tableMapping);
+
+            // Relationship mappings not yet implemented for AST-based approach
+            Map<String, sa.com.cloudsolutions.antikythera.parser.converter.JoinMapping> relationshipMappings = 
+                new HashMap<>();
+
+            return new EntityMetadata(entityToTableMappings, propertyToColumnMappings, relationshipMappings);
+        } catch (Exception e) {
+            logger.warn("Failed to build entity metadata from AST: {}", e.getMessage());
+            return null; // Fall back to reflection
+        }
+    }
+
+    /**
+     * Builds property to column map from TypeDeclaration AST.
+     */
+    private Map<String, String> buildPropertyToColumnMapFromAST(
+            com.github.javaparser.ast.body.TypeDeclaration<?> typeDecl) {
+        Map<String, String> propertyToColumnMap = new HashMap<>();
+
+        // Get all fields from the entity
+        typeDecl.getFields().forEach(field -> {
+            if (isTransientFieldFromAST(field)) {
+                return; // Skip transient fields
+            }
+
+            field.getVariables().forEach(var -> {
+                String propertyName = var.getNameAsString();
+                String columnName = getColumnNameFromAST(field);
+                if (columnName == null) {
+                    // Default: convert camelCase to snake_case
+                    columnName = camelToSnake(propertyName);
+                }
+                propertyToColumnMap.put(propertyName, columnName);
+            });
+        });
+
+        return propertyToColumnMap;
+    }
+
+    /**
+     * Builds property to column mappings with full metadata.
+     */
+    private Map<String, sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping> 
+            buildPropertyToColumnMappingsFromAST(
+                com.github.javaparser.ast.body.TypeDeclaration<?> typeDecl,
+                sa.com.cloudsolutions.antikythera.parser.converter.TableMapping tableMapping) {
+        Map<String, sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping> columnMappings = 
+            new HashMap<>();
+
+        typeDecl.getFields().forEach(field -> {
+            if (isTransientFieldFromAST(field) || isRelationshipFieldFromAST(field)) {
+                return; // Skip transient and relationship fields
+            }
+
+            field.getVariables().forEach(var -> {
+                String propertyName = var.getNameAsString();
+                String columnName = getColumnNameFromAST(field);
+                if (columnName == null) {
+                    columnName = camelToSnake(propertyName);
+                }
+                String fullPropertyName = tableMapping.entityName() + "." + propertyName;
+
+                sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping columnMapping = 
+                    new sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping(
+                        fullPropertyName,
+                        columnName,
+                        tableMapping.tableName()
+                    );
+
+                columnMappings.put(fullPropertyName, columnMapping);
+            });
+        });
+
+        return columnMappings;
+    }
+
+    /**
+     * Checks if a field is transient (should be skipped).
+     */
+    private boolean isTransientFieldFromAST(com.github.javaparser.ast.body.FieldDeclaration field) {
+        // Check for @Transient annotation
+        if (field.getAnnotationByName("Transient").isPresent()) {
+            return true;
+        }
+        // Check for transient or static modifier
+        return field.isTransient() || field.isStatic();
+    }
+
+    /**
+     * Checks if a field is a relationship field (JPA relationships).
+     */
+    private boolean isRelationshipFieldFromAST(com.github.javaparser.ast.body.FieldDeclaration field) {
+        return field.getAnnotationByName("OneToOne").isPresent() ||
+               field.getAnnotationByName("OneToMany").isPresent() ||
+               field.getAnnotationByName("ManyToOne").isPresent() ||
+               field.getAnnotationByName("ManyToMany").isPresent();
+    }
+
+    /**
+     * Gets column name from @Column annotation or returns null.
+     */
+    private String getColumnNameFromAST(com.github.javaparser.ast.body.FieldDeclaration field) {
+        Optional<com.github.javaparser.ast.expr.AnnotationExpr> columnAnn = 
+            field.getAnnotationByName("Column");
+        
+        if (columnAnn.isPresent()) {
+            Map<String, String> attributes = AbstractCompiler.extractAnnotationAttributes(columnAnn.get());
+            String name = attributes.get("name");
+            if (name != null && !name.isEmpty()) {
+                return name;
+            }
+        }
+        return null; // No @Column annotation or no name specified
     }
 
     /**

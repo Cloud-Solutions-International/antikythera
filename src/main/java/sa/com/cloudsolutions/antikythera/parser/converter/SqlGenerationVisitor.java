@@ -94,6 +94,12 @@ public class SqlGenerationVisitor {
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL
     );
     
+    // Pattern to match TYPE() function calls
+    private static final Pattern TYPE_FUNCTION_PATTERN = Pattern.compile(
+        "\\bTYPE\\s*\\(\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\)\\s*(=|!=|<>|IN)\\s*(.+?)(?=\\s+(?:AND|OR|ORDER|GROUP|HAVING|LIMIT|$))",
+        Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+    );
+    
     /**
      * Converts an HQL query node to native SQL.
      * 
@@ -174,25 +180,31 @@ public class SqlGenerationVisitor {
         // Step 4: Process JOIN operations conversion
         String sqlWithJoins = convertJoinOperations(sqlWithColumns, context);
         
-        // Step 5: Process WHERE clause conversion with proper column mapping
-        String sqlWithWhere = convertWhereClause(sqlWithJoins, context);
+        // Step 5: Add implicit inheritance JOINs for JOINED inheritance strategy
+        String sqlWithInheritanceJoins = addInheritanceJoins(sqlWithJoins, context);
         
-        // Step 6: Process aggregate functions (COUNT, SUM, AVG, MIN, MAX)
+        // Step 6: Add implicit discriminator filtering for SINGLE_TABLE inheritance
+        String sqlWithDiscriminator = addImplicitDiscriminatorFiltering(sqlWithInheritanceJoins, context);
+        
+        // Step 7: Process WHERE clause conversion with proper column mapping
+        String sqlWithWhere = convertWhereClause(sqlWithDiscriminator, context);
+        
+        // Step 8: Process aggregate functions (COUNT, SUM, AVG, MIN, MAX)
         String sqlWithAggregates = convertAggregateFunctions(sqlWithWhere, context);
         
-        // Step 7: Process GROUP BY clause conversion
+        // Step 9: Process GROUP BY clause conversion
         String sqlWithGroupBy = convertGroupByClause(sqlWithAggregates, context);
         
-        // Step 8: Process HAVING clause conversion with proper column mapping
+        // Step 10: Process HAVING clause conversion with proper column mapping
         String sqlWithHaving = convertHavingClause(sqlWithGroupBy, context);
         
-        // Step 9: Process subqueries (nested SELECT statements)
+        // Step 11: Process subqueries (nested SELECT statements)
         String sqlWithSubqueries = convertSubqueries(sqlWithHaving, context);
         
-        // Step 10: Convert named parameters to positional parameters
+        // Step 12: Convert named parameters to positional parameters
         String sqlWithPositionalParams = convertNamedParameters(sqlWithSubqueries);
         
-        // Step 11: Apply dialect-specific transformations
+        // Step 13: Apply dialect-specific transformations
         String finalSql = DialectTransformer.transform(sqlWithPositionalParams, context.dialect());
         
         logger.debug("Converted SELECT SQL: {}", finalSql);
@@ -1022,6 +1034,288 @@ public class SqlGenerationVisitor {
     }
     
     /**
+     * Adds implicit JOINs for JOINED inheritance strategy.
+     * When a query targets a subclass entity with JOINED inheritance,
+     * automatically adds JOIN to the parent table(s).
+     * 
+     * Example:
+     * - FROM Dog d (Dog extends Animal with JOINED strategy)
+     *   -> adds: INNER JOIN animal a ON d.id = a.id
+     * 
+     * @param query The SQL query after JOIN operations conversion
+     * @param context The conversion context with entity metadata
+     * @return Query with inheritance JOINs added
+     */
+    private String addInheritanceJoins(String query, SqlConversionContext context) {
+        // Extract entity references and their aliases from FROM and JOIN clauses
+        Map<String, TableMapping> aliasToTableMapping = extractAliasToTableMappings(query, context);
+        
+        if (aliasToTableMapping.isEmpty()) {
+            return query; // No entities to process
+        }
+        
+        // Build inheritance JOINs for entities with JOINED inheritance
+        StringBuilder inheritanceJoins = new StringBuilder();
+        
+        for (Map.Entry<String, TableMapping> entry : aliasToTableMapping.entrySet()) {
+            String alias = entry.getKey();
+            TableMapping tableMapping = entry.getValue();
+            
+            // Only add JOINs for JOINED inheritance with parent table
+            if (tableMapping.isJoinedInheritance() && tableMapping.parentTable() != null) {
+                String inheritanceJoin = generateInheritanceJoin(alias, tableMapping, context);
+                if (inheritanceJoin != null) {
+                    inheritanceJoins.append(" ").append(inheritanceJoin);
+                    
+                    logger.debug("Added inheritance JOIN: {}", inheritanceJoin);
+                }
+            }
+        }
+        
+        // If no inheritance joins, return original query
+        if (inheritanceJoins.length() == 0) {
+            return query;
+        }
+        
+        // Insert inheritance JOINs after the FROM clause
+        return insertJoinsAfterFrom(query, inheritanceJoins.toString());
+    }
+    
+    /**
+     * Generates a JOIN clause for JOINED inheritance hierarchy.
+     * Recursively adds JOINs for all parent tables in the hierarchy.
+     */
+    private String generateInheritanceJoin(String childAlias, TableMapping childTable, SqlConversionContext context) {
+        TableMapping parentTable = childTable.parentTable();
+        if (parentTable == null) {
+            return null;
+        }
+        
+        // Generate parent alias based on parent entity name
+        String parentAlias = generateParentAlias(parentTable.entityName(), childAlias);
+        
+        // Build JOIN clause: INNER JOIN parent_table parent_alias ON child_alias.id = parent_alias.id
+        StringBuilder join = new StringBuilder();
+        join.append("INNER JOIN ")
+            .append(parentTable.tableName())
+            .append(" ")
+            .append(parentAlias)
+            .append(" ON ")
+            .append(childAlias)
+            .append(".id = ")
+            .append(parentAlias)
+            .append(".id");
+        
+        // Recursively add JOINs for grandparent tables (multi-level inheritance)
+        if (parentTable.parentTable() != null) {
+            String grandparentJoin = generateInheritanceJoin(parentAlias, parentTable, context);
+            if (grandparentJoin != null) {
+                join.append(" ").append(grandparentJoin);
+            }
+        }
+        
+        return join.toString();
+    }
+    
+    /**
+     * Generates an alias for a parent table based on entity name.
+     * Uses first letter of entity name or a numbered suffix if conflicts.
+     */
+    private String generateParentAlias(String entityName, String childAlias) {
+        // Simple strategy: use lowercase first letter of entity name
+        // In a full implementation, we'd track existing aliases to avoid conflicts
+        String firstLetter = entityName.substring(0, 1).toLowerCase();
+        
+        // If it would conflict with child alias, append '_p' for parent
+        if (firstLetter.equals(childAlias)) {
+            return childAlias + "_p";
+        }
+        
+        return firstLetter;
+    }
+    
+    /**
+     * Inserts JOIN clauses after the FROM clause of a query.
+     */
+    private String insertJoinsAfterFrom(String query, String joins) {
+        // Pattern to find the FROM clause with table and alias
+        Pattern fromPattern = Pattern.compile(
+            "(FROM\\s+[a-zA-Z_][a-zA-Z0-9_]*\\s+[a-zA-Z_][a-zA-Z0-9_]*)",
+            Pattern.CASE_INSENSITIVE
+        );
+        
+        Matcher matcher = fromPattern.matcher(query);
+        
+        if (matcher.find()) {
+            int endOfFrom = matcher.end();
+            
+            StringBuilder result = new StringBuilder();
+            result.append(query.substring(0, endOfFrom));
+            result.append(joins);
+            result.append(query.substring(endOfFrom));
+            
+            return result.toString();
+        }
+        
+        // If FROM clause not found in expected format, return original query
+        logger.warn("Could not find FROM clause to insert inheritance JOINs");
+        return query;
+    }
+    
+    /**
+     * Adds implicit discriminator filtering for SINGLE_TABLE inheritance queries.
+     * When a query targets a specific entity with SINGLE_TABLE inheritance,
+     * automatically adds WHERE clause filtering by discriminator value.
+     * 
+     * Example:
+     * - FROM Dog d -> adds: WHERE d.dtype = 'DOG'
+     * - FROM Dog d WHERE d.age > 5 -> adds: WHERE d.dtype = 'DOG' AND d.age > 5
+     * 
+     * @param query The SQL query after entity reference conversion
+     * @param context The conversion context with entity metadata
+     * @return Query with implicit discriminator filtering added
+     */
+    private String addImplicitDiscriminatorFiltering(String query, SqlConversionContext context) {
+        // Extract entity references and their aliases from FROM and JOIN clauses
+        Map<String, TableMapping> aliasToTableMapping = extractAliasToTableMappings(query, context);
+        
+        if (aliasToTableMapping.isEmpty()) {
+            return query; // No entities to filter
+        }
+        
+        // Build discriminator conditions for entities with SINGLE_TABLE inheritance
+        StringBuilder discriminatorConditions = new StringBuilder();
+        
+        for (Map.Entry<String, TableMapping> entry : aliasToTableMapping.entrySet()) {
+            String alias = entry.getKey();
+            TableMapping tableMapping = entry.getValue();
+            
+            // Only add filtering for SINGLE_TABLE inheritance with discriminator value
+            if (tableMapping.isSingleTableInheritance() && 
+                tableMapping.discriminatorColumn() != null && 
+                tableMapping.discriminatorValue() != null) {
+                
+                if (discriminatorConditions.length() > 0) {
+                    discriminatorConditions.append(" AND ");
+                }
+                
+                discriminatorConditions.append(alias)
+                    .append(".")
+                    .append(tableMapping.discriminatorColumn())
+                    .append(" = '")
+                    .append(tableMapping.discriminatorValue())
+                    .append("'");
+                    
+                logger.debug("Added implicit discriminator filter: {}.{} = '{}'", 
+                           alias, tableMapping.discriminatorColumn(), tableMapping.discriminatorValue());
+            }
+        }
+        
+        // If no discriminator conditions, return original query
+        if (discriminatorConditions.length() == 0) {
+            return query;
+        }
+        
+        // Add discriminator conditions to WHERE clause
+        return addToWhereClause(query, discriminatorConditions.toString());
+    }
+    
+    /**
+     * Extracts alias-to-table mappings from FROM and JOIN clauses.
+     * Returns a map of alias -> TableMapping for entities that need discriminator filtering.
+     */
+    private Map<String, TableMapping> extractAliasToTableMappings(String query, SqlConversionContext context) {
+        Map<String, TableMapping> result = new HashMap<>();
+        
+        // Pattern to match FROM and JOIN clauses after entity conversion
+        // At this point, entity names should already be converted to table names
+        Pattern fromJoinPattern = Pattern.compile(
+            "\\b(FROM|JOIN)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+            Pattern.CASE_INSENSITIVE
+        );
+        
+        Matcher matcher = fromJoinPattern.matcher(query);
+        
+        while (matcher.find()) {
+            String tableName = matcher.group(2);
+            String alias = matcher.group(3);
+            
+            // Find the TableMapping for this table
+            TableMapping tableMapping = findTableMappingByTableName(tableName, context);
+            
+            if (tableMapping != null) {
+                result.put(alias, tableMapping);
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Finds TableMapping by table name (reverse lookup from entity name).
+     */
+    private TableMapping findTableMappingByTableName(String tableName, SqlConversionContext context) {
+        for (TableMapping mapping : context.entityMetadata().getAllTableMappings()) {
+            if (tableName.equalsIgnoreCase(mapping.tableName())) {
+                return mapping;
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Adds conditions to the WHERE clause of a query.
+     * If WHERE clause exists, adds with AND; otherwise creates new WHERE clause.
+     */
+    private String addToWhereClause(String query, String conditions) {
+        // Check if WHERE clause already exists
+        Pattern wherePattern = Pattern.compile(
+            "\\bWHERE\\b",
+            Pattern.CASE_INSENSITIVE
+        );
+        
+        Matcher matcher = wherePattern.matcher(query);
+        
+        if (matcher.find()) {
+            // WHERE clause exists - add conditions with AND
+            // Insert after WHERE keyword
+            int wherePos = matcher.start();
+            int afterWherePos = matcher.end();
+            
+            // Find the position to insert (after WHERE keyword and any whitespace)
+            String afterWhere = query.substring(afterWherePos).trim();
+            
+            // Build new query with added conditions
+            StringBuilder result = new StringBuilder();
+            result.append(query.substring(0, afterWherePos));
+            result.append(" (").append(conditions).append(") AND (");
+            result.append(afterWhere).append(")");
+            
+            return result.toString();
+        } else {
+            // No WHERE clause - add one before ORDER BY, GROUP BY, HAVING, or LIMIT
+            Pattern beforePattern = Pattern.compile(
+                "\\s+(ORDER\\s+BY|GROUP\\s+BY|HAVING|LIMIT|$)",
+                Pattern.CASE_INSENSITIVE
+            );
+            
+            Matcher beforeMatcher = beforePattern.matcher(query);
+            
+            if (beforeMatcher.find()) {
+                int insertPos = beforeMatcher.start();
+                StringBuilder result = new StringBuilder();
+                result.append(query.substring(0, insertPos));
+                result.append(" WHERE ").append(conditions);
+                result.append(query.substring(insertPos));
+                return result.toString();
+            } else {
+                // No special clauses - append WHERE at the end
+                return query + " WHERE " + conditions;
+            }
+        }
+    }
+    
+    /**
      * Converts WHERE clause with proper column mapping.
      * Ensures that property references in conditions are properly mapped to columns.
      */
@@ -1050,13 +1344,16 @@ public class SqlGenerationVisitor {
      * Converts property references within WHERE conditions.
      */
     private String convertWhereConditions(String conditions, SqlConversionContext context) {
-        // Pattern to match property references in conditions (more specific than general property pattern)
+        // First, convert TYPE() function calls to discriminator checks
+        String conditionsWithType = convertTypeFunctions(conditions, context);
+        
+        // Then convert property references in conditions
         Pattern conditionPropertyPattern = Pattern.compile(
             "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\.([a-zA-Z_][a-zA-Z0-9_]*)\\b"
         );
         
         StringBuffer result = new StringBuffer();
-        Matcher matcher = conditionPropertyPattern.matcher(conditions);
+        Matcher matcher = conditionPropertyPattern.matcher(conditionsWithType);
         
         while (matcher.find()) {
             String alias = matcher.group(1);
@@ -1077,6 +1374,150 @@ public class SqlGenerationVisitor {
         matcher.appendTail(result);
         
         return result.toString();
+    }
+    
+    /**
+     * Converts TYPE() function calls to discriminator column checks.
+     * Handles SINGLE_TABLE and JOINED inheritance strategies.
+     * 
+     * Examples:
+     * - TYPE(a) = Dog -> a.dtype = 'DOG' (SINGLE_TABLE)
+     * - TYPE(a) IN (Dog, Cat) -> a.dtype IN ('DOG', 'CAT') (SINGLE_TABLE)
+     * - TYPE(a) = Dog -> a.id IN (SELECT id FROM dog_table) (JOINED)
+     * 
+     * @param conditions The WHERE conditions containing TYPE() functions
+     * @param context The conversion context with entity metadata
+     * @return Converted conditions with discriminator checks
+     */
+    private String convertTypeFunctions(String conditions, SqlConversionContext context) {
+        StringBuffer result = new StringBuffer();
+        Matcher matcher = TYPE_FUNCTION_PATTERN.matcher(conditions);
+        
+        while (matcher.find()) {
+            String alias = matcher.group(1);
+            String operator = matcher.group(2);
+            String entityValue = matcher.group(3).trim();
+            
+            // Try to determine which entity this alias refers to
+            // For now, we'll look for any entity in metadata that has discriminator info
+            TableMapping tableMapping = findTableMappingForAlias(alias, context);
+            
+            if (tableMapping != null && tableMapping.discriminatorColumn() != null) {
+                String conversion = convertTypeFunction(alias, operator, entityValue, tableMapping, context);
+                if (conversion != null) {
+                    matcher.appendReplacement(result, Matcher.quoteReplacement(conversion));
+                    logger.debug("Converted TYPE() function: TYPE({}) {} {} -> {}", 
+                               alias, operator, entityValue, conversion);
+                    continue;
+                }
+            }
+            
+            // If we can't convert, keep original
+            matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group(0)));
+        }
+        matcher.appendTail(result);
+        
+        return result.toString();
+    }
+    
+    /**
+     * Converts a single TYPE() function call based on inheritance strategy.
+     */
+    private String convertTypeFunction(String alias, String operator, String entityValue,
+                                     TableMapping tableMapping, SqlConversionContext context) {
+        if (tableMapping.isSingleTableInheritance()) {
+            return convertTypeFunctionSingleTable(alias, operator, entityValue, tableMapping);
+        } else if (tableMapping.isJoinedInheritance()) {
+            return convertTypeFunctionJoined(alias, operator, entityValue, tableMapping, context);
+        } else {
+            // TABLE_PER_CLASS not supported yet
+            logger.warn("TYPE() function not supported for inheritance type: {}", tableMapping.inheritanceType());
+            return null;
+        }
+    }
+    
+    /**
+     * Converts TYPE() for SINGLE_TABLE inheritance strategy.
+     * Converts to discriminator column check.
+     */
+    private String convertTypeFunctionSingleTable(String alias, String operator, 
+                                                 String entityValue, TableMapping tableMapping) {
+        String discriminatorColumn = tableMapping.discriminatorColumn();
+        
+        // Handle IN operator (e.g., TYPE(a) IN (Dog, Cat))
+        if ("IN".equalsIgnoreCase(operator)) {
+            // Extract entity names from list: (Dog, Cat) or Dog, Cat
+            String entityList = entityValue.replaceAll("[()]", "").trim();
+            String[] entities = entityList.split(",\\s*");
+            
+            StringBuilder inClause = new StringBuilder();
+            inClause.append(alias).append(".").append(discriminatorColumn).append(" IN (");
+            
+            for (int i = 0; i < entities.length; i++) {
+                if (i > 0) inClause.append(", ");
+                String entityName = entities[i].trim();
+                // Convert entity name to discriminator value (uppercase)
+                inClause.append("'").append(entityName.toUpperCase()).append("'");
+            }
+            inClause.append(")");
+            
+            return inClause.toString();
+        }
+        
+        // Handle equality/inequality operators
+        // Extract entity name (might be quoted or not)
+        String entityName = entityValue.replaceAll("['\"]|\\s", "");
+        
+        // Convert entity name to discriminator value (uppercase by convention)
+        String discriminatorValue = entityName.toUpperCase();
+        
+        return alias + "." + discriminatorColumn + " " + operator + " '" + discriminatorValue + "'";
+    }
+    
+    /**
+     * Converts TYPE() for JOINED inheritance strategy.
+     * Converts to subquery checking if ID exists in subclass table.
+     */
+    private String convertTypeFunctionJoined(String alias, String operator, String entityValue,
+                                            TableMapping tableMapping, SqlConversionContext context) {
+        // For JOINED strategy, we need to check if the ID exists in the subclass table
+        // This requires knowing the subclass table name
+        
+        // Extract entity name
+        String entityName = entityValue.replaceAll("['\"]|\\s", "");
+        
+        // Try to find the table mapping for this entity
+        TableMapping entityTableMapping = context.entityMetadata().getTableMapping(entityName);
+        
+        if (entityTableMapping == null) {
+            logger.warn("Cannot find table mapping for entity: {}", entityName);
+            return null;
+        }
+        
+        String subclassTable = entityTableMapping.tableName();
+        
+        // Build subquery: a.id IN (SELECT id FROM subclass_table)
+        String conversion = alias + ".id " + 
+                          ("!=".equals(operator) || "<>".equals(operator) ? "NOT " : "") + 
+                          "IN (SELECT id FROM " + subclassTable + ")";
+        
+        return conversion;
+    }
+    
+    /**
+     * Finds the TableMapping that corresponds to a given alias.
+     * This is a simplified implementation - in practice, we'd need to track
+     * the entity-to-alias mapping from the FROM clause.
+     */
+    private TableMapping findTableMappingForAlias(String alias, SqlConversionContext context) {
+        // For now, return the first table mapping that has discriminator info
+        // In a complete implementation, we'd track alias -> entity mappings
+        for (TableMapping mapping : context.entityMetadata().getAllTableMappings()) {
+            if (mapping.discriminatorColumn() != null) {
+                return mapping;
+            }
+        }
+        return null;
     }
     
     /**

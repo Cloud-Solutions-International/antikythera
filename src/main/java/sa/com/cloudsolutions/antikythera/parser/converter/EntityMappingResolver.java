@@ -104,7 +104,46 @@ public class EntityMappingResolver {
         
         Map<String, String> propertyToColumnMap = buildPropertyToColumnMap(entityClass);
         
-        return new TableMapping(entityName, tableName, schema, propertyToColumnMap);
+        // Extract inheritance information
+        String discriminatorColumn = null;
+        String discriminatorValue = null;
+        String inheritanceType = null;
+        TableMapping parentTable = null;
+        
+        Inheritance inheritanceAnnotation = entityClass.getAnnotation(Inheritance.class);
+        if (inheritanceAnnotation != null) {
+            inheritanceType = inheritanceAnnotation.strategy().name();
+        }
+        
+        DiscriminatorColumn discriminatorColumnAnnotation = 
+            entityClass.getAnnotation(DiscriminatorColumn.class);
+        if (discriminatorColumnAnnotation != null) {
+            discriminatorColumn = discriminatorColumnAnnotation.name();
+            if (discriminatorColumn.isEmpty()) {
+                discriminatorColumn = "dtype"; // Default
+            }
+        } else if (inheritanceType != null && "SINGLE_TABLE".equals(inheritanceType)) {
+            discriminatorColumn = "dtype"; // Default for SINGLE_TABLE
+        }
+        
+        DiscriminatorValue discriminatorValueAnnotation = 
+            entityClass.getAnnotation(DiscriminatorValue.class);
+        if (discriminatorValueAnnotation != null) {
+            discriminatorValue = discriminatorValueAnnotation.value();
+        }
+        
+        // For JOINED strategy, build parent table mapping if exists
+        if ("JOINED".equals(inheritanceType)) {
+            Class<?> superclass = entityClass.getSuperclass();
+            if (superclass != null && superclass.isAnnotationPresent(Entity.class)) {
+                String parentEntityName = getEntityName(superclass);
+                parentTable = buildTableMapping(superclass, parentEntityName);
+            }
+        }
+        
+        return new TableMapping(entityName, tableName, schema, propertyToColumnMap,
+                                discriminatorColumn, discriminatorValue, 
+                                inheritanceType, parentTable);
     }
     
     private Map<String, String> buildPropertyToColumnMap(Class<?> entityClass) {
