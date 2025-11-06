@@ -68,7 +68,7 @@ class TestAKBuddy extends TestHelper {
 
     @Test
     void createComplexDynamicClass() throws ReflectiveOperationException {
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService", SpringEvaluator.class);
+        evaluator = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
 
         TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "FakeService").orElseThrow();
         MethodInterceptor interceptor = new MethodInterceptor(evaluator);

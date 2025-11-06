@@ -148,14 +148,14 @@ class DepSolverTest extends TestHelper {
     @ParameterizedTest
     @ValueSource(strings = {"searchFakeDataWithCriteria1", "searchFakeDataWithCriteria2"})
     void testSpecification(String name) {
-        postSetup("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService");
+        postSetup(FAKE_SERVICE);
         Graph.createGraphNode(
                 node.getEnclosingType().asClassOrInterfaceDeclaration()
                         .getMethodsByName(name).getFirst());
 
         depSolver.dfs();
         Map<String, CompilationUnit> a = Graph.getDependencies();
-        assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService"));
+        assertTrue(a.containsKey(FAKE_SERVICE));
         assertTrue(a.containsKey("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeSearchModel"));
         assertTrue(a.containsKey(FAKE_ENTITY));
         assertTrue(a.containsKey(FAKE_REPOSITORY));

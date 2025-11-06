@@ -277,7 +277,6 @@ class UnitTestGeneratorTest {
 }
 
 class UnitTestGeneratorMoreTests extends TestHelper {
-    public static final String FAKE_SERVICE = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService";
     public static final String PERSON = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Person";
     public static final String CONDITIONAL = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Conditional";
     CompilationUnit cu;
