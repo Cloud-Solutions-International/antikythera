@@ -616,6 +616,16 @@ public class BaseRepositoryParser extends AbstractCompiler {
     public Collection<RepositoryQuery> getAllQueries() {
         return queries.values();
     }
+    
+    /**
+     * Clears all queries from the internal map.
+     * This should be called before processing a new repository to prevent
+     * accumulation of queries from previously analyzed repositories.
+     */
+    public void clearQueries() {
+        queries.clear();
+        logger.debug("Queries map cleared");
+    }
 
 
     /**

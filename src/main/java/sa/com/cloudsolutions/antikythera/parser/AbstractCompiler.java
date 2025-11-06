@@ -30,6 +30,7 @@ import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.printer.lexicalpreservation.LexicalPreservingPrinter;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
@@ -91,6 +92,12 @@ public class AbstractCompiler {
     protected CompilationUnit cu;
     protected String className;
     protected static Map<String, TypeWrapper> typeCache = new HashMap<>();
+    
+    /**
+     * Flag to enable LexicalPreservingPrinter for whitespace preservation during AST modifications.
+     * When enabled, all CompilationUnits parsed via compile() will have LexicalPreservingPrinter.setup() called.
+     */
+    private static boolean enableLexicalPreservation = false;
 
     protected AbstractCompiler() throws IOException {
         if (combinedTypeSolver == null) {
@@ -98,6 +105,16 @@ public class AbstractCompiler {
         }
     }
 
+    /**
+     * Enables or disables LexicalPreservingPrinter for all subsequently parsed files.
+     * Must be called before parsing to take effect.
+     * 
+     * @param enable true to enable whitespace preservation, false to disable
+     */
+    public static void setEnableLexicalPreservation(boolean enable) {
+        enableLexicalPreservation = enable;
+    }
+    
     protected static void setupParser() throws IOException {
         combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
@@ -261,6 +278,12 @@ public class AbstractCompiler {
         // Proceed with parsing the controller file
         FileInputStream in = new FileInputStream(file);
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+        
+        // Enable LexicalPreservingPrinter if requested for whitespace preservation
+        if (enableLexicalPreservation) {
+            LexicalPreservingPrinter.setup(cu);
+        }
+        
         cache(cu);
         return false;
     }
