@@ -34,6 +34,7 @@ public class Antikythera {
     public static final String SRC = "src";
     private static final Logger logger = LoggerFactory.getLogger(Antikythera.class);
     private static final String PACKAGE_PATH = "src/main/java/sa/com/cloudsolutions/antikythera";
+    public static final String JAVA = ".java";
     private static Antikythera instance;
     private final Collection<String> controllers;
     private final Collection<String> services;
@@ -105,7 +106,11 @@ public class Antikythera {
     private void copyBaseFiles(String outputPath) throws IOException, XmlPullParserException {
         String testPath = PACKAGE_PATH.replace("main", "test");
         mavenHelper.copyPom();
-        mavenHelper.copyTemplate("TestHelper.java", testPath, "base");
+        String name = mavenHelper.copyTemplate("TestHelper.txt", testPath, "base");
+        String java = name.replace(".txt", JAVA);
+        File f = new File(name);
+        f.renameTo(new File(java));
+
         mavenHelper.copyTemplate("Configurations.java", testPath, "configurations");
 
         Path pathToCopy = Paths.get(outputPath, SRC, "test", "resources");
@@ -131,7 +136,7 @@ public class Antikythera {
     public void generateApiTests() throws IOException, XmlPullParserException, EvaluatorException {
         for (String controller : controllers) {
 
-            String controllersCleaned = controller.replace(".java", "").split("#")[0];
+            String controllersCleaned = controller.replace(JAVA, "").split("#")[0];
             RestControllerParser processor = new RestControllerParser(controllersCleaned);
             processor.start();
         }
@@ -178,7 +183,7 @@ public class Antikythera {
                 if (Files.isDirectory(packagePath)) {
                     try (var paths = Files.walk(packagePath)) {
                         paths.filter(Files::isRegularFile)
-                             .filter(p -> p.toString().endsWith(".java"))
+                             .filter(p -> p.toString().endsWith(JAVA))
                              .forEach(p -> {
                                  String relativePath = Paths.get(Settings.getBasePath())
                                      .relativize(p).toString()
