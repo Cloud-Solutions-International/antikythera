@@ -35,6 +35,7 @@ import net.sf.jsqlparser.statement.select.SelectItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
@@ -125,17 +126,21 @@ public class BaseRepositoryQuery {
 
                 if (itemStr.contains(".") && parts.length == 2 && !itemStr.contains("(")) {
                     String field = parts[1];
-                    String snakeCaseField = RepositoryParser.camelToSnake(field);
+                    String snakeCaseField = BaseRepositoryParser.camelToSnake(field);
                     SelectItem<?> col = SelectItem.from(new Column(parts[0] + "." + snakeCaseField));
                     items.set(i, col);
                 } else if (!itemStr.contains("(") && !itemStr.contains("*")) {
-                    String snakeCaseField = RepositoryParser.camelToSnake(parts[0]);
+                    String snakeCaseField = BaseRepositoryParser.camelToSnake(parts[0]);
                     SelectItem<?> col = SelectItem.from(new Column(snakeCaseField));
                     items.set(i, col);
                 }
                 // If it contains functions or complex expressions, leave it as-is
             }
         }
+    }
+
+    public Optional<AnnotationExpr> getQueryAnnotation() {
+        return methodDeclaration.getCallableDeclaration().getAnnotationByName("Query");
     }
 
     private static void processJoin(Join j, List<TypeWrapper> units) throws AntikytheraException {
@@ -168,23 +173,23 @@ public class BaseRepositoryQuery {
                 // find if there is a join column annotation, that will tell us the column names
                 // to map for the on clause.
                 Optional<AnnotationExpr> annotationExpr =  member.getAnnotationByName("JoinColumn");
-                for (var ann : member.getAnnotations()) {
-                    if (ann.getNameAsString().equals("JoinColumn")) {
-                        if (ann.isNormalAnnotationExpr()) {
-                            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                                if (pair.getNameAsString().equals("name")) {
-                                    lhs = RepositoryParser.camelToSnake(pair.getValue().toString());
-                                }
-                                if (pair.getNameAsString().equals("referencedColumnName")) {
-                                    rhs = RepositoryParser.camelToSnake(pair.getValue().toString());
-                                }
+
+                if (annotationExpr.isPresent()) {
+                    AnnotationExpr ann = annotationExpr.orElseThrow();
+                    if (ann.isNormalAnnotationExpr()) {
+                        for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                            if (pair.getNameAsString().equals("name")) {
+                                lhs = BaseRepositoryParser.camelToSnake(pair.getValue().toString());
                             }
-                        } else {
-                            lhs = RepositoryParser.camelToSnake(ann.asSingleMemberAnnotationExpr().getMemberValue().toString());
+                            if (pair.getNameAsString().equals("referencedColumnName")) {
+                                rhs = BaseRepositoryParser.camelToSnake(pair.getValue().toString());
+                            }
                         }
-                        break;
+                    } else {
+                        lhs = BaseRepositoryParser.camelToSnake(ann.asSingleMemberAnnotationExpr().getMemberValue().toString());
                     }
                 }
+
 
                 other = RepositoryParser.findEntity(member.getElementType());
 
@@ -228,7 +233,7 @@ public class BaseRepositoryQuery {
         for (var column : other.getType().getFields()) {
             for (var ann : column.getAnnotations()) {
                 if (ann.getNameAsString().equals("Id")) {
-                    lhs = RepositoryParser.camelToSnake(column.getVariable(0).getNameAsString());
+                    lhs = BaseRepositoryParser.camelToSnake(column.getVariable(0).getNameAsString());
 
                     break;
                 }
@@ -280,8 +285,8 @@ public class BaseRepositoryQuery {
             wh.setWhenExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(wh.getWhenExpression()));
         } else if (expr instanceof Function function) {
             // Handle function parameters
-            if (function.getParameters() != null && function.getParameters().getExpressions() != null) {
-                ExpressionList params = (ExpressionList) function.getParameters().getExpressions();
+            if (function.getParameters() != null &&
+                    function.getParameters().getExpressions() instanceof ExpressionList params) {
                 for (int i = 0; i < params.size(); i++) {
                     params.getExpressions().set(i, BaseRepositoryQuery.convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) params.get(i)));
                 }
@@ -293,7 +298,7 @@ public class BaseRepositoryQuery {
             binaryExpr.setLeftExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(binaryExpr.getLeftExpression()));
             binaryExpr.setRightExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(binaryExpr.getRightExpression()));
         } else if (expr instanceof Column column) {
-            column.setColumnName(RepositoryParser.camelToSnake(column.getColumnName()));
+            column.setColumnName(BaseRepositoryParser.camelToSnake(column.getColumnName()));
         }
         return expr;
     }
@@ -481,7 +486,7 @@ public class BaseRepositoryQuery {
     }
 
     protected String getColumnName(Column expr) {
-        return RepositoryParser.camelToSnake(expr.getColumnName());
+        return BaseRepositoryParser.camelToSnake(expr.getColumnName());
     }
 
     public Callable getMethodDeclaration() {
