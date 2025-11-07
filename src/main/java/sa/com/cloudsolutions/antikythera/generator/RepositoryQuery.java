@@ -16,8 +16,6 @@ import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.PlainSelect;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
@@ -31,8 +29,6 @@ import java.util.Optional;
  * Represents a query from a JPARepository
  */
 public class RepositoryQuery extends BaseRepositoryQuery {
-    private static final Logger logger = LoggerFactory.getLogger(RepositoryQuery.class);
-
     /**
      * The result set from the last execution of this query if any
      */

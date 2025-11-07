@@ -48,11 +48,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
      * SQL dialect, at the moment oracle or postgresql as identified from the connection url
      */
     protected static String dialect;
-    /**
-     * Cache for conversion results to avoid re-converting the same queries.
-     * Key is generated from query string and entity metadata.
-     */
-    private final Map<String, ConversionResult> conversionCache = new HashMap<>();
+
 
     /**
      * The JPA query converter for converting non-native queries to SQL
@@ -325,19 +321,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 EntityMetadata entityMetadata = buildEntityMetadata();
                 DatabaseDialect targetDialect = detectDatabaseDialect();
 
-                // Check cache first
-                String cacheKey = generateCacheKey(query, entityMetadata, targetDialect);
-                ConversionResult result = getCachedConversionResult(cacheKey);
-
-                if (result == null) {
-                    // Not in cache, perform conversion
-                    result = queryConverter.convertToNativeSQL(query, entityMetadata, targetDialect);
-
-                    // Cache the result (both successful and failed results)
-                    cacheConversionResult(cacheKey, result);
-                } else {
-                    logger.debug("Using cached conversion result for query");
-                }
+                ConversionResult result = queryConverter.convertToNativeSQL(query, entityMetadata, targetDialect);
 
                 if (result.isSuccessful()) {
                     logger.debug("Successfully converted JPA query to native SQL: {}", result.getNativeSql());
@@ -572,40 +556,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
         keyBuilder.append(dialect.name());
 
         return String.valueOf(keyBuilder.toString().hashCode());
-    }
-
-    /**
-     * Gets a cached conversion result if available.
-     *
-     * @param cacheKey The cache key
-     * @return The cached ConversionResult, or null if not found
-     */
-    ConversionResult getCachedConversionResult(String cacheKey) {
-        if (isCachingEnabled()) {
-            return conversionCache.get(cacheKey);
-        }
-        return null;
-    }
-
-    /**
-     * Caches a conversion result.
-     *
-     * @param cacheKey The cache key
-     * @param result The conversion result to cache
-     */
-    void cacheConversionResult(String cacheKey, ConversionResult result) {
-        if (isCachingEnabled()) {
-            conversionCache.put(cacheKey, result);
-            logger.debug("Cached conversion result for key: {}", cacheKey);
-        }
-    }
-
-    /**
-     * Clears the conversion cache. Useful for testing or when entity metadata changes.
-     */
-    public void clearConversionCache() {
-        conversionCache.clear();
-        logger.debug("Conversion cache cleared");
     }
 
     /**

@@ -72,34 +72,7 @@ class QueryConversionCompatibilityTest {
         RepositoryParser parser2 = new RepositoryParser();
         assertFalse(parser2.isCachingEnabled());
     }
-    
-    /**
-     * Test cache operations
-     */
-    @Test
-    void testCacheOperations() throws IOException {
-        enableQueryConversionWithCaching();
-        RepositoryParser parser = new RepositoryParser();
-        
-        String cacheKey = "test-cache-key";
-        ConversionResult result = ConversionResult.success("SELECT * FROM users WHERE id = ?");
-        
-        // Initially should be null
-        assertNull(parser.getCachedConversionResult(cacheKey));
-        
-        // Cache the result
-        parser.cacheConversionResult(cacheKey, result);
-        
-        // Should now return the cached result
-        ConversionResult cached = parser.getCachedConversionResult(cacheKey);
-        assertNotNull(cached);
-        assertEquals(result.getNativeSql(), cached.getNativeSql());
-        
-        // Clear cache
-        parser.clearConversionCache();
-        assertNull(parser.getCachedConversionResult(cacheKey));
-    }
-    
+
     /**
      * Test cache key generation
      */

@@ -81,29 +81,7 @@ class RepositoryParserIntegrationTest {
         assertNotNull(key1, "Cache key should not be null");
         assertFalse(key1.isEmpty(), "Cache key should not be empty");
     }
-    
-    @Test
-    void testConversionCacheOperations() {
-        // Test cache operations
-        String cacheKey = "test-key";
-        ConversionResult result = ConversionResult.success("SELECT * FROM users");
-        
-        // Initially should be null
-        assertNull(repositoryParser.getCachedConversionResult(cacheKey));
-        
-        // Cache the result
-        repositoryParser.cacheConversionResult(cacheKey, result);
-        
-        // Should now return the cached result
-        ConversionResult cached = repositoryParser.getCachedConversionResult(cacheKey);
-        assertNotNull(cached);
-        assertEquals(result.getNativeSql(), cached.getNativeSql());
-        
-        // Clear cache
-        repositoryParser.clearConversionCache();
-        assertNull(repositoryParser.getCachedConversionResult(cacheKey));
-    }
-    
+
     @Test
     void testConfigurationMethods() {
         // Test that configuration methods work correctly with disabled conversion
