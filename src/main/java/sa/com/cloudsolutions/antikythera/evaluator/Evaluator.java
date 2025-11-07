@@ -1477,7 +1477,7 @@ public class Evaluator implements EvaluationEngine {
             }
             return resolvePrimitiveOrBoxedVariable(variable, t);
         } else {
-            for (ImportWrapper imp : imports) {
+            for (ImportWrapper imp : imports.reversed()) {
                 String resolvedClass = imp.getNameAsString();
                 Variable v = resolveNonPrimitiveVariable(resolvedClass, variable, t);
                 if (v != null) {
