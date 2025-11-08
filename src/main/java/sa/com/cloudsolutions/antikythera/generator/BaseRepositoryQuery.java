@@ -84,11 +84,7 @@ public class BaseRepositoryQuery {
      */
     private Statement statement;
 
-    /**
-     * Whether the query is native or not.
-     * This is the value of the native flag to the @Query annotation.
-     */
-    boolean isNative;
+    QueryType queryType;
 
     /**
      * The original query as it was passed to the repository method.
@@ -477,14 +473,6 @@ public class BaseRepositoryQuery {
         return statement;
     }
 
-    public void setIsNative(boolean isNative) {
-        this.isNative = isNative;
-    }
-
-    public boolean isNative() {
-        return isNative;
-    }
-
     protected String getColumnName(Column expr) {
         return BaseRepositoryParser.camelToSnake(expr.getColumnName());
     }
@@ -523,5 +511,9 @@ public class BaseRepositoryQuery {
 
     public void setRepositoryClassName(String repositoryClassName) {
         this.repositoryClassName = repositoryClassName;
+    }
+
+    public QueryType getQueryType() {
+        return queryType;
     }
 }

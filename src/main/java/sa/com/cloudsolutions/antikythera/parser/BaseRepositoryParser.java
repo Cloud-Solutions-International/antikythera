@@ -8,11 +8,7 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
-import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
-import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
-import sa.com.cloudsolutions.antikythera.evaluator.Variable;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
+import sa.com.cloudsolutions.antikythera.generator.QueryType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping;
@@ -102,6 +98,9 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 queryFromMethodDeclaration(repoMethod.asMethodDeclaration());
             }
             else {
+                /*
+                 * TODO : THis has to be changed
+                 */
                 parseNonAnnotatedMethod(repoMethod);
             }
             q = queries.get(repoMethod);
@@ -110,37 +109,19 @@ public class BaseRepositoryParser extends AbstractCompiler {
     }
 
     void queryFromMethodDeclaration(MethodDeclaration n) {
-        String query = null;
-        boolean nt = false;
-        AnnotationExpr ann = n.getAnnotationByName("Query").orElse(null);
+        Optional<AnnotationExpr> annotationExpr = n.getAnnotationByName("Query");
+        Callable callable = new Callable(n, null);
 
-        if (ann != null && ann.isSingleMemberAnnotationExpr()) {
-            try {
-                Evaluator eval = EvaluatorFactory.create(className, SpringEvaluator.class);
-                Variable v = eval.evaluateExpression(
-                        ann.asSingleMemberAnnotationExpr().getMemberValue()
-                );
-                query = v.getValue().toString();
-            } catch (ReflectiveOperationException e) {
-                throw new AntikytheraException(e);
+        if (annotationExpr.isPresent()) {
+            Map<String, String> attr = AbstractCompiler.extractAnnotationAttributes(annotationExpr.get());
+            if (Boolean.parseBoolean(attr.getOrDefault(NATIVE_QUERY,"false"))) {
+                queries.put(callable, queryBuilder(attr.get("value"), QueryType.HQL, callable));
             }
-        } else if (ann != null && ann.isNormalAnnotationExpr()) {
-
-            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                if (pair.getNameAsString().equals(NATIVE_QUERY) && pair.getValue().toString().equals("true")) {
-                    nt = true;
-                }
-            }
-            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                if (pair.getNameAsString().equals("value")) {
-                    query = pair.getValue().toString();
-                }
+            else {
+                queries.put(callable, queryBuilder(attr.get("value"), QueryType.NATIVE_SQL, callable));
             }
         }
-        Callable callable = new Callable(n, null);
-        if (query != null) {
-            queries.put(callable, queryBuilder(query, nt, callable));
-        } else {
+        else {
             parseNonAnnotatedMethod(callable);
         }
     }
@@ -241,10 +222,16 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (ann.isPresent()) {
             Map<String, String> a = AbstractCompiler.extractAnnotationAttributes(ann.get());
             if (a.get(NATIVE_QUERY) != null && Boolean.parseBoolean(a.get(NATIVE_QUERY))) {
-                queries.put(md, queryBuilder(result.toString(), true, md));
+                /*
+                 * TODO : fix null
+                 */
+                queries.put(md, queryBuilder(result.toString(), null, md));
             }
         }
-        queries.put(md, queryBuilder(result.toString(), true, md));
+        /*
+         * TODO : fix null
+         */
+        queries.put(md, queryBuilder(result.toString(), null, md));
     }
 
     /**
@@ -313,10 +300,10 @@ public class BaseRepositoryParser extends AbstractCompiler {
     /**
      * Build a repository query object
      * @param query the query
-     * @param isNative will be true if an annotation says a native query
+     * @param qt what is the type of query we are dealing with
      * @return a repository query instance.
      */
-    RepositoryQuery queryBuilder(String query, boolean isNative, Callable md) {
+    RepositoryQuery queryBuilder(String query, QueryType qt, Callable md) {
         RepositoryQuery rql = new RepositoryQuery();
         rql.setMethodDeclaration(md);
         rql.setEntityType(entityType);
@@ -324,7 +311,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         rql.setRepositoryClassName(className);
 
         // Use the new converter for non-native queries if enabled
-        if (!isNative && isQueryConversionEnabled()) {
+        if (qt.equals(QueryType.HQL)) {
             try {
                 EntityMetadata entityMetadata = buildEntityMetadata();
                 DatabaseDialect targetDialect = detectDatabaseDialect();
@@ -334,23 +321,19 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 if (result.isSuccessful()) {
                     logger.debug("Successfully converted JPA query to native SQL: {}", result.getNativeSql());
                     rql.setQuery(result.getNativeSql());
-                    rql.setIsNative(true); // Mark as native after successful conversion
                 } else {
                     logger.debug("Falling back to existing logic for query conversion failure");
                     rql.setQuery(query);
-                    rql.setIsNative(isNative);
                 }
             } catch (Exception e) {
                 if (isConversionFailureLoggingEnabled()) {
                     logger.warn("Exception during query conversion: {}. Falling back to existing logic.", e.getMessage());
                 }
                 rql.setQuery(query);
-                rql.setIsNative(isNative);
             }
         } else {
             // Use original query for native queries or when conversion is disabled
             rql.setQuery(query);
-            rql.setIsNative(isNative);
         }
 
         return rql;
