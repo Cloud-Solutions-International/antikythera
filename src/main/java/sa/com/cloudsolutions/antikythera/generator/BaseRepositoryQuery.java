@@ -84,12 +84,15 @@ public class BaseRepositoryQuery {
      * The jsqlparser statement that represents the query.
      *
      * When we are dealing with derived queries, this will be the statement that we derived through
-     * the intermedia HQL.
-     * For an annotated native query this will be directly created from the query test.
+     * the intermediate HQL.
+     * For an annotated native query this will be directly created from the query text.
      * JPQL queries will first be parsed with the JQL parser to create an AST, then converted to SQL syntax
      */
     private Statement statement;
 
+    /**
+     * The result of the conversion from HQL to SQL
+     */
     private ConversionResult conversionResult;
 
     QueryType queryType;
