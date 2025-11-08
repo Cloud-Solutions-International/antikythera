@@ -21,6 +21,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
+import sa.com.cloudsolutions.antikythera.parser.converter.BasicConverter;
 
 import java.sql.ResultSet;
 import java.util.Map;
@@ -230,7 +231,7 @@ public class RepositoryQuery extends BaseRepositoryQuery {
     public void buildSimplifiedQuery() throws JSQLParserException, AntikytheraException {
         this.simplifiedStatement = CCJSqlParserUtil.parse(cleanUp(this.originalQuery));
         TypeWrapper entity = BaseRepositoryParser.findEntity(entityType);
-        convertFieldsToSnakeCase(simplifiedStatement, entity);
+        BasicConverter.convertFieldsToSnakeCase(simplifiedStatement, entity);
 
         if (simplifiedStatement instanceof PlainSelect ps) {
             simplifyWhereClause(ps.getWhere());
