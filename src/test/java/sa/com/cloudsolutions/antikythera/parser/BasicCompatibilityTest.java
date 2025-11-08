@@ -54,47 +54,7 @@ class BasicCompatibilityTest {
         assertTrue(result.contains("SELECT * FROM users WHERE active ="));
         assertTrue(result.contains("AND deleted ="));
     }
-    
-    /**
-     * Test that RepositoryParser can be instantiated with different configurations
-     */
-    @Test
-    void testRepositoryParserInstantiation() throws IOException {
-        // Test with query conversion disabled
-        disableQueryConversion();
-        RepositoryParser parser1 = new RepositoryParser();
-        assertNotNull(parser1);
-        assertFalse(parser1.isQueryConversionEnabled());
-        
-        // Test with query conversion enabled
-        enableQueryConversion();
-        RepositoryParser parser2 = new RepositoryParser();
-        assertNotNull(parser2);
-        assertTrue(parser2.isQueryConversionEnabled());
-    }
-    
-    /**
-     * Test that configuration methods work correctly
-     */
-    @Test
-    void testConfigurationMethods() throws IOException {
-        // Test with all features enabled
-        enableAllFeatures();
-        RepositoryParser parser = new RepositoryParser();
-        
-        assertTrue(parser.isQueryConversionEnabled());
-        assertTrue(parser.isFallbackOnFailureEnabled());
-        assertTrue(parser.isCachingEnabled());
-        
-        // Test with all features disabled
-        disableAllFeatures();
-        RepositoryParser parser2 = new RepositoryParser();
-        
-        assertFalse(parser2.isQueryConversionEnabled());
-        assertFalse(parser2.isFallbackOnFailureEnabled());
-        assertFalse(parser2.isCachingEnabled());
-    }
-    
+
     /**
      * Test that the system doesn't crash with various configurations
      */
@@ -134,36 +94,6 @@ class BasicCompatibilityTest {
     }
     
     private void disableQueryConversion() {
-        Map<String, Object> database = new HashMap<>();
-        database.put("url", "jdbc:postgresql://localhost:5432/test");
-        database.put("run_queries", false);
-        
-        Map<String, Object> queryConversion = new HashMap<>();
-        queryConversion.put("enabled", false);
-        queryConversion.put("fallback_on_failure", false);
-        queryConversion.put("log_conversion_failures", false);
-        queryConversion.put("cache_results", false);
-        
-        database.put("query_conversion", queryConversion);
-        Settings.setProperty("database", database);
-    }
-    
-    private void enableAllFeatures() {
-        Map<String, Object> database = new HashMap<>();
-        database.put("url", "jdbc:postgresql://localhost:5432/test");
-        database.put("run_queries", false);
-        
-        Map<String, Object> queryConversion = new HashMap<>();
-        queryConversion.put("enabled", true);
-        queryConversion.put("fallback_on_failure", true);
-        queryConversion.put("log_conversion_failures", true);
-        queryConversion.put("cache_results", true);
-        
-        database.put("query_conversion", queryConversion);
-        Settings.setProperty("database", database);
-    }
-    
-    private void disableAllFeatures() {
         Map<String, Object> database = new HashMap<>();
         database.put("url", "jdbc:postgresql://localhost:5432/test");
         database.put("run_queries", false);

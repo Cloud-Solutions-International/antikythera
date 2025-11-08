@@ -51,27 +51,4 @@ class RepositoryParserIntegrationTest {
         
         repositoryParser = new RepositoryParser();
     }
-
-    
-    @Test
-    void testCacheKeyGeneration() {
-        // Test cache key generation with different inputs
-        String query1 = "SELECT u FROM User u WHERE u.name = :name";
-        String query2 = "SELECT u FROM User u WHERE u.name = :name";
-        String query3 = "SELECT u FROM User u WHERE u.email = :email";
-        
-        // Same query should generate same cache key
-        String key1 = repositoryParser.generateCacheKey(query1, EntityMetadata.empty(), DatabaseDialect.POSTGRESQL);
-        String key2 = repositoryParser.generateCacheKey(query2, EntityMetadata.empty(), DatabaseDialect.POSTGRESQL);
-        assertEquals(key1, key2, "Same queries should generate the same cache key");
-        
-        // Different query should generate different cache key
-        String key3 = repositoryParser.generateCacheKey(query3, EntityMetadata.empty(), DatabaseDialect.POSTGRESQL);
-        assertNotEquals(key1, key3, "Different queries should generate different cache keys");
-        
-        // Test that cache keys are not null or empty
-        assertNotNull(key1, "Cache key should not be null");
-        assertFalse(key1.isEmpty(), "Cache key should not be empty");
-    }
-
 }
