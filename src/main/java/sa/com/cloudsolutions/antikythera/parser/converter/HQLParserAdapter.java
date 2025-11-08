@@ -14,7 +14,7 @@ import java.util.*;
  * Adapter that bridges antikythera's converter interface with raditha's hql-parser.
  * Replaces the mock implementation in HibernateQueryConverter with real ANTLR4-based parsing.
  */
-public class HQLParserAdapter implements JpaQueryConverter {
+public class HQLParserAdapter  {
     
     private static final Logger logger = LoggerFactory.getLogger(HQLParserAdapter.class);
     
@@ -29,8 +29,16 @@ public class HQLParserAdapter implements JpaQueryConverter {
         
         logger.info("HQLParserAdapter initialized with ANTLR4-based parser");
     }
-    
-    @Override
+
+    /**
+     * Converts a JPA/HQL query to native SQL.
+     *
+     * @param jpaQuery The original JPA/HQL query string to convert
+     * @param entityMetadata Metadata about entities involved in the query
+     * @param dialect The target database dialect for SQL generation
+     * @return ConversionResult containing the native SQL and conversion metadata
+     * @throws QueryConversionException if the conversion fails
+     */
     public ConversionResult convertToNativeSQL(String jpaQuery, EntityMetadata entityMetadata, DatabaseDialect dialect) {
         if (!supportsDialect(dialect)) {
             return ConversionResult.failure(
@@ -74,8 +82,14 @@ public class HQLParserAdapter implements JpaQueryConverter {
             );
         }
     }
-    
-    @Override
+
+
+    /**
+     * Validates if a query can be converted by this converter.
+     *
+     * @param jpaQuery The JPA/HQL query to validate
+     * @return true if the query can be converted, false otherwise
+     */
     public boolean canConvert(String jpaQuery) {
         if (jpaQuery == null || jpaQuery.trim().isEmpty()) {
             return false;
@@ -84,8 +98,13 @@ public class HQLParserAdapter implements JpaQueryConverter {
         // Use hql-parser's validation
         return hqlParser.isValid(jpaQuery);
     }
-    
-    @Override
+
+    /**
+     * Checks if the converter supports the specified database dialect.
+     *
+     * @param dialect The database dialect to check
+     * @return true if the dialect is supported, false otherwise
+     */
     public boolean supportsDialect(DatabaseDialect dialect) {
         return supportedDialects.contains(dialect);
     }

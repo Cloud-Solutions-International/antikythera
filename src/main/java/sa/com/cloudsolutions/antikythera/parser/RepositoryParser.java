@@ -5,7 +5,6 @@ import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.parser.converter.QueryConverterFactory;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
 import com.github.javaparser.ast.body.MethodDeclaration;
 
@@ -13,6 +12,7 @@ import net.sf.jsqlparser.statement.select.Select;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.parser.converter.HQLParserAdapter;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -66,7 +66,7 @@ public class RepositoryParser extends BaseRepositoryParser {
         
         // Initialize the query converter and entity mapping resolver
         this.entityMappingResolver = new EntityMappingResolver();
-        this.queryConverter = QueryConverterFactory.createConverter();
+        this.queryConverter = new HQLParserAdapter();
 
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
         if(db != null) {

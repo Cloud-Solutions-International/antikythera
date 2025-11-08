@@ -16,7 +16,7 @@ import sa.com.cloudsolutions.antikythera.parser.converter.ConversionResult;
 import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMetadata;
-import sa.com.cloudsolutions.antikythera.parser.converter.JpaQueryConverter;
+import sa.com.cloudsolutions.antikythera.parser.converter.HQLParserAdapter;
 import sa.com.cloudsolutions.antikythera.parser.converter.TableMapping;
 
 import java.io.IOException;
@@ -46,11 +46,10 @@ public class BaseRepositoryParser extends AbstractCompiler {
      */
     protected static String dialect;
 
-
     /**
      * The JPA query converter for converting non-native queries to SQL
      */
-    protected JpaQueryConverter queryConverter;
+    protected HQLParserAdapter queryConverter;
 
     /**
      * Entity mapping resolver for extracting metadata from JPA annotations

@@ -42,7 +42,7 @@ public class RepositoryQuery extends BaseRepositoryQuery {
     private ResultSet simplifiedResultSet;
 
     /**
-     * Running the same query repeatedly will slow things down and be wastefull, lets cache it.
+     * Running the same query repeatedly will slow things down and be wasteful, lets cache it.
      */
     Variable cachedResult;
 
