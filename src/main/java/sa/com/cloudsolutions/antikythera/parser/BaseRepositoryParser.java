@@ -304,9 +304,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 rql.setConversionResult(queryConverter.convertToNativeSQL(query, entityMetadata));
                 rql.setQuery(query);
             } catch (Exception e) {
-                if (isConversionFailureLoggingEnabled()) {
-                    logger.warn("Exception during query conversion: {}. Falling back to existing logic.", e.getMessage());
-                }
+                logger.warn("Exception during query conversion: {}. Falling back to existing logic.", e.getMessage());
                 rql.setQuery(query);
             }
         } else {
@@ -324,7 +322,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
      */
     private EntityMetadata buildEntityMetadata() {
         // Try to build from Antikythera's parsed source first
-        EntityMetadata metadata = buildEntityMetadataFromAntikythera();
+        EntityMetadata metadata = buildMetadataFromSources();
         if (metadata != null && !metadata.entityToTableMappings().isEmpty()) {
             return metadata;
         }
@@ -342,7 +340,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
      *
      * @return EntityMetadata from parsed source, or null if not available
      */
-    private EntityMetadata buildEntityMetadataFromAntikythera() {
+    private EntityMetadata buildMetadataFromSources() {
         if (entity == null || entity.getType() == null) {
             return null; // No parsed type available
         }
@@ -562,21 +560,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return true; // Default to enabled for safety
     }
 
-    /**
-     * Checks if conversion failure logging is enabled.
-     *
-     * @return true if logging conversion failures is enabled, false otherwise
-     */
-    boolean isConversionFailureLoggingEnabled() {
-        Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
-        if (db != null) {
-            Map<String, Object> queryConversion = (Map<String, Object>) db.get(Settings.SQL_QUERY_CONVERSION);
-            if (queryConversion != null) {
-                return Boolean.parseBoolean(queryConversion.getOrDefault("log_conversion_failures", "true").toString());
-            }
-        }
-        return true; // Default to enabled
-    }
 
     /**
      * Checks if conversion result caching is enabled.

@@ -25,7 +25,7 @@ public class ConversionResult {
      * Creates a successful conversion result.
      * 
      * @param nativeSql The converted native SQL query
-     * @param parameterMappings List of parameter mappings from original to converted query
+     * @param parameterMappings List of parameter mappings from original to a converted query
      * @param referencedTables Set of table names referenced in the converted query
      */
     public ConversionResult(String nativeSql, List<ParameterMapping> parameterMappings, Set<String> referencedTables) {
