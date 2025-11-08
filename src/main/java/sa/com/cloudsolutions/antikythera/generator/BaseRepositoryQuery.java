@@ -38,6 +38,7 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
+import sa.com.cloudsolutions.antikythera.parser.converter.ConversionResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -88,6 +89,8 @@ public class BaseRepositoryQuery {
      * JPQL queries will first be parsed with the JQL parser to create an AST, then converted to SQL syntax
      */
     private Statement statement;
+
+    private ConversionResult conversionResult;
 
     QueryType queryType;
 
@@ -520,5 +523,13 @@ public class BaseRepositoryQuery {
 
     public QueryType getQueryType() {
         return queryType;
+    }
+
+    public ConversionResult getConversionResult() {
+        return conversionResult;
+    }
+
+    public void setConversionResult(ConversionResult conversionResult) {
+        this.conversionResult = conversionResult;
     }
 }

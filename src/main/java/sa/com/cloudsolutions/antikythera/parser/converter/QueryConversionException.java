@@ -8,7 +8,6 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
  * This exception provides detailed information about conversion failures,
  * including the original query and the specific reason for failure.
  * 
- * Requirements addressed: 1.1, 2.1, 2.5
  */
 public class QueryConversionException extends AntikytheraException {
     

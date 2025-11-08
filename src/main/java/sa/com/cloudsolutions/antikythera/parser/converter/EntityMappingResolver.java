@@ -39,9 +39,9 @@ public class EntityMappingResolver {
         
         for (Class<?> entityClass : entityClasses) {
             EntityMetadata metadata = resolveEntityMetadata(entityClass);
-            entityToTableMappings.putAll(metadata.getEntityToTableMappings());
-            propertyToColumnMappings.putAll(metadata.getPropertyToColumnMappings());
-            relationshipMappings.putAll(metadata.getRelationshipMappings());
+            entityToTableMappings.putAll(metadata.entityToTableMappings());
+            propertyToColumnMappings.putAll(metadata.propertyToColumnMappings());
+            relationshipMappings.putAll(metadata.relationshipMappings());
         }
         
         return new EntityMetadata(entityToTableMappings, propertyToColumnMappings, relationshipMappings);

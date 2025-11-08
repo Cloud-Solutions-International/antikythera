@@ -35,52 +35,26 @@ public class HQLParserAdapter  {
      *
      * @param jpaQuery The original JPA/HQL query string to convert
      * @param entityMetadata Metadata about entities involved in the query
-     * @param dialect The target database dialect for SQL generation
      * @return ConversionResult containing the native SQL and conversion metadata
      * @throws QueryConversionException if the conversion fails
      */
-    public ConversionResult convertToNativeSQL(String jpaQuery, EntityMetadata entityMetadata, DatabaseDialect dialect) {
-        if (!supportsDialect(dialect)) {
-            return ConversionResult.failure(
-                "HQLParserAdapter currently supports PostgreSQL only. Oracle support coming soon.",
-                ConversionFailureReason.DIALECT_INCOMPATIBILITY
-            );
-        }
-        
-        try {
-            // Step 1: Analyze the HQL query using hql-parser
-            QueryAnalysis analysis = hqlParser.analyze(jpaQuery);
-            logger.debug("Parsed HQL query type: {}", analysis.getQueryType());
-            logger.debug("Entities found: {}", analysis.getEntityNames());
-            
-            // Step 2: Register entity and field mappings from EntityMetadata
-            registerMappings(entityMetadata, analysis);
-            
-            // Step 3: Convert to PostgreSQL using hql-parser converter
-            String nativeSql = sqlConverter.convert(jpaQuery);
-            logger.debug("Converted SQL: {}", nativeSql);
-            
-            // Step 4: Extract parameter mappings
-            List<ParameterMapping> parameterMappings = extractParameterMappings(analysis);
-            
-            // Step 5: Get referenced tables
-            Set<String> referencedTables = extractReferencedTables(entityMetadata, analysis);
-            
-            return new ConversionResult(nativeSql, parameterMappings, referencedTables);
-            
-        } catch (ParseException e) {
-            logger.error("HQL parsing failed for query: {}", jpaQuery, e);
-            return ConversionResult.failure(
-                "HQL parse error: " + e.getMessage(),
-                ConversionFailureReason.PARSER_ERROR
-            );
-        } catch (ConversionException e) {
-            logger.error("SQL conversion failed for query: {}", jpaQuery, e);
-            return ConversionResult.failure(
-                "SQL conversion error: " + e.getMessage(),
-                ConversionFailureReason.INTERNAL_ERROR
-            );
-        }
+    public ConversionResult convertToNativeSQL(String jpaQuery, EntityMetadata entityMetadata) throws ParseException, ConversionException {
+        // Step 1: Analyze the HQL query using hql-parser
+        QueryAnalysis analysis = hqlParser.analyze(jpaQuery);
+
+        // Step 2: Register entity and field mappings from EntityMetadata
+        registerMappings(entityMetadata, analysis);
+
+        // Step 3: Convert to PostgreSQL using hql-parser converter
+        String nativeSql = sqlConverter.convert(jpaQuery);
+
+        // Step 4: Extract parameter mappings
+        List<ParameterMapping> parameterMappings = extractParameterMappings(analysis);
+
+        // Step 5: Get referenced tables
+        Set<String> referencedTables = extractReferencedTables(entityMetadata, analysis);
+
+        return new ConversionResult(nativeSql, parameterMappings, referencedTables);
     }
 
 
@@ -140,7 +114,7 @@ public class HQLParserAdapter  {
         }
         
         // Register mappings for joined entities (if any)
-        for (JoinMapping joinMapping : entityMetadata.getRelationshipMappings().values()) {
+        for (JoinMapping joinMapping : entityMetadata.relationshipMappings().values()) {
             // Register the joined entity's table mapping
             sqlConverter.registerEntityMapping(
                 joinMapping.targetEntity(),
@@ -184,7 +158,7 @@ public class HQLParserAdapter  {
         }
         
         // Add joined tables
-        for (JoinMapping join : entityMetadata.getRelationshipMappings().values()) {
+        for (JoinMapping join : entityMetadata.relationshipMappings().values()) {
             if (join.targetTable() != null) {
                 tables.add(join.targetTable());
             }

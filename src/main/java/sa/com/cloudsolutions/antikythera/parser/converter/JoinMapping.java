@@ -1,7 +1,5 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
-import java.util.Objects;
-
 /**
  * Represents the mapping information for entity relationships and joins.
  * This class contains information about how entity relationships should be

@@ -12,7 +12,6 @@ import sa.com.cloudsolutions.antikythera.generator.QueryType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping;
-import sa.com.cloudsolutions.antikythera.parser.converter.ConversionResult;
 import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMetadata;
@@ -217,20 +216,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 result.append(c);
             }
         }
-        Optional<AnnotationExpr> ann = md.asMethodDeclaration().getAnnotationByName("Query");
-        if (ann.isPresent()) {
-            Map<String, String> a = AbstractCompiler.extractAnnotationAttributes(ann.get());
-            if (a.get(NATIVE_QUERY) != null && Boolean.parseBoolean(a.get(NATIVE_QUERY))) {
-                /*
-                 * TODO : fix null
-                 */
-                queries.put(md, queryBuilder(result.toString(), null, md));
-            }
-        }
-        /*
-         * TODO : fix null
-         */
-        queries.put(md, queryBuilder(result.toString(), null, md));
+
+        queries.put(md, queryBuilder(result.toString(), QueryType.DERIVED, md));
     }
 
     /**
@@ -313,17 +300,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (qt.equals(QueryType.HQL)) {
             try {
                 EntityMetadata entityMetadata = buildEntityMetadata();
-                DatabaseDialect targetDialect = detectDatabaseDialect();
-
-                ConversionResult result = queryConverter.convertToNativeSQL(query, entityMetadata, targetDialect);
-
-                if (result.isSuccessful()) {
-                    logger.debug("Successfully converted JPA query to native SQL: {}", result.getNativeSql());
-                    rql.setQuery(result.getNativeSql());
-                } else {
-                    logger.debug("Falling back to existing logic for query conversion failure");
-                    rql.setQuery(query);
-                }
+                rql.setConversionResult(queryConverter.convertToNativeSQL(query, entityMetadata));
+                rql.setQuery(query);
             } catch (Exception e) {
                 if (isConversionFailureLoggingEnabled()) {
                     logger.warn("Exception during query conversion: {}. Falling back to existing logic.", e.getMessage());
@@ -331,7 +309,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 rql.setQuery(query);
             }
         } else {
-            // Use original query for native queries or when conversion is disabled
             rql.setQuery(query);
         }
 
@@ -347,7 +324,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     private EntityMetadata buildEntityMetadata() {
         // Try to build from Antikythera's parsed source first
         EntityMetadata metadata = buildEntityMetadataFromAntikythera();
-        if (metadata != null && !metadata.getEntityToTableMappings().isEmpty()) {
+        if (metadata != null && !metadata.entityToTableMappings().isEmpty()) {
             return metadata;
         }
         
@@ -724,6 +701,10 @@ public class BaseRepositoryParser extends AbstractCompiler {
      * Process the CompilationUnit to identify all the queries.
      */
     public void processTypes()  {
+        /*
+         * TODO : get the isJpaRepository stuff from examples into this project and use it here.
+         * this method is now being called multiple times for a repository, fix that
+         */
         for(var tp : cu.getTypes()) {
             if(tp.isClassOrInterfaceDeclaration()) {
                 var cls = tp.asClassOrInterfaceDeclaration();

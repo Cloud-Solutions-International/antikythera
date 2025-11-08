@@ -972,7 +972,7 @@ public class SqlGenerationVisitor {
         EntityMetadata metadata = context.entityMetadata();
         
         // Look for relationship mappings that involve this entity
-        for (JoinMapping joinMapping : metadata.getRelationshipMappings().values()) {
+        for (JoinMapping joinMapping : metadata.relationshipMappings().values()) {
             if (entityName.equals(joinMapping.targetEntity())) {
                 // Generate ON clause based on join mapping
                 String joinColumn = joinMapping.joinColumn();

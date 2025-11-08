@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
-import java.util.Objects;
 
 /**
  * Represents the mapping of a parameter from the original JPA query to the converted native SQL.

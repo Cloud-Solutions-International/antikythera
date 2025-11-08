@@ -19,11 +19,11 @@ class EntityMetadataTest {
         EntityMetadata metadata = EntityMetadata.empty();
         
         assertNotNull(metadata, "Empty metadata should not be null");
-        assertTrue(metadata.getEntityToTableMappings().isEmpty(), 
+        assertTrue(metadata.entityToTableMappings().isEmpty(),
                   "Empty metadata should have no entity mappings");
-        assertTrue(metadata.getPropertyToColumnMappings().isEmpty(), 
+        assertTrue(metadata.propertyToColumnMappings().isEmpty(),
                   "Empty metadata should have no property mappings");
-        assertTrue(metadata.getRelationshipMappings().isEmpty(), 
+        assertTrue(metadata.relationshipMappings().isEmpty(),
                   "Empty metadata should have no relationship mappings");
     }
 
@@ -41,7 +41,7 @@ class EntityMetadataTest {
         EntityMetadata metadata = new EntityMetadata(entityMappings, propertyMappings, relationshipMappings);
         
         assertNotNull(metadata, "Metadata should not be null");
-        assertEquals(1, metadata.getEntityToTableMappings().size(), 
+        assertEquals(1, metadata.entityToTableMappings().size(),
                     "Should have one entity mapping");
         assertTrue(metadata.hasEntityMetadata("User"), 
                   "Should have metadata for User entity");
@@ -70,11 +70,11 @@ class EntityMetadataTest {
         // Test that null inputs are handled safely
         EntityMetadata metadata = new EntityMetadata(null, null, null);
         
-        assertNotNull(metadata.getEntityToTableMappings(), 
+        assertNotNull(metadata.entityToTableMappings(),
                      "Should return empty map for null input");
-        assertNotNull(metadata.getPropertyToColumnMappings(), 
+        assertNotNull(metadata.propertyToColumnMappings(),
                      "Should return empty map for null input");
-        assertNotNull(metadata.getRelationshipMappings(), 
+        assertNotNull(metadata.relationshipMappings(),
                      "Should return empty map for null input");
         
         assertNull(metadata.getTableMapping("NonExistent"), 
