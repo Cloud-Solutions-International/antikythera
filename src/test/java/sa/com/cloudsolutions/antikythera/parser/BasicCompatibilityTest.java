@@ -84,7 +84,6 @@ class BasicCompatibilityTest {
         
         assertTrue(parser.isQueryConversionEnabled());
         assertTrue(parser.isFallbackOnFailureEnabled());
-        assertTrue(parser.isConversionFailureLoggingEnabled());
         assertTrue(parser.isCachingEnabled());
         
         // Test with all features disabled
@@ -93,7 +92,6 @@ class BasicCompatibilityTest {
         
         assertFalse(parser2.isQueryConversionEnabled());
         assertFalse(parser2.isFallbackOnFailureEnabled());
-        assertFalse(parser2.isConversionFailureLoggingEnabled());
         assertFalse(parser2.isCachingEnabled());
     }
     

@@ -98,49 +98,7 @@ class QueryConversionCompatibilityTest {
         assertNotNull(key1, "Cache key should not be null");
         assertFalse(key1.isEmpty(), "Cache key should not be empty");
     }
-    
-    /**
-     * Test that logging configuration works
-     */
-    @Test
-    void testLoggingConfiguration() throws IOException {
-        // Test with logging enabled
-        enableQueryConversionWithLogging();
-        RepositoryParser parser1 = new RepositoryParser();
-        assertTrue(parser1.isConversionFailureLoggingEnabled());
-        
-        // Test with logging disabled
-        enableQueryConversionWithoutLogging();
-        RepositoryParser parser2 = new RepositoryParser();
-        assertFalse(parser2.isConversionFailureLoggingEnabled());
-    }
-    
-    /**
-     * Test that all configuration combinations work
-     */
-    @Test
-    void testAllConfigurationCombinations() throws IOException {
-        // Test all enabled
-        Map<String, Object> database = new HashMap<>();
-        database.put("url", "jdbc:postgresql://localhost:5432/test");
-        database.put("run_queries", false);
-        
-        Map<String, Object> queryConversion = new HashMap<>();
-        queryConversion.put("enabled", true);
-        queryConversion.put("fallback_on_failure", true);
-        queryConversion.put("log_conversion_failures", true);
-        queryConversion.put("cache_results", true);
-        
-        database.put("query_conversion", queryConversion);
-        Settings.setProperty("database", database);
-        
-        RepositoryParser parser = new RepositoryParser();
-        assertTrue(parser.isQueryConversionEnabled());
-        assertTrue(parser.isFallbackOnFailureEnabled());
-        assertTrue(parser.isConversionFailureLoggingEnabled());
-        assertTrue(parser.isCachingEnabled());
-    }
-    
+
     // Helper methods for configuration
     
     private void enableQueryConversion() {

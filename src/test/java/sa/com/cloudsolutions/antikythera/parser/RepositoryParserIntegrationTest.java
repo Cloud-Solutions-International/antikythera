@@ -51,15 +51,7 @@ class RepositoryParserIntegrationTest {
         
         repositoryParser = new RepositoryParser();
     }
-    
-    @Test
-    void testQueryConversionConfigurationLoading() {
-        // Test that configuration methods work correctly
-        assertTrue(repositoryParser.isQueryConversionEnabled());
-        assertTrue(repositoryParser.isFallbackOnFailureEnabled());
-        assertTrue(repositoryParser.isConversionFailureLoggingEnabled());
-        assertTrue(repositoryParser.isCachingEnabled());
-    }
+
     
     @Test
     void testCacheKeyGeneration() {
@@ -82,30 +74,4 @@ class RepositoryParserIntegrationTest {
         assertFalse(key1.isEmpty(), "Cache key should not be empty");
     }
 
-    @Test
-    void testConfigurationMethods() {
-        // Test that configuration methods work correctly with disabled conversion
-        Map<String, Object> database = new HashMap<>();
-        database.put("url", "jdbc:postgresql://localhost:5432/test");
-        Map<String, Object> queryConversion = new HashMap<>();
-        queryConversion.put("enabled", false);
-        queryConversion.put("fallback_on_failure", false);
-        queryConversion.put("log_conversion_failures", false);
-        queryConversion.put("cache_results", false);
-        database.put("query_conversion", queryConversion);
-        Settings.setProperty("database", database);
-        
-        // Create a new parser with disabled conversion
-        try {
-            RepositoryParser parser = new RepositoryParser();
-            
-            // Test configuration methods
-            assertFalse(parser.isQueryConversionEnabled(), "Query conversion should be disabled");
-            assertFalse(parser.isFallbackOnFailureEnabled(), "Fallback should be disabled");
-            assertFalse(parser.isConversionFailureLoggingEnabled(), "Logging should be disabled");
-            assertFalse(parser.isCachingEnabled(), "Caching should be disabled");
-        } catch (IOException e) {
-            fail("Failed to create RepositoryParser: " + e.getMessage());
-        }
-    }
 }
