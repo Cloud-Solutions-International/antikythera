@@ -12,7 +12,6 @@ import sa.com.cloudsolutions.antikythera.generator.QueryType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping;
-import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMetadata;
 import sa.com.cloudsolutions.antikythera.parser.converter.HQLParserAdapter;
@@ -29,6 +28,16 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * <p>Generates SQL from Repository methods.</p>
+ *
+ * <p>The `BaseRepositoryParser` class is responsible for parsing repository classes and generating
+ * repository queries based on the provided methods. It has functionality to handle custom
+ * query annotations, inferred queries through method naming, and metadata extraction for entities.</p>
+ *
+ * <p>This class focuses on analyzing repository structures, interpreting query definitions, and
+ * handling query conversion logic while accounting for specific database dialects.</p>
+ */
 public class BaseRepositoryParser extends AbstractCompiler {
     protected static final Logger logger = LoggerFactory.getLogger(BaseRepositoryParser.class);
 
@@ -90,25 +99,26 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
 
     public RepositoryQuery getQueryFromRepositoryMethod(Callable repoMethod) {
-        RepositoryQuery q = queries.get(repoMethod);
-        if (q == null) {
-            if (repoMethod.isMethodDeclaration()) {
-                queryFromMethodDeclaration(repoMethod.asMethodDeclaration());
-            }
-            else {
-                /*
-                 * TODO : THis has to be changed
-                 */
-                parseNonAnnotatedMethod(repoMethod);
-            }
-            q = queries.get(repoMethod);
-        }
-        return q;
+        return queries.get(repoMethod);
     }
 
-    void queryFromMethodDeclaration(MethodDeclaration n) {
-        Optional<AnnotationExpr> annotationExpr = n.getAnnotationByName("Query");
-        Callable callable = new Callable(n, null);
+    /**
+     * <p>Extract a query from a given method declaration.</p>
+     *
+     * <p>The method declaration should be a part of a JPARepository interface.
+     * It may or may not have an @Query annotation. If the annotation is
+     * present), it will either be a native query (in which case the nativeQuery
+     * attribute will be true, or it maybe an HQL.</p>
+     *
+     * <p>In the case of an HQL query, we will use the hql-parser library to
+     * convert it into an SQL which in turn will be parsed with the JSQL parser.
+     * However that parsing takes place inside the BaseRepositoryQuery class</p>
+     *
+     * @param methodDeclaration the method declaration to be processed
+     */
+    void queryFromMethodDeclaration(MethodDeclaration methodDeclaration) {
+        Optional<AnnotationExpr> annotationExpr = methodDeclaration.getAnnotationByName("Query");
+        Callable callable = new Callable(methodDeclaration, null);
 
         if (annotationExpr.isPresent()) {
             Map<String, String> attr = AbstractCompiler.extractAnnotationAttributes(annotationExpr.get());
@@ -120,16 +130,18 @@ public class BaseRepositoryParser extends AbstractCompiler {
             }
         }
         else {
-            parseNonAnnotatedMethod(callable);
+            queries.put(callable, parseNonAnnotatedMethod(callable));
         }
     }
 
     /**
      * Parse a repository method that does not have a query annotation.
      * In these cases the naming convention of the method is used to infer the query.
+     *
      * @param md the method declaration
+     * @return the RepositoryQuery instance that as parsed from the callable
      */
-    void parseNonAnnotatedMethod(Callable md) {
+    RepositoryQuery parseNonAnnotatedMethod(Callable md) {
         String methodName = md.getNameAsString();
         List<String> components = extractComponents(methodName);
         StringBuilder sql = new StringBuilder();
@@ -216,8 +228,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 result.append(c);
             }
         }
-
-        queries.put(md, queryBuilder(result.toString(), QueryType.DERIVED, md));
+        return queryBuilder(result.toString(), QueryType.DERIVED, md);
     }
 
     /**
@@ -247,7 +258,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return components;
     }
 
-
     /**
      * Count the number of parameters to bind.
      *
@@ -265,22 +275,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
     public static boolean isOracle() {
         return ORACLE.equals(dialect);
-    }
-
-    /**
-     * Checks if query conversion is enabled in the configuration.
-     *
-     * @return true if query conversion is enabled, false otherwise
-     */
-    boolean isQueryConversionEnabled() {
-        Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
-        if (db != null) {
-            Map<String, Object> queryConversion = (Map<String, Object>) db.get(Settings.SQL_QUERY_CONVERSION);
-            if (queryConversion != null) {
-                return Boolean.parseBoolean(queryConversion.getOrDefault("enabled", "false").toString());
-            }
-        }
-        return false; // Default to disabled
     }
 
     /**
@@ -338,7 +332,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
      * Builds entity metadata using Antikythera's TypeWrapper and AbstractCompiler.
      * This avoids reflection and works directly with parsed source code.
      *
-     * @return EntityMetadata from parsed source, or null if not available
+     * @return EntityMetadata from a parsed source, or null if not available
      */
     private EntityMetadata buildMetadataFromSources() {
         if (entity == null || entity.getType() == null) {
@@ -348,7 +342,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         com.github.javaparser.ast.body.TypeDeclaration<?> typeDecl = entity.getType();
         
         // Check if this is a JPA entity
-        if (!typeDecl.getAnnotationByName("Entity").isPresent()) {
+        if (typeDecl.getAnnotationByName("Entity").isEmpty()) {
             return null; // Not an entity
         }
 
@@ -487,41 +481,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
             }
         }
         return null; // No @Column annotation or no name specified
-    }
-
-    /**
-     * Detects the database dialect from the current configuration.
-     *
-     * @return DatabaseDialect enum value for the configured database
-     */
-    private DatabaseDialect detectDatabaseDialect() {
-        if (ORACLE.equals(dialect)) {
-            return DatabaseDialect.ORACLE;
-        } else if (POSTGRESQL.equals(dialect)) {
-            return DatabaseDialect.POSTGRESQL;
-        }
-        return DatabaseDialect.POSTGRESQL; // Default to PostgreSQL
-    }
-
-
-    /**
-     * Generates a cache key for the given query and entity metadata.
-     *
-     * @param query The JPA query string
-     * @param entityMetadata The entity metadata
-     * @param dialect The database dialect
-     * @return A unique cache key string
-     */
-    String generateCacheKey(String query, EntityMetadata entityMetadata, DatabaseDialect dialect) {
-        // Create a simple hash-based key combining query, entity info, and dialect
-        StringBuilder keyBuilder = new StringBuilder();
-        keyBuilder.append(query.trim().replaceAll("\\s+", " ")); // Normalize whitespace
-        keyBuilder.append("|");
-        keyBuilder.append(entityMetadata.hashCode());
-        keyBuilder.append("|");
-        keyBuilder.append(dialect.name());
-
-        return String.valueOf(keyBuilder.toString().hashCode());
     }
 
     /**

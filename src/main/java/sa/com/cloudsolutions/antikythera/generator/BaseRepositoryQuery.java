@@ -143,10 +143,6 @@ public class BaseRepositoryQuery {
         }
     }
 
-    public Optional<AnnotationExpr> getQueryAnnotation() {
-        return methodDeclaration.getCallableDeclaration().getAnnotationByName("Query");
-    }
-
     private static void processJoin(Join j, List<TypeWrapper> units) throws AntikytheraException {
         FromItem a = j.getRightItem();
         // the toString() of this will look something like p.dischargeNurseRequest n
