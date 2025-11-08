@@ -1,5 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+
 import javax.persistence.*;
 import java.lang.reflect.Field;
 import java.util.*;
@@ -59,11 +61,11 @@ public class EntityMappingResolver {
         String schema = null;
         
         if (tableAnnotation != null) {
-            tableName = tableAnnotation.name().isEmpty() ? 
-                convertCamelCaseToSnakeCase(entityName) : tableAnnotation.name();
+            tableName = tableAnnotation.name().isEmpty() ?
+                 AbstractCompiler.camelToSnakeCase(entityName) : tableAnnotation.name();
             schema = tableAnnotation.schema().isEmpty() ? null : tableAnnotation.schema();
         } else {
-            tableName = convertCamelCaseToSnakeCase(entityName);
+            tableName = AbstractCompiler.camelToSnakeCase(entityName);
         }
         
         Map<String, String> propertyToColumnMap = buildPropertyToColumnMap(entityClass);
@@ -170,12 +172,12 @@ public class EntityMappingResolver {
         String referencedColumnName = "id"; // Default assumption
         
         if (joinColumn != null) {
-            joinColumnName = joinColumn.name().isEmpty() ? 
-                convertCamelCaseToSnakeCase(propertyName) + "_id" : joinColumn.name();
+            joinColumnName = joinColumn.name().isEmpty() ?
+                AbstractCompiler.camelToSnakeCase(propertyName) + "_id" : joinColumn.name();
             referencedColumnName = joinColumn.referencedColumnName().isEmpty() ? 
                 "id" : joinColumn.referencedColumnName();
         } else {
-            joinColumnName = convertCamelCaseToSnakeCase(propertyName) + "_id";
+            joinColumnName = AbstractCompiler.camelToSnakeCase(propertyName) + "_id";
         }
         
         JoinType joinType = determineJoinType(field);
@@ -224,7 +226,7 @@ public class EntityMappingResolver {
         if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
             return tableAnnotation.name();
         }
-        return convertCamelCaseToSnakeCase(getEntityName(entityClass));
+        return AbstractCompiler.camelToSnakeCase(getEntityName(entityClass));
     }
     
     private List<Field> getAllFields(Class<?> clazz) {
@@ -257,27 +259,7 @@ public class EntityMappingResolver {
         if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
             return columnAnnotation.name();
         }
-        return convertCamelCaseToSnakeCase(field.getName());
+        return AbstractCompiler.camelToSnakeCase(field.getName());
     }
 
-    private String convertCamelCaseToSnakeCase(String camelCase) {
-        if (camelCase == null || camelCase.isEmpty()) {
-            return camelCase;
-        }
-        
-        StringBuilder result = new StringBuilder();
-        result.append(Character.toLowerCase(camelCase.charAt(0)));
-        
-        for (int i = 1; i < camelCase.length(); i++) {
-            char ch = camelCase.charAt(i);
-            if (Character.isUpperCase(ch)) {
-                result.append('_');
-                result.append(Character.toLowerCase(ch));
-            } else {
-                result.append(ch);
-            }
-        }
-        
-        return result.toString();
-    }
 }

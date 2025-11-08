@@ -1283,7 +1283,7 @@ public class AbstractCompiler {
      * @param camelCase The camelCase string
      * @return snake_case string
      */
-    private static String camelToSnakeCase(String camelCase) {
+    public static String camelToSnakeCase(String camelCase) {
         if (camelCase == null || camelCase.isEmpty()) {
             return camelCase;
         }
