@@ -44,6 +44,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     protected static final String ORACLE = "oracle";
     protected static final String POSTGRESQL = "PG";
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\?");
+    public static final String NATIVE_QUERY = "nativeQuery";
     /**
      * SQL dialect, at the moment oracle or postgresql as identified from the connection url
      */
@@ -126,7 +127,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         } else if (ann != null && ann.isNormalAnnotationExpr()) {
 
             for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                if (pair.getNameAsString().equals("nativeQuery") && pair.getValue().toString().equals("true")) {
+                if (pair.getNameAsString().equals(NATIVE_QUERY) && pair.getValue().toString().equals("true")) {
                     nt = true;
                 }
             }
@@ -234,6 +235,13 @@ public class BaseRepositoryParser extends AbstractCompiler {
             }
             else {
                 result.append(c);
+            }
+        }
+        Optional<AnnotationExpr> ann = md.asMethodDeclaration().getAnnotationByName("Query");
+        if (ann.isPresent()) {
+            Map<String, String> a = AbstractCompiler.extractAnnotationAttributes(ann.get());
+            if (a.get(NATIVE_QUERY) != null && Boolean.parseBoolean(a.get(NATIVE_QUERY))) {
+                queries.put(md, queryBuilder(result.toString(), true, md));
             }
         }
         queries.put(md, queryBuilder(result.toString(), true, md));
@@ -433,8 +441,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 return; // Skip transient fields
             }
 
-            field.getVariables().forEach(var -> {
-                String propertyName = var.getNameAsString();
+            field.getVariables().forEach(variable -> {
+                String propertyName = variable.getNameAsString();
                 String columnName = getColumnNameFromAST(field);
                 if (columnName == null) {
                     // Default: convert camelCase to snake_case
@@ -462,8 +470,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 return; // Skip transient and relationship fields
             }
 
-            field.getVariables().forEach(var -> {
-                String propertyName = var.getNameAsString();
+            field.getVariables().forEach(variable -> {
+                String propertyName = variable.getNameAsString();
                 String columnName = getColumnNameFromAST(field);
                 if (columnName == null) {
                     columnName = camelToSnake(propertyName);
