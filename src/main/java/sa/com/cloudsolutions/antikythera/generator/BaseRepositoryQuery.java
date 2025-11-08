@@ -532,4 +532,8 @@ public class BaseRepositoryQuery {
     public void setConversionResult(ConversionResult conversionResult) {
         this.conversionResult = conversionResult;
     }
+
+    public void setQueryType(QueryType qt) {
+        this.queryType = qt;
+    }
 }

@@ -113,10 +113,10 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (annotationExpr.isPresent()) {
             Map<String, String> attr = AbstractCompiler.extractAnnotationAttributes(annotationExpr.get());
             if (Boolean.parseBoolean(attr.getOrDefault(NATIVE_QUERY,"false"))) {
-                queries.put(callable, queryBuilder(attr.get("value"), QueryType.HQL, callable));
+                queries.put(callable, queryBuilder(attr.get("value"), QueryType.NATIVE_SQL, callable));
             }
             else {
-                queries.put(callable, queryBuilder(attr.get("value"), QueryType.NATIVE_SQL, callable));
+                queries.put(callable, queryBuilder(attr.get("value"), QueryType.HQL , callable));
             }
         }
         else {
@@ -295,6 +295,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         rql.setEntityType(entityType);
         rql.setPrimaryTable(table);
         rql.setRepositoryClassName(className);
+        rql.setQueryType(qt);
 
         // Use the new converter for non-native queries if enabled
         if (qt.equals(QueryType.HQL)) {
