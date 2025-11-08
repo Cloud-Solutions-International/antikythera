@@ -49,12 +49,8 @@ public record TableMapping(String entityName, String tableName, String schema,
      * @param propertyName The entity property name
      * @return The corresponding column mapping, or null if not found
      */
-    public ColumnMapping getColumnMapping(String propertyName) {
-        String columnName = propertyToColumnMap.get(propertyName);
-        if (columnName != null) {
-            return new ColumnMapping(propertyName, columnName, tableName);
-        }
-        return null;
+    public String getColumnMapping(String propertyName) {
+        return propertyToColumnMap.get(propertyName);
     }
 
     /**

@@ -31,7 +31,7 @@ class EntityMetadataTest {
     void testEntityMetadataWithMappings() {
         // Create test mappings
         Map<String, TableMapping> entityMappings = new HashMap<>();
-        Map<String, ColumnMapping> propertyMappings = new HashMap<>();
+        Map<String, String> propertyMappings = new HashMap<>();
         Map<String, JoinMapping> relationshipMappings = new HashMap<>();
         
         // Create a simple table mapping

@@ -11,7 +11,7 @@ import java.util.Map;
  * to convert JPA queries to native SQL.
  */
 public record EntityMetadata(Map<String, TableMapping> entityToTableMappings,
-                             Map<String, ColumnMapping> propertyToColumnMappings,
+                             Map<String, String> propertyToColumnMappings,
                              Map<String, JoinMapping> relationshipMappings) {
 
     /**
@@ -22,7 +22,7 @@ public record EntityMetadata(Map<String, TableMapping> entityToTableMappings,
      * @param relationshipMappings     Map of relationship property names to join mappings
      */
     public EntityMetadata(Map<String, TableMapping> entityToTableMappings,
-                          Map<String, ColumnMapping> propertyToColumnMappings,
+                          Map<String, String> propertyToColumnMappings,
                           Map<String, JoinMapping> relationshipMappings) {
         this.entityToTableMappings = entityToTableMappings != null ?
                 Map.copyOf(entityToTableMappings) : Collections.emptyMap();
@@ -48,7 +48,7 @@ public record EntityMetadata(Map<String, TableMapping> entityToTableMappings,
      * @param propertyName The name of the property (e.g., "user.username")
      * @return The column mapping, or null if not found
      */
-    public ColumnMapping getColumnMapping(String propertyName) {
+    public String getColumnMapping(String propertyName) {
         return propertyToColumnMappings.get(propertyName);
     }
 

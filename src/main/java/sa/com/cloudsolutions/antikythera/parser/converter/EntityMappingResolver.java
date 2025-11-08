@@ -25,44 +25,8 @@ public class EntityMappingResolver {
     public EntityMetadata resolveEntityMetadata(Class<?> entityClass) {
         return metadataCache.computeIfAbsent(entityClass, this::buildEntityMetadata);
     }
-    
-    /**
-     * Resolves entity metadata for multiple entity classes.
-     * 
-     * @param entityClasses Collection of entity classes to analyze
-     * @return Combined EntityMetadata for all entities
-     */
-    public EntityMetadata resolveEntityMetadata(Collection<Class<?>> entityClasses) {
-        Map<String, TableMapping> entityToTableMappings = new HashMap<>();
-        Map<String, ColumnMapping> propertyToColumnMappings = new HashMap<>();
-        Map<String, JoinMapping> relationshipMappings = new HashMap<>();
-        
-        for (Class<?> entityClass : entityClasses) {
-            EntityMetadata metadata = resolveEntityMetadata(entityClass);
-            entityToTableMappings.putAll(metadata.entityToTableMappings());
-            propertyToColumnMappings.putAll(metadata.propertyToColumnMappings());
-            relationshipMappings.putAll(metadata.relationshipMappings());
-        }
-        
-        return new EntityMetadata(entityToTableMappings, propertyToColumnMappings, relationshipMappings);
-    }
-    
-    /**
-     * Clears the metadata cache.
-     */
-    public void clearCache() {
-        metadataCache.clear();
-    }
-    
-    /**
-     * Gets the size of the metadata cache.
-     * 
-     * @return The number of cached entity metadata objects
-     */
-    public int getCacheSize() {
-        return metadataCache.size();
-    }
-    
+
+
     private EntityMetadata buildEntityMetadata(Class<?> entityClass) {
         if (!isJpaEntity(entityClass)) {
             return EntityMetadata.empty();
@@ -72,7 +36,7 @@ public class EntityMappingResolver {
         TableMapping tableMapping = buildTableMapping(entityClass, entityName);
         
         Map<String, TableMapping> entityToTableMappings = Map.of(entityName, tableMapping);
-        Map<String, ColumnMapping> propertyToColumnMappings = buildPropertyToColumnMappings(entityClass, tableMapping);
+        Map<String, String> propertyToColumnMappings = buildPropertyToColumnMappings(entityClass, tableMapping);
         Map<String, JoinMapping> relationshipMappings = buildRelationshipMappings(entityClass, tableMapping);
         
         return new EntityMetadata(entityToTableMappings, propertyToColumnMappings, relationshipMappings);
@@ -162,8 +126,8 @@ public class EntityMappingResolver {
         return propertyToColumnMap;
     }
     
-    private Map<String, ColumnMapping> buildPropertyToColumnMappings(Class<?> entityClass, TableMapping tableMapping) {
-        Map<String, ColumnMapping> columnMappings = new HashMap<>();
+    private Map<String, String> buildPropertyToColumnMappings(Class<?> entityClass, TableMapping tableMapping) {
+        Map<String, String> columnMappings = new HashMap<>();
         
         for (Field field : getAllFields(entityClass)) {
             if (isTransientField(field) || isRelationshipField(field)) {
@@ -173,17 +137,8 @@ public class EntityMappingResolver {
             String propertyName = field.getName();
             String columnName = getColumnName(field);
             String fullPropertyName = tableMapping.entityName() + "." + propertyName;
-            
-            ColumnMapping columnMapping = new ColumnMapping(
-                fullPropertyName,
-                columnName,
-                tableMapping.tableName(),
-                field.getType(),
-                getSqlType(field.getType()),
-                isNullable(field)
-            );
-            
-            columnMappings.put(fullPropertyName, columnMapping);
+
+            columnMappings.put(fullPropertyName, columnName);
         }
         
         return columnMappings;
@@ -304,39 +259,7 @@ public class EntityMappingResolver {
         }
         return convertCamelCaseToSnakeCase(field.getName());
     }
-    
-    private boolean isNullable(Field field) {
-        Column columnAnnotation = field.getAnnotation(Column.class);
-        if (columnAnnotation != null) {
-            return columnAnnotation.nullable();
-        }
-        // Default to nullable unless it's an ID field
-        return !field.isAnnotationPresent(Id.class);
-    }
-    
-    private String getSqlType(Class<?> javaType) {
-        if (javaType == String.class) {
-            return "VARCHAR";
-        } else if (javaType == Integer.class || javaType == int.class) {
-            return "INTEGER";
-        } else if (javaType == Long.class || javaType == long.class) {
-            return "BIGINT";
-        } else if (javaType == Boolean.class || javaType == boolean.class) {
-            return "BOOLEAN";
-        } else if (javaType == Double.class || javaType == double.class) {
-            return "DOUBLE";
-        } else if (javaType == Float.class || javaType == float.class) {
-            return "FLOAT";
-        } else if (javaType == java.util.Date.class || javaType == java.sql.Date.class) {
-            return "DATE";
-        } else if (javaType == java.sql.Timestamp.class) {
-            return "TIMESTAMP";
-        } else if (javaType == java.math.BigDecimal.class) {
-            return "DECIMAL";
-        }
-        return "VARCHAR"; // Default fallback
-    }
-    
+
     private String convertCamelCaseToSnakeCase(String camelCase) {
         if (camelCase == null || camelCase.isEmpty()) {
             return camelCase;

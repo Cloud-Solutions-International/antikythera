@@ -11,7 +11,6 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.generator.QueryType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
-import sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMetadata;
 import sa.com.cloudsolutions.antikythera.parser.converter.HQLParserAdapter;
@@ -366,7 +365,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
             Map<String, TableMapping> entityToTableMappings = Map.of(entityName, tableMapping);
             
             // Build property to column mappings
-            Map<String, ColumnMapping> propertyToColumnMappings = 
+            Map<String, String> propertyToColumnMappings =
                 buildPropertyToColumnMappingsFromAST(typeDecl, tableMapping);
 
             // Relationship mappings not yet implemented for AST-based approach
@@ -410,11 +409,11 @@ public class BaseRepositoryParser extends AbstractCompiler {
     /**
      * Builds property to column mappings with full metadata.
      */
-    private Map<String, sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping> 
+    private Map<String, String>
             buildPropertyToColumnMappingsFromAST(
                 com.github.javaparser.ast.body.TypeDeclaration<?> typeDecl,
                 sa.com.cloudsolutions.antikythera.parser.converter.TableMapping tableMapping) {
-        Map<String, sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping> columnMappings = 
+        Map<String, String> columnMappings =
             new HashMap<>();
 
         typeDecl.getFields().forEach(field -> {
@@ -430,14 +429,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 }
                 String fullPropertyName = tableMapping.entityName() + "." + propertyName;
 
-                sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping columnMapping = 
-                    new sa.com.cloudsolutions.antikythera.parser.converter.ColumnMapping(
-                        fullPropertyName,
-                        columnName,
-                        tableMapping.tableName()
-                    );
-
-                columnMappings.put(fullPropertyName, columnMapping);
+                columnMappings.put(fullPropertyName, columnName);
             });
         });
 
