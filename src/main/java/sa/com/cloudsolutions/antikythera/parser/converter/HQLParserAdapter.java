@@ -94,24 +94,21 @@ public class HQLParserAdapter  {
         for (TableMapping tableMapping : entityMetadata.getAllTableMappings()) {
             String entityName = tableMapping.entityName();
             String tableName = tableMapping.tableName();
-            
-            if (entityName != null && tableName != null) {
-                sqlConverter.registerEntityMapping(entityName, tableName);
-                logger.debug("Registered entity mapping: {} -> {}", entityName, tableName);
-                
-                // Register field-to-column mappings for this entity
-                if (tableMapping.propertyToColumnMap() != null) {
-                    for (var entry : tableMapping.propertyToColumnMap().entrySet()) {
-                        String propertyName = entry.getKey();
-                        String columnName = entry.getValue();
-                        sqlConverter.registerFieldMapping(
-                            entityName,
-                            propertyName,
-                            columnName
-                        );
-                        logger.debug("Registered field mapping: {}.{} -> {}",
-                            entityName, propertyName, columnName);
-                    }
+            sqlConverter.registerEntityMapping(entityName, tableName);
+            logger.debug("Registered entity mapping: {} -> {}", entityName, tableName);
+
+            // Register field-to-column mappings for this entity
+            if (tableMapping.propertyToColumnMap() != null) {
+                for (var entry : tableMapping.propertyToColumnMap().entrySet()) {
+                    String propertyName = entry.getKey();
+                    String columnName = entry.getValue();
+                    sqlConverter.registerFieldMapping(
+                        entityName,
+                        propertyName,
+                        columnName
+                    );
+                    logger.debug("Registered field mapping: {}.{} -> {}",
+                        entityName, propertyName, columnName);
                 }
             }
         }

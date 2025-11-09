@@ -1,11 +1,18 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.Expression;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 
 import javax.persistence.*;
 import java.lang.reflect.Field;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Resolver that extracts entity metadata from JPA annotations.
@@ -16,16 +23,111 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class EntityMappingResolver {
     
-    private final Map<Class<?>, EntityMetadata> metadataCache = new ConcurrentHashMap<>();
-    
+    private static final Map<String, EntityMetadata> mapping = new HashMap<>();
+
+    public static void build() throws ReflectiveOperationException {
+        for (TypeWrapper type : AntikytheraRunTime.getResolvedTypes().values()) {
+            TypeDeclaration<?> typeDecl = type.getType();
+            if (typeDecl != null && typeDecl.getAnnotationByName("Entity").isPresent()) {
+                mapping.put(typeDecl.getFullyQualifiedName().orElseThrow(), buildMetadataFromSources(typeDecl));
+            }
+            else {
+
+            }
+        }
+    }
+
     /**
-     * Resolves entity metadata for the given entity class.
-     * 
-     * @param entityClass The JPA entity class to analyze
-     * @return EntityMetadata containing all mapping information
+     * Builds property to column map from TypeDeclaration.
      */
-    public EntityMetadata resolveEntityMetadata(Class<?> entityClass) {
-        return metadataCache.computeIfAbsent(entityClass, this::buildEntityMetadata);
+    private static Map<String, String> buildPropertyToColumnMapFromAST(TypeDeclaration<?> typeDecl)  {
+        Map<String, String> propertyToColumnMap = new HashMap<>();
+
+        // Get all fields from the entity
+        for (FieldDeclaration field : typeDecl.getFields()) {
+            if (!isTransientFieldFromAST(field)) {
+                for (VariableDeclarator variable : field.getVariables()) {
+                    String propertyName = variable.getNameAsString();
+                    String columnName = getColumnNameFromAST(field);
+                    if (columnName == null) {
+                        // Default: convert camelCase to snake_case
+                        columnName = BaseRepositoryParser.camelToSnake(propertyName);
+                    }
+                    propertyToColumnMap.put(propertyName, columnName);
+                }
+            }
+        }
+
+        return propertyToColumnMap;
+    }
+
+    /**
+     * Checks if a field is transient (should be skipped).
+     */
+    private static boolean isTransientFieldFromAST(com.github.javaparser.ast.body.FieldDeclaration field) {
+        return field.isTransient() || field.isStatic() || field.getAnnotationByName("Transient").isPresent();
+    }
+
+    /**
+     * Checks if a field is a relationship field (JPA relationships).
+     */
+    private static boolean isRelationshipFieldFromAST(com.github.javaparser.ast.body.FieldDeclaration field) {
+        return field.getAnnotationByName("OneToOne").isPresent() ||
+                field.getAnnotationByName("OneToMany").isPresent() ||
+                field.getAnnotationByName("ManyToOne").isPresent() ||
+                field.getAnnotationByName("ManyToMany").isPresent();
+    }
+
+
+    /**
+     * Gets column name from @Column annotation or returns null.
+     */
+    private static String getColumnNameFromAST(com.github.javaparser.ast.body.FieldDeclaration field)  {
+        Optional<com.github.javaparser.ast.expr.AnnotationExpr> columnAnn =
+                field.getAnnotationByName("Column");
+
+        if (columnAnn.isPresent()) {
+            Map<String, Expression> attributes = AbstractCompiler.extractAnnotationAttributes(columnAnn.get());
+            Expression name = attributes.get("name");
+            return name.toString().replace("\"", ""); // Remove quotes
+        }
+        return null; // No @Column annotation or no name specified
+    }
+
+
+    /**
+     * Builds entity metadata using Antikythera's TypeWrapper and AbstractCompiler.
+     * This avoids reflection and works directly with parsed source code.
+     *
+     * @return EntityMetadata from a parsed source, or null if not available
+     */
+    private static EntityMetadata buildMetadataFromSources(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+        // Extract entity information using AbstractCompiler helpers
+        String entityName = getEntityName(typeDecl);
+        String tableName = getTableName(typeDecl);
+        String discriminatorColumn = getDiscriminatorColumn(typeDecl);
+        String discriminatorValue = getDiscriminatorValue(typeDecl);
+        String inheritanceType = getInheritanceStrategy(typeDecl);
+
+        // Build property to column map
+        Map<String, String> propertyToColumnMap = buildPropertyToColumnMapFromAST(typeDecl);
+
+        // For now, no parent table support (could be added later)
+        TableMapping tableMapping = new TableMapping(
+                entityName, tableName, null, propertyToColumnMap,
+                discriminatorColumn, discriminatorValue, inheritanceType, null
+        );
+
+        Map<String, TableMapping> entityToTableMappings = Map.of(entityName, tableMapping);
+
+        // Build property to column mappings
+        Map<String, String> propertyToColumnMappings = buildPropertyToColumnMapFromAST(typeDecl);
+
+        // Relationship mappings not yet implemented for AST-based approach
+        Map<String, sa.com.cloudsolutions.antikythera.parser.converter.JoinMapping> relationshipMappings =
+                new HashMap<>();
+
+        return new EntityMetadata(entityToTableMappings, propertyToColumnMappings, relationshipMappings);
     }
 
 
@@ -43,7 +145,118 @@ public class EntityMappingResolver {
         
         return new EntityMetadata(entityToTableMappings, propertyToColumnMappings, relationshipMappings);
     }
-    
+
+
+    /**
+     * Gets the discriminator value from @DiscriminatorValue.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Discriminator value, or null if not specified
+     */
+    public static String getDiscriminatorValue(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+        Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorValue");
+
+        if (discAnn.isPresent()) {
+            String s = getAnnotationValue(discAnn.get(), "name");
+            if (s != null) {
+                return s;
+            }
+        }
+
+        // Default: entity name
+        return getEntityName(typeDecl);
+    }
+
+    /**
+     * Gets the inheritance strategy from @Inheritance annotation.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Inheritance strategy ("SINGLE_TABLE", "JOINED", "TABLE_PER_CLASS"), or null
+     */
+    public static String getInheritanceStrategy(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+        Optional<AnnotationExpr> inhAnn = typeDecl.getAnnotationByName("Inheritance");
+
+        if (inhAnn.isPresent()) {
+            String strategy = getAnnotationValue(inhAnn.get(), "name");
+
+            if (strategy != null) {
+                // Extract enum value: InheritanceType.SINGLE_TABLE -> SINGLE_TABLE
+                if (strategy.contains(".")) {
+                    return strategy.substring(strategy.lastIndexOf('.') + 1);
+                }
+                return strategy;
+            }
+        }
+
+        return null; // No inheritance specified
+    }
+
+
+    static String  getAnnotationValue(AnnotationExpr expr, String name)  {
+        Map<String, Expression> attributes = AbstractCompiler.extractAnnotationAttributes(expr);
+        Expression value = attributes.get(name);
+        return value.toString().replace("\"", ""); // Remove quotes
+    }
+
+    /**
+     * Gets the table name from @Table annotation or derives from entity name.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Table name
+     */
+    public static String getTableName(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+        Optional<AnnotationExpr> tableAnn = typeDecl.getAnnotationByName("Table");
+
+        if (tableAnn.isPresent()) {
+            String s = getAnnotationValue(tableAnn.get(), "name");
+            if (s != null) {
+                return s;
+            }
+        }
+
+        // Default: convert entity name to snake_case
+        return BaseRepositoryParser.camelToSnakeCase(typeDecl.getNameAsString());
+    }
+
+    /**
+     * Gets the entity name from @Entity annotation or class name.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Entity name
+     */
+    public static String getEntityName(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+        Optional<AnnotationExpr> entityAnn = typeDecl.getAnnotationByName("Entity");
+
+        if (entityAnn.isPresent()) {
+            String s = getAnnotationValue(entityAnn.get(), "name");
+            if (s != null) {
+                return s;
+            }
+        }
+
+        return typeDecl.getNameAsString();
+    }
+
+    /**
+     * Gets the discriminator column name from @DiscriminatorColumn.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Discriminator column name, or "dtype" if not specified
+     */
+    public static String getDiscriminatorColumn(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+        Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorColumn");
+
+        if (discAnn.isPresent()) {
+            String s = getAnnotationValue(discAnn.get(), "name");
+            if (s != null) {
+                return s;
+            }
+        }
+
+        return "dtype"; // Default discriminator column
+    }
+
+
     private boolean isJpaEntity(Class<?> clazz) {
         return clazz.isAnnotationPresent(Entity.class);
     }
@@ -262,4 +475,7 @@ public class EntityMappingResolver {
         return AbstractCompiler.camelToSnakeCase(field.getName());
     }
 
+    public static Map<String, EntityMetadata> getMapping() {
+        return mapping;
+    }
 }

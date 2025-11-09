@@ -25,7 +25,6 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
-import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 import sa.com.cloudsolutions.antikythera.parser.converter.ConversionResult;
 import sa.com.cloudsolutions.antikythera.parser.converter.BasicConverter;
 
