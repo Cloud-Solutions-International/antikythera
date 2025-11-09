@@ -1,17 +1,13 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -22,7 +18,6 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMetadata;
 import sa.com.cloudsolutions.antikythera.parser.converter.HQLParserAdapter;
-import sa.com.cloudsolutions.antikythera.parser.converter.TableMapping;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
@@ -121,7 +116,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
      *
      * <p>In the case of an HQL query, we will use the hql-parser library to
      * convert it into an SQL which in turn will be parsed with the JSQL parser.
-     * However that parsing takes place inside the BaseRepositoryQuery class</p>
+     * However, that parsing takes place inside the BaseRepositoryQuery class</p>
      *
      * @param methodDeclaration the method declaration to be processed
      */
@@ -333,51 +328,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
     public Collection<RepositoryQuery> getAllQueries() {
         return queries.values();
     }
-    
-    /**
-     * Clears all queries from the internal map.
-     * This should be called before processing a new repository to prevent
-     * accumulation of queries from previously analyzed repositories.
-     */
-    public void clearQueries() {
-        queries.clear();
-        logger.debug("Queries map cleared");
-    }
-
-
-    /**
-     * Checks if fallback to existing logic is enabled on conversion failure.
-     *
-     * @return true if fallback is enabled, false otherwise
-     */
-    boolean isFallbackOnFailureEnabled() {
-        Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
-        if (db != null) {
-            Map<String, Object> queryConversion = (Map<String, Object>) db.get(Settings.SQL_QUERY_CONVERSION);
-            if (queryConversion != null) {
-                return Boolean.parseBoolean(queryConversion.getOrDefault("fallback_on_failure", "true").toString());
-            }
-        }
-        return true; // Default to enabled for safety
-    }
-
-
-    /**
-     * Checks if conversion result caching is enabled.
-     *
-     * @return true if caching is enabled, false otherwise
-     */
-    boolean isCachingEnabled() {
-        Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
-        if (db != null) {
-            Map<String, Object> queryConversion = (Map<String, Object>) db.get(Settings.SQL_QUERY_CONVERSION);
-            if (queryConversion != null) {
-                return Boolean.parseBoolean(queryConversion.getOrDefault("cache_results", "true").toString());
-            }
-        }
-        return true; // Default to enabled
-    }
-
 
     /**
      * Find the table name from the hibernate entity.
@@ -508,5 +458,4 @@ public class BaseRepositoryParser extends AbstractCompiler {
             }
         }
     }
-
 }
