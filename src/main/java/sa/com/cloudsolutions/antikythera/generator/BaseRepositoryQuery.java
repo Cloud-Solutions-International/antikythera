@@ -192,7 +192,7 @@ public class BaseRepositoryQuery {
         query = cleanUp(query);
         try {
             this.statement = CCJSqlParserUtil.parse(query);
-            TypeWrapper entity = RepositoryParser.findEntity(entityType);
+            TypeWrapper entity = BaseRepositoryParser.findEntity(entityType);
             BasicConverter.convertFieldsToSnakeCase(statement, entity);
         } catch (JSQLParserException e) {
             logger.debug("{} could not be parsed", query);

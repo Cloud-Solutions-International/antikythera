@@ -46,6 +46,9 @@ public class HQLParserAdapter  {
         registerMappings(entityMetadata, analysis);
 
         // Step 3: Convert to PostgreSQL using hql-parser converter
+        /*
+         * TODO figure why this one isn't doing the job
+         */
         String nativeSql = sqlConverter.convert(jpaQuery);
 
         // Step 4: Extract parameter mappings

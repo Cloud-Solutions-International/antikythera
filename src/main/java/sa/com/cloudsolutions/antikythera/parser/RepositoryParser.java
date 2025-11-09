@@ -66,7 +66,7 @@ public class RepositoryParser extends BaseRepositoryParser {
         
         // Initialize the query converter and entity mapping resolver
         this.entityMappingResolver = new EntityMappingResolver();
-        this.queryConverter = new HQLParserAdapter();
+        this.parserAdapter = new HQLParserAdapter();
 
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
         if(db != null) {

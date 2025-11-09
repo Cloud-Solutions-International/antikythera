@@ -64,7 +64,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     /**
      * The JPA query converter for converting non-native queries to SQL
      */
-    protected HQLParserAdapter queryConverter;
+    protected HQLParserAdapter parserAdapter;
 
     /**
      * Entity mapping resolver for extracting metadata from JPA annotations
@@ -312,7 +312,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (qt.equals(QueryType.HQL)) {
             try {
                 EntityMetadata entityMetadata = buildEntityMetadata();
-                rql.setConversionResult(queryConverter.convertToNativeSQL(query, entityMetadata));
+                rql.setConversionResult(parserAdapter.convertToNativeSQL(query, entityMetadata));
                 rql.setQuery(query);
             } catch (Exception e) {
                 logger.warn("Exception during query conversion: {}. Falling back to existing logic.", e.getMessage());
