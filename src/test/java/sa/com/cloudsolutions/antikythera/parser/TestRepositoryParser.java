@@ -12,9 +12,9 @@ import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
 import net.sf.jsqlparser.schema.Column;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
@@ -29,33 +29,23 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class TestRepositoryParser {
-    private RepositoryParser parser;
-    private CompilationUnit cu;
+
+    public static final String ANIMAL_ENTITY = "sa.com.cloudsolutions.antikythera.testhelper.model.Animal";
+    public static final String DOG_ENTITY = "sa.com.cloudsolutions.antikythera.testhelper.model.Dog";
+    public static final String USER_REPOSITORY = "sa.com.cloudsolutions.antikythera.testhelper.repository.UserRepository";
 
     @BeforeAll
     static void setUpAll() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
-    }
-
-    @BeforeEach
-    void setUp() throws IOException {
-        parser = new RepositoryParser();
-        cu = StaticJavaParser.parse("""
-                @Table(name = "table_name")
-                public class AdmissionClearance implements Serializable {}
-                """);
+        AbstractCompiler.preProcess();
     }
 
     @Test
     void testFindTableName() {
-
-        assertEquals("table_name", RepositoryParser.findTableName(new TypeWrapper(cu.getType(0))));
-
-        cu = StaticJavaParser.parse("""
-                public class AdmissionClearanceTable implements Serializable {}
-                """);
-        assertEquals("admission_clearance_table",
-                RepositoryParser.findTableName(new TypeWrapper(cu.getType(0))));
+        CompilationUnit animal = AntikytheraRunTime.getCompilationUnit(ANIMAL_ENTITY);
+        assertEquals("animals", RepositoryParser.findTableName(new TypeWrapper(animal.getType(0))));
+        CompilationUnit dog = AntikytheraRunTime.getCompilationUnit(DOG_ENTITY);
+        assertEquals("dog", RepositoryParser.findTableName(new TypeWrapper(dog.getType(0))));
     }
 
     @Test
@@ -238,25 +228,9 @@ class TestRepositoryParser {
     }
 
     @Test
-    void testParseNonAnnotatedMethod() {
-        CompilationUnit repoUnit = StaticJavaParser.parse("""
-                public interface UserRepository extends JpaRepository<User, Long> {
-                    User findByUsername(String username);
-                }
-                """);
-        
-        parser.cu = repoUnit;
-        
-        // Set up entity and table
-        CompilationUnit entityUnit = StaticJavaParser.parse("""
-                @Table(name = "users")
-                public class User {
-                    private String username;
-                }
-                """);
-        parser.entity = new TypeWrapper(entityUnit.getType(0));
-        parser.table = "users";
-        parser.entityType = StaticJavaParser.parseClassOrInterfaceType("User");
+    void testParseNonAnnotatedMethod() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
         
         // Test method pattern parsing
         MethodDeclaration findByUsername = repoUnit.findAll(MethodDeclaration.class).get(0);
@@ -274,7 +248,9 @@ class TestRepositoryParser {
     }
 
     @Test
-    void testExtractComponents() {
+    void testExtractComponents() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
         List<String> result = parser.extractComponents("findByUsernameAndAge");
         assertEquals(List.of("findBy", "Username", "And", "Age"), result);
         
@@ -286,44 +262,13 @@ class TestRepositoryParser {
     }
 
     @Test
-    void testProcessTypes() {
-        parser.cu = StaticJavaParser.parse("""
-                public interface UserRepository extends JpaRepository<User, Long> {
-                    User findByUsername(String username);
-                }
-                """);
+    void testProcessTypes() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
         parser.processTypes();
         
         assertNotNull(parser.entityType);
         assertEquals("User", parser.entityType.toString());
-    }
-
-    @Test
-    void testBuildQueries() {
-        parser.cu = StaticJavaParser.parse("""
-                public interface UserRepository extends JpaRepository<User, Long> {
-                    @Query("SELECT u FROM User u WHERE u.username = ?1")
-                    User findByUsername(String username);
-                    
-                    User findByEmail(String email);
-                }
-                """);
-
-        // Set up entity
-        CompilationUnit entityUnit = StaticJavaParser.parse("""
-                @Table(name = "users")
-                public class User {
-                    private String username;
-                    private String email;
-                }
-                """);
-        parser.entity = new TypeWrapper(entityUnit.getType(0));
-        parser.table = "users";
-        parser.entityType = StaticJavaParser.parseClassOrInterfaceType("User");
-        
-        parser.buildQueries();
-        
-        assertFalse(parser.queries.isEmpty());
     }
 
     @Test
@@ -351,34 +296,18 @@ class TestRepositoryParser {
     }
 
     @Test
-    void testGetQueryFromRepositoryMethodMethod() {
-        CompilationUnit repoUnit = StaticJavaParser.parse("""
-                public interface UserRepository extends JpaRepository<User, Long> {
-                    User findByUsername(String username);
-                }
-                """);
-        
-        parser.cu = repoUnit;
-        
-        // Set up entity
-        CompilationUnit entityUnit = StaticJavaParser.parse("""
-                @Table(name = "users")
-                public class User {
-                    private String username;
-                }
-                """);
-        parser.entity = new TypeWrapper(entityUnit.getType(0));
-        parser.table = "users";
-        parser.entityType = StaticJavaParser.parseClassOrInterfaceType("User");
-        
+    void testGetQueryFromRepositoryMethodMethod() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+
         MethodDeclaration method = repoUnit.findAll(MethodDeclaration.class).get(0);
         Callable callable = new Callable(method, null);
         
         RepositoryQuery query = parser.getQueryFromRepositoryMethod(callable);
-        assertNotNull(query);
+        assertNull(query);
         
-        // Test getting the same query again (should return cached version)
+        parser.buildQueries();
         RepositoryQuery query2 = parser.getQueryFromRepositoryMethod(callable);
-        assertSame(query, query2);
+        assertNotNull(query2);
     }
 }

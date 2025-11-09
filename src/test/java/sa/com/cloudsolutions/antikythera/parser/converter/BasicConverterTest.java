@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.parser.converter;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
-import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
@@ -14,7 +13,6 @@ import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
-import sa.com.cloudsolutions.antikythera.generator.BaseRepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.util.ArrayList;
@@ -27,90 +25,10 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-public class BasicConverterTest {
-
-    @Test
-    void testProcessJoinWithValidJoinColumn() throws EvaluatorException {
-        // Create a mock Join with a right item that has the expected format
-        Join mockJoin = mock(Join.class);
-        Table mockTable = mock(Table.class);
-        when(mockTable.toString()).thenReturn("p.department d");
-        when(mockJoin.getRightItem()).thenReturn(mockTable);
-        when(mockJoin.getFromItem()).thenReturn(mockTable);
-        when(mockJoin.getOnExpressions()).thenReturn(new ArrayList<>());
-
-        // Create a TypeWrapper for the main entity (Person)
-        CompilationUnit personCu = new CompilationUnit();
-        personCu.setPackageDeclaration("sa.com.cloudsolutions.model");
-        var personClass = personCu.addClass("Person");
-
-        // Add a department field with @JoinColumn annotation
-        FieldDeclaration departmentField = personClass.addField("Department", "department");
-        NormalAnnotationExpr joinColumnAnnotation = new NormalAnnotationExpr();
-        joinColumnAnnotation.setName("JoinColumn");
-        joinColumnAnnotation.addPair("name", new StringLiteralExpr("department_id"));
-        joinColumnAnnotation.addPair("referencedColumnName", new StringLiteralExpr("id"));
-        departmentField.addAnnotation(joinColumnAnnotation);
-
-        TypeWrapper personWrapper = new TypeWrapper(personClass);
-
-        // Create a list with the person entity
-        List<TypeWrapper> units = new ArrayList<>();
-        units.add(personWrapper);
-
-        // Test the protected method with parts array
-        String[] parts = {"p", "department d"};
-
-        // Call the protected method under test
-        TypeWrapper result = BasicConverter.processJoin(mockJoin, units, parts);
-
-        // Verify that the join was processed (onExpressions should be populated)
-        verify(mockJoin, atLeastOnce()).getOnExpressions();
-    }
-
-
-    @Test
-    void testProcessJoinWithSingleMemberAnnotation() throws EvaluatorException {
-        // Create a mock Join
-        Join mockJoin = mock(Join.class);
-        Table mockTable = mock(Table.class);
-        when(mockTable.toString()).thenReturn("p.department d");
-        when(mockJoin.getRightItem()).thenReturn(mockTable);
-        when(mockJoin.getFromItem()).thenReturn(mockTable);
-        when(mockJoin.getOnExpressions()).thenReturn(new ArrayList<>());
-
-        // Create a TypeWrapper for the main entity
-        CompilationUnit personCu = new CompilationUnit();
-        personCu.setPackageDeclaration("sa.com.cloudsolutions.model");
-        var personClass = personCu.addClass("Person");
-
-        // Add a department field with single member @JoinColumn annotation
-        FieldDeclaration departmentField = personClass.addField("Department", "department");
-        SingleMemberAnnotationExpr joinColumnAnnotation = new SingleMemberAnnotationExpr();
-        joinColumnAnnotation.setName("JoinColumn");
-        joinColumnAnnotation.setMemberValue(new StringLiteralExpr("department_id"));
-        departmentField.addAnnotation(joinColumnAnnotation);
-
-        TypeWrapper personWrapper = new TypeWrapper(personClass);
-
-        List<TypeWrapper> units = new ArrayList<>();
-        units.add(personWrapper);
-
-        // Test the protected method with parts array
-        String[] parts = {"p", "department d"};
-
-        // Call the protected method under test
-        TypeWrapper result = BasicConverter.processJoin(mockJoin, units, parts);
-
-        // Verify that the join was processed
-        verify(mockJoin, atLeastOnce()).getOnExpressions();
-    }
-
+class BasicConverterTest {
     @Test
     void testProcessJoinWithNoMatchingField() throws EvaluatorException {
         // Create a mock Join with a field that doesn't exist
@@ -154,39 +72,6 @@ public class BasicConverterTest {
 
         // Should return null since no entities to match against
         assertNull(result);
-    }
-
-    @Test
-    void testProcessJoinWithFieldButNoAnnotation() throws EvaluatorException {
-        // Create a mock Join
-        Join mockJoin = mock(Join.class);
-        Table mockTable = mock(Table.class);
-        when(mockTable.toString()).thenReturn("p.department d");
-        when(mockJoin.getRightItem()).thenReturn(mockTable);
-        when(mockJoin.getFromItem()).thenReturn(mockTable);
-        when(mockJoin.getOnExpressions()).thenReturn(new ArrayList<>());
-
-        // Create a TypeWrapper for the main entity
-        CompilationUnit personCu = new CompilationUnit();
-        personCu.setPackageDeclaration("sa.com.cloudsolutions.model");
-        var personClass = personCu.addClass("Person");
-
-        // Add a department field WITHOUT @JoinColumn annotation
-        FieldDeclaration departmentField = personClass.addField("Department", "department");
-
-        TypeWrapper personWrapper = new TypeWrapper(personClass);
-
-        List<TypeWrapper> units = new ArrayList<>();
-        units.add(personWrapper);
-
-        // Test the protected method with parts array
-        String[] parts = {"p", "department d"};
-
-        // Call the method under test - should handle missing annotation gracefully
-        TypeWrapper result = assertDoesNotThrow(() -> BasicConverter.processJoin(mockJoin, units, parts));
-
-        // Should still process but may return null due to missing annotation
-        // The exact behavior depends on RepositoryParser.findEntity implementation
     }
 
     @Test

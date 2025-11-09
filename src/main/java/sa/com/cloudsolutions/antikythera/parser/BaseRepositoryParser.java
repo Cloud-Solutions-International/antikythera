@@ -1,13 +1,21 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
@@ -82,6 +90,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
      */
     protected Map<Callable, RepositoryQuery> queries = new HashMap<>();
 
+    Evaluator eval;
+
     protected static final Pattern KEYWORDS_PATTERN = Pattern.compile(
             "get|findBy|findFirstBy|findTopBy|And|OrderBy|NotIn|In|Desc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan"
     );
@@ -116,20 +126,28 @@ public class BaseRepositoryParser extends AbstractCompiler {
      * @param methodDeclaration the method declaration to be processed
      */
     void queryFromMethodDeclaration(MethodDeclaration methodDeclaration) {
-        Optional<AnnotationExpr> annotationExpr = methodDeclaration.getAnnotationByName("Query");
-        Callable callable = new Callable(methodDeclaration, null);
+        try {
+            Optional<AnnotationExpr> annotationExpr = methodDeclaration.getAnnotationByName("Query");
+            Callable callable = new Callable(methodDeclaration, null);
 
-        if (annotationExpr.isPresent()) {
-            Map<String, String> attr = AbstractCompiler.extractAnnotationAttributes(annotationExpr.get());
-            if (Boolean.parseBoolean(attr.getOrDefault(NATIVE_QUERY,"false"))) {
-                queries.put(callable, queryBuilder(attr.get("value"), QueryType.NATIVE_SQL, callable));
+            if (annotationExpr.isPresent()) {
+                Map<String, Expression> attr = AbstractCompiler.extractAnnotationAttributes(annotationExpr.get());
+                Expression value = attr.get("value");
+                Expression nt = attr.get(NATIVE_QUERY);
+                Variable v = eval.evaluateExpression(value);
+
+                if (nt != null && eval.evaluateExpression(nt).getValue().equals(true)) {
+                    queries.put(callable, queryBuilder(v.getValue().toString(), QueryType.NATIVE_SQL, callable));
+                }
+                else {
+                    queries.put(callable, queryBuilder(v.getValue().toString(), QueryType.HQL , callable));
+                }
             }
             else {
-                queries.put(callable, queryBuilder(attr.get("value"), QueryType.HQL , callable));
+                queries.put(callable, parseNonAnnotatedMethod(callable));
             }
-        }
-        else {
-            queries.put(callable, parseNonAnnotatedMethod(callable));
+        } catch (ReflectiveOperationException e) {
+            throw new AntikytheraException(e);
         }
     }
 
@@ -347,11 +365,11 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
         try {
             // Extract entity information using AbstractCompiler helpers
-            String entityName = AbstractCompiler.getEntityName(typeDecl);
-            String tableName = AbstractCompiler.getTableName(typeDecl);
-            String discriminatorColumn = AbstractCompiler.getDiscriminatorColumn(typeDecl);
-            String discriminatorValue = AbstractCompiler.getDiscriminatorValue(typeDecl);
-            String inheritanceType = AbstractCompiler.getInheritanceStrategy(typeDecl);
+            String entityName = getEntityName(typeDecl);
+            String tableName = getTableName(typeDecl);
+            String discriminatorColumn = getDiscriminatorColumn(typeDecl);
+            String discriminatorValue = getDiscriminatorValue(typeDecl);
+            String inheritanceType = getInheritanceStrategy(typeDecl);
 
             // Build property to column map
             Map<String, String> propertyToColumnMap = buildPropertyToColumnMapFromAST(typeDecl);
@@ -382,26 +400,23 @@ public class BaseRepositoryParser extends AbstractCompiler {
     /**
      * Builds property to column map from TypeDeclaration AST.
      */
-    private Map<String, String> buildPropertyToColumnMapFromAST(
-            com.github.javaparser.ast.body.TypeDeclaration<?> typeDecl) {
+    private Map<String, String> buildPropertyToColumnMapFromAST(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
         Map<String, String> propertyToColumnMap = new HashMap<>();
 
         // Get all fields from the entity
-        typeDecl.getFields().forEach(field -> {
-            if (isTransientFieldFromAST(field)) {
-                return; // Skip transient fields
-            }
-
-            field.getVariables().forEach(variable -> {
-                String propertyName = variable.getNameAsString();
-                String columnName = getColumnNameFromAST(field);
-                if (columnName == null) {
-                    // Default: convert camelCase to snake_case
-                    columnName = camelToSnake(propertyName);
+        for (FieldDeclaration field : typeDecl.getFields()) {
+            if (!isTransientFieldFromAST(field)) {
+                for (VariableDeclarator variable : field.getVariables()) {
+                    String propertyName = variable.getNameAsString();
+                    String columnName = getColumnNameFromAST(field);
+                    if (columnName == null) {
+                        // Default: convert camelCase to snake_case
+                        columnName = camelToSnake(propertyName);
+                    }
+                    propertyToColumnMap.put(propertyName, columnName);
                 }
-                propertyToColumnMap.put(propertyName, columnName);
-            });
-        });
+            }
+        }
 
         return propertyToColumnMap;
     }
@@ -409,19 +424,16 @@ public class BaseRepositoryParser extends AbstractCompiler {
     /**
      * Builds property to column mappings with full metadata.
      */
-    private Map<String, String>
-            buildPropertyToColumnMappingsFromAST(
-                com.github.javaparser.ast.body.TypeDeclaration<?> typeDecl,
-                sa.com.cloudsolutions.antikythera.parser.converter.TableMapping tableMapping) {
-        Map<String, String> columnMappings =
-            new HashMap<>();
+    private Map<String, String> buildPropertyToColumnMappingsFromAST(
+            TypeDeclaration<?> typeDecl, TableMapping tableMapping) throws ReflectiveOperationException {
+        Map<String, String> columnMappings = new HashMap<>();
 
-        typeDecl.getFields().forEach(field -> {
+        for (FieldDeclaration field : typeDecl.getFields()) {
             if (isTransientFieldFromAST(field) || isRelationshipFieldFromAST(field)) {
-                return; // Skip transient and relationship fields
+                continue;
             }
 
-            field.getVariables().forEach(variable -> {
+            for (VariableDeclarator variable : field.getVariables()) {
                 String propertyName = variable.getNameAsString();
                 String columnName = getColumnNameFromAST(field);
                 if (columnName == null) {
@@ -430,8 +442,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 String fullPropertyName = tableMapping.entityName() + "." + propertyName;
 
                 columnMappings.put(fullPropertyName, columnName);
-            });
-        });
+            }
+        }
 
         return columnMappings;
     }
@@ -461,15 +473,15 @@ public class BaseRepositoryParser extends AbstractCompiler {
     /**
      * Gets column name from @Column annotation or returns null.
      */
-    private String getColumnNameFromAST(com.github.javaparser.ast.body.FieldDeclaration field) {
+    private String getColumnNameFromAST(com.github.javaparser.ast.body.FieldDeclaration field) throws ReflectiveOperationException {
         Optional<com.github.javaparser.ast.expr.AnnotationExpr> columnAnn = 
             field.getAnnotationByName("Column");
         
         if (columnAnn.isPresent()) {
-            Map<String, String> attributes = AbstractCompiler.extractAnnotationAttributes(columnAnn.get());
-            String name = attributes.get("name");
-            if (name != null && !name.isEmpty()) {
-                return name;
+            Map<String, Expression> attributes = AbstractCompiler.extractAnnotationAttributes(columnAnn.get());
+            Expression name = attributes.get("name");
+            if (name != null) {
+                return eval.evaluateExpression(name).getValue().toString();
             }
         }
         return null; // No @Column annotation or no name specified
@@ -651,11 +663,124 @@ public class BaseRepositoryParser extends AbstractCompiler {
                             entityType = t.getFirst().orElseThrow();
                             entity = findEntity(entityType);
                             table = findTableName(entity);
+                            eval = EvaluatorFactory.create(cls.getFullyQualifiedName().orElseThrow(), Evaluator.class);
                         });
                     }
                 }
             }
         }
+    }
+
+    String getAnnotationValue(AnnotationExpr expr, String name) throws ReflectiveOperationException {
+        Map<String, Expression> attributes = extractAnnotationAttributes(expr);
+        Expression value = attributes.get(name);
+        if (name != null) {
+            Variable v = eval.evaluateExpression(value);
+            return v.getValue().toString();
+        }
+        return null;
+    }
+
+    /**
+     * Gets the table name from @Table annotation or derives from entity name.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Table name
+     */
+    public String getTableName(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+        Optional<AnnotationExpr> tableAnn = typeDecl.getAnnotationByName("Table");
+
+        if (tableAnn.isPresent()) {
+            String s = getAnnotationValue(tableAnn.get(), "name");
+            if (s != null) {
+                return s;
+            }
+        }
+
+        // Default: convert entity name to snake_case
+        return camelToSnakeCase(typeDecl.getNameAsString());
+    }
+
+    /**
+     * Gets the entity name from @Entity annotation or class name.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Entity name
+     */
+    public  String getEntityName(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+        Optional<AnnotationExpr> entityAnn = typeDecl.getAnnotationByName("Entity");
+
+        if (entityAnn.isPresent()) {
+            String s = getAnnotationValue(entityAnn.get(), "name");
+            if (s != null) {
+                return s;
+            }
+        }
+
+        return typeDecl.getNameAsString();
+    }
+
+    /**
+     * Gets the discriminator column name from @DiscriminatorColumn.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Discriminator column name, or "dtype" if not specified
+     */
+    public  String getDiscriminatorColumn(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+        Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorColumn");
+
+        if (discAnn.isPresent()) {
+            String s = getAnnotationValue(discAnn.get(), "name");
+            if (s != null) {
+                return s;
+            }
+        }
+
+        return "dtype"; // Default discriminator column
+    }
+
+    /**
+     * Gets the discriminator value from @DiscriminatorValue.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Discriminator value, or null if not specified
+     */
+    public  String getDiscriminatorValue(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+        Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorValue");
+
+        if (discAnn.isPresent()) {
+            String s = getAnnotationValue(discAnn.get(), "name");
+            if (s != null) {
+                return s;
+            }
+        }
+
+        // Default: entity name
+        return getEntityName(typeDecl);
+    }
+
+    /**
+     * Gets the inheritance strategy from @Inheritance annotation.
+     *
+     * @param typeDecl The entity type declaration
+     * @return Inheritance strategy ("SINGLE_TABLE", "JOINED", "TABLE_PER_CLASS"), or null
+     */
+    public String getInheritanceStrategy(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+        Optional<AnnotationExpr> inhAnn = typeDecl.getAnnotationByName("Inheritance");
+
+        if (inhAnn.isPresent()) {
+            String strategy = getAnnotationValue(inhAnn.get(), "name");
+
+            if (strategy != null) {
+                // Extract enum value: InheritanceType.SINGLE_TABLE -> SINGLE_TABLE
+                if (strategy.contains(".")) {
+                    return strategy.substring(strategy.lastIndexOf('.') + 1);
+                }
+                return strategy;
+            }
+        }
+
+        return null; // No inheritance specified
     }
 
 }
