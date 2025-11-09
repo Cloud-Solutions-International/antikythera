@@ -62,11 +62,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
     protected HQLParserAdapter parserAdapter;
 
     /**
-     * Entity mapping resolver for extracting metadata from JPA annotations
-     */
-    protected EntityMappingResolver entityMappingResolver;
-
-    /**
      * The compilation unit or class associated with this entity.
      */
     TypeWrapper entity;

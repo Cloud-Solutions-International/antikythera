@@ -25,6 +25,12 @@ public class EntityMappingResolver {
     
     private static final Map<String, EntityMetadata> mapping = new HashMap<>();
 
+    /**
+     * Private constructor to prevent instantiation.
+     */
+    private EntityMappingResolver() {
+    }
+
     public static void build() throws ReflectiveOperationException {
         for (TypeWrapper type : AntikytheraRunTime.getResolvedTypes().values()) {
             TypeDeclaration<?> typeDecl = type.getType();
@@ -82,7 +88,7 @@ public class EntityMappingResolver {
     /**
      * Gets column name from @Column annotation or returns null.
      */
-    private static String getColumnNameFromAST(com.github.javaparser.ast.body.FieldDeclaration field)  {
+    private static String getColumnNameFromAST(FieldDeclaration field)  {
         Optional<com.github.javaparser.ast.expr.AnnotationExpr> columnAnn =
                 field.getAnnotationByName("Column");
 

@@ -63,9 +63,7 @@ public class RepositoryParser extends BaseRepositoryParser {
     public RepositoryParser() throws IOException {
         super();
         queries = new HashMap<>();
-        
-        // Initialize the query converter and entity mapping resolver
-        this.entityMappingResolver = new EntityMappingResolver();
+
         this.parserAdapter = new HQLParserAdapter();
 
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
