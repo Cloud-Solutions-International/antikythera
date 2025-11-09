@@ -29,10 +29,10 @@ public class EntityMappingResolver {
         for (TypeWrapper type : AntikytheraRunTime.getResolvedTypes().values()) {
             TypeDeclaration<?> typeDecl = type.getType();
             if (typeDecl != null && typeDecl.getAnnotationByName("Entity").isPresent()) {
-                mapping.put(typeDecl.getFullyQualifiedName().orElseThrow(), buildMetadataFromSources(typeDecl));
+                mapping.put(type.getFullyQualifiedName(), buildMetadataFromSources(typeDecl));
             }
             else {
-
+                mapping.put(type.getFullyQualifiedName(), buildEntityMetadata(type.getClazz()));
             }
         }
     }
@@ -131,7 +131,7 @@ public class EntityMappingResolver {
     }
 
 
-    private EntityMetadata buildEntityMetadata(Class<?> entityClass) {
+    private static EntityMetadata buildEntityMetadata(Class<?> entityClass) {
         if (!isJpaEntity(entityClass)) {
             return EntityMetadata.empty();
         }
@@ -257,17 +257,17 @@ public class EntityMappingResolver {
     }
 
 
-    private boolean isJpaEntity(Class<?> clazz) {
+    private static boolean isJpaEntity(Class<?> clazz) {
         return clazz.isAnnotationPresent(Entity.class);
     }
     
-    private String getEntityName(Class<?> entityClass) {
+    private static String getEntityName(Class<?> entityClass) {
         Entity entityAnnotation = entityClass.getAnnotation(Entity.class);
         String name = entityAnnotation.name();
         return name.isEmpty() ? entityClass.getSimpleName() : name;
     }
     
-    private TableMapping buildTableMapping(Class<?> entityClass, String entityName) {
+    private static TableMapping buildTableMapping(Class<?> entityClass, String entityName) {
         Table tableAnnotation = entityClass.getAnnotation(Table.class);
         
         String tableName;
@@ -325,7 +325,7 @@ public class EntityMappingResolver {
                                 inheritanceType, parentTable);
     }
     
-    private Map<String, String> buildPropertyToColumnMap(Class<?> entityClass) {
+    private static Map<String, String> buildPropertyToColumnMap(Class<?> entityClass) {
         Map<String, String> propertyToColumnMap = new HashMap<>();
         
         for (Field field : getAllFields(entityClass)) {
@@ -341,7 +341,7 @@ public class EntityMappingResolver {
         return propertyToColumnMap;
     }
     
-    private Map<String, String> buildPropertyToColumnMappings(Class<?> entityClass, TableMapping tableMapping) {
+    private static Map<String, String> buildPropertyToColumnMappings(Class<?> entityClass, TableMapping tableMapping) {
         Map<String, String> columnMappings = new HashMap<>();
         
         for (Field field : getAllFields(entityClass)) {
@@ -359,7 +359,7 @@ public class EntityMappingResolver {
         return columnMappings;
     }
     
-    private Map<String, JoinMapping> buildRelationshipMappings(Class<?> entityClass, TableMapping tableMapping) {
+    private static Map<String, JoinMapping> buildRelationshipMappings(Class<?> entityClass, TableMapping tableMapping) {
         Map<String, JoinMapping> joinMappings = new HashMap<>();
         
         for (Field field : getAllFields(entityClass)) {
@@ -374,7 +374,7 @@ public class EntityMappingResolver {
         return joinMappings;
     }
     
-    private JoinMapping buildJoinMapping(Field field, TableMapping sourceTableMapping) {
+    private static JoinMapping buildJoinMapping(Field field, TableMapping sourceTableMapping) {
         String propertyName = field.getName();
         Class<?> targetEntityClass = getTargetEntityClass(field);
         String targetEntityName = getEntityName(targetEntityClass);
@@ -406,7 +406,7 @@ public class EntityMappingResolver {
         );
     }
     
-    private Class<?> getTargetEntityClass(Field field) {
+    private static Class<?> getTargetEntityClass(Field field) {
         if (field.isAnnotationPresent(ManyToOne.class) || field.isAnnotationPresent(OneToOne.class)) {
             return field.getType();
         } else if (field.isAnnotationPresent(OneToMany.class) || field.isAnnotationPresent(ManyToMany.class)) {
@@ -421,7 +421,7 @@ public class EntityMappingResolver {
         return field.getType();
     }
     
-    private JoinType determineJoinType(Field field) {
+    private static JoinType determineJoinType(Field field) {
         // For now, default to LEFT join for optional relationships, INNER for required
         if (field.isAnnotationPresent(ManyToOne.class)) {
             ManyToOne manyToOne = field.getAnnotation(ManyToOne.class);
@@ -434,7 +434,7 @@ public class EntityMappingResolver {
         return JoinType.LEFT;
     }
     
-    private String getTableName(Class<?> entityClass) {
+    private static String getTableName(Class<?> entityClass) {
         Table tableAnnotation = entityClass.getAnnotation(Table.class);
         if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
             return tableAnnotation.name();
@@ -442,7 +442,7 @@ public class EntityMappingResolver {
         return AbstractCompiler.camelToSnakeCase(getEntityName(entityClass));
     }
     
-    private List<Field> getAllFields(Class<?> clazz) {
+    private static List<Field> getAllFields(Class<?> clazz) {
         List<Field> fields = new ArrayList<>();
         Class<?> currentClass = clazz;
         
@@ -454,20 +454,20 @@ public class EntityMappingResolver {
         return fields;
     }
     
-    private boolean isTransientField(Field field) {
+    private static boolean isTransientField(Field field) {
         return field.isAnnotationPresent(Transient.class) ||
                java.lang.reflect.Modifier.isTransient(field.getModifiers()) ||
                java.lang.reflect.Modifier.isStatic(field.getModifiers());
     }
     
-    private boolean isRelationshipField(Field field) {
+    private static boolean isRelationshipField(Field field) {
         return field.isAnnotationPresent(OneToOne.class) ||
                field.isAnnotationPresent(OneToMany.class) ||
                field.isAnnotationPresent(ManyToOne.class) ||
                field.isAnnotationPresent(ManyToMany.class);
     }
     
-    private String getColumnName(Field field) {
+    private static String getColumnName(Field field) {
         Column columnAnnotation = field.getAnnotation(Column.class);
         if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
             return columnAnnotation.name();
