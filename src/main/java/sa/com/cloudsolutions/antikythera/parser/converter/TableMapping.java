@@ -10,15 +10,13 @@ import java.util.Map;
  * including the table name, schema, property-to-column mappings, and inheritance information.
  * <p>
  */
-public record TableMapping(String entityName, String tableName, String schema,
+public record TableMapping(String tableName, String schema,
                            Map<String, String> propertyToColumnMap,
                            String discriminatorColumn, String discriminatorValue,
                            String inheritanceType, TableMapping parentTable) {
 
     /**
      * Creates a new table mapping with inheritance information.
-     *
-     * @param entityName          The name of the JPA entity
      * @param tableName           The name of the database table
      * @param schema              The database schema (can be null)
      * @param propertyToColumnMap Map of entity property names to column names
@@ -27,11 +25,10 @@ public record TableMapping(String entityName, String tableName, String schema,
      * @param inheritanceType     Inheritance strategy (SINGLE_TABLE, JOINED, TABLE_PER_CLASS, or null)
      * @param parentTable         Parent table mapping (for JOINED inheritance)
      */
-    public TableMapping(String entityName, String tableName, String schema, 
+    public TableMapping(String tableName, String schema,
                        Map<String, String> propertyToColumnMap,
                        String discriminatorColumn, String discriminatorValue,
                        String inheritanceType, TableMapping parentTable) {
-        this.entityName = entityName;
         this.tableName = tableName;
         this.schema = schema;
         this.propertyToColumnMap = propertyToColumnMap != null ?

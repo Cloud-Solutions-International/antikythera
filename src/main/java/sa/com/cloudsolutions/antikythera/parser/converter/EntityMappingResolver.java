@@ -132,8 +132,7 @@ public class EntityMappingResolver {
         Map<String, String> propertyToColumnMap = buildPropertyToColumnMapFromAST(typeDecl);
 
         // For now, no parent table support (could be added later)
-        TableMapping tableMapping = new TableMapping(
-                entityName, tableName, null, propertyToColumnMap,
+        TableMapping tableMapping = new TableMapping(tableName, null, propertyToColumnMap,
                 discriminatorColumn, discriminatorValue, inheritanceType, null
         );
 
@@ -151,10 +150,6 @@ public class EntityMappingResolver {
 
 
     private static EntityMetadata buildEntityMetadata(Class<?> entityClass) {
-        if (!isJpaEntity(entityClass)) {
-            return EntityMetadata.empty();
-        }
-        
         String entityName = getEntityName(entityClass);
         TableMapping tableMapping = buildTableMapping(entityClass, entityName);
         
@@ -342,7 +337,7 @@ public class EntityMappingResolver {
             }
         }
         
-        return new TableMapping(entityName, tableName, schema, propertyToColumnMap,
+        return new TableMapping(tableName, schema, propertyToColumnMap,
                                 discriminatorColumn, discriminatorValue, 
                                 inheritanceType, parentTable);
     }
@@ -373,7 +368,7 @@ public class EntityMappingResolver {
             
             String propertyName = field.getName();
             String columnName = getColumnName(field);
-            String fullPropertyName = tableMapping.entityName() + "." + propertyName;
+            String fullPropertyName = entityClass.getName() + "." + propertyName;
 
             columnMappings.put(fullPropertyName, columnName);
         }

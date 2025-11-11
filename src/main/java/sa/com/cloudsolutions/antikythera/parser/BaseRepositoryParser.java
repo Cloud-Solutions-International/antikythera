@@ -304,8 +304,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 rql.setConversionResult(parserAdapter.convertToNativeSQL(query));
                 rql.setQuery(query);
             } catch (Exception e) {
-                logger.warn("Exception during query conversion: {}. Falling back to existing logic.", e.getMessage());
-                rql.setQuery(query);
+                throw new AntikytheraException(e);
             }
         } else {
             rql.setQuery(query);

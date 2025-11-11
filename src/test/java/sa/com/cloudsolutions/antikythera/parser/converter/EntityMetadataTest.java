@@ -13,20 +13,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * for storing and retrieving entity mapping information.
  */
 class EntityMetadataTest {
-
-    @Test
-    void testEmptyEntityMetadata() {
-        EntityMetadata metadata = EntityMetadata.empty();
-        
-        assertNotNull(metadata, "Empty metadata should not be null");
-        assertTrue(metadata.entityToTableMappings().isEmpty(),
-                  "Empty metadata should have no entity mappings");
-        assertTrue(metadata.propertyToColumnMappings().isEmpty(),
-                  "Empty metadata should have no property mappings");
-        assertTrue(metadata.relationshipMappings().isEmpty(),
-                  "Empty metadata should have no relationship mappings");
-    }
-
     @Test
     void testEntityMetadataWithMappings() {
         // Create test mappings
@@ -35,7 +21,7 @@ class EntityMetadataTest {
         Map<String, JoinMapping> relationshipMappings = new HashMap<>();
         
         // Create a simple table mapping
-        TableMapping userTable = new TableMapping("User", "users", null, null, null, null, null, null);
+        TableMapping userTable = new TableMapping("users", null, null, null, null, null, null);
         entityMappings.put("User", userTable);
         
         EntityMetadata metadata = new EntityMetadata(entityMappings, propertyMappings, relationshipMappings);
@@ -56,8 +42,8 @@ class EntityMetadataTest {
     @Test
     void testGetAllTableMappings() {
         Map<String, TableMapping> entityMappings = new HashMap<>();
-        entityMappings.put("User", new TableMapping("User", "users", null, null, null, null, null, null));
-        entityMappings.put("Product", new TableMapping("Product", "products", null, null, null, null, null, null));
+        entityMappings.put("User", new TableMapping("users", null, null, null, null, null, null));
+        entityMappings.put("Product", new TableMapping( "products", null, null, null, null, null, null));
         
         EntityMetadata metadata = new EntityMetadata(entityMappings, null, null);
         

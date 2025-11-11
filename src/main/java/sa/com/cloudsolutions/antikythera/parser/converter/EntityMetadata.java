@@ -80,13 +80,4 @@ public record EntityMetadata(Map<String, TableMapping> entityToTableMappings,
     public java.util.Collection<TableMapping> getAllTableMappings() {
         return entityToTableMappings.values();
     }
-
-    /**
-     * Creates an empty EntityMetadata instance.
-     *
-     * @return An empty EntityMetadata
-     */
-    public static EntityMetadata empty() {
-        return new EntityMetadata(null, null, null);
-    }
 }
