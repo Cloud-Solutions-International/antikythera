@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.parser.converter;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.type.Type;
 import com.raditha.hql.parser.HQLParser;
 import com.raditha.hql.parser.ParseException;
 import com.raditha.hql.model.QueryAnalysis;
@@ -74,7 +75,7 @@ public class HQLParserAdapter  {
             TypeWrapper typeWrapper = AbstractCompiler.findType(cu, name);
             String fullName = null;
             if (typeWrapper == null) {
-                fullName = getEntiyNameFromEntity(name);
+                fullName = getEntiyNameForEntity(name);
             }
 
             EntityMetadata meta = EntityMappingResolver.getMapping().get(fullName);
@@ -107,25 +108,22 @@ public class HQLParserAdapter  {
         return tables;
     }
 
-    String getEntiyNameFromEntity(String name) {
+    String getEntiyNameForEntity(String name) {
+        if (entity.getName().equals(name) || entity.getFullyQualifiedName().equals(name)) {
+            return entity.getFullyQualifiedName();
+        }
+
         if (entity.getClazz() == null) {
-            TypeDeclaration<?> t = entity.getType();
-            if (t.getNameAsString().equals(name)) {
-                return entity.getFullyQualifiedName();
-            }
-            else {
-                for (FieldDeclaration f : entity.getType().getFields()) {
-                    String fieldType = f.getVariable(0).getType().asString();
-                    if (fieldType.equals(name)) {
-                        return AbstractCompiler.findType(cu, fieldType).getFullyQualifiedName();
+            for (FieldDeclaration f : entity.getType().getFields()) {
+                for (TypeWrapper tw : AbstractCompiler.findTypesInVariable(f.getVariable(0))) {
+                    if (tw.getFullyQualifiedName().equals(name) || tw.getName().equals(name)) {
+                        return tw.getFullyQualifiedName();
                     }
                 }
             }
         }
-        else {
-            if (entity.getClazz().getName().equals(name)) {
-                return entity.getFullyQualifiedName();
-            }
+        else if (entity.getClazz().getName().equals(name)) {
+            return entity.getFullyQualifiedName();
         }
         return null;
     }

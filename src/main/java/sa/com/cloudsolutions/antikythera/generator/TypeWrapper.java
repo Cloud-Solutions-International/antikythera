@@ -161,4 +161,11 @@ public class TypeWrapper {
         }
         return Optional.empty();
     }
+
+    public String getName() {
+        if (clazz != null) {
+            return clazz.getName();
+        }
+        return type.getNameAsString();
+    }
 }
