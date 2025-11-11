@@ -17,9 +17,8 @@ import java.io.IOException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-// ... other imports
 
-public class HQLParseAdapterTest extends TestHelper {
+class HQLParseAdapterTest extends TestHelper {
     private static final String USER_MODEL = "sa.com.cloudsolutions.antikythera.testhelper.model.User";
     private static final String VEHICAL_MODEL = "sa.com.cloudsolutions.antikythera.testhelper.model.Vehicle";
 

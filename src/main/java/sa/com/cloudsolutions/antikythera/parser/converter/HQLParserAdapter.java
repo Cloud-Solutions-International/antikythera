@@ -112,6 +112,10 @@ public class HQLParserAdapter  {
         if (entity.getName().equals(name) || entity.getFullyQualifiedName().equals(name)) {
             return entity.getFullyQualifiedName();
         }
+        Optional<String> n = EntityMappingResolver.getFullNamesForEntity(name).stream().findFirst();
+        if (n.isPresent()) {
+            return n.stream().findFirst().get();
+        }
 
         if (entity.getClazz() == null) {
             for (FieldDeclaration f : entity.getType().getFields()) {

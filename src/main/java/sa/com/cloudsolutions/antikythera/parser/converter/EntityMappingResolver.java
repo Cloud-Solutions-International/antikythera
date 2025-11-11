@@ -6,11 +6,13 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 
 import javax.persistence.*;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.*;
 
@@ -24,7 +26,7 @@ import java.util.*;
 public class EntityMappingResolver {
     
     private static final Map<String, EntityMetadata> mapping = new HashMap<>();
-
+    private static final Map<String, Set<String>> shortNames = new HashMap<>();
     /**
      * Private constructor to prevent instantiation.
      */
@@ -32,13 +34,24 @@ public class EntityMappingResolver {
     }
 
     public static void build() throws ReflectiveOperationException {
+        if (!mapping.isEmpty()) {
+            throw new AntikytheraException("Already built");
+        }
         for (TypeWrapper type : AntikytheraRunTime.getResolvedTypes().values()) {
             TypeDeclaration<?> typeDecl = type.getType();
+            String fullyQualifiedName = type.getFullyQualifiedName();
+            String name = type.getName();
+            shortNames.computeIfAbsent(name, k -> new HashSet<>()).add(fullyQualifiedName);
+
             if (typeDecl != null && typeDecl.getAnnotationByName("Entity").isPresent()) {
-                mapping.put(type.getFullyQualifiedName(), buildMetadataFromSources(typeDecl));
+                mapping.put(fullyQualifiedName, buildMetadataFromSources(typeDecl));
             }
-            else {
-                mapping.put(type.getFullyQualifiedName(), buildEntityMetadata(type.getClazz()));
+            else if (type.getClazz() != null) {
+                for (Annotation ann : type.getClazz().getAnnotations()) {
+                    if (ann.getClass().getName().equals("Entity")) {
+                        mapping.put(fullyQualifiedName, buildEntityMetadata(type.getClazz()));
+                    }
+                }
             }
         }
     }
@@ -163,9 +176,9 @@ public class EntityMappingResolver {
         Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorValue");
 
         if (discAnn.isPresent()) {
-            String s = getAnnotationValue(discAnn.get(), "name");
-            if (s != null) {
-                return s;
+            Optional<String> s = getAnnotationValue(discAnn.get(), "name");
+            if (s.isPresent()) {
+                return s.get();
             }
         }
 
@@ -183,14 +196,14 @@ public class EntityMappingResolver {
         Optional<AnnotationExpr> inhAnn = typeDecl.getAnnotationByName("Inheritance");
 
         if (inhAnn.isPresent()) {
-            String strategy = getAnnotationValue(inhAnn.get(), "name");
+            Optional<String> strategy = getAnnotationValue(inhAnn.get(), "name");
 
-            if (strategy != null) {
+            if (strategy.isPresent()) {
                 // Extract enum value: InheritanceType.SINGLE_TABLE -> SINGLE_TABLE
-                if (strategy.contains(".")) {
-                    return strategy.substring(strategy.lastIndexOf('.') + 1);
+                if (strategy.get().contains(".")) {
+                    return strategy.get().substring(strategy.get().lastIndexOf('.') + 1);
                 }
-                return strategy;
+                return strategy.get();
             }
         }
 
@@ -198,10 +211,13 @@ public class EntityMappingResolver {
     }
 
 
-    static String  getAnnotationValue(AnnotationExpr expr, String name)  {
+    static Optional<String>  getAnnotationValue(AnnotationExpr expr, String name)  {
         Map<String, Expression> attributes = AbstractCompiler.extractAnnotationAttributes(expr);
         Expression value = attributes.get(name);
-        return value.toString().replace("\"", ""); // Remove quotes
+        if (value == null) {
+            return Optional.empty();
+        }
+        return Optional.of(value.toString().replace("\"", "")); // Remove quotes
     }
 
     /**
@@ -214,9 +230,9 @@ public class EntityMappingResolver {
         Optional<AnnotationExpr> tableAnn = typeDecl.getAnnotationByName("Table");
 
         if (tableAnn.isPresent()) {
-            String s = getAnnotationValue(tableAnn.get(), "name");
-            if (s != null) {
-                return s;
+            Optional<String> s = getAnnotationValue(tableAnn.get(), "name");
+            if (s.isPresent()) {
+                return s.get();
             }
         }
 
@@ -234,9 +250,9 @@ public class EntityMappingResolver {
         Optional<AnnotationExpr> entityAnn = typeDecl.getAnnotationByName("Entity");
 
         if (entityAnn.isPresent()) {
-            String s = getAnnotationValue(entityAnn.get(), "name");
-            if (s != null) {
-                return s;
+            Optional<String> s = getAnnotationValue(entityAnn.get(), "name");
+            if (s.isPresent()) {
+                return s.get();
             }
         }
 
@@ -253,9 +269,9 @@ public class EntityMappingResolver {
         Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorColumn");
 
         if (discAnn.isPresent()) {
-            String s = getAnnotationValue(discAnn.get(), "name");
-            if (s != null) {
-                return s;
+            Optional<String> s = getAnnotationValue(discAnn.get(), "name");
+            if (s.isPresent()) {
+                return s.get();
             }
         }
 
@@ -483,5 +499,9 @@ public class EntityMappingResolver {
 
     public static Map<String, EntityMetadata> getMapping() {
         return mapping;
+    }
+
+    public static Set<String> getFullNamesForEntity(String name) {
+        return shortNames.getOrDefault(name, Collections.emptySet());
     }
 }
