@@ -77,14 +77,16 @@ public class HQLParserAdapter  {
             if (typeWrapper == null) {
                 fullName = getEntiyNameForEntity(name);
             }
+            else {
+                fullName = typeWrapper.getFullyQualifiedName();
+            }
 
             EntityMetadata meta = EntityMappingResolver.getMapping().get(fullName);
-            TableMapping tableMapping = meta.getTableMapping(name);
-            tables.add(tableMapping.tableName());
-            sqlConverter.registerEntityMapping(name, tableMapping.tableName());
+            tables.add(meta.tableName());
+            sqlConverter.registerEntityMapping(name, meta.tableName());
 
-            if (tableMapping.propertyToColumnMap() != null) {
-                for (var entry : tableMapping.propertyToColumnMap().entrySet()) {
+            if (meta.propertyToColumnMap() != null) {
+                for (var entry : meta.propertyToColumnMap().entrySet()) {
                     String propertyName = entry.getKey();
                     String columnName = entry.getValue();
                     sqlConverter.registerFieldMapping(
@@ -95,7 +97,7 @@ public class HQLParserAdapter  {
                 }
             }
             // Register mappings for joined entities (if any)
-            for (JoinMapping joinMapping : meta.relationshipMappings().values()) {
+            for (JoinMapping joinMapping : meta.relationshipMap().values()) {
                 // Register the joined entity's table mapping
                 sqlConverter.registerEntityMapping(
                         joinMapping.targetEntity(),

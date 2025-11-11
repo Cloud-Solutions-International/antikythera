@@ -121,31 +121,15 @@ public class EntityMappingResolver {
      * @return EntityMetadata from a parsed source, or null if not available
      */
     private static EntityMetadata buildMetadataFromSources(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
-        // Extract entity information using AbstractCompiler helpers
-        String entityName = getEntityName(typeDecl);
         String tableName = getTableName(typeDecl);
-        String discriminatorColumn = getDiscriminatorColumn(typeDecl);
-        String discriminatorValue = getDiscriminatorValue(typeDecl);
-        String inheritanceType = getInheritanceStrategy(typeDecl);
-
-        // Build property to column map
-        Map<String, String> propertyToColumnMap = buildPropertyToColumnMapFromAST(typeDecl);
-
-        // For now, no parent table support (could be added later)
-        TableMapping tableMapping = new TableMapping(tableName, null, propertyToColumnMap,
-                discriminatorColumn, discriminatorValue, inheritanceType, null
-        );
-
-        Map<String, TableMapping> entityToTableMappings = Map.of(entityName, tableMapping);
-
-        // Build property to column mappings
         Map<String, String> propertyToColumnMappings = buildPropertyToColumnMapFromAST(typeDecl);
 
         // Relationship mappings not yet implemented for AST-based approach
         Map<String, sa.com.cloudsolutions.antikythera.parser.converter.JoinMapping> relationshipMappings =
                 new HashMap<>();
 
-        return new EntityMetadata(entityToTableMappings, propertyToColumnMappings, relationshipMappings);
+        return new EntityMetadata(new TypeWrapper(typeDecl), tableName,
+                propertyToColumnMappings, relationshipMappings);
     }
 
 
@@ -157,7 +141,8 @@ public class EntityMappingResolver {
         Map<String, String> propertyToColumnMappings = buildPropertyToColumnMappings(entityClass, tableMapping);
         Map<String, JoinMapping> relationshipMappings = buildRelationshipMappings(entityClass, tableMapping);
         
-        return new EntityMetadata(entityToTableMappings, propertyToColumnMappings, relationshipMappings);
+        return new EntityMetadata(new TypeWrapper(entityClass), getTableName(entityClass),
+                propertyToColumnMappings, relationshipMappings);
     }
 
 
