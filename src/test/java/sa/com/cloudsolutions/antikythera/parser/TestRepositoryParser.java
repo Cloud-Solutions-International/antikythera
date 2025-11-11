@@ -231,20 +231,19 @@ class TestRepositoryParser {
     void testParseNonAnnotatedMethod() throws IOException {
         CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
         BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
-        
+        parser.processTypes();
+
         // Test method pattern parsing
         MethodDeclaration findByUsername = repoUnit.findAll(MethodDeclaration.class).get(0);
         Callable callable = new Callable(findByUsername, null);
         
         // Test that the method doesn't throw an exception
-        assertDoesNotThrow(() -> parser.parseNonAnnotatedMethod(callable));
-        
-        // Verify that a query was created
-        RepositoryQuery query = parser.queries.get(callable);
-        assertNotNull(query);
-        assertNotNull(query.getQuery());
-        // Just verify it contains basic SQL structure
-        assertTrue(query.getQuery().contains("SELECT * FROM users"));
+        assertDoesNotThrow(() ->
+        {
+            RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+            assertNotNull(q);
+            assertTrue(q.getQuery().contains("SELECT * FROM users"));
+        });
     }
 
     @Test
@@ -299,6 +298,7 @@ class TestRepositoryParser {
     void testGetQueryFromRepositoryMethodMethod() throws IOException {
         CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
         BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
 
         MethodDeclaration method = repoUnit.findAll(MethodDeclaration.class).get(0);
         Callable callable = new Callable(method, null);
