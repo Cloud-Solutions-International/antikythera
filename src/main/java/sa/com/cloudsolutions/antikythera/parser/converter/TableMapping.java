@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.parser.converter;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Represents the mapping between a JPA entity and its corresponding database table.

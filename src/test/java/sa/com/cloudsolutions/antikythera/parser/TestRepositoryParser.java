@@ -36,7 +36,7 @@ class TestRepositoryParser {
 
     @BeforeAll
     static void setUpAll() throws IOException {
-        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
     }
 

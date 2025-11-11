@@ -15,8 +15,6 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
-import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
-import sa.com.cloudsolutions.antikythera.parser.converter.EntityMetadata;
 import sa.com.cloudsolutions.antikythera.parser.converter.HQLParserAdapter;
 
 import java.io.IOException;
@@ -72,6 +70,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     String table;
     /**
      * The java parser type associated with the entity.
+     * TODO remove this
      */
     Type entityType;
 
@@ -88,6 +87,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
     public BaseRepositoryParser() throws IOException {
         super();
+        queries = new HashMap<>();
     }
 
     public static BaseRepositoryParser create(CompilationUnit cu) throws IOException {
@@ -301,8 +301,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         // Use the new converter for non-native queries if enabled
         if (qt.equals(QueryType.HQL)) {
             try {
-                EntityMetadata entityMetadata = EntityMappingResolver.getMapping().get(className);
-                rql.setConversionResult(parserAdapter.convertToNativeSQL(query, entityMetadata));
+                rql.setConversionResult(parserAdapter.convertToNativeSQL(query));
                 rql.setQuery(query);
             } catch (Exception e) {
                 logger.warn("Exception during query conversion: {}. Falling back to existing logic.", e.getMessage());
@@ -411,6 +410,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return CAMEL_TO_SNAKE_PATTERN.matcher(str).replaceAll("$1_$2").toLowerCase();
     }
     public void buildQueries() {
+        parserAdapter = new HQLParserAdapter(cu, entity);
         if (cu != null && entity != null) {
             cu.accept(new Visitor(), null);
         }

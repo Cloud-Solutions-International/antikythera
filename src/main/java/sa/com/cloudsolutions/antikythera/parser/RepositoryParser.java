@@ -62,9 +62,6 @@ public class RepositoryParser extends BaseRepositoryParser {
 
     public RepositoryParser() throws IOException {
         super();
-        queries = new HashMap<>();
-
-        this.parserAdapter = new HQLParserAdapter();
 
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
         if(db != null) {

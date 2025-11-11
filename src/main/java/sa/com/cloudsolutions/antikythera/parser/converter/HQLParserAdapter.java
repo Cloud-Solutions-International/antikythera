@@ -1,5 +1,8 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.raditha.hql.parser.HQLParser;
 import com.raditha.hql.parser.ParseException;
 import com.raditha.hql.model.QueryAnalysis;
@@ -7,6 +10,8 @@ import com.raditha.hql.converter.HQLToPostgreSQLConverter;
 import com.raditha.hql.converter.ConversionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.*;
 
@@ -17,63 +22,36 @@ import java.util.*;
 public class HQLParserAdapter  {
     
     private static final Logger logger = LoggerFactory.getLogger(HQLParserAdapter.class);
-    
+    private final CompilationUnit cu;
     private final HQLParser hqlParser;
     private final HQLToPostgreSQLConverter sqlConverter;
     private final Set<DatabaseDialect> supportedDialects;
-    
-    public HQLParserAdapter() {
+    TypeWrapper entity;
+
+    public HQLParserAdapter(CompilationUnit cu, TypeWrapper entity) {
         this.hqlParser = new HQLParser();
         this.sqlConverter = new HQLToPostgreSQLConverter();
         this.supportedDialects = EnumSet.of(DatabaseDialect.POSTGRESQL);
-        
-        logger.info("HQLParserAdapter initialized with ANTLR4-based parser");
+        this.cu = cu;
+        this.entity = entity;
     }
 
     /**
      * Converts a JPA/HQL query to native SQL.
      *
      * @param jpaQuery The original JPA/HQL query string to convert
-     * @param entityMetadata Metadata about entities involved in the query
      * @return ConversionResult containing the native SQL and conversion metadata
      * @throws QueryConversionException if the conversion fails
      */
-    public ConversionResult convertToNativeSQL(String jpaQuery, EntityMetadata entityMetadata) throws ParseException, ConversionException {
-        // Step 1: Analyze the HQL query using hql-parser
+    public ConversionResult convertToNativeSQL(String jpaQuery) throws ParseException, ConversionException {
         QueryAnalysis analysis = hqlParser.analyze(jpaQuery);
 
-        // Step 2: Register entity and field mappings from EntityMetadata
-        registerMappings(entityMetadata, analysis);
-
-        // Step 3: Convert to PostgreSQL using hql-parser converter
-        /*
-         * TODO figure why this one isn't doing the job
-         */
+        Set<String> referencedTables = registerMappings(analysis);
         String nativeSql = sqlConverter.convert(jpaQuery);
 
-        // Step 4: Extract parameter mappings
         List<ParameterMapping> parameterMappings = extractParameterMappings(analysis);
 
-        // Step 5: Get referenced tables
-        Set<String> referencedTables = extractReferencedTables(entityMetadata, analysis);
-
         return new ConversionResult(nativeSql, parameterMappings, referencedTables);
-    }
-
-
-    /**
-     * Validates if a query can be converted by this converter.
-     *
-     * @param jpaQuery The JPA/HQL query to validate
-     * @return true if the query can be converted, false otherwise
-     */
-    public boolean canConvert(String jpaQuery) {
-        if (jpaQuery == null || jpaQuery.trim().isEmpty()) {
-            return false;
-        }
-        
-        // Use hql-parser's validation
-        return hqlParser.isValid(jpaQuery);
     }
 
     /**
@@ -89,42 +67,68 @@ public class HQLParserAdapter  {
     /**
      * Registers entity and field mappings from EntityMetadata into the hql-parser converter.
      */
-    private void registerMappings(EntityMetadata entityMetadata, QueryAnalysis analysis) {
-        // Register entity-to-table mappings
-        for (TableMapping tableMapping : entityMetadata.getAllTableMappings()) {
-            String entityName = tableMapping.entityName();
-            String tableName = tableMapping.tableName();
-            sqlConverter.registerEntityMapping(entityName, tableName);
-            logger.debug("Registered entity mapping: {} -> {}", entityName, tableName);
+    private Set<String> registerMappings(QueryAnalysis analysis) {
+        Set<String> tables = new HashSet<>();
 
-            // Register field-to-column mappings for this entity
+        for (String name : analysis.getEntityNames()) {
+            TypeWrapper typeWrapper = AbstractCompiler.findType(cu, name);
+            String fullName = null;
+            if (typeWrapper == null) {
+                fullName = getEntiyNameFromEntity(name);
+            }
+
+            EntityMetadata meta = EntityMappingResolver.getMapping().get(fullName);
+            TableMapping tableMapping = meta.getTableMapping(name);
+            tables.add(tableMapping.tableName());
+            sqlConverter.registerEntityMapping(name, tableMapping.tableName());
+
             if (tableMapping.propertyToColumnMap() != null) {
                 for (var entry : tableMapping.propertyToColumnMap().entrySet()) {
                     String propertyName = entry.getKey();
                     String columnName = entry.getValue();
                     sqlConverter.registerFieldMapping(
-                        entityName,
-                        propertyName,
-                        columnName
+                            name,
+                            propertyName,
+                            columnName
                     );
-                    logger.debug("Registered field mapping: {}.{} -> {}",
-                        entityName, propertyName, columnName);
+                }
+            }
+            // Register mappings for joined entities (if any)
+            for (JoinMapping joinMapping : meta.relationshipMappings().values()) {
+                // Register the joined entity's table mapping
+                sqlConverter.registerEntityMapping(
+                        joinMapping.targetEntity(),
+                        joinMapping.targetTable()
+                );
+                logger.debug("Registered join entity mapping: {} -> {}",
+                        joinMapping.targetEntity(), joinMapping.targetTable());
+            }
+        }
+        return tables;
+    }
+
+    String getEntiyNameFromEntity(String name) {
+        if (entity.getClazz() == null) {
+            TypeDeclaration<?> t = entity.getType();
+            if (t.getNameAsString().equals(name)) {
+                return entity.getFullyQualifiedName();
+            }
+            else {
+                for (FieldDeclaration f : entity.getType().getFields()) {
+                    String fieldType = f.getVariable(0).getType().asString();
+                    if (fieldType.equals(name)) {
+                        return AbstractCompiler.findType(cu, fieldType).getFullyQualifiedName();
+                    }
                 }
             }
         }
-        
-        // Register mappings for joined entities (if any)
-        for (JoinMapping joinMapping : entityMetadata.relationshipMappings().values()) {
-            // Register the joined entity's table mapping
-            sqlConverter.registerEntityMapping(
-                joinMapping.targetEntity(),
-                joinMapping.targetTable()
-            );
-            logger.debug("Registered join entity mapping: {} -> {}",
-                joinMapping.targetEntity(), joinMapping.targetTable());
+        else {
+            if (entity.getClazz().getName().equals(name)) {
+                return entity.getFullyQualifiedName();
+            }
         }
+        return null;
     }
-    
     /**
      * Extracts parameter mappings from the query analysis.
      */
@@ -142,28 +146,5 @@ public class HQLParserAdapter  {
         }
         
         return mappings;
-    }
-    
-    /**
-     * Extracts referenced table names from entity metadata and query analysis.
-     */
-    private Set<String> extractReferencedTables(EntityMetadata entityMetadata, QueryAnalysis analysis) {
-        Set<String> tables = new HashSet<>();
-        
-        // Add all tables from entity-to-table mappings
-        for (TableMapping tableMapping : entityMetadata.getAllTableMappings()) {
-            if (tableMapping.tableName() != null) {
-                tables.add(tableMapping.tableName());
-            }
-        }
-        
-        // Add joined tables
-        for (JoinMapping join : entityMetadata.relationshipMappings().values()) {
-            if (join.targetTable() != null) {
-                tables.add(join.targetTable());
-            }
-        }
-        
-        return tables;
     }
 }
