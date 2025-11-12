@@ -48,7 +48,7 @@ public class HQLParserAdapter  {
         QueryAnalysis analysis = hqlParser.analyze(jpaQuery);
 
         Set<String> referencedTables = registerMappings(analysis);
-        String nativeSql = sqlConverter.convert(jpaQuery);
+        String nativeSql = sqlConverter.convert(jpaQuery, analysis);
 
         List<ParameterMapping> parameterMappings = extractParameterMappings(analysis);
 
