@@ -19,6 +19,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
+import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
 
 import java.io.File;
 import java.io.IOException;
@@ -35,9 +36,10 @@ class TestRepositoryParser {
     public static final String USER_REPOSITORY = "sa.com.cloudsolutions.antikythera.testhelper.repository.UserRepository";
 
     @BeforeAll
-    static void setUpAll() throws IOException {
+    static void setUpAll() throws IOException, ReflectiveOperationException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
+        EntityMappingResolver.build();
     }
 
     @Test

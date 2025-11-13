@@ -33,6 +33,15 @@ public class EntityMappingResolver {
     private EntityMappingResolver() {
     }
 
+    /**
+     * Reset the entity mapping resolver, clearing all cached mappings.
+     * This is useful for tests that need to rebuild the mappings.
+     */
+    public static void reset() {
+        mapping.clear();
+        shortNames.clear();
+    }
+
     public static void build() throws ReflectiveOperationException {
         if (!mapping.isEmpty()) {
             throw new AntikytheraException("Already built");
@@ -46,12 +55,8 @@ public class EntityMappingResolver {
             if (typeDecl != null && typeDecl.getAnnotationByName("Entity").isPresent()) {
                 mapping.put(fullyQualifiedName, buildMetadataFromSources(typeDecl));
             }
-            else if (type.getClazz() != null) {
-                for (Annotation ann : type.getClazz().getAnnotations()) {
-                    if (ann.getClass().getName().equals("Entity")) {
-                        mapping.put(fullyQualifiedName, buildEntityMetadata(type.getClazz()));
-                    }
-                }
+            else if (type.getClazz() != null && type.getClazz().isAnnotationPresent(Entity.class)) {
+                mapping.put(fullyQualifiedName, buildEntityMetadata(type.getClazz()));
             }
         }
     }

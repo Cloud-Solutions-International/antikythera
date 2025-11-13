@@ -23,10 +23,12 @@ class HQLParseAdapterTest extends TestHelper {
     private static final String VEHICAL_MODEL = "sa.com.cloudsolutions.antikythera.testhelper.model.Vehicle";
 
     @BeforeAll
-    static void setUp() throws IOException {
+    static void setUp() throws IOException, ReflectiveOperationException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
+        EntityMappingResolver.reset();
+        EntityMappingResolver.build();
     }
 
     @ParameterizedTest
