@@ -2,8 +2,6 @@ package sa.com.cloudsolutions.antikythera.parser.converter;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
-import com.github.javaparser.ast.type.Type;
 import com.raditha.hql.parser.HQLParser;
 import com.raditha.hql.parser.ParseException;
 import com.raditha.hql.model.QueryAnalysis;
@@ -111,7 +109,7 @@ public class HQLParserAdapter  {
     }
 
     String getEntiyNameForEntity(String name) {
-        if (entity.getName().equals(name) || entity.getFullyQualifiedName().equals(name)) {
+        if (name.equals(entity.getName()) || name.equals(entity.getFullyQualifiedName())) {
             return entity.getFullyQualifiedName();
         }
         Optional<String> n = EntityMappingResolver.getFullNamesForEntity(name).stream().findFirst();

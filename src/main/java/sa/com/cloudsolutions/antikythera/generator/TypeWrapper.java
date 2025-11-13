@@ -52,9 +52,14 @@ public class TypeWrapper {
 
     public String getFullyQualifiedName() {
         if (clazz == null) {
-            return type.getFullyQualifiedName().orElseThrow();
+            if (type != null) {
+                return type.getFullyQualifiedName().orElseThrow();
+            }
         }
-        return clazz.getName();
+        else {
+            return clazz.getName();
+        }
+        return null;
     }
 
     public boolean isController() {
@@ -166,6 +171,9 @@ public class TypeWrapper {
         if (clazz != null) {
             return clazz.getName();
         }
-        return type.getNameAsString();
+        if (type != null) {
+            return type.getNameAsString();
+        }
+        return null;
     }
 }
