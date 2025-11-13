@@ -12,7 +12,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 
 import javax.persistence.*;
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.*;
 

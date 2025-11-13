@@ -39,6 +39,7 @@ class TestRepositoryParser {
     static void setUpAll() throws IOException, ReflectiveOperationException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
+        EntityMappingResolver.reset();
         EntityMappingResolver.build();
     }
 
