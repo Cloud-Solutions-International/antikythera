@@ -1,9 +1,12 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
@@ -433,7 +436,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
      */
     public void processTypes()  {
         /*
-         * TODO : get the isJpaRepository stuff from examples into this project and use it here.
          * this method is now being called multiple times for a repository, fix that
          */
         for(var tp : cu.getTypes()) {
@@ -441,8 +443,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 var cls = tp.asClassOrInterfaceDeclaration();
 
                 for(var parent : cls.getExtendedTypes()) {
-                    if (parent.toString().startsWith(JPA_REPOSITORY)) {
-
+                    if (isRepositoryInterface(parent.toString())) {
                         parent.getTypeArguments().ifPresent(t -> {
                             entityType = t.getFirst().orElseThrow();
                             entity = findEntity(entityType);
@@ -453,5 +454,62 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 }
             }
         }
+    }
+
+
+    /**
+     * Determines if a TypeWrapper represents a JPA repository interface.
+     * Consolidates logic from QueryOptimizationChecker and HardDelete.
+     *
+     * @param typeWrapper the TypeWrapper to analyze
+     * @return true if it's a JPA repository, false otherwise
+     */
+    public static boolean isJpaRepository(TypeWrapper typeWrapper) {
+        if (typeWrapper == null) {
+            return false;
+        }
+
+        // Check by fully qualified name first (most reliable)
+        String fqn = typeWrapper.getFullyQualifiedName();
+        if ("org.springframework.data.jpa.repository.JpaRepository".equals(fqn)) {
+            return true;
+        }
+
+        // Check runtime class interfaces if available
+        if (typeWrapper.getClazz() != null) {
+            Class<?> clazz = typeWrapper.getClazz();
+            for (Class<?> iface : clazz.getInterfaces()) {
+                if (isRepositoryInterface(iface.getName())) {
+                    return true;
+                }
+            }
+        }
+        return isJpaRepository(typeWrapper.getType());
+    }
+
+    public static boolean isJpaRepository(TypeDeclaration<?> type) {
+        if (type instanceof ClassOrInterfaceDeclaration classOrInterface && classOrInterface.isInterface()) {
+
+            // Check extended types
+            for (ClassOrInterfaceType extendedType : classOrInterface.getExtendedTypes()) {
+                String typeName = extendedType.getNameAsString();
+                String fullTypeName = extendedType.toString();
+
+                if (isRepositoryInterface(typeName) || isRepositoryInterface(fullTypeName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isRepositoryInterface(String interfaceName) {
+        return interfaceName != null && (
+                interfaceName.contains(JPA_REPOSITORY) ||
+                        interfaceName.contains("CrudRepository") ||
+                        interfaceName.contains("PagingAndSortingRepository") ||
+                        interfaceName.contains("Repository") &&
+                                (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository"))
+        );
     }
 }
