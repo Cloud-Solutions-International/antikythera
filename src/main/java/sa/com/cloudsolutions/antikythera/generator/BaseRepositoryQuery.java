@@ -45,6 +45,8 @@ public class BaseRepositoryQuery {
      * This is the list of arguments that are passed to the function when being called.
      */
     protected final List<QueryMethodArgument> methodArguments;
+    private final Pattern selectPattern = Pattern.compile("SELECT\\s+\\w+\\s+FROM\\s+(\\w+)\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
+    private final Pattern newEntityPattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE);
 
     /**
      * The method declaration that represents the query on the JPARepository
@@ -224,13 +226,12 @@ public class BaseRepositoryQuery {
          * So lets remove everything starting at the NEW keyword and finishing at the FROM keyword.
          * The constructor call will be replaced by  the '*' character.
          *
-         * A second pattern is SELECT t FROM EntityClassName t ...
+         * A second newEntityPattern is SELECT t FROM EntityClassName t ...
          *
          * The first step is to Use a case-insensitive regex to find and replace the NEW keyword
          * and the FROM keyword
          */
-        Pattern pattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(sql);
+        Matcher matcher = newEntityPattern.matcher(sql);
         if (matcher.find()) {
             sql = matcher.replaceAll(" * from ");
         }
@@ -241,7 +242,6 @@ public class BaseRepositoryQuery {
         // Remove quotation marks
         sql = sql.replace("\"", "");
 
-        Pattern selectPattern = Pattern.compile("SELECT\\s+\\w+\\s+FROM\\s+(\\w+)\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
         Matcher selectMatcher = selectPattern.matcher(sql);
         if (selectMatcher.find()) {
             sql = selectMatcher.replaceAll("SELECT * FROM $1 $2");
