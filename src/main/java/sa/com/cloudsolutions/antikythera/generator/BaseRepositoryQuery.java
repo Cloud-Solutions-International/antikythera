@@ -124,7 +124,13 @@ public class BaseRepositoryQuery {
         } else if (expr instanceof WhenClause wh) {
             wh.setWhenExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(wh.getWhenExpression()));
         } else if (expr instanceof Function function) {
-            convertFunctionExpression(function);
+            // Handle function parameters
+            if (function.getParameters() != null &&
+                    function.getParameters().getExpressions() instanceof ExpressionList params) {
+                for (int i = 0; i < params.size(); i++) {
+                    params.getExpressions().set(i, BaseRepositoryQuery.convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) params.get(i)));
+                }
+            }
         } else if (expr instanceof ComparisonOperator compare) {
             compare.setRightExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(compare.getRightExpression()));
             compare.setLeftExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(compare.getLeftExpression()));
@@ -135,16 +141,6 @@ public class BaseRepositoryQuery {
             column.setColumnName(BaseRepositoryParser.camelToSnake(column.getColumnName()));
         }
         return expr;
-    }
-
-    private static void convertFunctionExpression(Function function) {
-        // Handle function parameters
-        if (function.getParameters() != null &&
-                function.getParameters().getExpressions() instanceof ExpressionList params) {
-            for (int i = 0; i < params.size(); i++) {
-                params.getExpressions().set(i, BaseRepositoryQuery.convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) params.get(i)));
-            }
-        }
     }
 
     private static void convertCaseExpression(CaseExpression ce) {
