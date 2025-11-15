@@ -141,7 +141,7 @@ public class EntityMappingResolver {
         String entityName = getEntityName(entityClass);
         TableMapping tableMapping = buildTableMapping(entityClass, entityName);
 
-        Map<String, String> propertyToColumnMappings = buildPropertyToColumnMappings(entityClass, tableMapping);
+        Map<String, String> propertyToColumnMappings = buildPropertyToColumnMappings(entityClass);
         Map<String, JoinMapping> relationshipMappings = buildRelationshipMappings(entityClass, tableMapping);
         
         return new EntityMetadata(new TypeWrapper(entityClass), getTableName(entityClass),
@@ -175,7 +175,7 @@ public class EntityMappingResolver {
      * @param typeDecl The entity type declaration
      * @return Inheritance strategy ("SINGLE_TABLE", "JOINED", "TABLE_PER_CLASS"), or null
      */
-    public static String getInheritanceStrategy(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+    public static String getInheritanceStrategy(TypeDeclaration<?> typeDecl)  {
         Optional<AnnotationExpr> inhAnn = typeDecl.getAnnotationByName("Inheritance");
 
         if (inhAnn.isPresent()) {
@@ -209,7 +209,7 @@ public class EntityMappingResolver {
      * @param typeDecl The entity type declaration
      * @return Table name
      */
-    public static String getTableName(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+    public static String getTableName(TypeDeclaration<?> typeDecl)  {
         Optional<AnnotationExpr> tableAnn = typeDecl.getAnnotationByName("Table");
 
         if (tableAnn.isPresent()) {
@@ -220,7 +220,7 @@ public class EntityMappingResolver {
         }
 
         // Default: convert entity name to snake_case
-        return BaseRepositoryParser.camelToSnakeCase(typeDecl.getNameAsString());
+        return AbstractCompiler.camelToSnakeCase(typeDecl.getNameAsString());
     }
 
     /**
@@ -229,7 +229,7 @@ public class EntityMappingResolver {
      * @param typeDecl The entity type declaration
      * @return Entity name
      */
-    public static String getEntityName(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+    public static String getEntityName(TypeDeclaration<?> typeDecl)  {
         Optional<AnnotationExpr> entityAnn = typeDecl.getAnnotationByName("Entity");
 
         if (entityAnn.isPresent()) {
@@ -261,11 +261,6 @@ public class EntityMappingResolver {
         return "dtype"; // Default discriminator column
     }
 
-
-    private static boolean isJpaEntity(Class<?> clazz) {
-        return clazz.isAnnotationPresent(Entity.class);
-    }
-    
     private static String getEntityName(Class<?> entityClass) {
         Entity entityAnnotation = entityClass.getAnnotation(Entity.class);
         String name = entityAnnotation.name();
@@ -346,7 +341,7 @@ public class EntityMappingResolver {
         return propertyToColumnMap;
     }
     
-    private static Map<String, String> buildPropertyToColumnMappings(Class<?> entityClass, TableMapping tableMapping) {
+    private static Map<String, String> buildPropertyToColumnMappings(Class<?> entityClass) {
         Map<String, String> columnMappings = new HashMap<>();
         
         for (Field field : getAllFields(entityClass)) {

@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * This test validates that the ParameterMapping class works correctly
  * for storing parameter conversion information.
  */
-public class ParameterMappingTest {
+class ParameterMappingTest {
 
     @Test
     void testParameterMappingCreation() {

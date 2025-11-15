@@ -59,7 +59,7 @@ class BasicCompatibilityTest {
      * Test that the system doesn't crash with various configurations
      */
     @Test
-    void testSystemStability() throws IOException {
+    void testSystemStability() {
         // Test multiple configuration changes
         for (int i = 0; i < 5; i++) {
             if (i % 2 == 0) {

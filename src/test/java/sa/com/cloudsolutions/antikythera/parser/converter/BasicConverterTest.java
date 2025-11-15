@@ -85,11 +85,8 @@ class BasicConverterTest {
         var personClass = personCu.addClass("Person");
         TypeWrapper entity = new TypeWrapper(personClass);
 
-        // Create a BaseRepositoryQuery instance to test the method
-        BasicConverter query = new BasicConverter();
-
         // Call the method under test
-        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        assertDoesNotThrow(() -> BasicConverter.convertFieldsToSnakeCase(stmt, entity));
 
         // Verify the statement was processed
         assertInstanceOf(Select.class, stmt);
@@ -112,11 +109,8 @@ class BasicConverterTest {
         var personClass = personCu.addClass("Person");
         TypeWrapper entity = new TypeWrapper(personClass);
 
-        // Create a BaseRepositoryQuery instance to test the method
-        BasicConverter query = new BasicConverter();
-
         // Call the method under test
-        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        assertDoesNotThrow(() -> BasicConverter.convertFieldsToSnakeCase(stmt, entity));
 
         // Verify the statement was processed
         assertInstanceOf(Select.class, stmt);
@@ -138,11 +132,8 @@ class BasicConverterTest {
         var personClass = personCu.addClass("Person");
         TypeWrapper entity = new TypeWrapper(personClass);
 
-        // Create a BaseRepositoryQuery instance to test the method
-        BasicConverter query = new BasicConverter();
-
         // Call the method under test
-        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        assertDoesNotThrow(() -> BasicConverter.convertFieldsToSnakeCase(stmt, entity));
 
         // Verify the statement was processed
         assertInstanceOf(Select.class, stmt);
@@ -164,11 +155,8 @@ class BasicConverterTest {
         var personClass = personCu.addClass("Person");
         TypeWrapper entity = new TypeWrapper(personClass);
 
-        // Create a BaseRepositoryQuery instance to test the method
-        BasicConverter query = new BasicConverter();
-
         // Call the method under test
-        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        assertDoesNotThrow(() -> BasicConverter.convertFieldsToSnakeCase(stmt, entity));
 
         // Verify the statement was processed
         assertInstanceOf(Select.class, stmt);
@@ -190,11 +178,8 @@ class BasicConverterTest {
         var personClass = personCu.addClass("Person");
         TypeWrapper entity = new TypeWrapper(personClass);
 
-        // Create a BaseRepositoryQuery instance to test the method
-        BasicConverter query = new BasicConverter();
-
         // Call the method under test
-        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        assertDoesNotThrow(() -> BasicConverter.convertFieldsToSnakeCase(stmt, entity));
 
         // Verify the statement was processed
         assertInstanceOf(Select.class, stmt);
@@ -217,11 +202,7 @@ class BasicConverterTest {
         var personClass = personCu.addClass("Person");
         TypeWrapper entity = new TypeWrapper(personClass);
 
-        // Create a BaseRepositoryQuery instance to test the method
-        BasicConverter query = new BasicConverter();
-
-        // Call the method under test
-        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        assertDoesNotThrow(() -> BasicConverter.convertFieldsToSnakeCase(stmt, entity));
 
         // Verify the statement was processed
         assertInstanceOf(Select.class, stmt);
@@ -243,11 +224,8 @@ class BasicConverterTest {
         var personClass = personCu.addClass("Person");
         TypeWrapper entity = new TypeWrapper(personClass);
 
-        // Create a BaseRepositoryQuery instance to test the method
-        BasicConverter query = new BasicConverter();
-
         // Call the method under test - should handle non-SELECT statements gracefully
-        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        assertDoesNotThrow(() -> BasicConverter.convertFieldsToSnakeCase(stmt, entity));
 
         // Should not be a Select statement
         assertFalse(stmt instanceof Select);
@@ -272,11 +250,7 @@ class BasicConverterTest {
 
         TypeWrapper entity = new TypeWrapper(personClass);
 
-        // Create a BaseRepositoryQuery instance to test the method
-        BasicConverter query = new BasicConverter();
-
-        // Call the method under test
-        assertDoesNotThrow(() -> query.convertFieldsToSnakeCase(stmt, entity));
+        assertDoesNotThrow(() -> BasicConverter.convertFieldsToSnakeCase(stmt, entity));
 
         // Verify the statement was processed
         assertInstanceOf(Select.class, stmt);

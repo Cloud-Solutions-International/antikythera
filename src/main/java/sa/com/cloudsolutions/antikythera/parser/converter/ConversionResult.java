@@ -55,24 +55,8 @@ public class ConversionResult {
         this.errorMessage = null;
         this.failureReason = null;
     }
-    
-    /**
-     * Creates a failed conversion result.
-     * 
-     * @param errorMessage Description of the conversion failure
-     * @param failureReason Categorized reason for the failure
-     */
-    private ConversionResult(String errorMessage, ConversionFailureReason failureReason) {
-        this.nativeSql = null;
-        this.parameterMappings = Collections.emptyList();
-        this.referencedTables = Collections.emptySet();
-        this.dtoClassName = null;
-        this.dtoConstructorArgs = Collections.emptyList();
-        this.successful = false;
-        this.errorMessage = errorMessage;
-        this.failureReason = failureReason;
-    }
-    
+
+
     /**
      * Gets the converted native SQL query.
      * 

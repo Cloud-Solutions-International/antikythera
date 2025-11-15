@@ -19,7 +19,6 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.BaseRepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
-import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +26,9 @@ import java.util.Optional;
 
 public class BasicConverter {
 
+    private BasicConverter () {
+        /* this is a utility clas */
+    }
     /**
      * Java field names need to be converted to snake case to match the table column.
      * <p>
@@ -58,9 +60,7 @@ public class BasicConverter {
             if (select.getGroupBy() != null) {
                 GroupByElement group = select.getGroupBy();
                 List<net.sf.jsqlparser.expression.Expression> groupBy = group.getGroupByExpressions();
-                for (int i = 0; i < groupBy.size(); i++) {
-                    groupBy.set(i, BaseRepositoryQuery.convertExpressionToSnakeCase(groupBy.get(i)));
-                }
+                groupBy.replaceAll(BaseRepositoryQuery::convertExpressionToSnakeCase);
             }
 
             if (select.getOrderByElements() != null) {
@@ -191,13 +191,13 @@ public class BasicConverter {
                 }
 
 
-                other = RepositoryParser.findEntity(member.getElementType());
+                other = BaseRepositoryParser.findEntity(member.getElementType());
 
-                String tableName = RepositoryParser.findTableName(other);
+                String tableName = BaseRepositoryParser.findTableName(other);
                 if (tableName == null || other == null) {
                     throw new AntikytheraException("Could not find table name for " + member.getElementType());
                 }
-                if (RepositoryParser.isOracle()) {
+                if (BaseRepositoryParser.isOracle()) {
                     tableName = tableName.replace("\"", "");
                 }
 
@@ -212,7 +212,7 @@ public class BasicConverter {
                     rhs = lhs = BasicConverter.implicitJoin(other, lhs);
                 }
                 if (lhs != null && rhs != null) {
-                    if (RepositoryParser.isOracle()) {
+                    if (BaseRepositoryParser.isOracle()) {
                         lhs = lhs.replace("\"", "");
                         rhs = rhs.replace("\"", "");
                     }
