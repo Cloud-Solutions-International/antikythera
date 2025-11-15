@@ -46,6 +46,7 @@ public class BaseRepositoryQuery {
      */
     protected final List<QueryMethodArgument> methodArguments;
     private final Pattern selectPattern = Pattern.compile("SELECT\\s+\\w+\\s+FROM\\s+(\\w+)\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
+    @SuppressWarnings("java:S5852")
     private final Pattern newEntityPattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE);
 
     /**
