@@ -1,5 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
+import com.raditha.hql.model.MetaData;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -20,7 +22,9 @@ public class ConversionResult {
     private final ConversionFailureReason failureReason;
     private final String dtoClassName;
     private final List<String> dtoConstructorArgs;
-    
+    private MetaData metaData;
+
+
     /**
      * Creates a successful conversion result.
      * 
@@ -41,7 +45,7 @@ public class ConversionResult {
      * @param dtoClassName The fully qualified name of the DTO class (if this is a constructor expression)
      * @param dtoConstructorArgs The original constructor argument expressions
      */
-    public ConversionResult(String nativeSql, List<ParameterMapping> parameterMappings, Set<String> referencedTables, String dtoClassName, List<String> dtoConstructorArgs) {
+    private ConversionResult(String nativeSql, List<ParameterMapping> parameterMappings, Set<String> referencedTables, String dtoClassName, List<String> dtoConstructorArgs) {
         this.nativeSql = nativeSql;
         this.parameterMappings = parameterMappings != null ? List.copyOf(parameterMappings) : Collections.emptyList();
         this.referencedTables = referencedTables != null ? Set.copyOf(referencedTables) : Collections.emptySet();
@@ -58,7 +62,7 @@ public class ConversionResult {
      * @param errorMessage Description of the conversion failure
      * @param failureReason Categorized reason for the failure
      */
-    public ConversionResult(String errorMessage, ConversionFailureReason failureReason) {
+    private ConversionResult(String errorMessage, ConversionFailureReason failureReason) {
         this.nativeSql = null;
         this.parameterMappings = Collections.emptyList();
         this.referencedTables = Collections.emptySet();
@@ -149,28 +153,7 @@ public class ConversionResult {
     public boolean isConstructorExpression() {
         return successful && dtoClassName != null;
     }
-    
-    /**
-     * Creates a successful conversion result with minimal information.
-     * 
-     * @param nativeSql The converted native SQL query
-     * @return A successful ConversionResult
-     */
-    public static ConversionResult success(String nativeSql) {
-        return new ConversionResult(nativeSql, null, null);
-    }
-    
-    /**
-     * Creates a failed conversion result.
-     * 
-     * @param errorMessage Description of the failure
-     * @param failureReason Categorized reason for the failure
-     * @return A failed ConversionResult
-     */
-    public static ConversionResult failure(String errorMessage, ConversionFailureReason failureReason) {
-        return new ConversionResult(errorMessage, failureReason);
-    }
-    
+
     @Override
     public String toString() {
         if (successful) {
@@ -178,5 +161,13 @@ public class ConversionResult {
         } else {
             return "ConversionResult{successful=false, errorMessage='" + errorMessage + "', failureReason=" + failureReason + "}";
         }
+    }
+
+    public void setMetaData(MetaData analysis) {
+        this.metaData = analysis;
+    }
+
+    public  MetaData getMetaData() {
+        return metaData;
     }
 }

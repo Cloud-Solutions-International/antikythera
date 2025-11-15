@@ -4,7 +4,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.raditha.hql.parser.HQLParser;
 import com.raditha.hql.parser.ParseException;
-import com.raditha.hql.model.QueryAnalysis;
+import com.raditha.hql.model.MetaData;
 import com.raditha.hql.converter.HQLToPostgreSQLConverter;
 import com.raditha.hql.converter.ConversionException;
 import org.slf4j.Logger;
@@ -43,14 +43,15 @@ public class HQLParserAdapter  {
      * @throws QueryConversionException if the conversion fails
      */
     public ConversionResult convertToNativeSQL(String jpaQuery) throws ParseException, ConversionException {
-        QueryAnalysis analysis = hqlParser.analyze(jpaQuery);
+        MetaData analysis = hqlParser.analyze(jpaQuery);
 
         Set<String> referencedTables = registerMappings(analysis);
         String nativeSql = sqlConverter.convert(jpaQuery, analysis);
 
         List<ParameterMapping> parameterMappings = extractParameterMappings(analysis);
-
-        return new ConversionResult(nativeSql, parameterMappings, referencedTables);
+        ConversionResult result = new ConversionResult(nativeSql, parameterMappings, referencedTables);
+        result.setMetaData(analysis);
+        return result;
     }
 
     /**
@@ -66,7 +67,7 @@ public class HQLParserAdapter  {
     /**
      * Registers entity and field mappings from EntityMetadata into the hql-parser converter.
      */
-    private Set<String> registerMappings(QueryAnalysis analysis) {
+    private Set<String> registerMappings(MetaData analysis) {
         Set<String> tables = new HashSet<>();
 
         for (String name : analysis.getEntityNames()) {
@@ -134,7 +135,7 @@ public class HQLParserAdapter  {
     /**
      * Extracts parameter mappings from the query analysis.
      */
-    private List<ParameterMapping> extractParameterMappings(QueryAnalysis analysis) {
+    private List<ParameterMapping> extractParameterMappings(MetaData analysis) {
         List<ParameterMapping> mappings = new ArrayList<>();
         
         // hql-parser provides parameter names from the query

@@ -140,8 +140,7 @@ public class EntityMappingResolver {
     private static EntityMetadata buildEntityMetadata(Class<?> entityClass) {
         String entityName = getEntityName(entityClass);
         TableMapping tableMapping = buildTableMapping(entityClass, entityName);
-        
-        Map<String, TableMapping> entityToTableMappings = Map.of(entityName, tableMapping);
+
         Map<String, String> propertyToColumnMappings = buildPropertyToColumnMappings(entityClass, tableMapping);
         Map<String, JoinMapping> relationshipMappings = buildRelationshipMappings(entityClass, tableMapping);
         
@@ -487,5 +486,17 @@ public class EntityMappingResolver {
 
     public static Set<String> getFullNamesForEntity(String name) {
         return shortNames.getOrDefault(name, Collections.emptySet());
+    }
+
+    public static String getTableNameForEntity(String entityName) {
+        EntityMetadata meta = mapping.get(entityName);
+        if (meta == null) {
+            Set<String> n = EntityMappingResolver.getFullNamesForEntity(entityName);
+            if (n.size() != 1) {
+                throw new AntikytheraException("Unresolable entity name: " + entityName);
+            }
+            return n.stream().findFirst().orElseThrow();
+        }
+        return meta.tableName();
     }
 }
