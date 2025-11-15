@@ -16,11 +16,12 @@ import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.PlainSelect;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
-import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
 import sa.com.cloudsolutions.antikythera.parser.converter.BasicConverter;
 
 import java.sql.ResultSet;
@@ -31,6 +32,8 @@ import java.util.Optional;
  * Represents a query from a JPARepository
  */
 public class RepositoryQuery extends BaseRepositoryQuery {
+    private static final Logger logger = LoggerFactory.getLogger(RepositoryQuery.class);
+
     /**
      * The result set from the last execution of this query if any
      */
@@ -130,7 +133,7 @@ public class RepositoryQuery extends BaseRepositoryQuery {
             }
         }
         else if (right instanceof ParenthesedExpressionList<?> rhs) {
-            System.out.println(rhs + " not mapped");
+            logger.warn(rhs + " not mapped");
         }
         return false;
     }
@@ -155,10 +158,10 @@ public class RepositoryQuery extends BaseRepositoryQuery {
         }
         if (expr instanceof Between between) {
             String left = between.getLeftExpression().toString();
-            if (mapPlaceHolders(between.getBetweenExpressionStart(), RepositoryParser.camelToSnake(left)) &&
-                    mapPlaceHolders(between.getBetweenExpressionEnd(), RepositoryParser.camelToSnake(left))) {
+            if (mapPlaceHolders(between.getBetweenExpressionStart(), BaseRepositoryParser.camelToSnake(left)) &&
+                    mapPlaceHolders(between.getBetweenExpressionEnd(), BaseRepositoryParser.camelToSnake(left))) {
 
-                remove(RepositoryParser.camelToSnake(left), between);
+                remove(BaseRepositoryParser.camelToSnake(left), between);
                 between.setBetweenExpressionStart(new LongValue("2"));
                 between.setBetweenExpressionEnd(new LongValue("4"));
                 between.setLeftExpression(new LongValue("3"));
@@ -166,8 +169,8 @@ public class RepositoryQuery extends BaseRepositoryQuery {
         } else if (expr instanceof InExpression ine) {
             Column col = (Column) ine.getLeftExpression();
             if (!("hospitalId".equals(col.getColumnName()) || "hospitalGroupId".equals(col.getColumnName()))) {
-                mapPlaceHolders(ine.getRightExpression(), RepositoryParser.camelToSnake(col.toString()));
-                remove(RepositoryParser.camelToSnake(ine.getLeftExpression().toString()), ine);
+                mapPlaceHolders(ine.getRightExpression(), BaseRepositoryParser.camelToSnake(col.toString()));
+                remove(BaseRepositoryParser.camelToSnake(ine.getLeftExpression().toString()), ine);
                 ine.setLeftExpression(new StringValue("1"));
                 ExpressionList<net.sf.jsqlparser.expression.Expression> rightExpression = new ExpressionList<>();
                 rightExpression.add(new StringValue("1"));
