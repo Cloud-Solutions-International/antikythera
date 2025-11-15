@@ -44,6 +44,7 @@ import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
+import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 import sa.com.cloudsolutions.antikythera.parser.RepositoryParser;
@@ -127,7 +128,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 ClassOrInterfaceDeclaration cdecl = typeDecl.asClassOrInterfaceDeclaration();
 
                 for (var ext : cdecl.getExtendedTypes()) {
-                    if (ext.getNameAsString().contains(RepositoryParser.JPA_REPOSITORY)) {
+                    if (ext.getNameAsString().contains(BaseRepositoryParser.JPA_REPOSITORY)) {
                         /*
                          * We have found a repository. Now we need to process it. Afterward
                          * it will be added to the repository map, to be identified by the
@@ -162,8 +163,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     for (VariableDeclarator fieldVar : field.getVariables()) {
                         String fieldName = fieldVar.getNameAsString();
                         try {
-                            if (rs.findColumn(RepositoryParser.camelToSnake(fieldName)) > 0) {
-                                Object value = rs.getObject(RepositoryParser.camelToSnake(fieldName));
+                            if (rs.findColumn(BaseRepositoryParser.camelToSnake(fieldName)) > 0) {
+                                Object value = rs.getObject(BaseRepositoryParser.camelToSnake(fieldName));
                                 Variable v = new Variable(value);
                                 v.setType(fieldVar.getType());
                                 evaluator.setField(fieldName, v);

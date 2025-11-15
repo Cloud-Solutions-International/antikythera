@@ -120,32 +120,11 @@ public class BaseRepositoryQuery {
                 pel.getExpressions().set(i, BaseRepositoryQuery.convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) pel.get(i)));
             }
         } else if (expr instanceof CaseExpression ce) {
-            // Convert switch expression if present
-            if (ce.getSwitchExpression() != null) {
-                ce.setSwitchExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(ce.getSwitchExpression()));
-            }
-
-            // Convert WHEN clauses
-            for (int i = 0; i < ce.getWhenClauses().size(); i++) {
-                WhenClause when = ce.getWhenClauses().get(i);
-                when.setWhenExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(when.getWhenExpression()));
-                when.setThenExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(when.getThenExpression()));
-            }
-
-            // Convert ELSE expression if present
-            if (ce.getElseExpression() != null) {
-                ce.setElseExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(ce.getElseExpression()));
-            }
+            convertCaseExpression(ce);
         } else if (expr instanceof WhenClause wh) {
             wh.setWhenExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(wh.getWhenExpression()));
         } else if (expr instanceof Function function) {
-            // Handle function parameters
-            if (function.getParameters() != null &&
-                    function.getParameters().getExpressions() instanceof ExpressionList params) {
-                for (int i = 0; i < params.size(); i++) {
-                    params.getExpressions().set(i, BaseRepositoryQuery.convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) params.get(i)));
-                }
-            }
+            convertFunctionExpression(function);
         } else if (expr instanceof ComparisonOperator compare) {
             compare.setRightExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(compare.getRightExpression()));
             compare.setLeftExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(compare.getLeftExpression()));
@@ -156,6 +135,35 @@ public class BaseRepositoryQuery {
             column.setColumnName(BaseRepositoryParser.camelToSnake(column.getColumnName()));
         }
         return expr;
+    }
+
+    private static void convertFunctionExpression(Function function) {
+        // Handle function parameters
+        if (function.getParameters() != null &&
+                function.getParameters().getExpressions() instanceof ExpressionList params) {
+            for (int i = 0; i < params.size(); i++) {
+                params.getExpressions().set(i, BaseRepositoryQuery.convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) params.get(i)));
+            }
+        }
+    }
+
+    private static void convertCaseExpression(CaseExpression ce) {
+        // Convert switch expression if present
+        if (ce.getSwitchExpression() != null) {
+            ce.setSwitchExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(ce.getSwitchExpression()));
+        }
+
+        // Convert WHEN clauses
+        for (int i = 0; i < ce.getWhenClauses().size(); i++) {
+            WhenClause when = ce.getWhenClauses().get(i);
+            when.setWhenExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(when.getWhenExpression()));
+            when.setThenExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(when.getThenExpression()));
+        }
+
+        // Convert ELSE expression if present
+        if (ce.getElseExpression() != null) {
+            ce.setElseExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(ce.getElseExpression()));
+        }
     }
 
     public String getQuery() {

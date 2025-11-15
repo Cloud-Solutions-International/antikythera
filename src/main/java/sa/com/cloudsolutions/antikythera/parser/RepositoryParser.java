@@ -5,14 +5,12 @@ import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodParameter;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
 import com.github.javaparser.ast.body.MethodDeclaration;
 
 import net.sf.jsqlparser.statement.select.Select;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.parser.converter.HQLParserAdapter;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -87,6 +85,7 @@ public class RepositoryParser extends BaseRepositoryParser {
      *
      * @throws SQLException if the connection could not be established
      */
+    @SuppressWarnings("java:S2077")
     static void createConnection() throws SQLException {
         Map<String, Object> db = (Map<String, Object>) Settings.getProperty(Settings.DATABASE);
         if(db != null && conn == null && runQueries) {
@@ -128,6 +127,7 @@ public class RepositoryParser extends BaseRepositoryParser {
      * This is useful only for visualization purposes.
      * @throws SQLException if the query cannot be executed
      */
+    @SuppressWarnings("java:S106")
     public void executeAllQueries() throws SQLException, JSQLParserException {
         for (var entry : queries.entrySet()) {
             ResultSet rs = executeQuery(entry.getKey());

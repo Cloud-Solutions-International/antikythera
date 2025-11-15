@@ -148,6 +148,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
      * @param md the method declaration
      * @return the RepositoryQuery instance that as parsed from the callable
      */
+    @SuppressWarnings("java:S127")
     RepositoryQuery parseNonAnnotatedMethod(Callable md) {
         String methodName = md.getNameAsString();
         List<String> components = extractComponents(methodName);

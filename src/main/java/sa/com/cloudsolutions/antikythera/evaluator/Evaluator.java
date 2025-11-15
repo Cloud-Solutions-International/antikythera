@@ -57,7 +57,6 @@ import net.bytebuddy.ByteBuddy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
@@ -79,6 +78,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -275,9 +275,8 @@ public class Evaluator implements EvaluationEngine {
                 if (wrapper != null && wrapper.getField() != null) {
                     VariableDeclarator vdecl = wrapper.getField().getVariable(0);
                     if (vdecl != null && vdecl.getInitializer().isPresent()) {
-                        return evaluateExpression(vdecl.getInitializer().get());
+                        return evaluateExpression(vdecl.getInitializer().orElseThrow());
                     }
-                    System.out.println(wrapper);
                 }
                 return null;
             }
@@ -1163,32 +1162,32 @@ public class Evaluator implements EvaluationEngine {
 
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
-            Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
-            returnValue = new Variable(method.invoke(target, finalArgs));
-            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                returnValue.setClazz(method.getReturnType());
-            }
+            invoke(method, finalArgs, v);
         } catch (IllegalAccessException e) {
             invokeinAccessibleMethod(v, reflectionArguments);
         } catch (IllegalArgumentException e) {
-            // Attempt robust fallback by re-resolving method based on runtime argument types
-            Class<?>[] runtimeTypes = new Class<?>[finalArgs.length];
-            for (int i = 0; i < finalArgs.length; i++) {
-                runtimeTypes[i] = finalArgs[i] == null ? Object.class : finalArgs[i].getClass();
-            }
+            invokeFallback(v, reflectionArguments, finalArgs, method);
+        }
+    }
 
-            ReflectionArguments retryArgs = new ReflectionArguments(reflectionArguments.getMethodName(), finalArgs, runtimeTypes);
-            retryArgs.setScope(reflectionArguments.getScope());
-            Method retry = Reflect.findMethod(method.getDeclaringClass(), retryArgs);
-            if (retry != null) {
-                Object target2 = java.lang.reflect.Modifier.isStatic(retry.getModifiers()) ? null : v.getValue();
-                retryArgs.setMethod(retry);
-                retryArgs.finalizeArguments();
-                Object[] retryFinal = retryArgs.getFinalArgs();
-                returnValue = new Variable(retry.invoke(target2, retryFinal));
-                if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                    returnValue.setClazz(retry.getReturnType());
-                }
+    private void invokeFallback(Variable v, ReflectionArguments reflectionArguments, Object[] finalArgs, Method method) throws IllegalAccessException, InvocationTargetException {
+        // Attempt robust fallback by re-resolving method based on runtime argument types
+        Class<?>[] runtimeTypes = new Class<?>[finalArgs.length];
+        for (int i = 0; i < finalArgs.length; i++) {
+            runtimeTypes[i] = finalArgs[i] == null ? Object.class : finalArgs[i].getClass();
+        }
+
+        ReflectionArguments retryArgs = new ReflectionArguments(reflectionArguments.getMethodName(), finalArgs, runtimeTypes);
+        retryArgs.setScope(reflectionArguments.getScope());
+        Method retry = Reflect.findMethod(method.getDeclaringClass(), retryArgs);
+        if (retry != null) {
+            Object target2 = java.lang.reflect.Modifier.isStatic(retry.getModifiers()) ? null : v.getValue();
+            retryArgs.setMethod(retry);
+            retryArgs.finalizeArguments();
+            Object[] retryFinal = retryArgs.getFinalArgs();
+            returnValue = new Variable(retry.invoke(target2, retryFinal));
+            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                returnValue.setClazz(retry.getReturnType());
             }
         }
     }
@@ -1199,11 +1198,7 @@ public class Evaluator implements EvaluationEngine {
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
             method.setAccessible(true);
-            Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
-            returnValue = new Variable(method.invoke(target, finalArgs));
-            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                returnValue.setClazz(method.getReturnType());
-            }
+            invoke(method, finalArgs, v);
         } catch (InaccessibleObjectException ioe) {
             // Handle JDK stream methods differently
             if (v.getClazz().getName().startsWith("java.util.stream.")) {
@@ -1213,13 +1208,17 @@ public class Evaluator implements EvaluationEngine {
                         reflectionArguments.getMethodName(),
                         reflectionArguments.getArgumentTypes());
                 if (publicMethod != null) {
-                    Object publicTarget = java.lang.reflect.Modifier.isStatic(publicMethod.getModifiers()) ? null : v.getValue();
-                    returnValue = new Variable(publicMethod.invoke(publicTarget, finalArgs));
-                    if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                        returnValue.setClazz(publicMethod.getReturnType());
-                    }
+                    invoke(publicMethod, finalArgs, v);
                 }
             }
+        }
+    }
+
+    void invoke(Method method, Object[] finalArgs, Variable v) throws InvocationTargetException, IllegalAccessException {
+        Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
+        returnValue = new Variable(method.invoke(target, finalArgs));
+        if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+            returnValue.setClazz(method.getReturnType());
         }
     }
 
@@ -1393,7 +1392,7 @@ public class Evaluator implements EvaluationEngine {
     Variable executeSource(MethodCallExpr methodCall) throws ReflectiveOperationException {
 
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
-                ClassProcessor.instanceToClassName(AbstractCompiler.fullyQualifiedToShortName(className))).orElse(null);
+                AbstractCompiler.instanceToClassName(AbstractCompiler.fullyQualifiedToShortName(className))).orElse(null);
         if (decl != null) {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
             Optional<Callable> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
@@ -2116,7 +2115,7 @@ public class Evaluator implements EvaluationEngine {
             incrementSequence();
             v.setValue(sequence);
             MethodCallExpr mce = new MethodCallExpr(
-                    "set" + ClassProcessor.instanceToClassName(variableDeclarator.getNameAsString()));
+                    "set" + AbstractCompiler.instanceToClassName(variableDeclarator.getNameAsString()));
             String type = v.getType().asString();
             if (type.equals("long") || type.equals("Long") || type.equals("java.lang.Long")) {
                 mce.addArgument(new LongLiteralExpr().setValue(Long.toString(sequence) + "L"));
@@ -2138,7 +2137,7 @@ public class Evaluator implements EvaluationEngine {
             if (!v.getInitializer().isEmpty()) {
                 Expression first = v.getInitializer().getFirst();
                 if (first instanceof MethodCallExpr m && m.getScope().isPresent()) {
-                    MethodCallExpr mce = new MethodCallExpr().setName("set" + ClassProcessor.instanceToClassName(entry.getKey()));
+                    MethodCallExpr mce = new MethodCallExpr().setName("set" + AbstractCompiler.instanceToClassName(entry.getKey()));
                     mce.addArgument(first);
                     fi.add(mce);
                     for (int i = 1; i < v.getInitializer().size(); i++) {
