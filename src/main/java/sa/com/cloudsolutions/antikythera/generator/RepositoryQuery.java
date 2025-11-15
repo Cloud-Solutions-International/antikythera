@@ -133,7 +133,7 @@ public class RepositoryQuery extends BaseRepositoryQuery {
             }
         }
         else if (right instanceof ParenthesedExpressionList<?> rhs) {
-            logger.warn(rhs + " not mapped");
+            logger.warn("{} not mapped", rhs);
         }
         return false;
     }

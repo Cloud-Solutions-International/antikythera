@@ -414,6 +414,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return CAMEL_TO_SNAKE_PATTERN.matcher(str).replaceAll("$1_$2").toLowerCase();
     }
     public void buildQueries() {
+        queries.clear();
         parserAdapter = new HQLParserAdapter(cu, entity);
         if (cu != null && entity != null) {
             cu.accept(new Visitor(), null);
