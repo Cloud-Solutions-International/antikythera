@@ -495,7 +495,8 @@ public class EntityMappingResolver {
             if (n.size() != 1) {
                 throw new AntikytheraException("Unresolable entity name: " + entityName);
             }
-            return n.stream().findFirst().orElseThrow();
+            EntityMetadata m = mapping.get(n.stream().findFirst().orElseThrow());
+            return m.tableName();
         }
         return meta.tableName();
     }
