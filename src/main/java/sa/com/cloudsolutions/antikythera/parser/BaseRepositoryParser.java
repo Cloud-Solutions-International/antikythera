@@ -153,146 +153,109 @@ public class BaseRepositoryParser extends AbstractCompiler {
         String methodName = md.getNameAsString();
         List<String> components = extractComponents(methodName);
         StringBuilder sql = new StringBuilder();
-        boolean top = false;
-        boolean ordering = false;
-        String next = "";
-
         String tableName = findTableName(entity);
+        boolean top = false;
         if (tableName != null) {
-            for (int i = 0; i < components.size(); i++) {
-                String component = components.get(i);
-
-                if (i < components.size() - 1) {
-                    next = components.get(i + 1);
-                } else {
-                    next = "";
-                }
-
-                switch (component) {
-                    case "findAll" -> sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
-                    case "findAllById" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE id = ?");
-                    case "findBy", "get" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
-                    case "findFirstBy", "findTopBy" -> {
-                        top = true;
-                        sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
-                    }
-                    case "Between" -> sql.append(" BETWEEN ? AND ? ");
-                    case "GreaterThan" -> sql.append(" > ? ");
-                    case "LessThan" -> sql.append(" < ? ");
-                    case "GreaterThanEqual" -> sql.append(" >= ? ");
-                    case "LessThanEqual" -> sql.append(" <= ? ");
-                    case "IsNull" -> sql.append(" IS NULL ");
-                    case "IsNotNull" -> sql.append(" IS NOT NULL ");
-                    case "And", "Or", "Not" -> sql.append(component).append(" ");
-                    case "Containing", "Like" -> sql.append(" LIKE ? ");
-                    case "OrderBy" -> {
-                        ordering = true;
-                        sql.append(" ORDER BY ");
-                    }
-                    default -> {
-                        sql.append(camelToSnake(component));
-                        if (!ordering) {
-                            if (next.equals("In")) {
-                                sql.append(" In  (?) ");
-                                i++;
-                            } else if (next.equals("NotIn")) {
-                                sql.append(" NOT In (?) ");
-                                i++;
-                            } else {
-                                // Add = ? if next is empty (last component) or next is not a special operator
-                                if (next.isEmpty() || (!next.equals("Between") && !next.equals("GreaterThan")
-                                        && !next.equals("LessThan") && !next.equals("LessThanEqual")
-                                        && !next.equals("IsNotNull") && !next.equals("Like")
-                                        && !next.equals("GreaterThanEqual") && !next.equals("IsNull")
-                                        && !next.equals("Containing"))) {
-                                    sql.append(" = ? ");
-                                }
-                            }
-                        } else {
-                            sql.append(" ");
-                        }
-                    }
-                }
-            }
+            top = buildSelectAndWhereClauses(components, sql, tableName);
         } else {
             logger.warn("Table name cannot be null");
         }
-
         if (top) {
-            String built = sql.toString();
-            if (dialect == DatabaseDialect.ORACLE) {
-                // If we have a trailing WHERE with no conditions, replace it with WHERE ROWNUM = 1
-                String trimmedUpper = built.trim().toUpperCase();
-                if (trimmedUpper.endsWith("WHERE")) {
-                    int idx = built.toUpperCase().lastIndexOf("WHERE");
-                    built = built.substring(0, idx) + "WHERE ROWNUM = 1";
-                } else {
-                    built = dialect.applyLimitClause(built, 1);
-                }
+            applyTopLimit(sql);
+        }
+        String finalSql = numberPlaceholders(sql.toString());
+        return queryBuilder(finalSql, QueryType.DERIVED, md);
+    }
+
+    /** Refactored: returns whether a TOP/FIRST was detected */
+    private boolean buildSelectAndWhereClauses(List<String> components, StringBuilder sql, String tableName) {
+        boolean top = false;
+        boolean ordering = false;
+        for (int i = 0; i < components.size(); i++) {
+            String component = components.get(i);
+            String next = (i < components.size() - 1) ? components.get(i + 1) : "";
+            switch (component) {
+                case "findAll" -> sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
+                case "findAllById" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE id = ?");
+                case "findBy", "get" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
+                case "findFirstBy", "findTopBy" -> { top = true; sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE "); }
+                case "Between" -> sql.append(" BETWEEN ? AND ? ");
+                case "GreaterThan" -> sql.append(" > ? ");
+                case "LessThan" -> sql.append(" < ? ");
+                case "GreaterThanEqual" -> sql.append(" >= ? ");
+                case "LessThanEqual" -> sql.append(" <= ? ");
+                case "IsNull" -> sql.append(" IS NULL ");
+                case "IsNotNull" -> sql.append(" IS NOT NULL ");
+                case "And", "Or", "Not" -> sql.append(component).append(' ');
+                case "Containing", "Like" -> sql.append(" LIKE ? ");
+                case "OrderBy" -> { ordering = true; sql.append(" ORDER BY "); }
+                default -> appendDefaultComponent(sql, component, next, ordering);
+            }
+        }
+        return top;
+    }
+
+    /** Updated default component handler to accept ordering flag */
+    private void appendDefaultComponent(StringBuilder sql, String component, String next, boolean ordering) {
+        sql.append(camelToSnake(component));
+        if (!ordering) {
+            if (next.equals("In")) {
+                sql.append(" In  (?) ");
+            } else if (next.equals("NotIn")) {
+                sql.append(" NOT In (?) ");
+            } else if (shouldAppendEquals(next)) {
+                sql.append(" = ? ");
+            } else {
+                sql.append(' ');
+            }
+        } else {
+            sql.append(' ');
+        }
+    }
+
+    private boolean shouldAppendEquals(String next) {
+        return next.isEmpty() || (!next.equals("Between") && !next.equals("GreaterThan") && !next.equals("LessThan") &&
+                !next.equals("LessThanEqual") && !next.equals("IsNotNull") && !next.equals("Like") &&
+                !next.equals("GreaterThanEqual") && !next.equals("IsNull") && !next.equals("Containing"));
+    }
+
+    /** Apply dialect-specific top limit (FIRST/TOP semantics) */
+    private void applyTopLimit(StringBuilder sql) {
+        String built = sql.toString();
+        String trimmedUpper = built.trim().toUpperCase();
+        boolean trailingWhere = trimmedUpper.endsWith("WHERE");
+        if (dialect == DatabaseDialect.ORACLE) {
+            if (trailingWhere) {
+                int idx = built.toUpperCase().lastIndexOf("WHERE");
+                built = built.substring(0, idx) + "WHERE ROWNUM = 1";
             } else {
                 built = dialect.applyLimitClause(built, 1);
             }
-            sql.setLength(0);
-            sql.append(built);
-        }
-
-        StringBuilder result = new StringBuilder();
-        for(int i = 0, j = 1 ; i < sql.length() ; i++) {
-            char c = sql.charAt(i);
-            if(c == '?') {
-                result.append('?').append(j++);
+        } else { // PostgreSQL (default) and others that use LIMIT
+            if (trailingWhere) {
+                // remove dangling WHERE before applying limit
+                built = built.substring(0, built.toUpperCase().lastIndexOf("WHERE"));
+                built = built.trim();
             }
-            else {
+            built = dialect.applyLimitClause(built, 1);
+        }
+        sql.setLength(0);
+        sql.append(built);
+    }
+
+    /** Replace placeholders ? with numbered ?1, ?2 */
+    private String numberPlaceholders(String input) {
+        StringBuilder result = new StringBuilder();
+        int paramIndex = 1;
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            if (c == '?') {
+                result.append('?').append(paramIndex++);
+            } else {
                 result.append(c);
             }
         }
-        return queryBuilder(result.toString(), QueryType.DERIVED, md);
-    }
-
-    /**
-     * Recursively search method names for sql components
-     * @param methodName name of the method
-     * @return a list of components
-     */
-    List<String> extractComponents(String methodName) {
-        List<String> components = new ArrayList<>();
-        Matcher matcher = KEYWORDS_PATTERN.matcher(methodName);
-
-        // Add spaces around each keyword
-        StringBuilder sb = new StringBuilder();
-        while (matcher.find()) {
-            matcher.appendReplacement(sb, " " + matcher.group() + " ");
-        }
-        matcher.appendTail(sb);
-
-        // Split the modified method name by spaces
-        String[] parts = sb.toString().split("\\s+");
-        for (String part : parts) {
-            if (!part.isEmpty()) {
-                components.add(part);
-            }
-        }
-
-        return components;
-    }
-
-    /**
-     * Count the number of parameters to bind.
-     *
-     * @param sql the sql statement as a string in which we will count the number of placeholders
-     * @return the number of placeholders. This can be 0
-     */
-    static int countPlaceholders(String sql) {
-        Matcher matcher = PLACEHOLDER_PATTERN.matcher(sql);
-        int count = 0;
-        while (matcher.find()) {
-            count++;
-        }
-        return count;
-    }
-
-    public static boolean isOracle() {
-        return dialect == DatabaseDialect.ORACLE;
+        return result.toString();
     }
 
     /**
@@ -308,8 +271,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
         rql.setPrimaryTable(table);
         rql.setRepositoryClassName(className);
         rql.setQueryType(qt);
-
-        // Use the new converter for non-native queries if enabled
         if (qt.equals(QueryType.HQL)) {
             try {
                 rql.setConversionResult(parserAdapter.convertToNativeSQL(query));
@@ -318,6 +279,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 logger.error(query);
                 throw new AntikytheraException(e);
             }
+        } else if (qt.equals(QueryType.DERIVED) && dialect != null) {
+            rql.setQuery(dialect.transformSql(query));
         } else {
             rql.setQuery(query);
         }
@@ -519,5 +482,29 @@ public class BaseRepositoryParser extends AbstractCompiler {
                         interfaceName.contains("Repository") &&
                                 (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository"))
         );
+    }
+
+    protected List<String> extractComponents(String methodName) {
+        List<String> components = new ArrayList<>();
+        Matcher matcher = KEYWORDS_PATTERN.matcher(methodName);
+        StringBuilder sb = new StringBuilder();
+        while (matcher.find()) {
+            matcher.appendReplacement(sb, " " + matcher.group() + " ");
+        }
+        matcher.appendTail(sb);
+        String[] parts = sb.toString().split("\\s+");
+        for (String part : parts) {
+            if (!part.isEmpty()) components.add(part);
+        }
+        return components;
+    }
+
+    public static DatabaseDialect getDialect() { return dialect; }
+
+    protected static int countPlaceholders(String sql) { // restored as protected for external usage
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(sql);
+        int count = 0;
+        while (matcher.find()) count++;
+        return count;
     }
 }

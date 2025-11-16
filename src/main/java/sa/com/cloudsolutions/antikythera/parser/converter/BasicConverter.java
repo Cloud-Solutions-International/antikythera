@@ -18,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.BaseRepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
+import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -164,7 +165,7 @@ public class BasicConverter {
             if (tableName == null) {
                 throw new AntikytheraException("Unable to determine table name for join field '" + fieldName + "' of type " + targetType);
             }
-            if (BaseRepositoryParser.isOracle()) tableName = tableName.replace("\"", "");
+            if (DatabaseDialect.ORACLE.equals(BaseRepositoryParser.getDialect())) tableName = tableName.replace("\"", "");
 
             // Replace right side with actual table + alias
             Table rightTable = new Table(tableName);
@@ -245,7 +246,7 @@ public class BasicConverter {
     }
 
     private static void addJoinCondition(Join join, String lhsAlias, String leftCol, String rhsAlias, String rightCol) {
-        if (BaseRepositoryParser.isOracle()) {
+        if (DatabaseDialect.ORACLE.equals(BaseRepositoryParser.getDialect())) {
             leftCol = leftCol.replace("\"", "");
             rightCol = rightCol.replace("\"", "");
         }
