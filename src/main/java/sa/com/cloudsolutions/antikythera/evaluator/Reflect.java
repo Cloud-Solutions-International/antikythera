@@ -549,10 +549,6 @@ public class Reflect {
         return null;
     }
 
-    private static boolean isSingleObjectArrayParam(Class<?>[] parameterTypes) {
-        return parameterTypes.length == 1 && parameterTypes[0].equals(Object[].class);
-    }
-
     private static boolean isArgumentCountValid(Class<?>[] argumentTypes, Class<?>[] parameterTypes, boolean isVarArgs) {
         if (argumentTypes == null) return false;
         if (!isVarArgs && parameterTypes.length != argumentTypes.length) return false;

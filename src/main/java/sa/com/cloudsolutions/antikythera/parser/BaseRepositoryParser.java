@@ -279,9 +279,9 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 logger.error(query);
                 throw new AntikytheraException(e);
             }
-        } else if (qt.equals(QueryType.DERIVED) && dialect != null) {
-            rql.setQuery(dialect.transformSql(query));
         } else {
+            // For DERIVED and NATIVE_SQL queries, set query as-is
+            // Boolean transformations for Oracle are handled elsewhere (e.g., in RepositoryParser.trueFalseCheck)
             rql.setQuery(query);
         }
 
