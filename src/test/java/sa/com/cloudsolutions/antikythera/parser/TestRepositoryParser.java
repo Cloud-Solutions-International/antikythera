@@ -36,7 +36,7 @@ class TestRepositoryParser {
     public static final String USER_REPOSITORY = "sa.com.cloudsolutions.antikythera.testhelper.repository.UserRepository";
 
     @BeforeAll
-    static void setUpAll() throws IOException, ReflectiveOperationException {
+    static void setUpAll() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.preProcess();
         EntityMappingResolver.reset();

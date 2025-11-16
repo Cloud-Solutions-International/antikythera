@@ -48,7 +48,7 @@ class BasicConverterTest extends TestHelper {
     }
 
     @BeforeAll
-    static void setUp() throws IOException, ReflectiveOperationException {
+    static void setUp() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();

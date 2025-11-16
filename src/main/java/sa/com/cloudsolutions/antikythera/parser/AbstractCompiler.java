@@ -193,6 +193,7 @@ public class AbstractCompiler {
         setupParser();
     }
 
+    @SuppressWarnings("java:S1452")
     static Optional<TypeDeclaration<?>> findInSamePackage(CompilationUnit compilationUnit, Type fd) {
         String packageName = compilationUnit.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
         String name = fd.isClassOrInterfaceType() ? fd.asClassOrInterfaceType().getNameAsString() : fd.toString();
@@ -377,6 +378,7 @@ public class AbstractCompiler {
      * @return the public class, enum or interface that is held in the compilation unit if any.
      * when no public type is found, null is returned.
      */
+    @SuppressWarnings("java:S1452")
     public static TypeDeclaration<?> getPublicType(CompilationUnit cu) {
         for (TypeDeclaration<?> type : cu.getTypes()) {
             if (type.isClassOrInterfaceDeclaration() && type.asClassOrInterfaceDeclaration().isPublic()) {
@@ -1001,6 +1003,7 @@ public class AbstractCompiler {
         }
     }
 
+    @SuppressWarnings("java:S1452")
     public static TypeDeclaration<?> getEnclosingType(Node n) {
         if (n instanceof ClassOrInterfaceDeclaration cdecl) {
             return cdecl;
