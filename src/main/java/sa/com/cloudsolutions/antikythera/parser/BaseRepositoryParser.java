@@ -53,7 +53,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     /**
      * SQL dialect, at the moment oracle or postgresql as identified from the connection url
      */
-    protected static DatabaseDialect dialect; // changed type from String to DatabaseDialect
+    protected static DatabaseDialect dialect = DatabaseDialect.POSTGRESQL; // default dialect set to PostgreSQL
 
     /**
      * The JPA query converter for converting non-native queries to SQL
@@ -219,11 +219,21 @@ public class BaseRepositoryParser extends AbstractCompiler {
         }
 
         if (top) {
+            String built = sql.toString();
             if (dialect == DatabaseDialect.ORACLE) {
-                sql.append(" AND ROWNUM = 1");
+                // If we have a trailing WHERE with no conditions, replace it with WHERE ROWNUM = 1
+                String trimmedUpper = built.trim().toUpperCase();
+                if (trimmedUpper.endsWith("WHERE")) {
+                    int idx = built.toUpperCase().lastIndexOf("WHERE");
+                    built = built.substring(0, idx) + "WHERE ROWNUM = 1";
+                } else {
+                    built = dialect.applyLimitClause(built, 1);
+                }
             } else {
-                sql.append(" LIMIT 1");
+                built = dialect.applyLimitClause(built, 1);
             }
+            sql.setLength(0);
+            sql.append(built);
         }
 
         StringBuilder result = new StringBuilder();
@@ -509,29 +519,5 @@ public class BaseRepositoryParser extends AbstractCompiler {
                         interfaceName.contains("Repository") &&
                                 (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository"))
         );
-    }
-
-    /**
-     * Sets the current database dialect explicitly.
-     * @param dbDialect the dialect enum value
-     */
-    public static void setDialect(DatabaseDialect dbDialect) {
-        dialect = dbDialect;
-    }
-
-    /**
-     * Detects and sets the dialect from a JDBC URL.
-     * @param jdbcUrl the JDBC connection URL
-     */
-    public static void setDialectFromJdbcUrl(String jdbcUrl) {
-        dialect = DatabaseDialect.fromJdbcUrl(jdbcUrl);
-    }
-
-    /**
-     * Gets the currently configured dialect.
-     * @return the dialect or null if not set
-     */
-    public static DatabaseDialect getDialect() {
-        return dialect;
     }
 }

@@ -1,17 +1,17 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
+
 /**
  * Enumeration of supported database dialects for query conversion.
  * 
  * This enum defines the database dialects that the JPA query converter
  * can target when generating native SQL. It provides dialect-specific
  * SQL generation rules and transformations.
- * 
- * Requirements addressed: 4.1, 4.2, 4.3
  */
 public enum DatabaseDialect {
     // Enum constants must come first; using literals here (forward reference to static fields is not allowed)
-    ORACLE("oracle", "Oracle Database") {
+    ORACLE(Settings.ORACLE_ID, "Oracle Database") {
         @Override
         public String transformBooleanValue(String value) {
             if ("true".equalsIgnoreCase(value)) {
@@ -34,7 +34,7 @@ public enum DatabaseDialect {
         @Override
         public boolean supportsBoolean() { return false; }
     },
-    POSTGRESQL("postgresql", "PostgreSQL Database") {
+    POSTGRESQL(Settings.POSTGRESQL_ID, "PostgreSQL Database") {
         @Override
         public String transformBooleanValue(String value) { return value; }
         @Override
@@ -46,11 +46,6 @@ public enum DatabaseDialect {
         @Override
         public boolean supportsBoolean() { return true; }
     };
-    // Centralized identifier & alias constants (declared after constants to avoid forward-reference errors)
-    private static final String ORACLE_ID = "oracle";
-    private static final String POSTGRESQL_ID = "postgresql";
-    private static final String POSTGRES_ALIAS = "postgres";
-    private static final String LEGACY_PG_ALIAS = "pg";
 
     private final String identifier;
     private final String displayName;
@@ -146,8 +141,8 @@ public enum DatabaseDialect {
     public static DatabaseDialect fromJdbcUrl(String jdbcUrl) {
         if (jdbcUrl == null) { return null; }
         String lowerUrl = jdbcUrl.toLowerCase();
-        if (lowerUrl.contains(ORACLE_ID)) { return ORACLE; }
-        if (lowerUrl.contains(POSTGRESQL_ID) || lowerUrl.contains(POSTGRES_ALIAS)) { return POSTGRESQL; }
+        if (lowerUrl.contains(Settings.ORACLE_ID)) { return ORACLE; }
+        if (lowerUrl.contains(Settings.POSTGRESQL_ID)) { return POSTGRESQL; }
         return null;
     }
     /**
@@ -160,8 +155,8 @@ public enum DatabaseDialect {
     public static DatabaseDialect fromString(String dialectString) {
         if (dialectString == null) { return null; }
         String lower = dialectString.toLowerCase();
-        if (ORACLE_ID.equals(lower)) { return ORACLE; }
-        if (POSTGRESQL_ID.equals(lower) || POSTGRES_ALIAS.equals(lower) || LEGACY_PG_ALIAS.equals(lower)) { return POSTGRESQL; }
+        if (Settings.ORACLE_ID.equals(lower)) { return ORACLE; }
+        if (Settings.POSTGRESQL_ID.equals(lower)) { return POSTGRESQL; }
         for (DatabaseDialect d : values()) {
             if (d.identifier.equals(lower) || d.displayName.toLowerCase().contains(lower)) { return d; }
         }

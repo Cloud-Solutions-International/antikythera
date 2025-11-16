@@ -26,6 +26,9 @@ import java.util.Scanner;
  * Manages the configuration properties from a generator.yml file.
  */
 public class Settings {
+    public static final String ORACLE_ID = "oracle";
+    public static final String POSTGRESQL_ID = "postgresql";
+
     public static final String APPLICATION_HOST = "application.host";
     public static final String LOG_APPENDER = "log_appender";
     private static final String VARIABLES = "variables";

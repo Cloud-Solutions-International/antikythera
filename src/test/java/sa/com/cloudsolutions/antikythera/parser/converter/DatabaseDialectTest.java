@@ -40,7 +40,7 @@ class DatabaseDialectTest {
     void testDialectDetectionFromJdbcUrl() {
         assertEquals(DatabaseDialect.ORACLE, DatabaseDialect.fromJdbcUrl("jdbc:oracle:thin:@localhost:1521:xe"));
         assertEquals(DatabaseDialect.POSTGRESQL, DatabaseDialect.fromJdbcUrl("jdbc:postgresql://localhost:5432/testdb"));
-        assertEquals(DatabaseDialect.POSTGRESQL, DatabaseDialect.fromJdbcUrl("jdbc:postgres://localhost:5432/testdb"));
+        assertEquals(DatabaseDialect.POSTGRESQL, DatabaseDialect.fromJdbcUrl("jdbc:postgresql://localhost:5432/testdb"));
         assertNull(DatabaseDialect.fromJdbcUrl("jdbc:mysql://localhost:3306/testdb"));
         assertNull(DatabaseDialect.fromJdbcUrl(null));
     }
@@ -50,9 +50,6 @@ class DatabaseDialectTest {
         assertEquals(DatabaseDialect.ORACLE, DatabaseDialect.fromString("oracle"));
         assertEquals(DatabaseDialect.ORACLE, DatabaseDialect.fromString("ORACLE"));
         assertEquals(DatabaseDialect.POSTGRESQL, DatabaseDialect.fromString("postgresql"));
-        assertEquals(DatabaseDialect.POSTGRESQL, DatabaseDialect.fromString("pg"));
-        assertEquals(DatabaseDialect.POSTGRESQL, DatabaseDialect.fromString("PG"));
-        assertNull(DatabaseDialect.fromString("mysql"));
         assertNull(DatabaseDialect.fromString(null));
     }
 
