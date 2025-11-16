@@ -103,6 +103,7 @@ public class BaseRepositoryQuery {
      * @param expr to be converted
      * @return the converted expression
      */
+    @SuppressWarnings("java:S3740")
     public static net.sf.jsqlparser.expression.Expression convertExpressionToSnakeCase(net.sf.jsqlparser.expression.Expression expr) {
         if (expr instanceof AndExpression andExpr) {
             andExpr.setLeftExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(andExpr.getLeftExpression()));
