@@ -7,7 +7,6 @@ import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.AllColumns;
-import net.sf.jsqlparser.statement.select.FromItem;
 import net.sf.jsqlparser.statement.select.GroupByElement;
 import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.OrderByElement;
@@ -26,8 +25,10 @@ import java.util.Optional;
 
 public class BasicConverter {
 
+    private static final String ID_ANNOTATION = "Id";
+
     private BasicConverter () {
-        /* this is a utility clas */
+        // utility class
     }
     /**
      * Java field names need to be converted to snake case to match the table column.
@@ -40,232 +41,266 @@ public class BasicConverter {
      * @throws AntikytheraException if we are unable to find related entities.
      */
     public static void convertFieldsToSnakeCase(Statement stmt, TypeWrapper entity) throws AntikytheraException {
-
-        if (stmt instanceof Select sel) {
-            convertPlainSelectToSnakeCase(sel.getPlainSelect(), entity);
+        if (!(stmt instanceof Select sel)) {
+            return; // only Select statements supported
         }
+        convertPlainSelectToSnakeCase(sel.getPlainSelect(), entity);
     }
 
+    /**
+     * Convert projections, clauses, and joins of a PlainSelect to snake case where applicable.
+     * Keeps method small by delegating to focused helpers.
+     */
     private static void convertPlainSelectToSnakeCase(PlainSelect select, TypeWrapper entity) throws AntikytheraException {
-        List<SelectItem<?>> items = select.getSelectItems();
-        // Generalized star replacement: single projection that is exactly the FROM alias (e.g. SELECT u FROM user u or SELECT veh FROM vehicle veh)
-        String fromAlias = null;
-        if (select.getFromItem() != null && select.getFromItem().getAlias() != null) {
-            fromAlias = select.getFromItem().getAlias().getName();
-        }
-        if (items.size() == 1 && fromAlias != null) {
-            String itemText = items.getFirst().toString().trim();
-            // Strip optional quoting
-            if (itemText.equals(fromAlias)) {
-                items.set(0, SelectItem.from(new AllColumns()));
-            }
-        }
-        else if (items.size() == 1 && items.getFirst().toString().length() == 1) { // legacy heuristic fallback
-            items.set(0, SelectItem.from(new AllColumns()));
-        } else {
-            BasicConverter.generalProjections(items);
-        }
-
-        if (select.getWhere() != null) {
-            select.setWhere(BaseRepositoryQuery.convertExpressionToSnakeCase(select.getWhere()));
-        }
-
-        if (select.getGroupBy() != null) {
-            GroupByElement group = select.getGroupBy();
-            List<net.sf.jsqlparser.expression.Expression> groupBy = group.getGroupByExpressions();
-            groupBy.replaceAll(BaseRepositoryQuery::convertExpressionToSnakeCase);
-        }
-
-        if (select.getOrderByElements() != null) {
-            List<OrderByElement> orderBy = select.getOrderByElements();
-            for (OrderByElement orderByElement : orderBy) {
-                orderByElement.setExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(orderByElement.getExpression()));
-            }
-        }
-
-        if (select.getHaving() != null) {
-            select.setHaving(BaseRepositoryQuery.convertExpressionToSnakeCase(select.getHaving()));
-        }
+        if (select == null) return;
+        normalizeProjection(select);
+        convertWhere(select);
+        convertGroupBy(select);
+        convertOrderBy(select);
+        convertHaving(select);
         processJoins(entity, select);
     }
 
+    // --- Projection helpers -------------------------------------------------
+
+    private static void normalizeProjection(PlainSelect select) {
+        List<SelectItem<?>> items = select.getSelectItems();
+        if (items == null || items.isEmpty()) {
+            return; // nothing to do
+        }
+        if (shouldReplaceWithStar(select, items)) {
+            items.set(0, SelectItem.from(new AllColumns()));
+            return;
+        }
+        generalProjections(items); // fall back to field-by-field conversion
+    }
 
     /**
-     * HQL joins use entity names instead of table name and column names.
-     * We need to replace those with the proper table and column name syntax if we are to execut the
-     * query through JDBC.
-     *
-     * @param entity the primary table or view for the join
-     * @param select the select statement
-     * @throws AntikytheraException if we are unable to find related entities.
+     * Decide if single projection should become '*'. We consider any single select item
+     * that equals the FROM alias (legacy heuristic kept for length==1).
      */
-    private static void processJoins(TypeWrapper entity, PlainSelect select) throws AntikytheraException {
-        List<TypeWrapper> units = new ArrayList<>();
-        units.add(entity);
+    private static boolean shouldReplaceWithStar(PlainSelect select, List<SelectItem<?>> items) {
+        if (items.size() != 1) return false;
+        String itemText = items.getFirst().toString().trim();
+        String fromAlias = select.getFromItem() != null && select.getFromItem().getAlias() != null
+                ? select.getFromItem().getAlias().getName() : null;
+        if (fromAlias != null && fromAlias.equals(itemText)) return true;
+        return itemText.length() == 1; // legacy fallback
+    }
 
-        List<Join> joins = select.getJoins();
-        if (joins != null) {
-            for (Join j : joins) {
-                if (j.getRightItem() instanceof ParenthesedSelect ps) {
-                    if (ps.getSelect() instanceof Select innerSel) {
-                        convertPlainSelectToSnakeCase(innerSel.getPlainSelect(), entity);
-                    }
-                } else {
-                    BasicConverter.processJoin(j, units);
+    private static void convertWhere(PlainSelect select) {
+        if (select.getWhere() != null) {
+            select.setWhere(BaseRepositoryQuery.convertExpressionToSnakeCase(select.getWhere()));
+        }
+    }
+
+    private static void convertGroupBy(PlainSelect select) {
+        GroupByElement group = select.getGroupBy();
+        if (group != null && group.getGroupByExpressionList() != null) {
+            var exprList = group.getGroupByExpressionList();
+            for (int i = 0; i < exprList.size(); i++) {
+                Object expr = exprList.get(i);
+                if (expr instanceof net.sf.jsqlparser.expression.Expression expression) {
+                    exprList.set(i, BaseRepositoryQuery.convertExpressionToSnakeCase(expression));
                 }
             }
         }
     }
 
+    private static void convertOrderBy(PlainSelect select) {
+        List<OrderByElement> orderBy = select.getOrderByElements();
+        if (orderBy != null) {
+            for (OrderByElement obe : orderBy) {
+                obe.setExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(obe.getExpression()));
+            }
+        }
+    }
+
+    private static void convertHaving(PlainSelect select) {
+        if (select.getHaving() != null) {
+            select.setHaving(BaseRepositoryQuery.convertExpressionToSnakeCase(select.getHaving()));
+        }
+    }
+
+    // --- Join processing ----------------------------------------------------
+
+    private static void processJoins(TypeWrapper rootEntity, PlainSelect select) throws AntikytheraException {
+        List<Join> joins = select.getJoins();
+        if (joins == null || joins.isEmpty()) return;
+        List<TypeWrapper> discovered = new ArrayList<>();
+        discovered.add(rootEntity);
+        for (Join j : joins) {
+            var right = j.getRightItem();
+            if (right instanceof ParenthesedSelect ps && ps.getSelect() instanceof Select innerSel) {
+                // recurse into nested select body
+                convertPlainSelectToSnakeCase(innerSel.getPlainSelect(), rootEntity);
+                continue;
+            }
+            resolveAndRewriteJoin(j, discovered);
+        }
+    }
+
+    private static void resolveAndRewriteJoin(Join join, List<TypeWrapper> known) throws AntikytheraException {
+        String raw = join.getRightItem().toString();
+        String[] dotParts = raw.split("\\.");
+        if (dotParts.length != 2) {
+            return; // not an HQL path style join (ignore)
+        }
+        String lhsAlias = dotParts[0];
+        String fieldAndAlias = dotParts[1];
+        String[] fieldParts = fieldAndAlias.split(" ");
+        if (fieldParts.length != 2) return;
+        String fieldName = fieldParts[0];
+        String joinAlias = fieldParts[1];
+
+        // Attempt resolution against each known entity
+        for (TypeWrapper entity : known) {
+            Optional<FieldDeclaration> fieldDeclOpt = entity.getType().getFieldByName(fieldName);
+            if (fieldDeclOpt.isEmpty()) continue;
+            FieldDeclaration fieldDecl = fieldDeclOpt.get();
+            com.github.javaparser.ast.type.Type targetType = resolveTargetEntityType(fieldDecl);
+            TypeWrapper targetWrapper = BaseRepositoryParser.findEntity(targetType);
+            String tableName = BaseRepositoryParser.findTableName(targetWrapper);
+            if (tableName == null) {
+                throw new AntikytheraException("Unable to determine table name for join field '" + fieldName + "' of type " + targetType);
+            }
+            if (BaseRepositoryParser.isOracle()) tableName = tableName.replace("\"", "");
+
+            // Replace right side with actual table + alias
+            Table rightTable = new Table(tableName);
+            rightTable.setAlias(new net.sf.jsqlparser.expression.Alias(joinAlias));
+            join.setRightItem(rightTable);
+
+            // Build ON expression if needed
+            buildOnExpression(join, targetWrapper, lhsAlias, joinAlias, fieldDecl);
+            known.add(targetWrapper);
+            return; // done for this join
+        }
+    }
+
+    /** Resolve generic collection element (List<X>) or direct type. */
+    private static com.github.javaparser.ast.type.Type resolveTargetEntityType(FieldDeclaration fd) {
+        com.github.javaparser.ast.type.Type resolved = fd.getElementType();
+        if (resolved.isClassOrInterfaceType()) {
+            var cit = resolved.asClassOrInterfaceType();
+            if (cit.getTypeArguments().isPresent()) {
+                var typeArgs = cit.getTypeArguments().orElseThrow();
+                if (!typeArgs.isEmpty()) {
+                    var firstArg = typeArgs.getFirst();
+                    if (firstArg.isPresent()) {
+                        resolved = firstArg.get();
+                    }
+                }
+            }
+        }
+        return resolved;
+    }
+
+    /** Add implicit join ON clause based on @JoinColumn annotation or id field fallback. */
+    private static void buildOnExpression(Join join, TypeWrapper target, String lhsAlias, String rhsAlias, FieldDeclaration fieldDecl) {
+        String leftCol = extractJoinColumnName(fieldDecl);
+        String rightCol = extractReferencedColumnName(fieldDecl);
+
+        // Fallback to implicit id if missing pieces
+        if (leftCol == null || rightCol == null) {
+            String idCol = findIdColumn(target);
+            leftCol = leftCol != null ? leftCol : idCol;
+            rightCol = rightCol != null ? rightCol : idCol;
+        }
+        if (leftCol == null || rightCol == null) return; // cannot build ON
+
+        addJoinCondition(join, lhsAlias, leftCol, rhsAlias, rightCol);
+    }
+
+    private static String extractJoinColumnName(FieldDeclaration fieldDecl) {
+        Optional<AnnotationExpr> annOpt = fieldDecl.getAnnotationByName("JoinColumn");
+        if (annOpt.isEmpty()) return null;
+
+        AnnotationExpr ann = annOpt.get();
+        if (ann.isNormalAnnotationExpr()) {
+            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                if (pair.getNameAsString().equals("name")) {
+                    return BaseRepositoryParser.camelToSnake(pair.getValue().toString());
+                }
+            }
+        } else {
+            return BaseRepositoryParser.camelToSnake(ann.asSingleMemberAnnotationExpr().getMemberValue().toString());
+        }
+        return null;
+    }
+
+    private static String extractReferencedColumnName(FieldDeclaration fieldDecl) {
+        Optional<AnnotationExpr> annOpt = fieldDecl.getAnnotationByName("JoinColumn");
+        if (annOpt.isEmpty()) return null;
+
+        AnnotationExpr ann = annOpt.get();
+        if (ann.isNormalAnnotationExpr()) {
+            for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
+                if (pair.getNameAsString().equals("referencedColumnName")) {
+                    return BaseRepositoryParser.camelToSnake(pair.getValue().toString());
+                }
+            }
+        }
+        return null;
+    }
+
+    private static void addJoinCondition(Join join, String lhsAlias, String leftCol, String rhsAlias, String rightCol) {
+        if (BaseRepositoryParser.isOracle()) {
+            leftCol = leftCol.replace("\"", "");
+            rightCol = rightCol.replace("\"", "");
+        }
+        EqualsTo eq = new EqualsTo();
+        eq.setLeftExpression(new Column(lhsAlias + "." + leftCol));
+        eq.setRightExpression(new Column(rhsAlias + "." + rightCol));
+        join.getOnExpressions().add(eq);
+    }
+
+    private static String findIdColumn(TypeWrapper tw) {
+        if (tw == null || tw.getType() == null) return null;
+        for (var fd : tw.getType().getFields()) {
+            if (fd.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals(ID_ANNOTATION))) {
+                return BaseRepositoryParser.camelToSnake(fd.getVariable(0).getNameAsString());
+            }
+        }
+        return null;
+    }
+
+    // --- Field conversion helpers --------------------------------------------
 
     protected static void generalProjections(List<SelectItem<?>> items) {
         for (int i = 0; i < items.size(); i++) {
             SelectItem<?> item = items.get(i);
-
-            // Get the expression from the SelectItem
-            if (item.getExpression() != null) {
-                // Convert the expression using the existing convertExpressionToSnakeCase method
-                net.sf.jsqlparser.expression.Expression convertedExpression =
-                        BaseRepositoryQuery.convertExpressionToSnakeCase(item.getExpression());
-
-                // Create a new SelectItem with the converted expression
-                SelectItem<?> convertedItem = SelectItem.from(convertedExpression);
-
-                // Preserve alias if it exists
-                if (item.getAlias() != null) {
-                    convertedItem.setAlias(item.getAlias());
-                }
-
-                items.set(i, convertedItem);
-            } else {
-                // Fallback to the old logic for simple cases
+            if (item.getExpression() == null) {
+                // simple string-based item
                 String itemStr = item.toString();
-                String[] parts = itemStr.split("\\.");
-
-                if (itemStr.contains(".") && parts.length == 2 && !itemStr.contains("(")) {
-                    String field = parts[1];
-                    String snakeCaseField = BaseRepositoryParser.camelToSnake(field);
-                    SelectItem<?> col = SelectItem.from(new Column(parts[0] + "." + snakeCaseField));
-                    items.set(i, col);
-                } else if (!itemStr.contains("(") && !itemStr.contains("*")) {
-                    String snakeCaseField = BaseRepositoryParser.camelToSnake(parts[0]);
-                    SelectItem<?> col = SelectItem.from(new Column(snakeCaseField));
-                    items.set(i, col);
+                if (isConvertibleSimpleProjection(itemStr)) {
+                    items.set(i, convertSimpleProjection(itemStr));
                 }
-                // If it contains functions or complex expressions, leave it as-is
+                continue;
             }
+            // expression-based item
+            net.sf.jsqlparser.expression.Expression converted = BaseRepositoryQuery.convertExpressionToSnakeCase(item.getExpression());
+            SelectItem<?> convertedItem = SelectItem.from(converted);
+            if (item.getAlias() != null) {
+                convertedItem.setAlias(item.getAlias());
+            }
+            items.set(i, convertedItem);
         }
     }
 
-    private static void processJoin(Join j, List<TypeWrapper> units) throws AntikytheraException {
-        FromItem a = j.getRightItem();
-        // the toString() of this will look something like p.dischargeNurseRequest n
-        // from this we need to extract the dischargeNurseRequest
-        String[] parts = a.toString().split("\\.");
-        if (parts.length == 2) {
-            TypeWrapper other = BasicConverter.processJoin(j, units, parts);
-            // if we have discovered a new entity add it to our collection for looking up
-            // join fields in the next one
-            if (other != null) {
-                units.add(other);
-            }
-        }
+    private static boolean isConvertibleSimpleProjection(String itemStr) {
+        return !itemStr.contains("(") && !itemStr.contains("*");
     }
 
-    protected static TypeWrapper processJoin(Join j, List<TypeWrapper> units, String[] parts) throws AntikytheraException {
-        TypeWrapper other = null;
-        // the join may happen against any of the tables that we have encountered so far
-        // hence the need to loop through here.
-        for (TypeWrapper unit : units) {
-            String field = parts[1].split(" ")[0];
-            Optional<FieldDeclaration> x = unit.getType().getFieldByName(field);
-            if (x.isPresent()) {
-                var member = x.get();
-                String lhs = null;
-                String rhs = null;
-
-                // NEW: resolve element type for collection (e.g. List<Vehicle>)
-                com.github.javaparser.ast.type.Type resolvedType = member.getElementType();
-                if (resolvedType.isClassOrInterfaceType()) {
-                    var cit = resolvedType.asClassOrInterfaceType();
-                    if (cit.getTypeArguments().isPresent() && !cit.getTypeArguments().get().isEmpty()) {
-                        var firstArg = cit.getTypeArguments().get().getFirst();
-                        if (firstArg.isPresent()) {
-                            resolvedType = firstArg.get();
-                        }
-                    }
-                }
-
-                // find if there is a join column annotation
-                Optional<AnnotationExpr> annotationExpr =  member.getAnnotationByName("JoinColumn");
-
-                if (annotationExpr.isPresent()) {
-                    AnnotationExpr ann = annotationExpr.orElseThrow();
-                    if (ann.isNormalAnnotationExpr()) {
-                        for (var pair : ann.asNormalAnnotationExpr().getPairs()) {
-                            if (pair.getNameAsString().equals("name")) {
-                                lhs = BaseRepositoryParser.camelToSnake(pair.getValue().toString());
-                            }
-                            if (pair.getNameAsString().equals("referencedColumnName")) {
-                                rhs = BaseRepositoryParser.camelToSnake(pair.getValue().toString());
-                            }
-                        }
-                    } else {
-                        lhs = BaseRepositoryParser.camelToSnake(ann.asSingleMemberAnnotationExpr().getMemberValue().toString());
-                    }
-                }
-
-
-                other = BaseRepositoryParser.findEntity(resolvedType);
-
-                String tableName = BaseRepositoryParser.findTableName(other);
-                if (tableName == null || other == null) {
-                    throw new AntikytheraException("Could not find table name for " + resolvedType);
-                }
-                if (BaseRepositoryParser.isOracle()) {
-                    tableName = tableName.replace("\"", "");
-                }
-
-                // FIX: replace RIGHT item (the HQL path) with actual table name preserving alias
-                String rightAlias = parts[1].split(" ")[1];
-                Table rightTable = new Table(tableName);
-                rightTable.setAlias(new net.sf.jsqlparser.expression.Alias(rightAlias));
-                j.setRightItem(rightTable);
-
-                // leave fromItem as-is; no longer modify left side here
-                // ...existing code...
-                if (lhs == null || rhs == null) {
-                    rhs = lhs = BasicConverter.implicitJoin(other, lhs);
-                }
-                if (lhs != null && rhs != null) {
-                    if (BaseRepositoryParser.isOracle()) {
-                        lhs = lhs.replace("\"", "");
-                        rhs = rhs.replace("\"", "");
-                    }
-                    EqualsTo eq = new EqualsTo();
-                    eq.setLeftExpression(new Column(parts[0] + "." + lhs));
-                    eq.setRightExpression(new Column(rightAlias + "." + rhs));
-                    j.getOnExpressions().add(eq);
-                }
-
-            }
+    private static SelectItem<?> convertSimpleProjection(String itemStr) {
+        String[] parts = itemStr.split("\\.");
+        Column col;
+        if (itemStr.contains(".") && parts.length == 2) {
+            col = new Column(parts[0] + "." + BaseRepositoryParser.camelToSnake(parts[1]));
+        } else {
+            col = new Column(BaseRepositoryParser.camelToSnake(parts[0]));
         }
-        return other;
-    }
-
-    private static String implicitJoin(TypeWrapper other, String lhs) {
-        // lets roll with an implicit join for now
-        // todo fix this by figuring out the join column from other annotations
-        for (var column : other.getType().getFields()) {
-            for (var ann : column.getAnnotations()) {
-                if (ann.getNameAsString().equals("Id")) {
-                    lhs = BaseRepositoryParser.camelToSnake(column.getVariable(0).getNameAsString());
-
-                    break;
-                }
-            }
-        }
-        return lhs;
+        return SelectItem.from(col);
     }
 
 
