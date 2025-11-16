@@ -10,10 +10,7 @@ package sa.com.cloudsolutions.antikythera.parser.converter;
  * Requirements addressed: 4.1, 4.2, 4.3
  */
 public enum DatabaseDialect {
-    
-    /**
-     * Oracle Database dialect.
-     */
+    // Enum constants must come first; using literals here (forward reference to static fields is not allowed)
     ORACLE("oracle", "Oracle Database") {
         @Override
         public String transformBooleanValue(String value) {
@@ -24,69 +21,41 @@ public enum DatabaseDialect {
             }
             return value;
         }
-        
         @Override
         public String applyLimitClause(String sql, int limit) {
-            if (limit == 1) {
-                return sql + " AND ROWNUM = 1";
-            } else {
-                return sql + " AND ROWNUM <= " + limit;
-            }
+            return limit == 1 ? sql + " AND ROWNUM = 1" : sql + " AND ROWNUM <= " + limit;
         }
-        
         @Override
         public String getSequenceNextValueSyntax(String sequenceName) {
             return sequenceName + ".NEXTVAL";
         }
-        
         @Override
-        public String getConcatenationOperator() {
-            return "||";
-        }
-        
+        public String getConcatenationOperator() { return "||"; }
         @Override
-        public boolean supportsBoolean() {
-            return false;
-        }
+        public boolean supportsBoolean() { return false; }
     },
-    
-    /**
-     * PostgreSQL Database dialect.
-     */
     POSTGRESQL("postgresql", "PostgreSQL Database") {
         @Override
-        public String transformBooleanValue(String value) {
-            // PostgreSQL supports native boolean values
-            return value;
-        }
-        
+        public String transformBooleanValue(String value) { return value; }
         @Override
-        public String applyLimitClause(String sql, int limit) {
-            return sql + " LIMIT " + limit;
-        }
-        
+        public String applyLimitClause(String sql, int limit) { return sql + " LIMIT " + limit; }
         @Override
-        public String getSequenceNextValueSyntax(String sequenceName) {
-            return "NEXTVAL('" + sequenceName + "')";
-        }
-        
+        public String getSequenceNextValueSyntax(String sequenceName) { return "NEXTVAL('" + sequenceName + "')"; }
         @Override
-        public String getConcatenationOperator() {
-            return "||";
-        }
-        
+        public String getConcatenationOperator() { return "||"; }
         @Override
-        public boolean supportsBoolean() {
-            return true;
-        }
+        public boolean supportsBoolean() { return true; }
     };
-    
+    // Centralized identifier & alias constants (declared after constants to avoid forward-reference errors)
+    private static final String ORACLE_ID = "oracle";
+    private static final String POSTGRESQL_ID = "postgresql";
+    private static final String POSTGRES_ALIAS = "postgres";
+    private static final String LEGACY_PG_ALIAS = "pg";
+
     private final String identifier;
     private final String displayName;
-    
     DatabaseDialect(String identifier, String displayName) {
-        this.identifier = identifier;
-        this.displayName = displayName;
+        this.identifier = identifier; this.displayName = displayName;
     }
     
     /**
@@ -175,20 +144,12 @@ public enum DatabaseDialect {
      * @return The detected dialect, or null if not recognized
      */
     public static DatabaseDialect fromJdbcUrl(String jdbcUrl) {
-        if (jdbcUrl == null) {
-            return null;
-        }
-        
+        if (jdbcUrl == null) { return null; }
         String lowerUrl = jdbcUrl.toLowerCase();
-        if (lowerUrl.contains("oracle")) {
-            return ORACLE;
-        } else if (lowerUrl.contains("postgresql") || lowerUrl.contains("postgres")) {
-            return POSTGRESQL;
-        }
-        
+        if (lowerUrl.contains(ORACLE_ID)) { return ORACLE; }
+        if (lowerUrl.contains(POSTGRESQL_ID) || lowerUrl.contains(POSTGRES_ALIAS)) { return POSTGRESQL; }
         return null;
     }
-    
     /**
      * Determines the database dialect from a dialect string identifier.
      * Compatible with existing RepositoryParser dialect constants.
@@ -197,30 +158,15 @@ public enum DatabaseDialect {
      * @return The matching dialect, or null if not found
      */
     public static DatabaseDialect fromString(String dialectString) {
-        if (dialectString == null) {
-            return null;
-        }
-        
+        if (dialectString == null) { return null; }
         String lower = dialectString.toLowerCase();
-        
-        // Handle existing RepositoryParser constants
-        if ("oracle".equals(lower)) {
-            return ORACLE;
-        } else if ("pg".equals(lower) || "postgresql".equals(lower) || "postgres".equals(lower)) {
-            return POSTGRESQL;
+        if (ORACLE_ID.equals(lower)) { return ORACLE; }
+        if (POSTGRESQL_ID.equals(lower) || POSTGRES_ALIAS.equals(lower) || LEGACY_PG_ALIAS.equals(lower)) { return POSTGRESQL; }
+        for (DatabaseDialect d : values()) {
+            if (d.identifier.equals(lower) || d.displayName.toLowerCase().contains(lower)) { return d; }
         }
-        
-        // Handle display names and identifiers
-        for (DatabaseDialect dialect : values()) {
-            if (dialect.identifier.equals(lower) || 
-                dialect.displayName.toLowerCase().contains(lower)) {
-                return dialect;
-            }
-        }
-        
         return null;
     }
-    
     /**
      * Creates a DatabaseDialect from the existing RepositoryParser dialect detection.
      * This method integrates with the existing dialect detection logic.
@@ -228,10 +174,8 @@ public enum DatabaseDialect {
      * @param repositoryDialect The dialect string from RepositoryParser
      * @return The corresponding DatabaseDialect, or null if not found
      */
-    public static DatabaseDialect fromRepositoryParser(String repositoryDialect) {
-        return fromString(repositoryDialect);
-    }
-    
+    public static DatabaseDialect fromRepositoryParser(String repositoryDialect) { return fromString(repositoryDialect); }
+
     @Override
     public String toString() {
         return displayName;

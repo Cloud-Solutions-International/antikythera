@@ -18,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
+import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
 import sa.com.cloudsolutions.antikythera.parser.converter.HQLParserAdapter;
 
 import java.io.IOException;
@@ -47,15 +48,12 @@ public class BaseRepositoryParser extends AbstractCompiler {
     public static final String JPA_REPOSITORY = "JpaRepository";
     public static final String SELECT_STAR = "SELECT * FROM ";
     protected static final Pattern CAMEL_TO_SNAKE_PATTERN = Pattern.compile("([a-z])([A-Z]+)");
-
-    protected static final String ORACLE = "oracle";
-    protected static final String POSTGRESQL = "PG";
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\?");
     public static final String NATIVE_QUERY = "nativeQuery";
     /**
      * SQL dialect, at the moment oracle or postgresql as identified from the connection url
      */
-    protected static String dialect;
+    protected static DatabaseDialect dialect; // changed type from String to DatabaseDialect
 
     /**
      * The JPA query converter for converting non-native queries to SQL
@@ -221,7 +219,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         }
 
         if (top) {
-            if (ORACLE.equals(dialect)) {
+            if (dialect == DatabaseDialect.ORACLE) {
                 sql.append(" AND ROWNUM = 1");
             } else {
                 sql.append(" LIMIT 1");
@@ -284,7 +282,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     }
 
     public static boolean isOracle() {
-        return ORACLE.equals(dialect);
+        return dialect == DatabaseDialect.ORACLE;
     }
 
     /**
@@ -511,5 +509,29 @@ public class BaseRepositoryParser extends AbstractCompiler {
                         interfaceName.contains("Repository") &&
                                 (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository"))
         );
+    }
+
+    /**
+     * Sets the current database dialect explicitly.
+     * @param dbDialect the dialect enum value
+     */
+    public static void setDialect(DatabaseDialect dbDialect) {
+        dialect = dbDialect;
+    }
+
+    /**
+     * Detects and sets the dialect from a JDBC URL.
+     * @param jdbcUrl the JDBC connection URL
+     */
+    public static void setDialectFromJdbcUrl(String jdbcUrl) {
+        dialect = DatabaseDialect.fromJdbcUrl(jdbcUrl);
+    }
+
+    /**
+     * Gets the currently configured dialect.
+     * @return the dialect or null if not set
+     */
+    public static DatabaseDialect getDialect() {
+        return dialect;
     }
 }

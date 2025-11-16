@@ -11,6 +11,7 @@ import net.sf.jsqlparser.statement.select.Select;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -67,12 +68,7 @@ public class RepositoryParser extends BaseRepositoryParser {
             Object urlObj = db.get("url");
             if (urlObj != null) {
                 String url = urlObj.toString();
-                if(url.contains(ORACLE)) {
-                    dialect = ORACLE;
-                }
-                else {
-                    dialect = POSTGRESQL;
-                }
+                dialect = DatabaseDialect.fromJdbcUrl(url); // assign enum directly
             }
         }
     }
@@ -264,7 +260,7 @@ public class RepositoryParser extends BaseRepositoryParser {
      * @return the sql statement modified so that oracle can understand it.
      */
     static String trueFalseCheck(String sql) {
-        if(ORACLE.equals(dialect)) {
+        if (dialect == DatabaseDialect.ORACLE) { // enum comparison
             sql = sql.replaceAll("(?i)true", "1")
                     .replaceAll("(?i)false", "0");
         }
@@ -289,4 +285,3 @@ public class RepositoryParser extends BaseRepositoryParser {
         return sql;
     }
 }
-
