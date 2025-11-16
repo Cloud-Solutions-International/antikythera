@@ -42,39 +42,51 @@ public class BasicConverter {
     public static void convertFieldsToSnakeCase(Statement stmt, TypeWrapper entity) throws AntikytheraException {
 
         if (stmt instanceof Select sel) {
-            PlainSelect select = sel.getPlainSelect();
-
-            List<SelectItem<?>> items = select.getSelectItems();
-            if (items.size() == 1 && items.getFirst().toString().length() == 1) {
-                // This is a select * query but because it's an HQL query it appears as SELECT t
-                // replace select t with select *
-                items.set(0, SelectItem.from(new AllColumns()));
-            } else {
-                BasicConverter.generalProjections(items);
-            }
-
-            if (select.getWhere() != null) {
-                select.setWhere(BaseRepositoryQuery.convertExpressionToSnakeCase(select.getWhere()));
-            }
-
-            if (select.getGroupBy() != null) {
-                GroupByElement group = select.getGroupBy();
-                List<net.sf.jsqlparser.expression.Expression> groupBy = group.getGroupByExpressions();
-                groupBy.replaceAll(BaseRepositoryQuery::convertExpressionToSnakeCase);
-            }
-
-            if (select.getOrderByElements() != null) {
-                List<OrderByElement> orderBy = select.getOrderByElements();
-                for (OrderByElement orderByElement : orderBy) {
-                    orderByElement.setExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(orderByElement.getExpression()));
-                }
-            }
-
-            if (select.getHaving() != null) {
-                select.setHaving(BaseRepositoryQuery.convertExpressionToSnakeCase(select.getHaving()));
-            }
-            processJoins(entity, select);
+            convertPlainSelectToSnakeCase(sel.getPlainSelect(), entity);
         }
+    }
+
+    private static void convertPlainSelectToSnakeCase(PlainSelect select, TypeWrapper entity) throws AntikytheraException {
+        List<SelectItem<?>> items = select.getSelectItems();
+        // Generalized star replacement: single projection that is exactly the FROM alias (e.g. SELECT u FROM user u or SELECT veh FROM vehicle veh)
+        String fromAlias = null;
+        if (select.getFromItem() != null && select.getFromItem().getAlias() != null) {
+            fromAlias = select.getFromItem().getAlias().getName();
+        }
+        if (items.size() == 1 && fromAlias != null) {
+            String itemText = items.getFirst().toString().trim();
+            // Strip optional quoting
+            if (itemText.equals(fromAlias)) {
+                items.set(0, SelectItem.from(new AllColumns()));
+            }
+        }
+        else if (items.size() == 1 && items.getFirst().toString().length() == 1) { // legacy heuristic fallback
+            items.set(0, SelectItem.from(new AllColumns()));
+        } else {
+            BasicConverter.generalProjections(items);
+        }
+
+        if (select.getWhere() != null) {
+            select.setWhere(BaseRepositoryQuery.convertExpressionToSnakeCase(select.getWhere()));
+        }
+
+        if (select.getGroupBy() != null) {
+            GroupByElement group = select.getGroupBy();
+            List<net.sf.jsqlparser.expression.Expression> groupBy = group.getGroupByExpressions();
+            groupBy.replaceAll(BaseRepositoryQuery::convertExpressionToSnakeCase);
+        }
+
+        if (select.getOrderByElements() != null) {
+            List<OrderByElement> orderBy = select.getOrderByElements();
+            for (OrderByElement orderByElement : orderBy) {
+                orderByElement.setExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(orderByElement.getExpression()));
+            }
+        }
+
+        if (select.getHaving() != null) {
+            select.setHaving(BaseRepositoryQuery.convertExpressionToSnakeCase(select.getHaving()));
+        }
+        processJoins(entity, select);
     }
 
 
@@ -95,7 +107,9 @@ public class BasicConverter {
         if (joins != null) {
             for (Join j : joins) {
                 if (j.getRightItem() instanceof ParenthesedSelect ps) {
-                    convertFieldsToSnakeCase(ps.getSelectBody(), entity);
+                    if (ps.getSelect() instanceof Select innerSel) {
+                        convertPlainSelectToSnakeCase(innerSel.getPlainSelect(), entity);
+                    }
                 } else {
                     BasicConverter.processJoin(j, units);
                 }
@@ -170,8 +184,19 @@ public class BasicConverter {
                 String lhs = null;
                 String rhs = null;
 
-                // find if there is a join column annotation, that will tell us the column names
-                // to map for the on clause.
+                // NEW: resolve element type for collection (e.g. List<Vehicle>)
+                com.github.javaparser.ast.type.Type resolvedType = member.getElementType();
+                if (resolvedType.isClassOrInterfaceType()) {
+                    var cit = resolvedType.asClassOrInterfaceType();
+                    if (cit.getTypeArguments().isPresent() && !cit.getTypeArguments().get().isEmpty()) {
+                        var firstArg = cit.getTypeArguments().get().getFirst();
+                        if (firstArg.isPresent()) {
+                            resolvedType = firstArg.get();
+                        }
+                    }
+                }
+
+                // find if there is a join column annotation
                 Optional<AnnotationExpr> annotationExpr =  member.getAnnotationByName("JoinColumn");
 
                 if (annotationExpr.isPresent()) {
@@ -191,23 +216,24 @@ public class BasicConverter {
                 }
 
 
-                other = BaseRepositoryParser.findEntity(member.getElementType());
+                other = BaseRepositoryParser.findEntity(resolvedType);
 
                 String tableName = BaseRepositoryParser.findTableName(other);
                 if (tableName == null || other == null) {
-                    throw new AntikytheraException("Could not find table name for " + member.getElementType());
+                    throw new AntikytheraException("Could not find table name for " + resolvedType);
                 }
                 if (BaseRepositoryParser.isOracle()) {
                     tableName = tableName.replace("\"", "");
                 }
 
-                var f = j.getFromItem();
-                if (f instanceof Table) {
-                    Table t = new Table(tableName);
-                    t.setAlias(f.getAlias());
-                    j.setFromItem(t);
+                // FIX: replace RIGHT item (the HQL path) with actual table name preserving alias
+                String rightAlias = parts[1].split(" ")[1];
+                Table rightTable = new Table(tableName);
+                rightTable.setAlias(new net.sf.jsqlparser.expression.Alias(rightAlias));
+                j.setRightItem(rightTable);
 
-                }
+                // leave fromItem as-is; no longer modify left side here
+                // ...existing code...
                 if (lhs == null || rhs == null) {
                     rhs = lhs = BasicConverter.implicitJoin(other, lhs);
                 }
@@ -218,7 +244,7 @@ public class BasicConverter {
                     }
                     EqualsTo eq = new EqualsTo();
                     eq.setLeftExpression(new Column(parts[0] + "." + lhs));
-                    eq.setRightExpression(new Column(parts[1].split(" ")[1] + "." + rhs));
+                    eq.setRightExpression(new Column(rightAlias + "." + rhs));
                     j.getOnExpressions().add(eq);
                 }
 
