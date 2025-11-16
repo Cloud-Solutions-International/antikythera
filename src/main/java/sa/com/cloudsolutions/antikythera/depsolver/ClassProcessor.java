@@ -113,32 +113,38 @@ public class ClassProcessor extends AbstractCompiler {
          * if we have a compilation unit.
          */
         CompilationUnit depCu = getCompilationUnit(dependency.getTo());
-        if (depCu != null) {
-            for (var decl : depCu.getTypes()) {
-                if (decl.isClassOrInterfaceDeclaration() && decl.asClassOrInterfaceDeclaration().isInterface()) {
-                    continue;
-                }
-                String targetName = dependency.getTo();
-                if (!copied.contains(targetName) && targetName.startsWith(Settings.getBasePackage())) {
-                    /*
-                     * There maybe cyclic dependencies, specially if you have @Entity mappings. Therefor
-                     * it's best to make sure that we haven't copied this file already and also to make
-                     * sure that the class is directly part of the application under test.
-                     */
+        if (depCu == null) {
+            return;
+        }
 
-                    try {
-                        copied.add(targetName);
-                        DTOHandler handler = new DTOHandler();
-                        handler.copyDTO(classToPath(targetName));
+        for (var decl : depCu.getTypes()) {
+            if (decl.isClassOrInterfaceDeclaration() && decl.asClassOrInterfaceDeclaration().isInterface()) {
+                continue;
+            }
+            String targetName = dependency.getTo();
+            if (!copied.contains(targetName) && targetName.startsWith(Settings.getBasePackage())) {
+                /*
+                 * There maybe cyclic dependencies, specially if you have @Entity mappings. Therefor
+                 * it's best to make sure that we haven't copied this file already and also to make
+                 * sure that the class is directly part of the application under test.
+                 */
 
-                    } catch (FileNotFoundException fe) {
-                        if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
-                            logger.warn("Could not find {} for copying", targetName);
-                        } else {
-                            throw fe;
-                        }
-                    }
-                }
+                copyDependencyHelper(targetName);
+            }
+        }
+    }
+
+    private static void copyDependencyHelper(String targetName) throws IOException {
+        try {
+            copied.add(targetName);
+            DTOHandler handler = new DTOHandler();
+            handler.copyDTO(classToPath(targetName));
+
+        } catch (FileNotFoundException fe) {
+            if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
+                logger.warn("Could not find {} for copying", targetName);
+            } else {
+                throw fe;
             }
         }
     }
@@ -332,28 +338,7 @@ public class ClassProcessor extends AbstractCompiler {
         if(typeArg.isPrimitiveType() ||
                 (typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().isBoxedType())) {
             Node parent = typeArg.getParentNode().orElse(null);
-            if (parent instanceof VariableDeclarator vadecl) {
-                Expression init = vadecl.getInitializer().orElse(null);
-                if (init != null) {
-                    if (init.isFieldAccessExpr()) {
-                        FieldAccessExpr fae = init.asFieldAccessExpr();
-                        ResolvedValueDeclaration rfd = fae.resolve();
-                        addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, rfd.getType().describe()));
-
-                    }
-                    else if (!init.isConditionalExpr() && !init.isEnclosedExpr() && !init.isCastExpr() &&
-                            !init.isMethodCallExpr() && !init.isLiteralExpr()) {
-                        JavaParserFieldDeclaration fieldDeclaration = symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
-                        ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
-                        addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, declaringType.getQualifiedName()));
-                        return true;
-                    }
-                }
-                else {
-                    logger.debug("Variable {} being initialized through method call but it should not matter", typeArg);
-                }
-            }
-            return false;
+            return createEdgeHelper(typeArg, from, parent);
         }
         String description = typeArg.resolve().describe();
         if (!description.startsWith("java.")) {
@@ -365,6 +350,31 @@ public class ClassProcessor extends AbstractCompiler {
                 }
             }
             addEdge(from.getFullyQualifiedName().orElse(null), dependency);
+        }
+        return false;
+    }
+
+    private boolean createEdgeHelper(Type typeArg, TypeDeclaration<?> from, Node parent) {
+        if (parent instanceof VariableDeclarator vadecl) {
+            Expression init = vadecl.getInitializer().orElse(null);
+            if (init != null) {
+                if (init.isFieldAccessExpr()) {
+                    FieldAccessExpr fae = init.asFieldAccessExpr();
+                    ResolvedValueDeclaration rfd = fae.resolve();
+                    addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, rfd.getType().describe()));
+
+                }
+                else if (!init.isConditionalExpr() && !init.isEnclosedExpr() && !init.isCastExpr() &&
+                        !init.isMethodCallExpr() && !init.isLiteralExpr()) {
+                    JavaParserFieldDeclaration fieldDeclaration = symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
+                    ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
+                    addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, declaringType.getQualifiedName()));
+                    return true;
+                }
+            }
+            else {
+                logger.debug("Variable {} being initialized through method call but it should not matter", typeArg);
+            }
         }
         return false;
     }

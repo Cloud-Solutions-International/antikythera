@@ -405,13 +405,12 @@ public class EntityMappingResolver {
         if (field.isAnnotationPresent(ManyToOne.class) || field.isAnnotationPresent(OneToOne.class)) {
             return field.getType();
         }
-        if (field.isAnnotationPresent(OneToMany.class) || field.isAnnotationPresent(ManyToMany.class)) {
+        if ((field.isAnnotationPresent(OneToMany.class) || field.isAnnotationPresent(ManyToMany.class)) &&
+                Collection.class.isAssignableFrom(field.getType())) {
             // For collections, we need to get the generic type
-            if (Collection.class.isAssignableFrom(field.getType())) {
-                java.lang.reflect.Type genericType = field.getGenericType();
-                if (genericType instanceof java.lang.reflect.ParameterizedType paramType) {
-                    return (Class<?>) paramType.getActualTypeArguments()[0];
-                }
+            java.lang.reflect.Type genericType = field.getGenericType();
+            if (genericType instanceof java.lang.reflect.ParameterizedType paramType) {
+                return (Class<?>) paramType.getActualTypeArguments()[0];
             }
         }
         return field.getType();
