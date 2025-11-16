@@ -10,13 +10,11 @@ import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
-import net.sf.jsqlparser.statement.select.SelectItem;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.TestHelper;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -31,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * We simulate HQL style joins (entity.property alias) by supplying a custom FromItem whose toString()
  * matches the expected pattern that BasicConverter.split(".").
  */
-public class BasicConverterTest extends TestHelper {
+class BasicConverterTest extends TestHelper {
     private static final String USER_MODEL = "sa.com.cloudsolutions.antikythera.testhelper.model.User";
 
     // Helper subclass to force the toString() format "u.vehicles v" for join processing
@@ -71,10 +69,10 @@ public class BasicConverterTest extends TestHelper {
         j1.setRightItem(new PathTable("u.vehicles", "j"));
         ps.setJoins(List.of(j1));
         BasicConverter.convertFieldsToSnakeCase(stmt, wrapper);
-        assertTrue(ps.getSelectItems().getFirst().getExpression() instanceof AllColumns);
+        assertInstanceOf(AllColumns.class, ps.getSelectItems().getFirst().getExpression());
         assertEquals(1, j1.getOnExpressions().size());
         // Right item should now be a concrete table name, not path
-        assertTrue(j1.getRightItem() instanceof Table);
+        assertInstanceOf(Table.class, j1.getRightItem());
         assertFalse(j1.getRightItem().toString().contains("u.vehicles"));
     }
 
@@ -100,11 +98,11 @@ public class BasicConverterTest extends TestHelper {
         j2.setRightItem(parenthesedSelect);
         outerPs.setJoins(List.of(j1, j2));
         BasicConverter.convertFieldsToSnakeCase(outerStmt, wrapper);
-        assertTrue(outerPs.getSelectItems().getFirst().getExpression() instanceof AllColumns);
+        assertInstanceOf(AllColumns.class, outerPs.getSelectItems().getFirst().getExpression());
         assertEquals(1, j1.getOnExpressions().size());
-        assertTrue(j1.getRightItem() instanceof Table);
+        assertInstanceOf(Table.class, j1.getRightItem());
         PlainSelect innerPs = innerSel.getPlainSelect();
-        assertTrue(innerPs.getSelectItems().getFirst().getExpression() instanceof AllColumns);
+        assertInstanceOf(AllColumns.class, innerPs.getSelectItems().getFirst().getExpression());
         assertTrue(j2.getOnExpressions().isEmpty());
     }
 
@@ -120,7 +118,7 @@ public class BasicConverterTest extends TestHelper {
         j1.setRightItem(new PathTable("u.vehicles", "v"));
         ps.setJoins(List.of(j1));
         BasicConverter.convertFieldsToSnakeCase(stmt, wrapper);
-        assertTrue(ps.getSelectItems().getFirst().getExpression() instanceof AllColumns);
+        assertInstanceOf(AllColumns.class, ps.getSelectItems().getFirst().getExpression());
         assertEquals(1, j1.getOnExpressions().size());
     }
 
@@ -143,9 +141,9 @@ public class BasicConverterTest extends TestHelper {
         j2.setRightItem(parenthesedSelect);
         outerPs.setJoins(List.of(j1, j2));
         BasicConverter.convertFieldsToSnakeCase(outerStmt, wrapper);
-        assertTrue(outerPs.getSelectItems().getFirst().getExpression() instanceof AllColumns);
+        assertInstanceOf(AllColumns.class, outerPs.getSelectItems().getFirst().getExpression());
         assertEquals(1, j1.getOnExpressions().size());
         PlainSelect innerPs = innerSel.getPlainSelect();
-        assertTrue(innerPs.getSelectItems().getFirst().getExpression() instanceof AllColumns);
+        assertInstanceOf(AllColumns.class, innerPs.getSelectItems().getFirst().getExpression());
     }
 }

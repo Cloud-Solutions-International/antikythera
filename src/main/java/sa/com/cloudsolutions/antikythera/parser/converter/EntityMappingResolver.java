@@ -23,9 +23,11 @@ import java.util.*;
  * and relationship information for joins.
  */
 public class EntityMappingResolver {
-    
+
     private static final Map<String, EntityMetadata> mapping = new HashMap<>();
     private static final Map<String, Set<String>> shortNames = new HashMap<>();
+    public static final String DTYPE = "dtype";
+
     /**
      * Private constructor to prevent instantiation.
      */
@@ -41,7 +43,7 @@ public class EntityMappingResolver {
         shortNames.clear();
     }
 
-    public static void build() throws ReflectiveOperationException {
+    public static void build() {
         if (!mapping.isEmpty()) {
             throw new AntikytheraException("Already built");
         }
@@ -92,17 +94,6 @@ public class EntityMappingResolver {
     }
 
     /**
-     * Checks if a field is a relationship field (JPA relationships).
-     */
-    private static boolean isRelationshipFieldFromAST(com.github.javaparser.ast.body.FieldDeclaration field) {
-        return field.getAnnotationByName("OneToOne").isPresent() ||
-                field.getAnnotationByName("OneToMany").isPresent() ||
-                field.getAnnotationByName("ManyToOne").isPresent() ||
-                field.getAnnotationByName("ManyToMany").isPresent();
-    }
-
-
-    /**
      * Gets column name from @Column annotation or returns null.
      */
     private static String getColumnNameFromAST(FieldDeclaration field)  {
@@ -124,7 +115,7 @@ public class EntityMappingResolver {
      *
      * @return EntityMetadata from a parsed source, or null if not available
      */
-    private static EntityMetadata buildMetadataFromSources(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+    private static EntityMetadata buildMetadataFromSources(TypeDeclaration<?> typeDecl) {
         String tableName = getTableName(typeDecl);
         Map<String, String> propertyToColumnMappings = buildPropertyToColumnMapFromAST(typeDecl);
 
@@ -155,7 +146,7 @@ public class EntityMappingResolver {
      * @param typeDecl The entity type declaration
      * @return Discriminator value, or null if not specified
      */
-    public static String getDiscriminatorValue(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+    public static String getDiscriminatorValue(TypeDeclaration<?> typeDecl)  {
         Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorValue");
 
         if (discAnn.isPresent()) {
@@ -248,7 +239,7 @@ public class EntityMappingResolver {
      * @param typeDecl The entity type declaration
      * @return Discriminator column name, or "dtype" if not specified
      */
-    public static String getDiscriminatorColumn(TypeDeclaration<?> typeDecl) throws ReflectiveOperationException {
+    public static String getDiscriminatorColumn(TypeDeclaration<?> typeDecl)  {
         Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorColumn");
 
         if (discAnn.isPresent()) {
@@ -258,7 +249,7 @@ public class EntityMappingResolver {
             }
         }
 
-        return "dtype"; // Default discriminator column
+        return DTYPE; // Default discriminator column
     }
 
     private static String getEntityName(Class<?> entityClass) {
@@ -280,37 +271,41 @@ public class EntityMappingResolver {
         } else {
             tableName = AbstractCompiler.camelToSnakeCase(entityName);
         }
-        
+
+        return buildTableMapping(entityClass, tableName, schema);
+    }
+
+    private static TableMapping buildTableMapping(Class<?> entityClass, String tableName, String schema) {
         Map<String, String> propertyToColumnMap = buildPropertyToColumnMap(entityClass);
-        
+
         // Extract inheritance information
         String discriminatorColumn = null;
         String discriminatorValue = null;
         String inheritanceType = null;
         TableMapping parentTable = null;
-        
+
         Inheritance inheritanceAnnotation = entityClass.getAnnotation(Inheritance.class);
         if (inheritanceAnnotation != null) {
             inheritanceType = inheritanceAnnotation.strategy().name();
         }
-        
-        DiscriminatorColumn discriminatorColumnAnnotation = 
+
+        DiscriminatorColumn discriminatorColumnAnnotation =
             entityClass.getAnnotation(DiscriminatorColumn.class);
         if (discriminatorColumnAnnotation != null) {
             discriminatorColumn = discriminatorColumnAnnotation.name();
             if (discriminatorColumn.isEmpty()) {
-                discriminatorColumn = "dtype"; // Default
+                discriminatorColumn = DTYPE; // Default
             }
         } else if (inheritanceType != null && "SINGLE_TABLE".equals(inheritanceType)) {
-            discriminatorColumn = "dtype"; // Default for SINGLE_TABLE
+            discriminatorColumn = DTYPE; // Default for SINGLE_TABLE
         }
-        
-        DiscriminatorValue discriminatorValueAnnotation = 
+
+        DiscriminatorValue discriminatorValueAnnotation =
             entityClass.getAnnotation(DiscriminatorValue.class);
         if (discriminatorValueAnnotation != null) {
             discriminatorValue = discriminatorValueAnnotation.value();
         }
-        
+
         // For JOINED strategy, build parent table mapping if exists
         if ("JOINED".equals(inheritanceType)) {
             Class<?> superclass = entityClass.getSuperclass();
@@ -319,12 +314,12 @@ public class EntityMappingResolver {
                 parentTable = buildTableMapping(superclass, parentEntityName);
             }
         }
-        
+
         return new TableMapping(tableName, schema, propertyToColumnMap,
-                                discriminatorColumn, discriminatorValue, 
-                                inheritanceType, parentTable);
+                discriminatorColumn, discriminatorValue,
+                inheritanceType, parentTable);
     }
-    
+
     private static Map<String, String> buildPropertyToColumnMap(Class<?> entityClass) {
         Map<String, String> propertyToColumnMap = new HashMap<>();
         
@@ -409,7 +404,8 @@ public class EntityMappingResolver {
     private static Class<?> getTargetEntityClass(Field field) {
         if (field.isAnnotationPresent(ManyToOne.class) || field.isAnnotationPresent(OneToOne.class)) {
             return field.getType();
-        } else if (field.isAnnotationPresent(OneToMany.class) || field.isAnnotationPresent(ManyToMany.class)) {
+        }
+        if (field.isAnnotationPresent(OneToMany.class) || field.isAnnotationPresent(ManyToMany.class)) {
             // For collections, we need to get the generic type
             if (Collection.class.isAssignableFrom(field.getType())) {
                 java.lang.reflect.Type genericType = field.getGenericType();

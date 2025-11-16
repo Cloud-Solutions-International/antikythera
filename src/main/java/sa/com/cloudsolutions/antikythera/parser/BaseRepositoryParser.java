@@ -73,7 +73,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
     String table;
     /**
      * The java parser type associated with the entity.
-     * TODO remove this
      */
     Type entityType;
 
