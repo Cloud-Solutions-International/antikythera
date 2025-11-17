@@ -313,4 +313,28 @@ class TestRepositoryParser {
         RepositoryQuery query2 = parser.getQueryFromRepositoryMethod(callable);
         assertNotNull(query2);
     }
+
+    @Test
+    void testFindByFieldInMethod() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        // Test extractComponents for method with "In"
+        List<String> components = parser.extractComponents("findByApprovalIdIn");
+        assertEquals(List.of("findBy", "ApprovalId", "In"), components);
+
+        // Create a mock method to test parsing
+        String methodCode = "public interface TestRepo { List<User> findByApprovalIdIn(Collection<Long> approvalIds); }";
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        // Test that parseNonAnnotatedMethod handles "In" correctly
+        RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+        assertNotNull(q);
+        String sql = q.getQuery();
+        assertTrue(sql.contains("IN"), "Query should contain IN clause: " + sql);
+        assertTrue(sql.contains("approval_id"), "Query should contain snake_case field: " + sql);
+    }
 }

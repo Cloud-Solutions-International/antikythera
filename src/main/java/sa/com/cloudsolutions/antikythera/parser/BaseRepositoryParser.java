@@ -179,6 +179,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 case "findAllById" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE id = ?");
                 case "findBy", "get" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
                 case "findFirstBy", "findTopBy" -> { top = true; sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE "); }
+                case "In" -> sql.append(" IN (?) ");
+                case "NotIn" -> sql.append(" NOT IN (?) ");
                 case "Between" -> sql.append(" BETWEEN ? AND ? ");
                 case "GreaterThan" -> sql.append(" > ? ");
                 case "LessThan" -> sql.append(" < ? ");
@@ -199,11 +201,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     private void appendDefaultComponent(StringBuilder sql, String component, String next, boolean ordering) {
         sql.append(camelToSnake(component));
         if (!ordering) {
-            if (next.equals("In")) {
-                sql.append(" In  (?) ");
-            } else if (next.equals("NotIn")) {
-                sql.append(" NOT In (?) ");
-            } else if (shouldAppendEquals(next)) {
+            if (shouldAppendEquals(next)) {
                 sql.append(" = ? ");
             } else {
                 sql.append(' ');
@@ -216,7 +214,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
     private boolean shouldAppendEquals(String next) {
         return next.isEmpty() || (!next.equals("Between") && !next.equals("GreaterThan") && !next.equals("LessThan") &&
                 !next.equals("LessThanEqual") && !next.equals("IsNotNull") && !next.equals("Like") &&
-                !next.equals("GreaterThanEqual") && !next.equals("IsNull") && !next.equals("Containing"));
+                !next.equals("GreaterThanEqual") && !next.equals("IsNull") && !next.equals("Containing") &&
+                !next.equals("In") && !next.equals("NotIn"));
     }
 
     /** Apply dialect-specific top limit (FIRST/TOP semantics) */
