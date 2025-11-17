@@ -220,7 +220,13 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 case "Desc" -> {
                     // Desc should only appear after a field name in ORDER BY context
                     if (ordering) {
-                        sql.append("DESC ");
+                        sql.append("DESC");
+                        // Add comma if next is a field name (not Asc, Desc, or empty)
+                        if (!next.isEmpty() && !next.equals("Desc") && !next.equals("Asc")) {
+                            sql.append(", ");
+                        } else {
+                            sql.append(' ');
+                        }
                     } else {
                         // This shouldn't happen in well-formed method names, but handle it as a field
                         appendDefaultComponent(sql, component, next, ordering);
@@ -229,7 +235,13 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 case "Asc" -> {
                     // Asc should only appear after a field name in ORDER BY context
                     if (ordering) {
-                        sql.append("ASC ");
+                        sql.append("ASC");
+                        // Add comma if next is a field name (not Asc, Desc, or empty)
+                        if (!next.isEmpty() && !next.equals("Desc") && !next.equals("Asc")) {
+                            sql.append(", ");
+                        } else {
+                            sql.append(' ');
+                        }
                     } else {
                         // This shouldn't happen in well-formed method names, but handle it as a field
                         appendDefaultComponent(sql, component, next, ordering);
@@ -247,12 +259,17 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (!ordering) {
             if (shouldAppendEquals(next)) {
                 sql.append(" = ? ");
-            } else {
+            } else if (!next.equals("Not")) {
+                // Only add space if next is not "Not" (which will add its own operator)
                 sql.append(' ');
             }
         } else {
-            // In ORDER BY context, add comma if next is not Desc/Asc/empty
-            if (!next.isEmpty() && !next.equals("Desc") && !next.equals("Asc")) {
+            // In ORDER BY context:
+            // - If next is Asc/Desc, just add space (they will handle comma if needed)
+            // - Otherwise, add comma (for multiple fields without explicit Asc/Desc)
+            if (next.equals("Desc") || next.equals("Asc")) {
+                sql.append(' ');
+            } else if (!next.isEmpty()) {
                 sql.append(", ");
             } else {
                 sql.append(' ');
@@ -264,7 +281,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return next.isEmpty() || (!next.equals("Between") && !next.equals("GreaterThan") && !next.equals("LessThan") &&
                 !next.equals("LessThanEqual") && !next.equals("IsNotNull") && !next.equals("Like") &&
                 !next.equals("GreaterThanEqual") && !next.equals("IsNull") && !next.equals("Containing") &&
-                !next.equals("In") && !next.equals("NotIn"));
+                !next.equals("In") && !next.equals("NotIn") && !next.equals("Not"));
     }
 
     /** Apply dialect-specific top limit (FIRST/TOP semantics) */
