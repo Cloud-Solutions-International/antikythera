@@ -109,22 +109,25 @@ public class Antikythera {
         String name = mavenHelper.copyTemplate("TestHelper.txt", testPath, "base");
         String java = name.replace(".txt", JAVA);
         File f = new File(name);
-        f.renameTo(new File(java));
+        if (f.renameTo(new File(java))) {
 
-        mavenHelper.copyTemplate("Configurations.java", testPath, "configurations");
+            mavenHelper.copyTemplate("Configurations.java", testPath, "configurations");
 
-        Path pathToCopy = Paths.get(outputPath, SRC, "test", "resources");
-        Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get(SRC, "test", "resources"), pathToCopy);
+            Path pathToCopy = Paths.get(outputPath, SRC, "test", "resources");
+            Files.createDirectories(pathToCopy);
+            copyFolder(Paths.get(SRC, "test", "resources"), pathToCopy);
 
-        pathToCopy = Paths.get(outputPath, PACKAGE_PATH, "constants");
-        Files.createDirectories(pathToCopy);
-        copyFolder(Paths.get(PACKAGE_PATH, "constants"), pathToCopy);
+            pathToCopy = Paths.get(outputPath, PACKAGE_PATH, "constants");
+            Files.createDirectories(pathToCopy);
+            copyFolder(Paths.get(PACKAGE_PATH, "constants"), pathToCopy);
 
-        pathToCopy = Paths.get(outputPath, PACKAGE_PATH, "configurations");
-        Files.createDirectories(pathToCopy);
+            pathToCopy = Paths.get(outputPath, PACKAGE_PATH, "configurations");
+            Files.createDirectories(pathToCopy);
+        }
+        else {
+            throw  new AntikytheraException("Could not copy resources");
+        }
     }
-
     /**
      * Generate tests for the controllers
      *
