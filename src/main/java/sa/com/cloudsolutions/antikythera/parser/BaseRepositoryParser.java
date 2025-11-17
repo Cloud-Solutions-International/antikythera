@@ -50,6 +50,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     protected static final Pattern CAMEL_TO_SNAKE_PATTERN = Pattern.compile("([a-z])([A-Z]+)");
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\?");
     public static final String NATIVE_QUERY = "nativeQuery";
+    public static final String WHERE = "WHERE";
     /**
      * SQL dialect, at the moment oracle or postgresql as identified from the connection url
      */
@@ -222,10 +223,10 @@ public class BaseRepositoryParser extends AbstractCompiler {
     private void applyTopLimit(StringBuilder sql) {
         String built = sql.toString();
         String trimmedUpper = built.trim().toUpperCase();
-        boolean trailingWhere = trimmedUpper.endsWith("WHERE");
+        boolean trailingWhere = trimmedUpper.endsWith(WHERE);
         if (dialect == DatabaseDialect.ORACLE) {
             if (trailingWhere) {
-                int idx = built.toUpperCase().lastIndexOf("WHERE");
+                int idx = built.toUpperCase().lastIndexOf(WHERE);
                 built = built.substring(0, idx) + "WHERE ROWNUM = 1";
             } else {
                 built = dialect.applyLimitClause(built, 1);
@@ -233,7 +234,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         } else { // PostgreSQL (default) and others that use LIMIT
             if (trailingWhere) {
                 // remove dangling WHERE before applying limit
-                built = built.substring(0, built.toUpperCase().lastIndexOf("WHERE"));
+                built = built.substring(0, built.toUpperCase().lastIndexOf(WHERE));
                 built = built.trim();
             }
             built = dialect.applyLimitClause(built, 1);

@@ -76,6 +76,7 @@ public class ClassProcessor extends AbstractCompiler {
     protected static final Map<String, Set<ClassDependency>> dependencies = new HashMap<>();
 
     static final Set<String> copied = new HashSet<>();
+    public static final String PREFIX = "java.";
 
     /**
      * A collection of all imports encountered in a class.
@@ -103,7 +104,7 @@ public class ClassProcessor extends AbstractCompiler {
      * @param nameAsString a fully qualified class name
      */
     protected void copyDependency(String nameAsString, ClassDependency dependency) throws IOException {
-        if (dependency.isExternal() || nameAsString.startsWith("java.")
+        if (dependency.isExternal() || nameAsString.startsWith(PREFIX)
                 || AntikytheraRunTime.isInterface(nameAsString)
                 || nameAsString.startsWith("org.springframework")) {
             return;
@@ -253,7 +254,6 @@ public class ClassProcessor extends AbstractCompiler {
         }
         if (secondaryType != null) {
             for (Type t : secondaryType) {
-                // todo find out the proper way to indentify Type parameters like List<T>
                 if(t.asString().length() != 1 ) {
                     solveTypeDependencies(from, t);
                 }
@@ -325,7 +325,7 @@ public class ClassProcessor extends AbstractCompiler {
             return createEdgeHelper(typeArg, from);
         } catch (UnsolvedSymbolException e) {
             ImportDeclaration decl = resolveImport(typeArg.asClassOrInterfaceType().getNameAsString());
-            if (decl != null && !decl.getNameAsString().startsWith("java.")) {
+            if (decl != null && !decl.getNameAsString().startsWith(PREFIX)) {
                 addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, decl.getNameAsString()));
                 return true;
             }
@@ -341,7 +341,7 @@ public class ClassProcessor extends AbstractCompiler {
             return createEdgeHelper(typeArg, from, parent);
         }
         String description = typeArg.resolve().describe();
-        if (!description.startsWith("java.")) {
+        if (!description.startsWith(PREFIX)) {
             ClassDependency dependency = new ClassDependency(from, description);
             for (var jarSolver : jarSolvers) {
                 if (jarSolver.getKnownClasses().contains(description)) {
@@ -472,7 +472,7 @@ public class ClassProcessor extends AbstractCompiler {
         if (imp != null) {
             keepImports.add(imp);
             ClassDependency dep = new ClassDependency(fromType, imp.getNameAsString());
-            addEdge(fromType.getFullyQualifiedName().get(), dep);
+            addEdge(fromType.getFullyQualifiedName().orElseThrow(), dep);
         }
         else {
             /*
@@ -605,6 +605,7 @@ public class ClassProcessor extends AbstractCompiler {
         field.setAnnotations(filteredAnnotations);
     }
 
+    @SuppressWarnings("java:S1452")
     protected ModifierVisitor<?> createTypeCollector() {
         return new TypeCollector();
     }
