@@ -153,13 +153,21 @@ public class BaseRepositoryParser extends AbstractCompiler {
     RepositoryQuery parseNonAnnotatedMethod(Callable md) {
         String methodName = md.getNameAsString();
         List<String> components = extractComponents(methodName);
+        
+        // Validate that we have components to work with
+        if (components.isEmpty()) {
+            logger.warn("Method name '{}' did not produce any recognizable JPA query components", methodName);
+            // Return a basic query as fallback
+            return queryBuilder("SELECT * FROM " + findTableName(entity), QueryType.DERIVED, md);
+        }
+        
         StringBuilder sql = new StringBuilder();
         String tableName = findTableName(entity);
         boolean top = false;
         if (tableName != null) {
             top = buildSelectAndWhereClauses(components, sql, tableName);
         } else {
-            logger.warn("Table name cannot be null");
+            logger.warn("Table name cannot be null for entity");
         }
         if (top) {
             applyTopLimit(sql);
@@ -281,7 +289,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return next.isEmpty() || (!next.equals("Between") && !next.equals("GreaterThan") && !next.equals("LessThan") &&
                 !next.equals("LessThanEqual") && !next.equals("IsNotNull") && !next.equals("Like") &&
                 !next.equals("GreaterThanEqual") && !next.equals("IsNull") && !next.equals("Containing") &&
-                !next.equals("In") && !next.equals("NotIn") && !next.equals("Not"));
+                !next.equals("In") && !next.equals("NotIn") && !next.equals("Not") && !next.equals("Or"));
     }
 
     /** Apply dialect-specific top limit (FIRST/TOP semantics) */
