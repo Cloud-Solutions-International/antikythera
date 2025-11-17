@@ -51,7 +51,7 @@ public class Callable {
 
     }
 
-    @SuppressWarnings("java:S152")
+    @SuppressWarnings("java:S1452")
     public CallableDeclaration<?> getCallableDeclaration() {
         return callableDeclaration;
     }
