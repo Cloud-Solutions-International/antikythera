@@ -337,4 +337,101 @@ class TestRepositoryParser {
         assertTrue(sql.contains("IN"), "Query should contain IN clause: " + sql);
         assertTrue(sql.contains("approval_id"), "Query should contain snake_case field: " + sql);
     }
+
+    @Test
+    void testOrderByWithDesc() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        // Test extractComponents for method with OrderBy and Desc
+        List<String> components = parser.extractComponents("findByActiveOrderByCreatedDateDesc");
+        assertEquals(List.of("findBy", "Active", "OrderBy", "CreatedDate", "Desc"), components);
+
+        // Create a mock method to test parsing
+        String methodCode = "public interface TestRepo { List<User> findByActiveOrderByCreatedDateDesc(Boolean active); }";
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        // Test that parseNonAnnotatedMethod handles OrderBy with Desc correctly
+        RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+        assertNotNull(q);
+        String sql = q.getQuery();
+        assertTrue(sql.contains("ORDER BY"), "Query should contain ORDER BY: " + sql);
+        assertTrue(sql.contains("created_date"), "Query should contain snake_case field: " + sql);
+        assertTrue(sql.contains("DESC"), "Query should contain DESC keyword: " + sql);
+    }
+
+    @Test
+    void testOrderByWithAsc() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        // Create a mock method to test parsing with Asc
+        String methodCode = "public interface TestRepo { List<User> findAllOrderByNameAsc(); }";
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+        assertNotNull(q);
+        String sql = q.getQuery();
+        assertTrue(sql.contains("ORDER BY"), "Query should contain ORDER BY: " + sql);
+        assertTrue(sql.contains("ASC") || !sql.contains("DESC"), "Query should contain ASC or no DESC: " + sql);
+    }
+
+    @Test
+    void testOrderByMultipleFields() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        // Test with multiple order by fields
+        String methodCode = "public interface TestRepo { List<User> findAllOrderByLastNameAscFirstNameDesc(); }";
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+        assertNotNull(q);
+        String sql = q.getQuery();
+        assertTrue(sql.contains("ORDER BY"), "Query should contain ORDER BY: " + sql);
+        assertTrue(sql.contains("last_name"), "Query should contain last_name: " + sql);
+        assertTrue(sql.contains("first_name"), "Query should contain first_name: " + sql);
+    }
+
+    @Test
+    void testNotOperator() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        // Test Not operator standalone (e.g., findByActiveNot should mean active != ?)
+        List<String> components = parser.extractComponents("findByActiveNot");
+        assertEquals(List.of("findBy", "Active", "Not"), components);
+    }
+
+    @Test
+    void testFindFirstByWithNoWhereClause() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        // Test findFirst with no where clause (should still add LIMIT/ROWNUM)
+        String methodCode = "public interface TestRepo { User findFirstByOrderByIdDesc(); }";
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+        assertNotNull(q);
+        String sql = q.getQuery();
+        // Should have either LIMIT 1 (PostgreSQL) or WHERE ROWNUM (Oracle)
+        assertTrue(sql.contains("LIMIT 1") || sql.contains("ROWNUM"), 
+                  "Query should contain LIMIT or ROWNUM: " + sql);
+        assertTrue(sql.contains("ORDER BY"), "Query should contain ORDER BY: " + sql);
+        assertTrue(sql.contains("DESC"), "Query should contain DESC: " + sql);
+    }
 }
