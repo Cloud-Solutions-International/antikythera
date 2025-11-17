@@ -16,7 +16,7 @@ This document provides comprehensive technical information for AI agents (specif
 
 ## Project Overview
 
-**Antikythera** is an automated test generator for Java projects. It generates:
+**Antikythera** is an automated test generator and refacoring tool for Java projects. It generates:
 - **Unit tests** for service classes and business logic
 - **API tests** for REST endpoints using REST Assured
 

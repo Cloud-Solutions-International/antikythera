@@ -22,7 +22,6 @@ import net.sf.jsqlparser.statement.Statement;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.converter.ConversionResult;
@@ -203,8 +202,6 @@ public class BaseRepositoryQuery {
             BasicConverter.convertFieldsToSnakeCase(statement, entity);
         } catch (JSQLParserException e) {
             logger.debug("{} could not be parsed", query);
-        } catch (AntikytheraException e) {
-            logger.debug(e.getMessage());
         }
     }
 
