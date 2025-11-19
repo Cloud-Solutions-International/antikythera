@@ -60,12 +60,14 @@ This document provides a comprehensive analysis of the `BaseRepositoryParser` cl
 
 ### Low Priority Issues (Documented for Future Work)
 
-8. **No Support for deleteBy/countBy/existsBy**
-   - These are valid JPA patterns but not currently supported
-   - Would require different SQL statement types (DELETE, SELECT COUNT, SELECT 1, etc.)
+8. **~~No Support for deleteBy/countBy/existsBy~~** ✅ IMPLEMENTED
+   - ✅ countBy - SELECT COUNT(*) statements now supported
+   - ✅ deleteBy - DELETE statements now supported
+   - ✅ existsBy - SELECT EXISTS statements now supported
 
 9. **No Support for Complex Projections**
    - Only SELECT * is generated, no support for specific field selections
+   - Future enhancement for custom field selection
 
 ## Code Changes
 
@@ -127,6 +129,64 @@ RepositoryQuery parseNonAnnotatedMethod(Callable md) {
 }
 ```
 
+## New Query Types Implemented
+
+### countBy Queries
+
+Count queries generate `SELECT COUNT(*)` statements to return the number of matching records.
+
+**Pattern**: `countByFieldName` or `countByField1AndField2`
+
+**Examples**:
+```java
+Long countByActive(Boolean active);
+// → SELECT COUNT(*) FROM users WHERE active = ?1
+
+Long countByActiveAndAgeGreaterThan(Boolean active, Integer age);
+// → SELECT COUNT(*) FROM users WHERE active = ?1 AND age > ?2
+```
+
+**Implementation**: Added `countBy` to keywords pattern and switch case that generates `SELECT COUNT(*) FROM table WHERE`.
+
+### deleteBy Queries
+
+Delete queries generate `DELETE FROM` statements to remove matching records.
+
+**Pattern**: `deleteByFieldName` or `deleteByField1AndField2`
+
+**Examples**:
+```java
+void deleteByActive(Boolean active);
+// → DELETE FROM users WHERE active = ?1
+
+void deleteByUsernameAndAge(String username, Integer age);
+// → DELETE FROM users WHERE username = ?1 AND age = ?2
+```
+
+**Implementation**: Added `deleteBy` to keywords pattern and switch case that generates `DELETE FROM table WHERE`.
+
+### existsBy Queries
+
+Exists queries generate `SELECT EXISTS` statements to check if matching records exist, returning a boolean result.
+
+**Pattern**: `existsByFieldName` or `existsByField1AndField2`
+
+**Examples**:
+```java
+boolean existsByUsername(String username);
+// → SELECT EXISTS (SELECT 1 FROM users WHERE username = ?1)
+
+boolean existsByActiveAndAgeGreaterThan(Boolean active, Integer age);
+// → SELECT EXISTS (SELECT 1 FROM users WHERE active = ?1 AND age > ?2)
+```
+
+**Implementation**: 
+- Added `existsBy` to keywords pattern
+- Added switch case that generates `SELECT EXISTS (SELECT 1 FROM table WHERE`
+- Modified `parseNonAnnotatedMethod` to detect existsBy queries and append closing parenthesis
+
+**Note**: All operators (And, Or, Not, In, Between, GreaterThan, etc.) work with all query types.
+
 ## Test Results
 
 ### Verified Test Cases
@@ -141,6 +201,10 @@ RepositoryQuery parseNonAnnotatedMethod(Callable md) {
 | `findByUsernameAndAge` | `SELECT * FROM users WHERE username = ?1 AND age = ?2` | ✅ Pass |
 | `findByUsernameOrAge` | `SELECT * FROM users WHERE username = ?1 OR age = ?2` | ✅ Pass |
 | `findByAgeGreaterThanAndUsernameContaining` | `SELECT * FROM users WHERE age > ?1 AND username LIKE ?2` | ✅ Pass |
+| `countByActive` | `SELECT COUNT(*) FROM users WHERE active = ?1` | ✅ Pass |
+| `countByActiveAndAgeGreaterThan` | `SELECT COUNT(*) FROM users WHERE active = ?1 AND age > ?2` | ✅ Pass |
+| `deleteByActive` | `DELETE FROM users WHERE active = ?1` | ✅ Pass |
+| `existsByUsername` | `SELECT EXISTS (SELECT 1 FROM users WHERE username = ?1)` | ✅ Pass |
 
 ## Supported JPA Query Patterns
 
@@ -150,9 +214,9 @@ RepositoryQuery parseNonAnnotatedMethod(Callable md) {
 - ✅ `findFirstBy...` - SELECT with LIMIT 1
 - ✅ `findTopBy...` - SELECT with LIMIT 1
 - ✅ `get...` - Alias for findBy
-- ❌ `deleteBy...` - Not yet supported
-- ❌ `countBy...` - Not yet supported
-- ❌ `existsBy...` - Not yet supported
+- ✅ `deleteBy...` - DELETE with WHERE clause
+- ✅ `countBy...` - SELECT COUNT(*) with WHERE clause
+- ✅ `existsBy...` - SELECT EXISTS subquery
 
 ### Operators
 - ✅ `And` - Logical AND
@@ -205,8 +269,8 @@ RepositoryQuery parseNonAnnotatedMethod(Callable md) {
 
 ### Long-term (Future)
 1. Refactor to strategy pattern for better maintainability
-2. Add support for deleteBy/countBy/existsBy
-3. Add support for custom projections
+2. ~~Add support for deleteBy/countBy/existsBy~~ ✅ IMPLEMENTED
+3. Add support for custom projections (SELECT specific fields)
 4. Consider performance optimization for complex queries
 
 ## Related Components
