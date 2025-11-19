@@ -559,18 +559,7 @@ public class AbstractCompiler {
          * If the compilation unit is null, this may be part of the java.lang package.
          */
         if (cu == null) {
-            try {
-                Class<?> c = Class.forName("java.lang." + className);
-                return new TypeWrapper(c);
-            } catch (ClassNotFoundException e) {
-                /*
-                 * dirty hack to handle an extreme edge case
-                 */
-                if (className.equals("Optional")) {
-                    return new TypeWrapper(Optional.class);
-                }
-            }
-            return null;
+            return findTypeFromJavaLang(className);
         }
 
         /*
@@ -611,6 +600,21 @@ public class AbstractCompiler {
         }
 
         return detectTypeWithClassLoaders(cu, className);
+    }
+
+    private static TypeWrapper findTypeFromJavaLang(String className) {
+        try {
+            Class<?> c = Class.forName("java.lang." + className);
+            return new TypeWrapper(c);
+        } catch (ClassNotFoundException e) {
+            /*
+             * dirty hack to handle an extreme edge case
+             */
+            if (className.equals("Optional")) {
+                return new TypeWrapper(Optional.class);
+            }
+        }
+        return null;
     }
 
     private static TypeWrapper detectTypeWithClassLoaders(CompilationUnit cu, String className) {
