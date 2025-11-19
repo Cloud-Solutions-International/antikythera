@@ -8,9 +8,11 @@ import com.github.javaparser.ast.expr.NameExpr;
 public class TestNgAsserter extends  Asserter {
 
 
+    public static final String ASSERT = "Assert";
+
     @Override
     public Expression assertNotNull(String variable) {
-        MethodCallExpr aNotNull = new MethodCallExpr(new NameExpr("Assert"), "assertNotNull");
+        MethodCallExpr aNotNull = new MethodCallExpr(new NameExpr(ASSERT), "assertNotNull");
         aNotNull.addArgument(new NameExpr(variable));
         return aNotNull;
     }
@@ -18,7 +20,7 @@ public class TestNgAsserter extends  Asserter {
 
     @Override
     public Expression assertNull(String variable) {
-        MethodCallExpr aNotNull = new MethodCallExpr(new NameExpr("Assert"), "assertNull");
+        MethodCallExpr aNotNull = new MethodCallExpr(new NameExpr(ASSERT), "assertNull");
         aNotNull.addArgument(new NameExpr(variable));
         return aNotNull;
     }
@@ -31,12 +33,11 @@ public class TestNgAsserter extends  Asserter {
 
     @Override
     public Expression assertEquals(String rhs, String lhs) {
-        MethodCallExpr assertEquals = new MethodCallExpr(new NameExpr("Assert"), "assertEquals");
-        return assertEquals;
+        return new MethodCallExpr(new NameExpr(ASSERT), "assertEquals");
     }
 
     @Override
     public Expression assertThrows(String invocation, MethodResponse response) {
-        throw new RuntimeException("Not implemented");
+        throw new IllegalStateException("Not implemented");
     }
 }

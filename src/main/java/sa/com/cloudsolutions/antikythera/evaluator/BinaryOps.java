@@ -95,15 +95,7 @@ public class BinaryOps {
 
             case AND -> new Variable((boolean) left.getValue() && (boolean) right.getValue());
 
-            case GREATER -> {
-                if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
-                    yield new Variable(NumericComparator.compare(left.getValue(), right.getValue()) > 0);
-                }
-                if (left.getValue() == null || right.getValue() == null) {
-                    throw new NullPointerException();
-                }
-                throw new EvaluatorException(leftExpression, rightExpression);
-            }
+            case GREATER -> checkGreaterThan(leftExpression, rightExpression, left, right);
 
             case GREATER_EQUALS -> {
                 if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
@@ -144,5 +136,15 @@ public class BinaryOps {
 
             default -> null;
         };
+    }
+
+    private static Variable checkGreaterThan(Expression leftExpression, Expression rightExpression, Variable left, Variable right) {
+        if (left.getValue() instanceof Number && right.getValue() instanceof Number) {
+            return new Variable(NumericComparator.compare(left.getValue(), right.getValue()) > 0);
+        }
+        if (left.getValue() == null || right.getValue() == null) {
+            throw new NullPointerException();
+        }
+        throw new EvaluatorException(leftExpression, rightExpression);
     }
 }
