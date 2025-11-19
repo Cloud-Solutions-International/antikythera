@@ -83,7 +83,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     Evaluator eval;
 
     protected static final Pattern KEYWORDS_PATTERN = Pattern.compile(
-            "get|findBy|findFirstBy|findTopBy|findAll|And|OrderBy|NotIn|In|Desc|Asc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan"
+            "get|findBy|findFirstBy|findTopBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|In|Desc|Asc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan"
     );
 
     public BaseRepositoryParser() throws IOException {
@@ -164,6 +164,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         StringBuilder sql = new StringBuilder();
         String tableName = findTableName(entity);
         boolean top = false;
+        boolean isExistsQuery = components.contains("existsBy");
         if (tableName != null) {
             top = buildSelectAndWhereClauses(components, sql, tableName);
         } else {
@@ -172,6 +173,12 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (top) {
             applyTopLimit(sql);
         }
+        
+        // Close the EXISTS subquery if needed
+        if (isExistsQuery) {
+            sql.append(")");
+        }
+        
         String finalSql = numberPlaceholders(sql.toString());
         return queryBuilder(finalSql, QueryType.DERIVED, md);
     }
@@ -195,6 +202,9 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 }
                 case "findAllById" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE id = ?");
                 case "findBy", "get" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
+                case "countBy" -> sql.append("SELECT COUNT(*) FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
+                case "deleteBy" -> sql.append("DELETE FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
+                case "existsBy" -> sql.append("SELECT EXISTS (SELECT 1 FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
                 case "findFirstBy", "findTopBy" -> { 
                     top = true; 
                     // Check if immediately followed by OrderBy (no WHERE clause)
