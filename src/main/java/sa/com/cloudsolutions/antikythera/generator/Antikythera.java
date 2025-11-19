@@ -119,8 +119,11 @@ public class Antikythera {
 
             pathToCopy = Paths.get(outputPath, PACKAGE_PATH, "constants");
             Files.createDirectories(pathToCopy);
+            /*
+             * Todo resurrect the Constants class that as in the com.sa.com.cloudsolutions.antikythera.constants package
+             *  and move it to the resources
             copyFolder(Paths.get(PACKAGE_PATH, "constants"), pathToCopy);
-
+            */
             pathToCopy = Paths.get(outputPath, PACKAGE_PATH, "configurations");
             Files.createDirectories(pathToCopy);
         }
