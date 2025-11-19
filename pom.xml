@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>sa.com.cloudsolutions</groupId>
     <artifactId>antikythera</artifactId>
-    <version>0.1.2.1</version>
+    <version>0.1.2.2</version>
 
     <name>Antikythera</name>
     <description>Automated Test Generator for Java projects. Generates unit tests and API tests for Spring applications.</description>
@@ -99,7 +99,7 @@
         <dependency>
             <groupId>com.raditha</groupId>
             <artifactId>hql-parser</artifactId>
-            <version>0.0.2</version>
+            <version>0.0.5</version>
         </dependency>
         
         <!-- Explicitly declare ANTLR 4 runtime to ensure IDE classpath includes it -->
