@@ -40,45 +40,48 @@ public class Graph {
 
         TypeDeclaration<?> cdecl = g.getEnclosingType();
         if (cdecl != null) {
-            Optional<String> fullyQualifiedName = cdecl.getFullyQualifiedName();
-            if (fullyQualifiedName.isPresent()) {
-                String fqn = fullyQualifiedName.get();
-                if (dependencies.containsKey(fqn)) {
-                    /*
-                     * This class has been processed before, but this particular method or field
-                     * may not have been considered
-                     */
-                    if (g.getDestination() == null) {
-
-                        CompilationUnit destination = dependencies.get(fqn);
-                        g.setDestination(destination);
-                        Optional<ClassOrInterfaceDeclaration> classDecl = destination.findFirst(ClassOrInterfaceDeclaration.class);
-                        if (classDecl.isPresent()) {
-                            g.setTypeDeclaration(classDecl.orElseThrow());
-                        }
-                        else if (destination.findFirst(EnumDeclaration.class).isPresent()) {
-                            g.setTypeDeclaration(destination.findFirst(EnumDeclaration.class).orElseThrow());
-                        }
-                        else {
-                            throw new IllegalStateException("Cannot find class declaration in " + destination);
-                        }
-                    }
-                }
-                else {
-                    /*
-                     * We have not previously processed this class.
-                     */
-
-                    unseenType(g, cdecl);
-                    dependencies.put(fqn, g.getDestination());
-                }
-            }
+            createGraphNode(cdecl, g);
         }
-
 
         g.buildNode();
         DepSolver.push(g);
         return g;
+    }
+
+    private static void createGraphNode(TypeDeclaration<?> cdecl, GraphNode g) {
+        Optional<String> fullyQualifiedName = cdecl.getFullyQualifiedName();
+        if (fullyQualifiedName.isPresent()) {
+            String fqn = fullyQualifiedName.get();
+            if (dependencies.containsKey(fqn)) {
+                /*
+                 * This class has been processed before, but this particular method or field
+                 * may not have been considered
+                 */
+                if (g.getDestination() == null) {
+
+                    CompilationUnit destination = dependencies.get(fqn);
+                    g.setDestination(destination);
+                    Optional<ClassOrInterfaceDeclaration> classDecl = destination.findFirst(ClassOrInterfaceDeclaration.class);
+                    if (classDecl.isPresent()) {
+                        g.setTypeDeclaration(classDecl.orElseThrow());
+                    }
+                    else if (destination.findFirst(EnumDeclaration.class).isPresent()) {
+                        g.setTypeDeclaration(destination.findFirst(EnumDeclaration.class).orElseThrow());
+                    }
+                    else {
+                        throw new IllegalStateException("Cannot find class declaration in " + destination);
+                    }
+                }
+            }
+            else {
+                /*
+                 * We have not previously processed this class.
+                 */
+
+                unseenType(g, cdecl);
+                dependencies.put(fqn, g.getDestination());
+            }
+        }
     }
 
     /**
@@ -87,46 +90,46 @@ public class Graph {
      * @param cdecl TypeDeclaration of the node
      */
     private static void unseenType(GraphNode g, TypeDeclaration<?> cdecl) {
-        if (g.getDestination() == null) {
-            TypeDeclaration<?> target = null;
-            Optional<Node> parentNode = cdecl.getParentNode();
-            if (cdecl.isClassOrInterfaceDeclaration() && parentNode.isPresent() && parentNode.get() instanceof ClassOrInterfaceDeclaration parent)
-            {
+        if (g.getDestination() != null) {
+            return;
+        }
+        TypeDeclaration<?> target = null;
+        Optional<Node> parentNode = cdecl.getParentNode();
+        if (cdecl.isClassOrInterfaceDeclaration() && parentNode.isPresent() && parentNode.get() instanceof ClassOrInterfaceDeclaration parent)
+        {
 
-                GraphNode parentGraphNode = createGraphNode(parent);
-                CompilationUnit parentCompilationUnit = parentGraphNode.getDestination();
-                g.setDestination(parentCompilationUnit);
+            GraphNode parentGraphNode = createGraphNode(parent);
+            CompilationUnit parentCompilationUnit = parentGraphNode.getDestination();
+            g.setDestination(parentCompilationUnit);
 
-                ClassOrInterfaceDeclaration parentClass = parentGraphNode.getTypeDeclaration().asClassOrInterfaceDeclaration();
-                ClassOrInterfaceDeclaration innerClass = cdecl.asClassOrInterfaceDeclaration().clone();
-                target = parentClass.addMember(innerClass);
-                target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
-                g.setTypeDeclaration(innerClass);
+            ClassOrInterfaceDeclaration parentClass = parentGraphNode.getTypeDeclaration().asClassOrInterfaceDeclaration();
+            ClassOrInterfaceDeclaration innerClass = cdecl.asClassOrInterfaceDeclaration().clone();
+            target = parentClass.addMember(innerClass);
+            target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
+            g.setTypeDeclaration(innerClass);
 
-            }
-            else {
-                g.setDestination(new CompilationUnit());
-                if (cdecl.isAnnotationDeclaration()) {
-                    target = g.getDestination().addAnnotationDeclaration(cdecl.getNameAsString());
-                } else if (cdecl.isEnumDeclaration()) {
-                    target = g.getDestination().addEnum(cdecl.getNameAsString());
-                    target.setModifiers(cdecl.getModifiers());
-                } else {
-                    target = g.getDestination().addClass(cdecl.getNameAsString());
-                    target.setModifiers(cdecl.getModifiers());
-                    if (cdecl.isClassOrInterfaceDeclaration()) {
-                        target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
-                    }
+        }
+        else {
+            g.setDestination(new CompilationUnit());
+            if (cdecl.isAnnotationDeclaration()) {
+                target = g.getDestination().addAnnotationDeclaration(cdecl.getNameAsString());
+            } else if (cdecl.isEnumDeclaration()) {
+                target = g.getDestination().addEnum(cdecl.getNameAsString());
+                target.setModifiers(cdecl.getModifiers());
+            } else {
+                target = g.getDestination().addClass(cdecl.getNameAsString());
+                target.setModifiers(cdecl.getModifiers());
+                if (cdecl.isClassOrInterfaceDeclaration()) {
+                    target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
                 }
-                g.setTypeDeclaration(target);
             }
-            if(target != null) {
-                Optional<JavadocComment> comment = cdecl.getJavadocComment();
-                comment.ifPresent(target::setJavadocComment);
-            }
+            g.setTypeDeclaration(target);
+        }
+        if(target != null) {
+            Optional<JavadocComment> comment = cdecl.getJavadocComment();
+            comment.ifPresent(target::setJavadocComment);
         }
     }
-
 
     public static Map<String, CompilationUnit> getDependencies() {
         return dependencies;
