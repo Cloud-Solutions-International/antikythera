@@ -99,6 +99,11 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
     public BaseRepositoryParser() throws IOException {
         super();
+        // safeguard: dialect should never be null due to earlier tests manipulating static state
+        if (dialect == null) {
+            dialect = DatabaseDialect.POSTGRESQL; // restore default
+            logger.debug("Dialect was null; reset to POSTGRESQL default");
+        }
         queries = new HashMap<>();
     }
 

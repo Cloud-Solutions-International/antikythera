@@ -68,7 +68,10 @@ public class RepositoryParser extends BaseRepositoryParser {
             Object urlObj = db.get("url");
             if (urlObj != null) {
                 String url = urlObj.toString();
-                dialect = DatabaseDialect.fromJdbcUrl(url); // assign enum directly
+                DatabaseDialect detected = DatabaseDialect.fromJdbcUrl(url); // may be null for unsupported dialects
+                if (detected != null) {
+                    dialect = detected; // only override when recognized
+                }
             }
         }
     }
