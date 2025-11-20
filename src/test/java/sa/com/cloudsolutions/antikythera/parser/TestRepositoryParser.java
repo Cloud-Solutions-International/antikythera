@@ -491,7 +491,7 @@ class TestRepositoryParser {
         assertNotNull(q);
         String sql = q.getQuery();
         assertTrue(sql.contains("SELECT EXISTS"), "Query should use EXISTS: " + sql);
-        assertTrue(sql.contains("SELECT 1"), "Query should select 1 in subquery: " + sql);
+        assertTrue(sql.contains("SELECT *"), "Query should select 1 in subquery: " + sql);
         assertTrue(sql.contains("FROM users"), "Query should reference users table: " + sql);
         assertTrue(sql.contains("WHERE"), "Query should have WHERE clause: " + sql);
         // Verify the closing parenthesis

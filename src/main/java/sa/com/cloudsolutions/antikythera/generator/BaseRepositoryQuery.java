@@ -47,7 +47,7 @@ public class BaseRepositoryQuery {
     protected final List<QueryMethodArgument> methodArguments;
     private final Pattern selectPattern = Pattern.compile("SELECT\\s+\\w+\\s+FROM\\s+(\\w+)\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
     @SuppressWarnings("java:S5852")
-    private final Pattern newEntityPattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE);
+    private final Pattern newEntityPattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     /**
      * The method declaration that represents the query on the JPARepository
@@ -202,7 +202,7 @@ public class BaseRepositoryQuery {
             TypeWrapper entity = BaseRepositoryParser.findEntity(entityType);
             BasicConverter.convertFieldsToSnakeCase(statement, entity);
         } catch (JSQLParserException e) {
-            throw new AntikytheraException("Exception parsing SQL query: " + query, e);
+                throw new AntikytheraException("Exception parsing SQL query: " + query, e);
         }
     }
 

@@ -197,7 +197,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                     if (next.isEmpty() || next.equals("OrderBy")) {
                         sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
                     } else {
-                        sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
+                        sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
                     }
                 }
                 case "findAllById" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE id = ?");
