@@ -83,7 +83,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     Evaluator eval;
 
     protected static final Pattern KEYWORDS_PATTERN = Pattern.compile(
-            "get|findBy|findFirstBy|findTopBy|And|OrderBy|NotIn|In|Desc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan"
+            "get|findBy|findFirstBy|findTopBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|In|Desc|Asc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan"
     );
 
     public BaseRepositoryParser() throws IOException {
@@ -153,17 +153,32 @@ public class BaseRepositoryParser extends AbstractCompiler {
     RepositoryQuery parseNonAnnotatedMethod(Callable md) {
         String methodName = md.getNameAsString();
         List<String> components = extractComponents(methodName);
+        
+        // Validate that we have components to work with
+        if (components.isEmpty()) {
+            logger.warn("Method name '{}' did not produce any recognizable JPA query components", methodName);
+            // Return a basic query as fallback
+            return queryBuilder("SELECT * FROM " + findTableName(entity), QueryType.DERIVED, md);
+        }
+        
         StringBuilder sql = new StringBuilder();
         String tableName = findTableName(entity);
         boolean top = false;
+        boolean isExistsQuery = components.contains("existsBy");
         if (tableName != null) {
             top = buildSelectAndWhereClauses(components, sql, tableName);
         } else {
-            logger.warn("Table name cannot be null");
+            logger.warn("Table name cannot be null for entity");
         }
         if (top) {
             applyTopLimit(sql);
         }
+        
+        // Close the EXISTS subquery if needed
+        if (isExistsQuery) {
+            sql.append(")");
+        }
+        
         String finalSql = numberPlaceholders(sql.toString());
         return queryBuilder(finalSql, QueryType.DERIVED, md);
     }
@@ -175,11 +190,30 @@ public class BaseRepositoryParser extends AbstractCompiler {
         for (int i = 0; i < components.size(); i++) {
             String component = components.get(i);
             String next = (i < components.size() - 1) ? components.get(i + 1) : "";
+            String prev = (i > 0) ? components.get(i - 1) : "";
             switch (component) {
-                case "findAll" -> sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
+                case "findAll" -> {
+                    // findAll with no suffix means SELECT * FROM table with no WHERE
+                    if (next.isEmpty() || next.equals("OrderBy")) {
+                        sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
+                    } else {
+                        sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
+                    }
+                }
                 case "findAllById" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE id = ?");
                 case "findBy", "get" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
-                case "findFirstBy", "findTopBy" -> { top = true; sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE "); }
+                case "countBy" -> sql.append("SELECT COUNT(*) FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
+                case "deleteBy" -> sql.append("DELETE FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
+                case "existsBy" -> sql.append("SELECT EXISTS (SELECT 1 FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
+                case "findFirstBy", "findTopBy" -> { 
+                    top = true; 
+                    // Check if immediately followed by OrderBy (no WHERE clause)
+                    if (next.equals("OrderBy")) {
+                        sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
+                    } else {
+                        sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
+                    }
+                }
                 case "In" -> sql.append(" IN (?) ");
                 case "NotIn" -> sql.append(" NOT IN (?) ");
                 case "Between" -> sql.append(" BETWEEN ? AND ? ");
@@ -189,9 +223,48 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 case "LessThanEqual" -> sql.append(" <= ? ");
                 case "IsNull" -> sql.append(" IS NULL ");
                 case "IsNotNull" -> sql.append(" IS NOT NULL ");
-                case "And", "Or", "Not" -> sql.append(component).append(' ');
+                case "And", "Or" -> sql.append(" ").append(component.toUpperCase()).append(' ');
+                case "Not" -> {
+                    // "Not" can appear in two contexts:
+                    // 1. As part of a composite keyword like NotIn, IsNotNull (already handled above)
+                    // 2. As a standalone negation operator: findByActiveNot means active != ?
+                    // We only handle case 2 here since case 1 is handled by the specific cases
+                    if (!prev.equals("Is") && !next.equals("In")) {
+                        sql.append(" != ? ");
+                    }
+                }
                 case "Containing", "Like" -> sql.append(" LIKE ? ");
                 case "OrderBy" -> { ordering = true; sql.append(" ORDER BY "); }
+                case "Desc" -> {
+                    // Desc should only appear after a field name in ORDER BY context
+                    if (ordering) {
+                        sql.append("DESC");
+                        // Add comma if next is a field name (not Asc, Desc, or empty)
+                        if (!next.isEmpty() && !next.equals("Desc") && !next.equals("Asc")) {
+                            sql.append(", ");
+                        } else {
+                            sql.append(' ');
+                        }
+                    } else {
+                        // This shouldn't happen in well-formed method names, but handle it as a field
+                        appendDefaultComponent(sql, component, next, ordering);
+                    }
+                }
+                case "Asc" -> {
+                    // Asc should only appear after a field name in ORDER BY context
+                    if (ordering) {
+                        sql.append("ASC");
+                        // Add comma if next is a field name (not Asc, Desc, or empty)
+                        if (!next.isEmpty() && !next.equals("Desc") && !next.equals("Asc")) {
+                            sql.append(", ");
+                        } else {
+                            sql.append(' ');
+                        }
+                    } else {
+                        // This shouldn't happen in well-formed method names, but handle it as a field
+                        appendDefaultComponent(sql, component, next, ordering);
+                    }
+                }
                 default -> appendDefaultComponent(sql, component, next, ordering);
             }
         }
@@ -204,11 +277,21 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (!ordering) {
             if (shouldAppendEquals(next)) {
                 sql.append(" = ? ");
-            } else {
+            } else if (!next.equals("Not")) {
+                // Only add space if next is not "Not" (which will add its own operator)
                 sql.append(' ');
             }
         } else {
-            sql.append(' ');
+            // In ORDER BY context:
+            // - If next is Asc/Desc, just add space (they will handle comma if needed)
+            // - Otherwise, add comma (for multiple fields without explicit Asc/Desc)
+            if (next.equals("Desc") || next.equals("Asc")) {
+                sql.append(' ');
+            } else if (!next.isEmpty()) {
+                sql.append(", ");
+            } else {
+                sql.append(' ');
+            }
         }
     }
 
@@ -216,7 +299,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return next.isEmpty() || (!next.equals("Between") && !next.equals("GreaterThan") && !next.equals("LessThan") &&
                 !next.equals("LessThanEqual") && !next.equals("IsNotNull") && !next.equals("Like") &&
                 !next.equals("GreaterThanEqual") && !next.equals("IsNull") && !next.equals("Containing") &&
-                !next.equals("In") && !next.equals("NotIn"));
+                !next.equals("In") && !next.equals("NotIn") && !next.equals("Not") && !next.equals("Or"));
     }
 
     /** Apply dialect-specific top limit (FIRST/TOP semantics) */
@@ -224,21 +307,27 @@ public class BaseRepositoryParser extends AbstractCompiler {
         String built = sql.toString();
         String trimmedUpper = built.trim().toUpperCase();
         boolean trailingWhere = trimmedUpper.endsWith(WHERE);
+        
+        if (trailingWhere) {
+            // Remove dangling WHERE before applying limit
+            int idx = built.toUpperCase().lastIndexOf(WHERE);
+            built = built.substring(0, idx).trim();
+        }
+        
+        // For Oracle, we need a WHERE clause for ROWNUM to work
+        // For PostgreSQL and others, LIMIT is appended after the query
         if (dialect == DatabaseDialect.ORACLE) {
-            if (trailingWhere) {
-                int idx = built.toUpperCase().lastIndexOf(WHERE);
-                built = built.substring(0, idx) + "WHERE ROWNUM = 1";
+            // Oracle needs WHERE clause for ROWNUM
+            if (!built.toUpperCase().contains("WHERE")) {
+                built = built + " WHERE ROWNUM = 1";
             } else {
                 built = dialect.applyLimitClause(built, 1);
             }
-        } else { // PostgreSQL (default) and others that use LIMIT
-            if (trailingWhere) {
-                // remove dangling WHERE before applying limit
-                built = built.substring(0, built.toUpperCase().lastIndexOf(WHERE));
-                built = built.trim();
-            }
+        } else {
+            // PostgreSQL and others use LIMIT which doesn't need WHERE
             built = dialect.applyLimitClause(built, 1);
         }
+        
         sql.setLength(0);
         sql.append(built);
     }
