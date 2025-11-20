@@ -33,14 +33,25 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * <p>Generates SQL from Repository methods.</p>
+ * <p>
+ * Generates SQL from Repository methods.
+ * </p>
  *
- * <p>The `BaseRepositoryParser` class is responsible for parsing repository classes and generating
- * repository queries based on the provided methods. It has functionality to handle custom
- * query annotations, inferred queries through method naming, and metadata extraction for entities.</p>
+ * <p>
+ * The `BaseRepositoryParser` class is responsible for parsing repository
+ * classes and generating
+ * repository queries based on the provided methods. It has functionality to
+ * handle custom
+ * query annotations, inferred queries through method naming, and metadata
+ * extraction for entities.
+ * </p>
  *
- * <p>This class focuses on analyzing repository structures, interpreting query definitions, and
- * handling query conversion logic while accounting for specific database dialects.</p>
+ * <p>
+ * This class focuses on analyzing repository structures, interpreting query
+ * definitions, and
+ * handling query conversion logic while accounting for specific database
+ * dialects.
+ * </p>
  */
 public class BaseRepositoryParser extends AbstractCompiler {
     protected static final Logger logger = LoggerFactory.getLogger(BaseRepositoryParser.class);
@@ -52,7 +63,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
     public static final String NATIVE_QUERY = "nativeQuery";
     public static final String WHERE = "WHERE";
     /**
-     * SQL dialect, at the moment oracle or postgresql as identified from the connection url
+     * SQL dialect, at the moment oracle or postgresql as identified from the
+     * connection url
      */
     protected static DatabaseDialect dialect = DatabaseDialect.POSTGRESQL; // default dialect set to PostgreSQL
 
@@ -83,8 +95,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     Evaluator eval;
 
     protected static final Pattern KEYWORDS_PATTERN = Pattern.compile(
-            "get|findBy|findFirstBy|findTopBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|In|Desc|Asc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan"
-    );
+            "get|findBy|findFirstBy|findTopBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|In|Desc|Asc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan");
 
     public BaseRepositoryParser() throws IOException {
         super();
@@ -97,22 +108,27 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return parser;
     }
 
-
     public RepositoryQuery getQueryFromRepositoryMethod(Callable repoMethod) {
         return queries.get(repoMethod);
     }
 
     /**
-     * <p>Extract a query from a given method declaration.</p>
+     * <p>
+     * Extract a query from a given method declaration.
+     * </p>
      *
-     * <p>The method declaration should be a part of a JPARepository interface.
+     * <p>
+     * The method declaration should be a part of a JPARepository interface.
      * It may or may not have an @Query annotation. If the annotation is
      * present), it will either be a native query (in which case the nativeQuery
-     * attribute will be true, or it maybe an HQL.</p>
+     * attribute will be true, or it maybe an HQL.
+     * </p>
      *
-     * <p>In the case of an HQL query, we will use the hql-parser library to
+     * <p>
+     * In the case of an HQL query, we will use the hql-parser library to
      * convert it into an SQL which in turn will be parsed with the JSQL parser.
-     * However, that parsing takes place inside the BaseRepositoryQuery class</p>
+     * However, that parsing takes place inside the BaseRepositoryQuery class
+     * </p>
      *
      * @param methodDeclaration the method declaration to be processed
      */
@@ -126,15 +142,15 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 Expression value = attr.get("value");
                 Expression nt = attr.get(NATIVE_QUERY);
                 Variable v = eval.evaluateExpression(value);
+                // Unescape the string to convert \\n to actual newlines (text blocks issue)
+                String queryString = unescapeJavaString((String) v.getValue());
 
                 if (nt != null && eval.evaluateExpression(nt).getValue().equals(true)) {
-                    queries.put(callable, queryBuilder(v.getValue().toString(), QueryType.NATIVE_SQL, callable));
+                    queries.put(callable, queryBuilder(queryString, QueryType.NATIVE_SQL, callable));
+                } else {
+                    queries.put(callable, queryBuilder(queryString, QueryType.HQL, callable));
                 }
-                else {
-                    queries.put(callable, queryBuilder(v.getValue().toString(), QueryType.HQL , callable));
-                }
-            }
-            else {
+            } else {
                 queries.put(callable, parseNonAnnotatedMethod(callable));
             }
         } catch (ReflectiveOperationException e) {
@@ -143,8 +159,26 @@ public class BaseRepositoryParser extends AbstractCompiler {
     }
 
     /**
+     * Unescapes a Java string literal by converting escape sequences to actual
+     * characters.
+     * Handles: \\n (newline), \\t (tab), \\r (carriage return), \\" (quote), \\\\
+     * (backslash)
+     */
+    private String unescapeJavaString(String str) {
+        if (str == null) {
+            return null;
+        }
+        return str.replace("\\n", "\n")
+                .replace("\\t", "\t")
+                .replace("\\r", "\r")
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\");
+    }
+
+    /**
      * Parse a repository method that does not have a query annotation.
-     * In these cases the naming convention of the method is used to infer the query.
+     * In these cases the naming convention of the method is used to infer the
+     * query.
      *
      * @param md the method declaration
      * @return the RepositoryQuery instance that as parsed from the callable
@@ -153,14 +187,14 @@ public class BaseRepositoryParser extends AbstractCompiler {
     RepositoryQuery parseNonAnnotatedMethod(Callable md) {
         String methodName = md.getNameAsString();
         List<String> components = extractComponents(methodName);
-        
+
         // Validate that we have components to work with
         if (components.isEmpty()) {
             logger.warn("Method name '{}' did not produce any recognizable JPA query components", methodName);
             // Return a basic query as fallback
             return queryBuilder("SELECT * FROM " + findTableName(entity), QueryType.DERIVED, md);
         }
-        
+
         StringBuilder sql = new StringBuilder();
         String tableName = findTableName(entity);
         boolean top = false;
@@ -173,12 +207,12 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (top) {
             applyTopLimit(sql);
         }
-        
+
         // Close the EXISTS subquery if needed
         if (isExistsQuery) {
             sql.append(")");
         }
-        
+
         String finalSql = numberPlaceholders(sql.toString());
         return queryBuilder(finalSql, QueryType.DERIVED, md);
     }
@@ -200,13 +234,16 @@ public class BaseRepositoryParser extends AbstractCompiler {
                         sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
                     }
                 }
-                case "findAllById" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE id = ?");
+                case "findAllById" ->
+                    sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE id = ?");
                 case "findBy", "get" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
-                case "countBy" -> sql.append("SELECT COUNT(*) FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
+                case "countBy" ->
+                    sql.append("SELECT COUNT(*) FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
                 case "deleteBy" -> sql.append("DELETE FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
-                case "existsBy" -> sql.append("SELECT EXISTS (SELECT 1 FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
-                case "findFirstBy", "findTopBy" -> { 
-                    top = true; 
+                case "existsBy" ->
+                    sql.append("SELECT EXISTS (SELECT 1 FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
+                case "findFirstBy", "findTopBy" -> {
+                    top = true;
                     // Check if immediately followed by OrderBy (no WHERE clause)
                     if (next.equals("OrderBy")) {
                         sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
@@ -226,7 +263,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 case "And", "Or" -> sql.append(" ").append(component.toUpperCase()).append(' ');
                 case "Not" -> {
                     // "Not" can appear in two contexts:
-                    // 1. As part of a composite keyword like NotIn, IsNotNull (already handled above)
+                    // 1. As part of a composite keyword like NotIn, IsNotNull (already handled
+                    // above)
                     // 2. As a standalone negation operator: findByActiveNot means active != ?
                     // We only handle case 2 here since case 1 is handled by the specific cases
                     if (!prev.equals("Is") && !next.equals("In")) {
@@ -234,7 +272,10 @@ public class BaseRepositoryParser extends AbstractCompiler {
                     }
                 }
                 case "Containing", "Like" -> sql.append(" LIKE ? ");
-                case "OrderBy" -> { ordering = true; sql.append(" ORDER BY "); }
+                case "OrderBy" -> {
+                    ordering = true;
+                    sql.append(" ORDER BY ");
+                }
                 case "Desc" -> {
                     // Desc should only appear after a field name in ORDER BY context
                     if (ordering) {
@@ -307,13 +348,13 @@ public class BaseRepositoryParser extends AbstractCompiler {
         String built = sql.toString();
         String trimmedUpper = built.trim().toUpperCase();
         boolean trailingWhere = trimmedUpper.endsWith(WHERE);
-        
+
         if (trailingWhere) {
             // Remove dangling WHERE before applying limit
             int idx = built.toUpperCase().lastIndexOf(WHERE);
             built = built.substring(0, idx).trim();
         }
-        
+
         // For Oracle, we need a WHERE clause for ROWNUM to work
         // For PostgreSQL and others, LIMIT is appended after the query
         if (dialect == DatabaseDialect.ORACLE) {
@@ -327,7 +368,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
             // PostgreSQL and others use LIMIT which doesn't need WHERE
             built = dialect.applyLimitClause(built, 1);
         }
-        
+
         sql.setLength(0);
         sql.append(built);
     }
@@ -349,8 +390,9 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
     /**
      * Build a repository query object
+     * 
      * @param query the query
-     * @param qt what is the type of query we are dealing with
+     * @param qt    what is the type of query we are dealing with
      * @return a repository query instance.
      */
     RepositoryQuery queryBuilder(String query, QueryType qt, Callable md) {
@@ -362,15 +404,18 @@ public class BaseRepositoryParser extends AbstractCompiler {
         rql.setQueryType(qt);
         if (qt.equals(QueryType.HQL)) {
             try {
-                rql.setConversionResult(parserAdapter.convertToNativeSQL(query));
-                rql.setQuery(query);
+                // Trim query to remove leading/trailing whitespace from text blocks
+                String trimmedQuery = query.trim();
+                rql.setConversionResult(parserAdapter.convertToNativeSQL(trimmedQuery));
+                rql.setQuery(trimmedQuery);
             } catch (Exception e) {
-                logger.error(query);
+                logger.error("Failed to parse HQL query: {}", query);
                 throw new AntikytheraException(e);
             }
         } else {
             // For DERIVED and NATIVE_SQL queries, set query as-is
-            // Boolean transformations for Oracle are handled elsewhere (e.g., in RepositoryParser.trueFalseCheck)
+            // Boolean transformations for Oracle are handled elsewhere (e.g., in
+            // RepositoryParser.trueFalseCheck)
             rql.setQuery(query);
         }
 
@@ -388,9 +433,11 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
     /**
      * Find the table name from the hibernate entity.
-     * Usually the entity will have an annotation giving the actual name of the table.
+     * Usually the entity will have an annotation giving the actual name of the
+     * table.
      *
-     * This method is made static because when processing joins there are multiple entities
+     * This method is made static because when processing joins there are multiple
+     * entities
      * and there by multiple table names involved.
      *
      * @param entity a TypeWrapper representing the entity
@@ -398,11 +445,10 @@ public class BaseRepositoryParser extends AbstractCompiler {
      */
     public static String findTableName(TypeWrapper entity) {
         String table = null;
-        if(entity != null) {
+        if (entity != null) {
             if (entity.getType() != null) {
                 return getNameFromType(entity, table);
-            }
-            else if (entity.getClazz() != null){
+            } else if (entity.getClazz() != null) {
                 Class<?> cls = entity.getClazz();
                 for (Annotation ann : cls.getAnnotations()) {
                     if (ann instanceof javax.persistence.Table t) {
@@ -410,8 +456,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                     }
                 }
             }
-        }
-        else {
+        } else {
             logger.warn("Compilation unit is null");
         }
         return table;
@@ -447,8 +492,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
             for (ImportWrapper wrapper : AbstractCompiler.findImport(cu.get(), fd)) {
                 if (wrapper.getType() != null) {
                     return new TypeWrapper(wrapper.getType());
-                }
-                else if(!wrapper.getImport().getNameAsString().startsWith("java.util")) {
+                } else if (!wrapper.getImport().getNameAsString().startsWith("java.util")) {
                     try {
                         Class<?> cls = AbstractCompiler.loadClass(wrapper.getImport().getNameAsString());
                         return new TypeWrapper(cls);
@@ -465,13 +509,16 @@ public class BaseRepositoryParser extends AbstractCompiler {
     }
 
     /**
-     * Converts the fields in an Entity to snake case which is the usual pattern for columns
+     * Converts the fields in an Entity to snake case which is the usual pattern for
+     * columns
+     * 
      * @param str A camel cased variable
      * @return a snake cased variable
      */
     public static String camelToSnake(String str) {
         return CAMEL_TO_SNAKE_PATTERN.matcher(str).replaceAll("$1_$2").toLowerCase();
     }
+
     public void buildQueries() {
         queries.clear();
         parserAdapter = new HQLParserAdapter(cu, entity);
@@ -494,15 +541,15 @@ public class BaseRepositoryParser extends AbstractCompiler {
     /**
      * Process the CompilationUnit to identify all the queries.
      */
-    public void processTypes()  {
+    public void processTypes() {
         /*
          * this method is now being called multiple times for a repository, fix that
          */
-        for(var tp : cu.getTypes()) {
-            if(tp.isClassOrInterfaceDeclaration()) {
+        for (var tp : cu.getTypes()) {
+            if (tp.isClassOrInterfaceDeclaration()) {
                 var cls = tp.asClassOrInterfaceDeclaration();
 
-                for(var parent : cls.getExtendedTypes()) {
+                for (var parent : cls.getExtendedTypes()) {
                     if (isRepositoryInterface(parent.toString())) {
                         parent.getTypeArguments().ifPresent(t -> {
                             entityType = t.getFirst().orElseThrow();
@@ -515,7 +562,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
             }
         }
     }
-
 
     /**
      * Determines if a TypeWrapper represents a JPA repository interface.
@@ -564,13 +610,11 @@ public class BaseRepositoryParser extends AbstractCompiler {
     }
 
     private static boolean isRepositoryInterface(String interfaceName) {
-        return interfaceName != null && (
-                interfaceName.contains(JPA_REPOSITORY) ||
-                        interfaceName.contains("CrudRepository") ||
-                        interfaceName.contains("PagingAndSortingRepository") ||
-                        interfaceName.contains("Repository") &&
-                                (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository"))
-        );
+        return interfaceName != null && (interfaceName.contains(JPA_REPOSITORY) ||
+                interfaceName.contains("CrudRepository") ||
+                interfaceName.contains("PagingAndSortingRepository") ||
+                interfaceName.contains("Repository") &&
+                        (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository")));
     }
 
     protected List<String> extractComponents(String methodName) {
@@ -583,17 +627,21 @@ public class BaseRepositoryParser extends AbstractCompiler {
         matcher.appendTail(sb);
         String[] parts = sb.toString().split("\\s+");
         for (String part : parts) {
-            if (!part.isEmpty()) components.add(part);
+            if (!part.isEmpty())
+                components.add(part);
         }
         return components;
     }
 
-    public static DatabaseDialect getDialect() { return dialect; }
+    public static DatabaseDialect getDialect() {
+        return dialect;
+    }
 
     protected static int countPlaceholders(String sql) { // restored as protected for external usage
         Matcher matcher = PLACEHOLDER_PATTERN.matcher(sql);
         int count = 0;
-        while (matcher.find()) count++;
+        while (matcher.find())
+            count++;
         return count;
     }
 }
