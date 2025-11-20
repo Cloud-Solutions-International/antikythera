@@ -95,7 +95,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     Evaluator eval;
 
     protected static final Pattern KEYWORDS_PATTERN = Pattern.compile(
-            "get|findBy|findFirstBy|findTopBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|In|Desc|Asc|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan");
+             "get|findBy|findFirstBy|findTopBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan|In|Desc|Asc");
 
     public BaseRepositoryParser() throws IOException {
         super();
@@ -621,14 +621,32 @@ public class BaseRepositoryParser extends AbstractCompiler {
         List<String> components = new ArrayList<>();
         Matcher matcher = KEYWORDS_PATTERN.matcher(methodName);
         StringBuilder sb = new StringBuilder();
+
         while (matcher.find()) {
-            matcher.appendReplacement(sb, " " + matcher.group() + " ");
+            String keyword = matcher.group();
+            int start = matcher.start();
+            int end = matcher.end();
+
+            // Special handling for short keywords that could be part of field names
+            // If the keyword is followed by a lowercase letter, it's part of a field name
+            // Examples: "Invoice" (In+voice), "Description" (Desc+ription), "Ordering" (Or+dering)
+            if (keyword.matches("In|Or|Not|Asc|Desc") && end < methodName.length()) {
+                char nextChar = methodName.charAt(end);
+                if (Character.isLowerCase(nextChar)) {
+                    // Keyword is part of a field name, don't treat as keyword
+                    continue;
+                }
+            }
+
+            matcher.appendReplacement(sb, " " + keyword + " ");
         }
         matcher.appendTail(sb);
+
         String[] parts = sb.toString().split("\\s+");
         for (String part : parts) {
-            if (!part.isEmpty())
+            if (!part.isEmpty()) {
                 components.add(part);
+            }
         }
         return components;
     }
