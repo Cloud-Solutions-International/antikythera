@@ -667,4 +667,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
             count++;
         return count;
     }
+
+    public TypeWrapper getEntity() {
+        return entity;
+    }
 }
