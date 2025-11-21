@@ -1,0 +1,59 @@
+# This file contains the configurations for Antikythera with query conversion enabled.
+# You can use environment variables anywhere in this file. For example ${HOME} will be 
+# replaced with the value of the HOME environment variable.
+
+variables:
+  projects_folder: ..
+  m2_folder: ${HOME}/.m2/repository
+
+# Points to top level folder of the application under test. This is a file system path.
+base_path: ${projects_folder}/antikythera-sample-project/src/main/java
+
+# Add the base path to the src/main/java folder of csi-project
+# The top level package for your project. As an example for the pharmacy project it is
+# com.csi.phr
+base_package: sa.com.cloudsolutions
+
+# The controllers settings determines where the controllers can be found. If you
+# specify a package name it will iterate through all the controllers in that
+# package. If you specify an individual controller it will only generate tests
+# for that single controller
+controllers: sa.com.cloudsolutions.controller
+
+# Path to output the generated test project
+output_path: /tmp/antikythera
+
+#
+# Dependencies configuration
+#
+dependencies:
+  # what should be done if a dependency cannot be found? options are log and exit
+  # if you don't have the jar files locally you may want to try the log option.
+  # not all dependencies need to be resolved to generate tests.
+  on_error: log
+
+#
+# use the database settings to connect and try out the queries extracted from JPARepository
+#
+database:
+  url: jdbc:oracle:thin:@//host:1521/service_name
+  user: C##xstrm
+  password: oracle_pwd
+  schema: your_schema
+  run_queries: false
+  
+  # Query conversion configuration for enhanced JPA query processing
+  query_conversion:
+    # Enable or disable the new JPA query converter
+    enabled: true
+    
+    # Whether to fallback to existing logic when conversion fails
+    fallback_on_failure: true
+    
+    # Whether to log conversion failures for debugging
+    log_conversion_failures: true
+    
+    # Whether to cache conversion results for performance
+    cache_results: true
+
+log_level: DEBUG

@@ -968,12 +968,7 @@ public class TruthTable {
          */
         private void findDomain(Expression nameExpression, HashMap<Expression, Domain> collector, Expression compareWith) {
             if (compareWith.isNullLiteralExpr()) {
-                if (allowNullInputs) {
-                    collector.put(nameExpression, new Domain(null, "T"));
-                } else {
-                    // If null inputs are not allowed, use a non-null domain
-                    collector.put(nameExpression, new Domain(false, true));
-                }
+                handleNullLiteral(nameExpression, collector);
             }
             else if (compareWith.isIntegerLiteralExpr()) {
                 handleIntegerLiteral(nameExpression, collector, compareWith);
@@ -985,12 +980,7 @@ public class TruthTable {
                 handleDoubleLiteral(nameExpression, collector, compareWith);
             }
             else if (compareWith.isStringLiteralExpr()) {
-                if (allowNullInputs) {
-                    collector.put(nameExpression, new Domain(null, compareWith.asStringLiteralExpr().getValue()));
-                } else {
-                    // If null inputs are not allowed, use a non-null domain for strings
-                    collector.put(nameExpression, new Domain("", compareWith.asStringLiteralExpr().getValue()));
-                }
+                handleStringLiteral(nameExpression, collector, compareWith);
             }
             else {
                 // Handle equals where the other side is a toString() chain by assigning string domains
@@ -1007,6 +997,24 @@ public class TruthTable {
                     collector.put(nameExpression, new Domain(true, false));
                     collector.put(compareWith, new Domain(true, false));
                 }
+            }
+        }
+
+        private void handleStringLiteral(Expression nameExpression, HashMap<Expression, Domain> collector, Expression compareWith) {
+            if (allowNullInputs) {
+                collector.put(nameExpression, new Domain(null, compareWith.asStringLiteralExpr().getValue()));
+            } else {
+                // If null inputs are not allowed, use a non-null domain for strings
+                collector.put(nameExpression, new Domain("", compareWith.asStringLiteralExpr().getValue()));
+            }
+        }
+
+        private void handleNullLiteral(Expression nameExpression, HashMap<Expression, Domain> collector) {
+            if (allowNullInputs) {
+                collector.put(nameExpression, new Domain(null, "T"));
+            } else {
+                // If null inputs are not allowed, use a non-null domain
+                collector.put(nameExpression, new Domain(false, true));
             }
         }
 

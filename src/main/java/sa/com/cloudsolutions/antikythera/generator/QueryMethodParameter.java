@@ -2,7 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 
 import com.github.javaparser.ast.body.Parameter;
-
+import com.github.javaparser.ast.expr.Expression;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,9 +46,16 @@ public class QueryMethodParameter {
                     if(a.isStringLiteralExpr()) {
                         setPlaceHolderName(a.asStringLiteralExpr().asString());
                     }
-                    else {
-                        setPlaceHolderName(a.asSingleMemberAnnotationExpr().getMemberValue().asStringLiteralExpr().asString());
+                    else if (a.isSingleMemberAnnotationExpr()) {
+                        Expression sme = a.asSingleMemberAnnotationExpr().getMemberValue();
+                        if (sme.isEnclosedExpr()) {
+                            setPlaceHolderName(sme.asEnclosedExpr().getInner().asStringLiteralExpr().asString());
+                        }
+                        else {
+                            setPlaceHolderName(sme.asStringLiteralExpr().asString());
+                        }
                     }
+
                 }
         );
         setPlaceHolderId(new ArrayList<>());

@@ -91,3 +91,4 @@ public class InterfaceSolver extends AbstractCompiler {
         }
     }
 }
+

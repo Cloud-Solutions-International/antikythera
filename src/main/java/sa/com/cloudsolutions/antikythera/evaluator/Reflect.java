@@ -536,10 +536,6 @@ public class Reflect {
         for (Method m : getMethodsByName(clazz, methodName)) {
             Class<?>[] parameterTypes = m.getParameterTypes();
 
-            if (isSingleObjectArrayParam(parameterTypes)) {
-                return m;
-            }
-
             boolean isVarArgs = m.isVarArgs();
             if (!isArgumentCountValid(argumentTypes, parameterTypes, isVarArgs)) {
                 continue;
@@ -551,10 +547,6 @@ public class Reflect {
             }
         }
         return null;
-    }
-
-    private static boolean isSingleObjectArrayParam(Class<?>[] parameterTypes) {
-        return parameterTypes.length == 1 && parameterTypes[0].equals(Object[].class);
     }
 
     private static boolean isArgumentCountValid(Class<?>[] argumentTypes, Class<?>[] parameterTypes, boolean isVarArgs) {

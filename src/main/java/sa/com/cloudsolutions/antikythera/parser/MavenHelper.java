@@ -33,8 +33,43 @@ import java.util.regex.Pattern;
 public class MavenHelper {
     public static final String POM_XML = "pom.xml";
     private static final Logger logger = LoggerFactory.getLogger(MavenHelper.class);
-    private Model pomModel;
     private static final Map<String, Artifact> artifacts = new HashMap<>();
+    private Model pomModel;
+
+    public static String[] getJarPaths() {
+        List<String> paths = new ArrayList<>();
+        for (Artifact artifact : artifacts.values()) {
+            if (artifact.jarFile != null) {
+                paths.add(artifact.jarFile);
+            }
+        }
+
+        return paths.toArray(new String[]{});
+    }
+
+    private static void addDependency(String m2, String groupIdPath, String artifactId, String version) throws IOException, XmlPullParserException {
+        Path p = Paths.get(m2, groupIdPath, artifactId, version,
+                artifactId + "-" + version + ".jar");
+        if (Files.exists(p)) {
+            Artifact artifact = artifacts.get(artifactId);
+            if (artifact != null) {
+                artifact.jarFile = p.toString();
+                artifact.version = version;
+            } else {
+                artifacts.put(artifactId, new Artifact(artifactId, version, p.toString()));
+
+                Path pom = Paths.get(m2, groupIdPath, artifactId, version,
+                        artifactId + "-" + version + ".pom");
+                if (Files.exists(pom)) {
+                    MavenHelper pomHelper = new MavenHelper();
+                    pomHelper.readPomFile(pom);
+                    pomHelper.buildJarPaths();
+                }
+            }
+        } else {
+            logger.debug("Jar not found: {}", p);
+        }
+    }
 
     public void readPomFile() throws IOException, XmlPullParserException {
         String basePath = Settings.getBasePath();
@@ -53,7 +88,6 @@ public class MavenHelper {
         MavenXpp3Reader reader = new MavenXpp3Reader();
         pomModel = reader.read(new FileReader(p.toFile()));
     }
-
 
     /**
      * Copy the pom.xml file to the specified path, injecting the dependencies as needed.
@@ -93,7 +127,6 @@ public class MavenHelper {
         }
     }
 
-
     /**
      * Copy a template file to the specified path
      *
@@ -101,17 +134,19 @@ public class MavenHelper {
      * @param subPath  the path components
      * @throws IOException thrown if the copy operation failed
      */
-    public void copyTemplate(String filename, String... subPath) throws IOException {
+    public String copyTemplate(String filename, String... subPath) throws IOException {
         Path destinationPath = Path.of(Settings.getOutputPath(), subPath);     // Path where template file should be copied into
         Files.createDirectories(destinationPath);
+        String name = destinationPath + File.separator + filename;
         try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/" + filename);
-             FileOutputStream destStream = new FileOutputStream(destinationPath + File.separator + filename);
+             FileOutputStream destStream = new FileOutputStream(name);
              FileChannel destChannel = destStream.getChannel()) {
             if (sourceStream == null) {
                 throw new IOException("Template file not found");
             }
             destChannel.transferFrom(Channels.newChannel(sourceStream), 0, Long.MAX_VALUE);
         }
+        return name;
     }
 
     /**
@@ -147,28 +182,17 @@ public class MavenHelper {
             List<Dependency> dependencies = pomModel.getDependencies();
 
             Settings.getProperty("variables.m2_folder", String.class)
-                .ifPresent(m2 -> {
-                    for (Dependency dependency : dependencies) {
-                        try {
-                            addJarPath(dependency, m2);
-                        } catch (XmlPullParserException|IOException e) {
-                            throw new AntikytheraException(e);
+                    .ifPresent(m2 -> {
+                        for (Dependency dependency : dependencies) {
+                            try {
+                                addJarPath(dependency, m2);
+                            } catch (XmlPullParserException | IOException e) {
+                                throw new AntikytheraException(e);
+                            }
                         }
-                    }
-                });
+                    });
         }
 
-    }
-
-    public static String[] getJarPaths() {
-        List<String> paths = new ArrayList<>();
-        for (Artifact artifact : artifacts.values()) {
-            if (artifact.jarFile != null) {
-                paths.add(artifact.jarFile);
-            }
-        }
-
-        return paths.toArray(new String[]{});
     }
 
     private String findLatestVersion(String groupIdPath, String artifactId, String m2) {
@@ -184,7 +208,7 @@ public class MavenHelper {
                 if (Files.isDirectory(path)) {
                     String version = path.getFileName().toString();
                     Path p = Paths.get(m2, groupIdPath, artifactId, version, artifactId + "-" + version + ".jar");
-                    if (! (version.startsWith("${") || version.equals("unknown")) && Files.exists(p)) {
+                    if (!(version.startsWith("${") || version.equals("unknown")) && Files.exists(p)) {
                         versions.add(version);
                     }
                 }
@@ -234,31 +258,6 @@ public class MavenHelper {
 
         if (version != null) {
             addDependency(m2, groupIdPath, artifactId, version);
-        }
-    }
-
-    private static void addDependency(String m2, String groupIdPath, String artifactId, String version) throws IOException, XmlPullParserException {
-        Path p = Paths.get(m2, groupIdPath, artifactId, version,
-                artifactId + "-" + version + ".jar");
-        if (Files.exists(p)) {
-            Artifact artifact = artifacts.get(artifactId);
-            if (artifact != null) {
-                artifact.jarFile = p.toString();
-                artifact.version = version;
-            }
-            else {
-                artifacts.put(artifactId, new Artifact(artifactId, version, p.toString()));
-
-                Path pom = Paths.get(m2, groupIdPath, artifactId, version,
-                        artifactId + "-" + version + ".pom");
-                if (Files.exists(pom)) {
-                    MavenHelper pomHelper = new MavenHelper();
-                    pomHelper.readPomFile(pom);
-                    pomHelper.buildJarPaths();
-                }
-            }
-        } else {
-            logger.debug("Jar not found: {}", p);
         }
     }
 

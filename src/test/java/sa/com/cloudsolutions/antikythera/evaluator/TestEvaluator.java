@@ -160,7 +160,7 @@ class TestEvaluator extends TestHelper {
         Variable v = evaluator.getField("id");
         assertEquals(43, v.getValue());
 
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeEntity",
+        evaluator = EvaluatorFactory.create(FAKE_ENTITY,
                 Evaluator.class);
         v = evaluator.getField("id");
         assertTrue(0 < (long) v.getValue());
@@ -199,11 +199,11 @@ class TestEvaluator extends TestHelper {
 
     @Test
     void evaluateClassExpressionReturnsClassObject3() throws AntikytheraException, ReflectiveOperationException {
-        evaluator.getCompilationUnit().addImport("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeRepository");
-        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeRepository"));
+        evaluator.getCompilationUnit().addImport(FAKE_REPOSITORY);
+        ClassExpr evaluatorClassExpr = new ClassExpr(StaticJavaParser.parseType(FAKE_REPOSITORY));
         Variable result = evaluator.evaluateClassExpression(evaluatorClassExpr);
         assertNotNull(result);
-        assertEquals("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeRepository", ((Class<?>) result.getValue()).getName());
+        assertEquals(FAKE_REPOSITORY, ((Class<?>) result.getValue()).getName());
     }
 
     @Test

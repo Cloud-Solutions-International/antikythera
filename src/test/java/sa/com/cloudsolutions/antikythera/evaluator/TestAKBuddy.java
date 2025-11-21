@@ -67,8 +67,50 @@ class TestAKBuddy extends TestHelper {
     }
 
     @Test
+    void workWithArrays() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Functional", Evaluator.class);
+        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "Functional").orElseThrow();
+        MethodInterceptor interceptor = new MethodInterceptor(evaluator);
+        Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
+        assertNotNull(clazz);
+        Object instance = AKBuddy.createInstance(clazz, interceptor);
+        assertNotNull(instance);
+
+        for(FieldDeclaration fd : cdecl.getFields()) {
+            String name = fd.getVariable(0).getNameAsString();
+            Field declaredField = instance.getClass().getDeclaredField(name);
+            declaredField.setAccessible(true);
+            assertNotNull(declaredField);
+            assertNotNull(declaredField.get(instance));
+        }
+    }
+    @Test
+    void workWithNullLists() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.KitchenSink", Evaluator.class);
+        TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "KitchenSink").orElseThrow();
+        MethodInterceptor interceptor = new MethodInterceptor(evaluator);
+        Class<?> clazz = AKBuddy.createDynamicClass(interceptor);
+        assertNotNull(clazz);
+        Object instance = AKBuddy.createInstance(clazz, interceptor);
+        assertNotNull(instance);
+
+        for(FieldDeclaration fd : cdecl.getFields()) {
+            String name = fd.getVariable(0).getNameAsString();
+            Field declaredField = instance.getClass().getDeclaredField(name);
+            declaredField.setAccessible(true);
+            assertNotNull(declaredField);
+            if (name.equals("text") || name.equals("number") || name.equals("id")) {
+                assertNotNull(declaredField);
+            }
+            else {
+                assertNull(declaredField.get(instance));
+            }
+        }
+    }
+
+    @Test
     void createComplexDynamicClass() throws ReflectiveOperationException {
-        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.FakeService", SpringEvaluator.class);
+        evaluator = EvaluatorFactory.create(FAKE_SERVICE, SpringEvaluator.class);
 
         TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "FakeService").orElseThrow();
         MethodInterceptor interceptor = new MethodInterceptor(evaluator);

@@ -14,6 +14,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
@@ -30,6 +31,7 @@ import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.printer.lexicalpreservation.LexicalPreservingPrinter;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
@@ -49,8 +51,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -88,6 +92,13 @@ public class AbstractCompiler {
     protected static ClassLoader loader;
     protected CompilationUnit cu;
     protected String className;
+    protected static Map<String, TypeWrapper> typeCache = new HashMap<>();
+    
+    /**
+     * Flag to enable LexicalPreservingPrinter for whitespace preservation during AST modifications.
+     * When enabled, all CompilationUnits parsed via compile() will have LexicalPreservingPrinter.setup() called.
+     */
+    private static boolean enableLexicalPreservation = false;
 
     protected AbstractCompiler() throws IOException {
         if (combinedTypeSolver == null) {
@@ -95,6 +106,16 @@ public class AbstractCompiler {
         }
     }
 
+    /**
+     * Enables or disables LexicalPreservingPrinter for all subsequently parsed files.
+     * Must be called before parsing to take effect.
+     * 
+     * @param enable true to enable whitespace preservation, false to disable
+     */
+    public static void setEnableLexicalPreservation(boolean enable) {
+        enableLexicalPreservation = enable;
+    }
+    
     protected static void setupParser() throws IOException {
         combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
@@ -172,6 +193,7 @@ public class AbstractCompiler {
         setupParser();
     }
 
+    @SuppressWarnings("java:S1452")
     static Optional<TypeDeclaration<?>> findInSamePackage(CompilationUnit compilationUnit, Type fd) {
         String packageName = compilationUnit.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
         String name = fd.isClassOrInterfaceType() ? fd.asClassOrInterfaceType().getNameAsString() : fd.toString();
@@ -258,6 +280,12 @@ public class AbstractCompiler {
         // Proceed with parsing the controller file
         FileInputStream in = new FileInputStream(file);
         cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+        
+        // Enable LexicalPreservingPrinter if requested for whitespace preservation
+        if (enableLexicalPreservation) {
+            LexicalPreservingPrinter.setup(cu);
+        }
+        
         cache(cu);
         return false;
     }
@@ -350,6 +378,7 @@ public class AbstractCompiler {
      * @return the public class, enum or interface that is held in the compilation unit if any.
      * when no public type is found, null is returned.
      */
+    @SuppressWarnings("java:S1452")
     public static TypeDeclaration<?> getPublicType(CompilationUnit cu) {
         for (TypeDeclaration<?> type : cu.getTypes()) {
             if (type.isClassOrInterfaceDeclaration() && type.asClassOrInterfaceDeclaration().isPublic()) {
@@ -510,6 +539,7 @@ public class AbstractCompiler {
         }
         return null;
     }
+
     public static TypeWrapper findType(CompilationUnit cu, Type type) {
         if (type instanceof ClassOrInterfaceType ctype) {
             TypeWrapper wrapper = findType(cu, ctype.getNameAsString());
@@ -529,18 +559,7 @@ public class AbstractCompiler {
          * If the compilation unit is null, this may be part of the java.lang package.
          */
         if (cu == null) {
-            try {
-                Class<?> c = Class.forName("java.lang." + className);
-                return new TypeWrapper(c);
-            } catch (ClassNotFoundException e) {
-                /*
-                 * dirty hack to handle an extreme edge case
-                 */
-                if (className.equals("Optional")) {
-                    return new TypeWrapper(Optional.class);
-                }
-            }
-            return null;
+            return findTypeFromJavaLang(className);
         }
 
         /*
@@ -581,6 +600,21 @@ public class AbstractCompiler {
         }
 
         return detectTypeWithClassLoaders(cu, className);
+    }
+
+    private static TypeWrapper findTypeFromJavaLang(String className) {
+        try {
+            Class<?> c = Class.forName("java.lang." + className);
+            return new TypeWrapper(c);
+        } catch (ClassNotFoundException e) {
+            /*
+             * dirty hack to handle an extreme edge case
+             */
+            if (className.equals("Optional")) {
+                return new TypeWrapper(Optional.class);
+            }
+        }
+        return null;
     }
 
     private static TypeWrapper detectTypeWithClassLoaders(CompilationUnit cu, String className) {
@@ -973,6 +1007,7 @@ public class AbstractCompiler {
         }
     }
 
+    @SuppressWarnings("java:S1452")
     public static TypeDeclaration<?> getEnclosingType(Node n) {
         if (n instanceof ClassOrInterfaceDeclaration cdecl) {
             return cdecl;
@@ -1112,4 +1147,60 @@ public class AbstractCompiler {
     public static ClassLoader getClassLoader() {
         return loader;
     }
+
+    public static String instanceToClassName(String string) {
+        return string.substring(0, 1).toUpperCase() + string.substring(1);
+    }
+
+    /**
+     * Extracts annotation attributes from a JavaParser annotation.
+     * Handles both single-member and normal annotations.
+     *
+     * @param annotation The annotation expression
+     * @return Map of attribute names to values
+     */
+    public static Map<String, Expression> extractAnnotationAttributes(AnnotationExpr annotation) {
+        Map<String, Expression> attributes = new HashMap<>();
+        
+        if (annotation.isSingleMemberAnnotationExpr()) {
+            Expression value = annotation.asSingleMemberAnnotationExpr()
+                    .getMemberValue();
+            attributes.put("value", value);
+        } else if (annotation.isNormalAnnotationExpr()) {
+            annotation.asNormalAnnotationExpr().getPairs().forEach(pair -> {
+                String name = pair.getNameAsString();
+                attributes.put(name, pair.getValue());
+            });
+        }
+        
+        return attributes;
+    }
+
+    /**
+     * Converts camelCase string to snake_case.
+     *
+     * @param camelCase The camelCase string
+     * @return snake_case string
+     */
+    public static String camelToSnakeCase(String camelCase) {
+        if (camelCase == null || camelCase.isEmpty()) {
+            return camelCase;
+        }
+        
+        StringBuilder result = new StringBuilder();
+        result.append(Character.toLowerCase(camelCase.charAt(0)));
+        
+        for (int i = 1; i < camelCase.length(); i++) {
+            char ch = camelCase.charAt(i);
+            if (Character.isUpperCase(ch)) {
+                result.append('_');
+                result.append(Character.toLowerCase(ch));
+            } else {
+                result.append(ch);
+            }
+        }
+        
+        return result.toString();
+    }
+
 }

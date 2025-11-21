@@ -67,21 +67,19 @@ public class MCEWrapper {
 
     private void argumentTypeAsNonPrimitiveClass(Type type, Class<?>[] classes, int i) {
         if (methodCallExpr instanceof MethodCallExpr mce) {
-            CompilationUnit cu = mce.findCompilationUnit().orElse(null);
-            if (cu != null) {
-                TypeWrapper wrapper = AbstractCompiler.findType(cu, type);
-                if (wrapper != null) {
-                    if (wrapper.getClazz() != null) {
-                        classes[i] = wrapper.getClazz();
-                    }
-                    else {
-                        MockingEvaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
-                        try {
-                            Class<?> cls = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
-                            classes[i] = cls;
-                        } catch (ClassNotFoundException ex) {
-                            classes[i] = Object.class;
-                        }
+            CompilationUnit cu = mce.findCompilationUnit().orElseThrow();
+            TypeWrapper wrapper = AbstractCompiler.findType(cu, type);
+            if (wrapper != null) {
+                if (wrapper.getClazz() != null) {
+                    classes[i] = wrapper.getClazz();
+                }
+                else {
+                    MockingEvaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
+                    try {
+                        Class<?> cls = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
+                        classes[i] = cls;
+                    } catch (ClassNotFoundException ex) {
+                        classes[i] = Object.class;
                     }
                 }
             }

@@ -76,6 +76,7 @@ public class ClassProcessor extends AbstractCompiler {
     protected static final Map<String, Set<ClassDependency>> dependencies = new HashMap<>();
 
     static final Set<String> copied = new HashSet<>();
+    public static final String PREFIX = "java.";
 
     /**
      * A collection of all imports encountered in a class.
@@ -97,17 +98,13 @@ public class ClassProcessor extends AbstractCompiler {
         super();
     }
 
-    public static String instanceToClassName(String string) {
-        return string.substring(0, 1).toUpperCase() + string.substring(1);
-    }
-
     /**
      * Copy a dependency from the application under test.
      *
      * @param nameAsString a fully qualified class name
      */
     protected void copyDependency(String nameAsString, ClassDependency dependency) throws IOException {
-        if (dependency.isExternal() || nameAsString.startsWith("java.")
+        if (dependency.isExternal() || nameAsString.startsWith(PREFIX)
                 || AntikytheraRunTime.isInterface(nameAsString)
                 || nameAsString.startsWith("org.springframework")) {
             return;
@@ -117,32 +114,38 @@ public class ClassProcessor extends AbstractCompiler {
          * if we have a compilation unit.
          */
         CompilationUnit depCu = getCompilationUnit(dependency.getTo());
-        if (depCu != null) {
-            for (var decl : depCu.getTypes()) {
-                if (decl.isClassOrInterfaceDeclaration() && decl.asClassOrInterfaceDeclaration().isInterface()) {
-                    continue;
-                }
-                String targetName = dependency.getTo();
-                if (!copied.contains(targetName) && targetName.startsWith(Settings.getBasePackage())) {
-                    /*
-                     * There maybe cyclic dependencies, specially if you have @Entity mappings. Therefor
-                     * it's best to make sure that we haven't copied this file already and also to make
-                     * sure that the class is directly part of the application under test.
-                     */
+        if (depCu == null) {
+            return;
+        }
 
-                    try {
-                        copied.add(targetName);
-                        DTOHandler handler = new DTOHandler();
-                        handler.copyDTO(classToPath(targetName));
+        for (var decl : depCu.getTypes()) {
+            if (decl.isClassOrInterfaceDeclaration() && decl.asClassOrInterfaceDeclaration().isInterface()) {
+                continue;
+            }
+            String targetName = dependency.getTo();
+            if (!copied.contains(targetName) && targetName.startsWith(Settings.getBasePackage())) {
+                /*
+                 * There maybe cyclic dependencies, specially if you have @Entity mappings. Therefor
+                 * it's best to make sure that we haven't copied this file already and also to make
+                 * sure that the class is directly part of the application under test.
+                 */
 
-                    } catch (FileNotFoundException fe) {
-                        if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
-                            logger.warn("Could not find {} for copying", targetName);
-                        } else {
-                            throw fe;
-                        }
-                    }
-                }
+                copyDependencyHelper(targetName);
+            }
+        }
+    }
+
+    private static void copyDependencyHelper(String targetName) throws IOException {
+        try {
+            copied.add(targetName);
+            DTOHandler handler = new DTOHandler();
+            handler.copyDTO(classToPath(targetName));
+
+        } catch (FileNotFoundException fe) {
+            if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
+                logger.warn("Could not find {} for copying", targetName);
+            } else {
+                throw fe;
             }
         }
     }
@@ -188,25 +191,29 @@ public class ClassProcessor extends AbstractCompiler {
      */
     private void solveConstant(TypeDeclaration<?> from, Type type) {
         Optional<VariableDeclarator> vdecl = type.findAncestor(VariableDeclarator.class);
-        if (vdecl.isPresent()) {
-            Optional<Expression> optExpr = vdecl.get().getInitializer();
-            if(optExpr.isPresent()) {
-                Expression expr = optExpr.get();
-                if(expr.isNameExpr()) {
-                    String name = expr.asNameExpr().getName().asString();
-                    ImportDeclaration imp = resolveImport(name);
-                    if (imp != null) {
-                        String className = imp.getNameAsString();
+        if (vdecl.isEmpty()) {
+            return;
+        }
 
-                        int index = className.lastIndexOf(".");
-                        if (index > 0) {
-                            String pkg = className.substring(0, index);
-                            CompilationUnit depCu = getCompilationUnit(pkg);
-                            if (depCu != null) {
-                                ClassDependency dep = new ClassDependency(from, pkg);
-                                addEdge(from.getFullyQualifiedName().orElse(null), dep);
-                            }
-                        }
+        Optional<Expression> optExpr = vdecl.get().getInitializer();
+        if(optExpr.isEmpty()) {
+            return;
+        }
+        Expression expr = optExpr.get();
+
+        if(expr.isNameExpr()) {
+            String name = expr.asNameExpr().getName().asString();
+            ImportDeclaration imp = resolveImport(name);
+            if (imp != null) {
+                String className = imp.getNameAsString();
+
+                int index = className.lastIndexOf(".");
+                if (index > 0) {
+                    String pkg = className.substring(0, index);
+                    CompilationUnit depCu = getCompilationUnit(pkg);
+                    if (depCu != null) {
+                        ClassDependency dep = new ClassDependency(from, pkg);
+                        addEdge(from.getFullyQualifiedName().orElse(null), dep);
                     }
                 }
             }
@@ -247,7 +254,6 @@ public class ClassProcessor extends AbstractCompiler {
         }
         if (secondaryType != null) {
             for (Type t : secondaryType) {
-                // todo find out the proper way to indentify Type parameters like List<T>
                 if(t.asString().length() != 1 ) {
                     solveTypeDependencies(from, t);
                 }
@@ -316,50 +322,59 @@ public class ClassProcessor extends AbstractCompiler {
 
     protected boolean createEdge(Type typeArg, TypeDeclaration<?> from) {
         try {
-            if(typeArg.isPrimitiveType() ||
-                    (typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().isBoxedType())) {
-                Node parent = typeArg.getParentNode().orElse(null);
-                if (parent instanceof VariableDeclarator vadecl) {
-                    Expression init = vadecl.getInitializer().orElse(null);
-                    if (init != null) {
-                        if (init.isFieldAccessExpr()) {
-                            FieldAccessExpr fae = init.asFieldAccessExpr();
-                            ResolvedValueDeclaration rfd = fae.resolve();
-                            addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, rfd.getType().describe()));
-
-                        }
-                        else if (!init.isConditionalExpr() && !init.isEnclosedExpr() && !init.isCastExpr() &&
-                                !init.isMethodCallExpr() && !init.isLiteralExpr()) {
-                            JavaParserFieldDeclaration fieldDeclaration = symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
-                            ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
-                            addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, declaringType.getQualifiedName()));
-                            return true;
-                        }
-                    }
-                    else {
-                        logger.debug("Variable {} being initialized through method call but it should not matter", typeArg);
-                    }
-                }
-                return false;
-            }
-            String description = typeArg.resolve().describe();
-            if (!description.startsWith("java.")) {
-                ClassDependency dependency = new ClassDependency(from, description);
-                for (var jarSolver : jarSolvers) {
-                    if (jarSolver.getKnownClasses().contains(description)) {
-                        dependency.setExternal(true);
-                        return true;
-                    }
-                }
-                addEdge(from.getFullyQualifiedName().orElse(null), dependency);
-            }
+            return createEdgeHelper(typeArg, from);
         } catch (UnsolvedSymbolException e) {
             ImportDeclaration decl = resolveImport(typeArg.asClassOrInterfaceType().getNameAsString());
-            if (decl != null && !decl.getNameAsString().startsWith("java.")) {
+            if (decl != null && !decl.getNameAsString().startsWith(PREFIX)) {
                 addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, decl.getNameAsString()));
                 return true;
             }
             logger.debug("Unresolvable {}", typeArg);
+        }
+        return false;
+    }
+
+    private boolean createEdgeHelper(Type typeArg, TypeDeclaration<?> from) {
+        if(typeArg.isPrimitiveType() ||
+                (typeArg.isClassOrInterfaceType() && typeArg.asClassOrInterfaceType().isBoxedType())) {
+            Node parent = typeArg.getParentNode().orElse(null);
+            return createEdgeHelper(typeArg, from, parent);
+        }
+        String description = typeArg.resolve().describe();
+        if (!description.startsWith(PREFIX)) {
+            ClassDependency dependency = new ClassDependency(from, description);
+            for (var jarSolver : jarSolvers) {
+                if (jarSolver.getKnownClasses().contains(description)) {
+                    dependency.setExternal(true);
+                    return true;
+                }
+            }
+            addEdge(from.getFullyQualifiedName().orElse(null), dependency);
+        }
+        return false;
+    }
+
+    private boolean createEdgeHelper(Type typeArg, TypeDeclaration<?> from, Node parent) {
+        if (parent instanceof VariableDeclarator vadecl) {
+            Expression init = vadecl.getInitializer().orElse(null);
+            if (init != null) {
+                if (init.isFieldAccessExpr()) {
+                    FieldAccessExpr fae = init.asFieldAccessExpr();
+                    ResolvedValueDeclaration rfd = fae.resolve();
+                    addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, rfd.getType().describe()));
+
+                }
+                else if (!init.isConditionalExpr() && !init.isEnclosedExpr() && !init.isCastExpr() &&
+                        !init.isMethodCallExpr() && !init.isLiteralExpr()) {
+                    JavaParserFieldDeclaration fieldDeclaration = symbolResolver.resolveDeclaration(init, JavaParserFieldDeclaration.class);
+                    ResolvedTypeDeclaration declaringType = fieldDeclaration.declaringType();
+                    addEdge(from.getFullyQualifiedName().orElse(null), new ClassDependency(from, declaringType.getQualifiedName()));
+                    return true;
+                }
+            }
+            else {
+                logger.debug("Variable {} being initialized through method call but it should not matter", typeArg);
+            }
         }
         return false;
     }
@@ -414,18 +429,17 @@ public class ClassProcessor extends AbstractCompiler {
             keepImports.add(solvedImport);
             return solvedImport;
         }
-        else {
-            ref = combinedTypeSolver.tryToSolveType(packageName);
-            if (ref.isSolved()) {
-                Optional<ResolvedReferenceTypeDeclaration> resolved = ref.getDeclaration();
-                if(resolved.isPresent()) {
-                    for(ResolvedFieldDeclaration field : resolved.get().getDeclaredFields()) {
-                        if (field.getName().equals(name)) {
-                            ImportDeclaration solvedImport = new ImportDeclaration(
-                                    packageName + "." + name, field.isStatic(), false);
-                            keepImports.add(solvedImport);
-                            return solvedImport;
-                        }
+
+        ref = combinedTypeSolver.tryToSolveType(packageName);
+        if (ref.isSolved()) {
+            Optional<ResolvedReferenceTypeDeclaration> resolved = ref.getDeclaration();
+            if(resolved.isPresent()) {
+                for(ResolvedFieldDeclaration field : resolved.get().getDeclaredFields()) {
+                    if (field.getName().equals(name)) {
+                        ImportDeclaration solvedImport = new ImportDeclaration(
+                                packageName + "." + name, field.isStatic(), false);
+                        keepImports.add(solvedImport);
+                        return solvedImport;
                     }
                 }
             }
@@ -458,7 +472,7 @@ public class ClassProcessor extends AbstractCompiler {
         if (imp != null) {
             keepImports.add(imp);
             ClassDependency dep = new ClassDependency(fromType, imp.getNameAsString());
-            addEdge(fromType.getFullyQualifiedName().get(), dep);
+            addEdge(fromType.getFullyQualifiedName().orElseThrow(), dep);
         }
         else {
             /*
@@ -582,17 +596,16 @@ public class ClassProcessor extends AbstractCompiler {
                 resolveImport(annotationName);
                 filteredAnnotations.add(annotation);
             }
-            else if(annotationName.equals("Id") || annotationName.equals("NotNull")) {
-                switch(field.getElementType().asString()) {
-                    case "Long": field.setAllTypes(new PrimitiveType(PrimitiveType.Primitive.LONG));
-                        break;
-                }
+            if( (annotationName.equals("Id") || annotationName.equals("NotNull")) &&
+                    "Long".equals(field.getElementType().asString())) {
+                field.setAllTypes(new PrimitiveType(PrimitiveType.Primitive.LONG));
             }
         }
         field.getAnnotations().clear();
         field.setAnnotations(filteredAnnotations);
     }
 
+    @SuppressWarnings("java:S1452")
     protected ModifierVisitor<?> createTypeCollector() {
         return new TypeCollector();
     }

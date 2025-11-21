@@ -12,6 +12,10 @@ import java.io.IOException;
 import java.io.PrintStream;
 
 public class TestHelper {
+    public static final String FAKE_ENTITY = "sa.com.cloudsolutions.antikythera.testhelper.model.FakeEntity";
+    public static final String FAKE_REPOSITORY = "sa.com.cloudsolutions.antikythera.testhelper.repository.FakeRepository";
+    public static final String FAKE_SERVICE = "sa.com.cloudsolutions.antikythera.testhelper.service.FakeService";
+
     protected Evaluator evaluator;
 
     protected final PrintStream standardOut = System.out;

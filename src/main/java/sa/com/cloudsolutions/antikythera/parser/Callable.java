@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 
 import java.lang.reflect.Method;
@@ -24,6 +25,8 @@ public class Callable {
      */
     Class<?> foundInClass;
 
+    ClassOrInterfaceDeclaration classOrInterfaceDeclaration;
+
     /**
      * The method call expression associated with this callable.
      * A callable instance is typically created when we search through our source code and binaries
@@ -31,8 +34,11 @@ public class Callable {
      * criteria that resulted in this instance being created.
      */
     MCEWrapper mce;
+
     public Callable(CallableDeclaration<?> callableDeclaration, MCEWrapper mce) {
         this.callableDeclaration = callableDeclaration;
+        callableDeclaration.findAncestor(ClassOrInterfaceDeclaration.class)
+                .ifPresent(orInterfaceDeclaration -> this.classOrInterfaceDeclaration = orInterfaceDeclaration);
         this.mce = mce;
     }
 
@@ -45,6 +51,7 @@ public class Callable {
 
     }
 
+    @SuppressWarnings("java:S1452")
     public CallableDeclaration<?> getCallableDeclaration() {
         return callableDeclaration;
     }
@@ -119,6 +126,11 @@ public class Callable {
     }
     public MCEWrapper getMce() {
         return mce;
+    }
+
+    @SuppressWarnings("unused")
+    public ClassOrInterfaceDeclaration getClassOrInterfaceDeclaration() {
+        return classOrInterfaceDeclaration;
     }
 
     public void setMce(MCEWrapper mce) {

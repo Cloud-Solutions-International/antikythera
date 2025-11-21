@@ -34,6 +34,7 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.expr.TextBlockLiteralExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithArguments;
@@ -56,7 +57,6 @@ import net.bytebuddy.ByteBuddy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
@@ -78,6 +78,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -166,6 +167,8 @@ public class Evaluator implements EvaluationEngine {
                     new Variable(AbstractCompiler.convertLiteralToType(integerLiteralExpr), Integer.parseInt(integerLiteralExpr.getValue()));
             case StringLiteralExpr stringLiteralExpr ->
                     new Variable(AbstractCompiler.convertLiteralToType(stringLiteralExpr), stringLiteralExpr.getValue());
+            case TextBlockLiteralExpr textBlockLiteralExpr ->
+                    new Variable(new com.github.javaparser.ast.type.ClassOrInterfaceType(null, "String"), textBlockLiteralExpr.getValue());
             case CharLiteralExpr charLiteralExpr ->
                     new Variable(AbstractCompiler.convertLiteralToType(charLiteralExpr), charLiteralExpr.getValue());
             case LongLiteralExpr longLiteralExpr -> {
@@ -267,7 +270,16 @@ public class Evaluator implements EvaluationEngine {
         if (expr.isNameExpr()) {
             String name = expr.asNameExpr().getNameAsString();
             Symbol s = getValue(expr, name);
-            if (s == null) return null;
+            if (s == null) {
+                ImportWrapper wrapper = AbstractCompiler.findImport(cu, expr.toString());
+                if (wrapper != null && wrapper.getField() != null) {
+                    VariableDeclarator vdecl = wrapper.getField().getVariable(0);
+                    if (vdecl != null && vdecl.getInitializer().isPresent()) {
+                        return evaluateExpression(vdecl.getInitializer().orElseThrow());
+                    }
+                }
+                return null;
+            }
             if (s instanceof Variable v) return v;
             return new Variable(s.getType(), s.getValue());
         } else if (expr.isMethodCallExpr()) {
@@ -1150,12 +1162,33 @@ public class Evaluator implements EvaluationEngine {
 
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
-            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
-            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                returnValue.setClazz(method.getReturnType());
-            }
+            invoke(method, finalArgs, v);
         } catch (IllegalAccessException e) {
             invokeinAccessibleMethod(v, reflectionArguments);
+        } catch (IllegalArgumentException e) {
+            invokeFallback(v, reflectionArguments, finalArgs, method);
+        }
+    }
+
+    private void invokeFallback(Variable v, ReflectionArguments reflectionArguments, Object[] finalArgs, Method method) throws IllegalAccessException, InvocationTargetException {
+        // Attempt robust fallback by re-resolving method based on runtime argument types
+        Class<?>[] runtimeTypes = new Class<?>[finalArgs.length];
+        for (int i = 0; i < finalArgs.length; i++) {
+            runtimeTypes[i] = finalArgs[i] == null ? Object.class : finalArgs[i].getClass();
+        }
+
+        ReflectionArguments retryArgs = new ReflectionArguments(reflectionArguments.getMethodName(), finalArgs, runtimeTypes);
+        retryArgs.setScope(reflectionArguments.getScope());
+        Method retry = Reflect.findMethod(method.getDeclaringClass(), retryArgs);
+        if (retry != null) {
+            Object target2 = java.lang.reflect.Modifier.isStatic(retry.getModifiers()) ? null : v.getValue();
+            retryArgs.setMethod(retry);
+            retryArgs.finalizeArguments();
+            Object[] retryFinal = retryArgs.getFinalArgs();
+            returnValue = new Variable(retry.invoke(target2, retryFinal));
+            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+                returnValue.setClazz(retry.getReturnType());
+            }
         }
     }
 
@@ -1165,10 +1198,7 @@ public class Evaluator implements EvaluationEngine {
         Object[] finalArgs = reflectionArguments.getFinalArgs();
         try {
             method.setAccessible(true);
-            returnValue = new Variable(method.invoke(v.getValue(), finalArgs));
-            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                returnValue.setClazz(method.getReturnType());
-            }
+            invoke(method, finalArgs, v);
         } catch (InaccessibleObjectException ioe) {
             // Handle JDK stream methods differently
             if (v.getClazz().getName().startsWith("java.util.stream.")) {
@@ -1178,12 +1208,17 @@ public class Evaluator implements EvaluationEngine {
                         reflectionArguments.getMethodName(),
                         reflectionArguments.getArgumentTypes());
                 if (publicMethod != null) {
-                    returnValue = new Variable(publicMethod.invoke(v.getValue(), finalArgs));
-                    if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                        returnValue.setClazz(publicMethod.getReturnType());
-                    }
+                    invoke(publicMethod, finalArgs, v);
                 }
             }
+        }
+    }
+
+    void invoke(Method method, Object[] finalArgs, Variable v) throws InvocationTargetException, IllegalAccessException {
+        Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
+        returnValue = new Variable(method.invoke(target, finalArgs));
+        if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+            returnValue.setClazz(method.getReturnType());
         }
     }
 
@@ -1357,7 +1392,7 @@ public class Evaluator implements EvaluationEngine {
     Variable executeSource(MethodCallExpr methodCall) throws ReflectiveOperationException {
 
         TypeDeclaration<?> decl = AbstractCompiler.getMatchingType(cu,
-                ClassProcessor.instanceToClassName(AbstractCompiler.fullyQualifiedToShortName(className))).orElse(null);
+                AbstractCompiler.instanceToClassName(AbstractCompiler.fullyQualifiedToShortName(className))).orElse(null);
         if (decl != null) {
             MCEWrapper wrapper = wrapCallExpression(methodCall);
             Optional<Callable> md = AbstractCompiler.findMethodDeclaration(wrapper, decl);
@@ -1441,7 +1476,7 @@ public class Evaluator implements EvaluationEngine {
             }
             return resolvePrimitiveOrBoxedVariable(variable, t);
         } else {
-            for (ImportWrapper imp : imports) {
+            for (ImportWrapper imp : imports.reversed()) {
                 String resolvedClass = imp.getNameAsString();
                 Variable v = resolveNonPrimitiveVariable(resolvedClass, variable, t);
                 if (v != null) {
@@ -1802,6 +1837,7 @@ public class Evaluator implements EvaluationEngine {
     }
 
     private void executeForEachWithArray(ForEachStmt forEachStmt, Object iterValue) throws ReflectiveOperationException {
+        // Ensure the loop variable is declared in the current scope
         evaluateExpression(forEachStmt.getVariable());
 
         for (int i = 0; i < Array.getLength(iterValue); i++) {
@@ -1810,6 +1846,10 @@ public class Evaluator implements EvaluationEngine {
                 Symbol v = getLocal(forEachStmt, vdecl.getNameAsString());
                 if (v != null) {
                     v.setValue(value);
+                } else {
+                    // Mirror collection behavior: create the local variable when missing
+                    v = new Variable(value);
+                    setLocal(forEachStmt, vdecl.getNameAsString(), v);
                 }
             }
 
@@ -1915,7 +1955,7 @@ public class Evaluator implements EvaluationEngine {
     protected void handleApplicationException(Exception e, BlockStmt parent) throws ReflectiveOperationException {
         returnValue = null;
         if (catching.isEmpty()) {
-            throw new AUTException("Unhandled exception", e);
+            throw new AUTException("Unhandled exception: ", e);
         }
 
         TryStmt t = catching.pollLast();
@@ -1951,7 +1991,7 @@ public class Evaluator implements EvaluationEngine {
         }
 
         if (!matchFound && t.getFinallyBlock().isEmpty()) {
-            throw new AUTException("Unhandled exception", e);
+            throw new AUTException("Unhandled exception: " + e.getClass().getName() + ": " + (e.getMessage() == null ? "" : e.getMessage()), e);
         }
     }
 
@@ -2075,7 +2115,7 @@ public class Evaluator implements EvaluationEngine {
             incrementSequence();
             v.setValue(sequence);
             MethodCallExpr mce = new MethodCallExpr(
-                    "set" + ClassProcessor.instanceToClassName(variableDeclarator.getNameAsString()));
+                    "set" + AbstractCompiler.instanceToClassName(variableDeclarator.getNameAsString()));
             String type = v.getType().asString();
             if (type.equals("long") || type.equals("Long") || type.equals("java.lang.Long")) {
                 mce.addArgument(new LongLiteralExpr().setValue(Long.toString(sequence) + "L"));
@@ -2097,7 +2137,7 @@ public class Evaluator implements EvaluationEngine {
             if (!v.getInitializer().isEmpty()) {
                 Expression first = v.getInitializer().getFirst();
                 if (first instanceof MethodCallExpr m && m.getScope().isPresent()) {
-                    MethodCallExpr mce = new MethodCallExpr().setName("set" + ClassProcessor.instanceToClassName(entry.getKey()));
+                    MethodCallExpr mce = new MethodCallExpr().setName("set" + AbstractCompiler.instanceToClassName(entry.getKey()));
                     mce.addArgument(first);
                     fi.add(mce);
                     for (int i = 1; i < v.getInitializer().size(); i++) {

@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>sa.com.cloudsolutions</groupId>
     <artifactId>antikythera</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.2.4</version>
 
     <name>Antikythera</name>
     <description>Automated Test Generator for Java projects. Generates unit tests and API tests for Spring applications.</description>
@@ -26,6 +26,7 @@
         <api-framework-version>2.0.0</api-framework-version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <antikythera.agent.path>${project.basedir}/../antikythera-agent/target/antikythera-agent-0.0.1.jar</antikythera.agent.path>
     </properties>
 
     <repositories>
@@ -68,12 +69,12 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>2.17.1</version>
+            <version>2.17.2</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-yaml</artifactId>
-            <version>2.17.1</version>
+            <version>2.17.2</version>
         </dependency>
 
         <dependency>
@@ -92,6 +93,20 @@
             <groupId>com.github.jsqlparser</groupId>
             <artifactId>jsqlparser</artifactId>
             <version>5.3</version>
+        </dependency>
+
+        <!-- HQL/JPQL Parser with ANTLR4 -->
+        <dependency>
+            <groupId>com.raditha</groupId>
+            <artifactId>hql-parser</artifactId>
+            <version>0.0.6</version>
+        </dependency>
+        
+        <!-- Explicitly declare ANTLR 4 runtime to ensure IDE classpath includes it -->
+        <dependency>
+            <groupId>org.antlr</groupId>
+            <artifactId>antlr4-runtime</artifactId>
+            <version>4.13.1</version>
         </dependency>
 
         <dependency>
@@ -127,6 +142,8 @@
             <artifactId>spring-kafka</artifactId>
             <version>3.2.1</version>
         </dependency>
+
+        <!-- Note: Hibernate is already included via spring-boot-starter-data-jpa -->
     </dependencies>
     <build>
         <plugins>
@@ -137,7 +154,7 @@
                 <configuration>
                     <parallel>none</parallel>
                     <runOrder>alphabetical</runOrder>
-                    <argLine>@{argLine} -javaagent:/home/raditha/csi/Antikythera/antikythera-agent/target/antikythera-agent-1.0-SNAPSHOT.jar -XX:+EnableDynamicAgentLoading
+                    <argLine>@{argLine} -javaagent:${antikythera.agent.path} -XX:+EnableDynamicAgentLoading
                         --add-opens java.base/java.nio.charset=ALL-UNNAMED
                         --add-opens java.base/java.lang=ALL-UNNAMED
                         --add-opens java.base/java.util.stream=ALL-UNNAMED
