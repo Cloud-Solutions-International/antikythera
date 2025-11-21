@@ -16,7 +16,7 @@ This document provides comprehensive technical information for AI agents (specif
 
 ## Project Overview
 
-**Antikythera** is an automated test generator and refacoring tool for Java projects. It generates:
+**Antikythera** is an automated test generator and refactoring tool for Java projects. It generates:
 - **Unit tests** for service classes and business logic
 - **API tests** for REST endpoints using REST Assured
 
@@ -35,6 +35,7 @@ This document provides comprehensive technical information for AI agents (specif
 - `rest-assured` - API test generation
 - `jsqlparser` - Query parsing and conversion
 - `spring-boot-starter-data-jpa` - JPA entity metadata
+- `hql-parser` (GitHub dependency from raditha) - HQL to SQL conversion
 - `antikythera-common` (GitHub dependency) - Shared utilities
 
 ### Related Repositories
@@ -113,13 +114,15 @@ Target Project Source Files
         │
         ▼
    [TestGenerator]
+        ├─▶ SpringTestGenerator (for REST controllers)
+        ├─▶ UnitTestGenerator (for services)
         ├─▶ Test method generation
-        ├─▶ Mock setup generation
-        ├─▶ Assertion generation
+        ├─▶ Mock setup generation (Mockito)
+        ├─▶ Assertion generation (JUnit/TestNG)
         └─▶ File writing (Antikythera.writeFilesToTest)
         │
         ▼
-Output Directory (JUnit Test Files)
+Output Directory (JUnit/TestNG Test Files)
 ```
 
 ---
@@ -192,89 +195,49 @@ Parses JPA repositories to extract and execute queries.
 ##### Supporting Classes
 - `Callable.java` - Wraps method/constructor declarations with metadata
 - `ImportWrapper.java` - Wraps import declarations with resolved types
+- `ImportUtils.java` - Utilities for managing imports in generated code
 - `MCEWrapper.java` - Wraps MethodCallExpr with argument type information
 - `MavenHelper.java` - Parses pom.xml and builds classpath
 - `Stats.java` - Tracks parsing statistics
 
 #### Parser Converter Subpackage
-Located at `parser/converter`, this is a comprehensive JPA/HQL to SQL conversion subsystem.
+Located at `parser/converter`, this is a JPA/HQL to SQL conversion subsystem.
 
-**Purpose:** Convert JPA/JPQL/HQL queries to native SQL with full dialect support and entity metadata resolution.
+**Purpose:** Convert JPA/JPQL/HQL queries to native SQL with dialect support and entity metadata resolution.
 
-##### Core Interfaces & Implementations
+##### Core Converter Classes
 
-**`JpaQueryConverter.java` (Interface)**
-Defines the contract for JPA query conversion.
+**`BasicConverter.java`**
+Static utility class for converting Java field names to snake_case SQL columns.
 
-**Methods:**
-- `convertToNativeSQL(String jpaQuery, EntityMetadata, DatabaseDialect)` - Main conversion method
-- `canConvert(String jpaQuery)` - Validates if query is convertible
-- `supportsDialect(DatabaseDialect dialect)` - Checks dialect support
-
-**`HibernateQueryConverter.java`**
-Primary implementation of JpaQueryConverter using Hibernate's query parsing.
-
-**Features:**
-- Parses HQL/JPQL using pattern matching and JSQLParser
-- Supports SELECT, UPDATE, DELETE queries
-- Named parameter to positional parameter conversion
-- Aggregate function handling (COUNT, SUM, AVG, MIN, MAX)
-- Subquery support (EXISTS, IN subqueries)
-- Dialect-specific transformations (Oracle, PostgreSQL)
+**Key Features:**
+- Converts camelCase field names to snake_case column names
+- Processes SELECT statements (projections, WHERE, GROUP BY, ORDER BY, HAVING)
+- Handles JOIN operations with entity metadata
+- Normalizes SQL projections (replaces single-alias projections with *)
 
 **Key Methods:**
-- `parseHqlQuery(String)` - Parses HQL into QueryNode AST
-- `extractParameterMappings(String)` - Maps named params to positions
-- `extractReferencedTables(EntityMetadata, QueryNode)` - Finds referenced tables
-- `applyAdditionalDialectTransformations(String, DatabaseDialect)` - Dialect-specific SQL fixes
+- `convertFieldsToSnakeCase(Statement stmt, TypeWrapper entity)` - Main entry point for field conversion
+- `convertPlainSelectToSnakeCase(PlainSelect, TypeWrapper)` - Converts all clauses to snake_case
+- `normalizeProjection(PlainSelect)` - Optimizes SELECT projections
+- `processJoins(TypeWrapper, PlainSelect)` - Handles JOIN clauses with entity metadata
 
-**Supported Patterns:**
-- Entity references: `FROM User u` → `FROM users u`
-- Property refs: `u.userName` → `u.user_name`
-- Named params: `:paramName` → `?`
-- Aggregate functions with DISTINCT
-- Complex WHERE/HAVING clauses
+**`HQLParserAdapter.java`**
+Adapter that bridges Antikythera's converter interface with the external hql-parser library (ANTLR4-based).
 
-##### SQL Generation & Transformation
-
-**`SqlGenerationVisitor.java`**
-Visitor pattern implementation for converting HQL AST to SQL.
-
-**Multi-Phase Conversion Process:**
-1. **SELECT Statement** - Entity to table mapping, property to column
-2. **Entity References** - Convert FROM/JOIN entity names to tables
-3. **Property References** - Convert alias.property to alias.column
-4. **JOIN Operations** - Handle INNER/LEFT/RIGHT/FULL joins
-5. **WHERE Clause** - Property-to-column mapping in conditions
-6. **Aggregate Functions** - COUNT/SUM/AVG/MIN/MAX with column mapping
-7. **GROUP BY Clause** - Property name conversion
-8. **HAVING Clause** - Column mapping in aggregate conditions
-9. **Subqueries** - Recursive processing of nested SELECTs
-10. **Named Parameters** - Convert to positional (?)
-11. **Dialect Transformations** - Apply dialect-specific rules
+**Key Features:**
+- Uses `com.raditha.hql.parser.HQLParser` for HQL/JPQL parsing
+- Converts parsed HQL to PostgreSQL dialect using `HQLToPostgreSQLConverter`
+- Registers entity metadata mappings from JavaParser annotations
+- Provides ConversionResult with native SQL and metadata
 
 **Key Methods:**
-- `convertToSql(QueryNode, SqlConversionContext)` - Main entry point
-- `convertSelectStatement(Select, SqlConversionContext)` - AST-based SELECT conversion
-- `convertUpdateStatement(Update, SqlConversionContext)` - AST-based UPDATE conversion
-- `convertDeleteStatement(Delete, SqlConversionContext)` - AST-based DELETE conversion
-- `convertExpressionToSnakeCase(Expression, SqlConversionContext)` - Recursive expression conversion
-- `convertEntityReferences(String, SqlConversionContext)` - Entity to table mapping
-- `convertPropertyReferences(String, SqlConversionContext)` - Property to column mapping
-- `convertJoinOperations(String, SqlConversionContext)` - JOIN clause generation
-- `convertAggregateFunctions(String, SqlConversionContext)` - Aggregate function handling
-- `handleImplicitJoins(String, SqlConversionContext)` - Detect and add missing JOINs
+- `convertToNativeSQL(String jpaQuery)` - Parses and converts HQL to SQL
+- `registerMappings(MetaData)` - Registers entity-to-table mappings from HQL analysis
 
-**Supported Constructs:**
-- SELECT/UPDATE/DELETE statements
-- INNER/LEFT/RIGHT/FULL OUTER joins
-- Aggregate functions: COUNT, SUM, AVG, MIN, MAX
-- GROUP BY and HAVING clauses
-- ORDER BY clauses
-- Subqueries (SELECT in WHERE, EXISTS, IN)
-- CASE expressions
-- Binary expressions (AND, OR, =, <, >, etc.)
-- Function calls with parameter conversion
+**Dependencies:**
+- External library: `com.raditha:hql-parser` (GitHub dependency)
+- Supports PostgreSQL dialect conversion
 
 ##### Dialect Support System
 
@@ -282,53 +245,13 @@ Visitor pattern implementation for converting HQL AST to SQL.
 Defines supported database dialects with dialect-specific behaviors.
 
 **Supported Dialects:**
-- **ORACLE** - Oracle Database with ROWNUM, boolean as 0/1, sequence.NEXTVAL
-- **POSTGRESQL** - PostgreSQL with LIMIT, native boolean, NEXTVAL('sequence')
+- **ORACLE** - Oracle Database
+- **POSTGRESQL** - PostgreSQL
 
-**Methods (per dialect):**
-- `transformBooleanValue(String)` - true/false → 1/0 (Oracle) or unchanged (PostgreSQL)
-- `applyLimitClause(String sql, int limit)` - LIMIT vs ROWNUM
-- `getSequenceNextValueSyntax(String)` - Sequence next value syntax
-- `getConcatenationOperator()` - String concatenation (|| for both)
-- `supportsBoolean()` - Native boolean support check
-- `transformSql(String)` - Apply all dialect transformations
-- `fromJdbcUrl(String)` - Detect dialect from JDBC URL
-- `fromString(String)` - Parse dialect from string identifier
-
-**`DialectHandler.java`**
-Integration layer between Settings and DatabaseDialect.
-
-**Features:**
-- Auto-detects dialect from configuration (JDBC URL)
-- Provides convenience methods for dialect operations
-- Backward compatibility with existing RepositoryParser
-
-**Key Methods:**
-- `detectDialectFromConfiguration()` - Read from Settings
-- `detectDialectFromUrl(String jdbcUrl)` - Parse JDBC URL
-- `transformSql(String)` - Apply current dialect transformations
-- `isOracle()` / `isPostgreSQL()` - Dialect checks
-- `fromRepositoryParser(String)` - Compatibility method
-
-**`DialectTransformer.java`**
-Comprehensive dialect-specific SQL transformations.
-
-**Oracle Transformations:**
-- LIMIT → ROWNUM (with OFFSET support)
-- CONCAT(a, b) → (a || b)
-- CURRENT_TIMESTAMP → SYSDATE
-- NOW() → SYSDATE
-- ILIKE → LIKE (with UPPER wrapping)
-- COALESCE(a, b) → NVL(a, b) (2 args only)
-- Date/time function conversions
-
-**PostgreSQL Transformations:**
-- SYSDATE → CURRENT_TIMESTAMP
-- sequence.NEXTVAL → NEXTVAL('sequence')
-- NVL(a, b) → COALESCE(a, b)
-- ROWNUM → LIMIT
-- Length → CHAR_LENGTH
-- Oracle date functions to PostgreSQL equivalents
+**Key Features:**
+- Dialect detection from JDBC URL
+- Dialect-specific SQL transformations
+- Used by BaseRepositoryParser and RepositoryParser for query conversion
 
 ##### Entity Metadata System
 
@@ -364,13 +287,11 @@ Immutable container for entity mapping information.
 
 **Contains:**
 - Entity-to-table mappings: `Map<String, TableMapping>`
-- Property-to-column mappings: `Map<String, ColumnMapping>`
-- Relationship mappings: `Map<String, JoinMapping>`
+- Property-to-column mappings: `Map<String, ColumnMapping>` (via TableMapping)
+- Relationship mappings: `Map<String, JoinMapping>` (via TableMapping)
 
 **Methods:**
 - `getTableMapping(String entityName)` - Get table for entity
-- `getColumnMapping(String propertyName)` - Get column for property
-- `getJoinMapping(String relationshipProperty)` - Get join info
 - `hasEntityMetadata(String entityName)` - Check existence
 - `getAllTableMappings()` - Get all tables
 
@@ -386,22 +307,8 @@ Maps JPA entity to database table.
 - `propertyToColumnMap` - Map of property names to columns
 
 **Methods:**
-- `getColumnMapping(String propertyName)` - Get column for property
+- `getColumnMapping(String propertyName)` - Get column for property (returns column name as String)
 - `hasPropertyMapping(String)` - Check if property mapped
-
-**`ColumnMapping.java`**
-Maps entity property to database column.
-
-**Fields:**
-- `propertyName` - Entity property name
-- `columnName` - Database column name
-- `tableName` - Containing table
-- `javaType` - Java class type
-- `sqlType` - SQL type (VARCHAR, INTEGER, etc.)
-- `nullable` - NULL constraint
-
-**Methods:**
-- `getFullyQualifiedColumnName()` - Returns table.column
 
 **`JoinMapping.java` (Record)**
 Maps entity relationship to SQL join.
@@ -461,41 +368,27 @@ Categorizes conversion failures:
 **`QueryConversionException.java`**
 Exception thrown during conversion failures.
 
-**`SqlConversionContext.java` (Record)**
-Context object passed through conversion pipeline.
-
-**Fields:**
-- `entityMetadata` - EntityMetadata instance
-- `dialect` - Target DatabaseDialect
-
-**`QueryNode.java` (Interface)**
-Represents nodes in HQL AST.
-
-**Methods:**
-- Tree navigation: getParent(), getChildren(), getFirstChild(), etc.
-- Node properties: getType(), getText(), getLine(), getColumn()
-- Tree manipulation: addChild(), removeChild(), replaceChild()
-
 ##### Usage Example
 
 ```java
 // Setup
 EntityMappingResolver resolver = new EntityMappingResolver();
 EntityMetadata metadata = resolver.resolveEntityMetadata(User.class);
-DatabaseDialect dialect = DatabaseDialect.POSTGRESQL;
 
-// Create converter
-HibernateQueryConverter converter = new HibernateQueryConverter(dialect);
+// Use BasicConverter for camelCase to snake_case conversion
+Statement stmt = CCJSqlParserUtil.parse("SELECT u FROM User u WHERE u.userName = ?");
+TypeWrapper userEntity = new TypeWrapper(User.class);
+BasicConverter.convertFieldsToSnakeCase(stmt, userEntity);
 
-// Convert query
+// Or use HQLParserAdapter for full HQL to SQL conversion
+HQLParserAdapter adapter = new HQLParserAdapter(compilationUnit, userEntity);
 String hql = "SELECT u FROM User u WHERE u.userName = :name";
-ConversionResult result = converter.convertToNativeSQL(hql, metadata, dialect);
+ConversionResult result = adapter.convertToNativeSQL(hql);
 
 if (result.isSuccessful()) {
     String sql = result.getNativeSql();
     // "SELECT u.* FROM users u WHERE u.user_name = ?"
     List<ParameterMapping> params = result.getParameterMappings();
-    // [{name="name", position=1, type=String.class, column="user_name"}]
 }
 ```
 
@@ -588,6 +481,87 @@ Represents a runtime variable with type and value.
 - `Class<?> clazz` - Resolved Java class
 - `List<Expression> initializer` - Original initialization expression
 
+##### `Arithmetics.java`
+Static utility class for arithmetic operations on Variables.
+
+**Purpose:**
+- Handles arithmetic operations (+, -, *, /, %) for numeric types
+- Supports string concatenation
+- Type promotion for numeric operations (int, long, float, double)
+
+**Key Methods:**
+- `operate(Variable left, Variable right, BinaryExpr.Operator)` - Perform arithmetic or string concatenation
+- `performOperation(Number, Number, BinaryExpr.Operator)` - Core numeric operation
+
+##### `BinaryOps.java`
+Static utility class for binary operations and condition manipulation.
+
+**Purpose:**
+- Equality checking for Variables
+- Condition negation for branching
+- Numeric comparison support
+
+**Key Methods:**
+- `checkEquality(Variable left, Variable right)` - Compare two Variables for equality
+- `negateCondition(Expression)` - Negate a conditional expression (used for branch coverage)
+
+##### `ControlFlowEvaluator.java`
+Handles control flow evaluation (if/else, switch, loops).
+
+**Purpose:**
+- Evaluates control flow statements
+- Manages branching execution
+- Tracks execution paths for test generation
+
+##### Argument Generation Classes
+
+**`ArgumentGenerator.java`**
+Base class for generating test method arguments.
+
+**`DatabaseArgumentGenerator.java`**
+Generates test arguments by querying the database for real data.
+
+**`DummyArgumentGenerator.java`**
+Generates dummy/placeholder test arguments.
+
+**`NullArgumentGenerator.java`**
+Generates null arguments for test cases.
+
+##### Supporting Evaluator Classes
+
+**`AntikytheraGenerated.java`**
+Marker annotation for generated classes.
+
+**`ConditionVisitor.java`**
+Visitor for analyzing conditional expressions.
+
+**`InnerClassEvaluator.java`**
+Specialized evaluator for inner and anonymous classes.
+
+**`LineOfCode.java`**
+Represents a single line of code during evaluation for debugging/tracking.
+
+**`MockReturnValueHandler.java`**
+Handles return values from mocked methods.
+
+**`MockingEvaluator.java`**
+Specialized evaluator for classes with mocked dependencies.
+
+**`NumericComparator.java`**
+Utility for comparing numeric values of different types.
+
+**`Precondition.java`**
+Represents preconditions for test execution.
+
+**`ReturnConditionVisitor.java`**
+Visitor for analyzing return statement conditions.
+
+**`SpringEvaluator.java`**
+Specialized evaluator for Spring framework classes.
+
+**`TestSuiteEvaluator.java`**
+Evaluator for test suite generation and execution.
+
 ##### `Scope.java` & `ScopeChain.java`
 Handle scoped method calls like `obj.method1().method2()`.
 
@@ -612,20 +586,26 @@ Handles lambda expressions and method references.
 - `FPEvaluator.java` - Creates functional interface implementations
 - `FunctionEvaluator.java` - Function<T, R> support
 - `ConsumerEvaluator.java` - Consumer<T> support
+- `BiConsumerEvaluator.java` - BiConsumer<T, U> support
 - `SupplierEvaluator.java` - Supplier<T> support
 - `BiFunctionEvaluator.java` - BiFunction<T, U, R> support
+- `RunnableEvaluator.java` - Runnable support
 - `FunctionalConverter.java` - Converts method references to lambdas
+- `FunctionalInvocationHandler.java` - Dynamic proxy handler for functional interfaces
 
 ##### Mocking (`evaluator/mock`)
 Mock configuration and registry.
 
 - `MockingRegistry.java` - Registers custom mock expressions
 - `MockConfigReader.java` - Reads mock configuration from YAML
+- `MockedFieldDetector.java` - Detects and tracks mocked fields
+- `MockingCall.java` - Represents a mocked method call
 
 ##### Logging (`evaluator/logging`)
 Tracks logging statements for test assertions.
 
 - `AKLogger.java` - Intercepts logging calls during evaluation
+- `LogRecorder.java` - Records log statements for assertion generation
 
 ---
 
@@ -649,6 +629,100 @@ Abstract base class for test generation.
 - `generateMocks()` - Generates mock declarations and setups
 - `generateAssertions(Variable returnValue)` - Generates assertion statements
 - `writeTestFile(String className, String content)` - Writes test file
+
+##### `SpringTestGenerator.java`
+Test generator specialized for Spring applications.
+
+**Features:**
+- Handles Spring annotations (@Service, @Component, @Autowired)
+- Generates tests for REST controllers
+- Manages Spring-specific test setup
+- Supports transaction boundaries
+
+**Key Methods:**
+- Generates REST Assured tests for API endpoints
+- Handles @RequestMapping and related annotations
+- Creates authentication and authorization test setup
+
+##### `UnitTestGenerator.java`
+Test generator for unit tests with full mocking support.
+
+**Features:**
+- Generates JUnit tests with Mockito
+- Creates mock declarations for dependencies
+- Handles complex object initialization
+- Supports dependency injection patterns
+- Generates preconditions for test setup
+
+**Key Methods:**
+- Generates @Mock annotations
+- Creates when().thenReturn() mock setups
+- Handles dependency graphs
+- Generates comprehensive test assertions
+
+##### Assertion Classes
+
+**`Asserter.java`**
+Abstract base class for test assertion generation.
+
+**Purpose:**
+- Defines assertion API for test generators
+- Supports multiple assertion frameworks
+- Generates field assertions for complex objects
+
+**Key Methods:**
+- `assertNotNull(String variable)` - Generate not-null assertion
+- `assertNull(String variable)` - Generate null assertion
+- `assertEquals(String rhs, String lhs)` - Generate equality assertion
+- `assertThrows(String invocation, MethodResponse)` - Generate exception assertion
+- `addFieldAsserts(MethodResponse, BlockStmt)` - Add field-level assertions
+
+**`JunitAsserter.java`**
+JUnit-specific assertion generator.
+
+**Features:**
+- Generates JUnit 5 assertions
+- Uses org.junit.jupiter.api.Assertions
+
+**`TestNgAsserter.java`**
+TestNG-specific assertion generator.
+
+**Features:**
+- Generates TestNG assertions
+- Uses org.testng.Assert
+
+##### Supporting Generator Classes
+
+**`Factory.java`**
+Factory for creating generator instances and test components.
+
+**`MethodResponse.java`**
+Encapsulates the response/result of a method execution.
+
+**Fields:**
+- Method return value
+- Execution state
+- Side effects
+- Exceptions thrown
+
+**`ControllerRequest.java`**
+Represents an HTTP request for REST controller test generation.
+
+**Fields:**
+- HTTP method (GET, POST, PUT, DELETE)
+- Endpoint path
+- Request parameters
+- Request body
+- Headers
+
+**`QueryType.java`**
+Enum defining types of repository queries (SELECT, INSERT, UPDATE, DELETE).
+
+**`QueryMethodArgument.java`**
+Represents an argument for a repository query method.
+
+**`QueryMethodParameter.java`**
+Represents a parameter in a repository query.
 
 ##### `Antikythera.java`
 Main entry point for test generation.
@@ -689,7 +763,98 @@ Wraps type information (TypeDeclaration or Class).
 
 ---
 
-### 4. Configuration Module (`sa.com.cloudsolutions.antikythera.configuration`)
+### 4. Depsolver Module (`sa.com.cloudsolutions.antikythera.depsolver`)
+
+**Purpose:** Resolve and analyze dependencies between classes, manage dependency graphs, and handle DTO transformations.
+
+#### Key Classes
+
+##### `DepSolver.java`
+Main dependency solver that analyzes class dependencies.
+
+**Core Responsibilities:**
+- Traverse AST to identify class dependencies
+- Build dependency graphs
+- Track imports, field types, method parameters
+- Handle complex dependency chains
+
+**Key Methods:**
+- Analyzes field declarations for dependencies
+- Processes method calls and constructor invocations
+- Tracks type references throughout compilation units
+
+##### `InterfaceSolver.java`
+Resolves interface implementations and finds concrete classes.
+
+**Purpose:**
+- Maps interfaces to their implementations
+- Supports polymorphic dependency resolution
+- Used by test generators to instantiate concrete types
+
+##### `ClassProcessor.java`
+Processes individual classes for dependency extraction.
+
+**Features:**
+- Extracts class-level dependencies
+- Identifies annotations and their impacts
+- Processes inheritance hierarchies
+
+##### `Graph.java` & `GraphNode.java`
+Data structures for representing dependency graphs.
+
+**`Graph.java`:**
+- Manages collection of GraphNodes
+- Supports graph traversal operations
+- Detects circular dependencies
+
+**`GraphNode.java`:**
+- Represents a single node (class/interface) in dependency graph
+- Tracks incoming and outgoing dependencies
+- Contains compilation unit reference
+- Manages destination compilation unit for code generation
+
+**Fields:**
+- `TypeDeclaration<?> typeDeclaration` - Source type
+- `CompilationUnit compilationUnit` - Source CU
+- `CompilationUnit destination` - Target CU for generation
+- Dependencies: references to other GraphNodes
+
+##### `AnnotationVisitor.java`
+Visitor pattern implementation for processing annotations.
+
+**Purpose:**
+- Identifies Spring annotations (@Service, @Component, @Autowired, etc.)
+- Extracts annotation parameters
+- Used for dependency injection resolution
+
+##### `DTOHandler.java`
+Handles Data Transfer Objects (DTOs) in test generation.
+
+**Features:**
+- Identifies DTO classes
+- Generates DTO initialization code
+- Handles nested DTOs
+- Supports builder patterns
+
+##### `ClassDependency.java`
+Represents a single class dependency relationship.
+
+**Fields:**
+- Source class
+- Dependent class
+- Dependency type (field, parameter, return type)
+
+##### `Resolver.java`
+Generic resolver utility for type resolution.
+
+**Purpose:**
+- Resolves types across packages
+- Handles generic types
+- Supports wildcard imports
+
+---
+
+### 5. Configuration Module (`sa.com.cloudsolutions.antikythera.configuration`)
 
 **Purpose:** Manage project configuration.
 
@@ -739,17 +904,25 @@ sa.com.cloudsolutions.antikythera/
 │   ├── DepsolvingParser.java            # Dependency resolution
 │   ├── Callable.java                    # Method/constructor wrapper
 │   ├── ImportWrapper.java               # Import declaration wrapper
+│   ├── ImportUtils.java                 # Import management utilities
 │   ├── MCEWrapper.java                  # Method call expression wrapper
 │   ├── MavenHelper.java                 # Maven POM parsing
 │   ├── Stats.java                       # Statistics tracking
-│   └── converter/                       # JPA query conversion
-│       ├── JpaQueryConverter.java
-│       ├── HibernateQueryConverter.java
-│       ├── EntityMappingResolver.java
-│       ├── DialectHandler.java
-│       └── ... (12 more classes)
+│   └── converter/                       # JPA query conversion (12 classes)
+│       ├── BasicConverter.java          # Field name conversion utility
+│       ├── HQLParserAdapter.java        # HQL to SQL adapter
+│       ├── EntityMappingResolver.java   # JPA entity metadata
+│       ├── EntityMetadata.java          # Entity metadata container
+│       ├── TableMapping.java            # Entity-to-table mapping
+│       ├── JoinMapping.java             # Relationship mapping
+│       ├── JoinType.java                # JOIN type enum
+│       ├── ParameterMapping.java        # Parameter mapping
+│       ├── DatabaseDialect.java         # Database dialect enum
+│       ├── ConversionResult.java        # Conversion result
+│       ├── ConversionFailureReason.java # Failure reason enum
+│       └── QueryConversionException.java # Conversion exception
 │
-├── evaluator/
+├── evaluator/                           # Expression evaluation (29 classes)
 │   ├── Evaluator.java                   # Core evaluation engine
 │   ├── EvaluatorFactory.java            # Evaluator creation
 │   ├── AntikytheraRunTime.java          # Global runtime state
@@ -757,47 +930,90 @@ sa.com.cloudsolutions.antikythera/
 │   ├── Scope.java                       # Method call scope
 │   ├── ScopeChain.java                  # Chained method call tracking
 │   ├── Branching.java                   # Branch tracking
+│   ├── Arithmetics.java                 # Arithmetic operations
+│   ├── BinaryOps.java                   # Binary operations
+│   ├── ControlFlowEvaluator.java        # Control flow evaluation
 │   ├── ArgumentGenerator.java           # Test argument generation
+│   ├── DatabaseArgumentGenerator.java   # DB-based argument generation
+│   ├── DummyArgumentGenerator.java      # Dummy argument generation
+│   ├── NullArgumentGenerator.java       # Null argument generation
 │   ├── AKBuddy.java                     # ByteBuddy integration
 │   ├── MethodInterceptor.java           # Method call interception
 │   ├── Reflect.java                     # Reflection utilities
 │   ├── ReflectionArguments.java         # Reflection argument handling
-│   ├── functional/                      # Functional programming support
+│   ├── AntikytheraGenerated.java        # Generated class marker
+│   ├── ConditionVisitor.java            # Condition analysis visitor
+│   ├── InnerClassEvaluator.java         # Inner class evaluation
+│   ├── LineOfCode.java                  # Line tracking
+│   ├── MockReturnValueHandler.java      # Mock return handling
+│   ├── MockingEvaluator.java            # Mocking evaluator
+│   ├── NumericComparator.java           # Numeric comparison
+│   ├── Precondition.java                # Test preconditions
+│   ├── ReturnConditionVisitor.java      # Return analysis visitor
+│   ├── SpringEvaluator.java             # Spring-specific evaluator
+│   ├── TestSuiteEvaluator.java          # Test suite evaluator
+│   ├── functional/                      # Functional programming (9 classes)
 │   │   ├── FPEvaluator.java
 │   │   ├── FunctionEvaluator.java
 │   │   ├── ConsumerEvaluator.java
+│   │   ├── BiConsumerEvaluator.java
 │   │   ├── SupplierEvaluator.java
-│   │   └── ... (5 more classes)
-│   ├── logging/
-│   │   └── AKLogger.java                # Logging interception
-│   └── mock/
-│       ├── MockingRegistry.java         # Mock management
-│       └── MockConfigReader.java        # Mock configuration
+│   │   ├── BiFunctionEvaluator.java
+│   │   ├── FunctionalConverter.java
+│   │   ├── FunctionalInvocationHandler.java
+│   │   └── RunnableEvaluator.java
+│   ├── logging/                         # Logging support (2 classes)
+│   │   ├── AKLogger.java
+│   │   └── LogRecorder.java
+│   └── mock/                            # Mocking support (4 classes)
+│       ├── MockingRegistry.java
+│       ├── MockConfigReader.java
+│       ├── MockedFieldDetector.java
+│       └── MockingCall.java
 │
-├── generator/
+├── generator/                           # Test generation (18 classes)
 │   ├── Antikythera.java                 # Main entry point
 │   ├── TestGenerator.java               # Base test generator
+│   ├── SpringTestGenerator.java         # Spring test generator
+│   ├── UnitTestGenerator.java           # Unit test generator
+│   ├── Asserter.java                    # Base asserter
+│   ├── JunitAsserter.java               # JUnit asserter
+│   ├── TestNgAsserter.java              # TestNG asserter
 │   ├── TypeWrapper.java                 # Type information wrapper
 │   ├── BaseRepositoryQuery.java         # Query representation
 │   ├── RepositoryQuery.java             # Query execution
+│   ├── QueryType.java                   # Query type enum
+│   ├── QueryMethodArgument.java         # Query method argument
+│   ├── QueryMethodParameter.java        # Query method parameter
+│   ├── MethodResponse.java              # Method response container
+│   ├── ControllerRequest.java           # Controller request container
+│   ├── Factory.java                     # Factory for generators
 │   ├── CopyUtils.java                   # File copying utilities
 │   └── TruthTable.java                  # Branch coverage support
 │
-├── depsolver/
+├── depsolver/                           # Dependency resolution (9 classes)
+│   ├── DepSolver.java                   # Main dependency solver
 │   ├── InterfaceSolver.java             # Interface implementation resolution
-│   └── ClassProcessor.java              # Class dependency processing
+│   ├── ClassProcessor.java              # Class dependency processing
+│   ├── AnnotationVisitor.java           # Annotation processing
+│   ├── DTOHandler.java                  # DTO handling
+│   ├── ClassDependency.java             # Dependency representation
+│   ├── Resolver.java                    # Type resolver
+│   ├── Graph.java                       # Dependency graph
+│   └── GraphNode.java                   # Graph node
 │
 ├── finch/
 │   └── Finch.java                       # External source integration
 │
-└── exception/
+└── exception/                           # Exceptions (5 classes)
     ├── AntikytheraException.java        # Base exception
     ├── EvaluatorException.java          # Evaluation errors
     ├── GeneratorException.java          # Generation errors
+    ├── DepsolverException.java          # Dependency resolution errors
     └── AUTException.java                # Application Under Test errors
 ```
 
-**Total:** 109 Java source files
+**Total:** 102 Java source files
 
 ---
 
