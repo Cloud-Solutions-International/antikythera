@@ -114,13 +114,15 @@ Target Project Source Files
         │
         ▼
    [TestGenerator]
+        ├─▶ SpringTestGenerator (for REST controllers)
+        ├─▶ UnitTestGenerator (for services)
         ├─▶ Test method generation
-        ├─▶ Mock setup generation
-        ├─▶ Assertion generation
+        ├─▶ Mock setup generation (Mockito)
+        ├─▶ Assertion generation (JUnit/TestNG)
         └─▶ File writing (Antikythera.writeFilesToTest)
         │
         ▼
-Output Directory (JUnit Test Files)
+Output Directory (JUnit/TestNG Test Files)
 ```
 
 ---
