@@ -16,7 +16,7 @@ This document provides comprehensive technical information for AI agents (specif
 
 ## Project Overview
 
-**Antikythera** is an automated test generator and refacoring tool for Java projects. It generates:
+**Antikythera** is an automated test generator and refactoring tool for Java projects. It generates:
 - **Unit tests** for service classes and business logic
 - **API tests** for REST endpoints using REST Assured
 
@@ -35,6 +35,7 @@ This document provides comprehensive technical information for AI agents (specif
 - `rest-assured` - API test generation
 - `jsqlparser` - Query parsing and conversion
 - `spring-boot-starter-data-jpa` - JPA entity metadata
+- `hql-parser` (GitHub dependency from raditha) - HQL to SQL conversion
 - `antikythera-common` (GitHub dependency) - Shared utilities
 
 ### Related Repositories
@@ -583,20 +584,26 @@ Handles lambda expressions and method references.
 - `FPEvaluator.java` - Creates functional interface implementations
 - `FunctionEvaluator.java` - Function<T, R> support
 - `ConsumerEvaluator.java` - Consumer<T> support
+- `BiConsumerEvaluator.java` - BiConsumer<T, U> support
 - `SupplierEvaluator.java` - Supplier<T> support
 - `BiFunctionEvaluator.java` - BiFunction<T, U, R> support
+- `RunnableEvaluator.java` - Runnable support
 - `FunctionalConverter.java` - Converts method references to lambdas
+- `FunctionalInvocationHandler.java` - Dynamic proxy handler for functional interfaces
 
 ##### Mocking (`evaluator/mock`)
 Mock configuration and registry.
 
 - `MockingRegistry.java` - Registers custom mock expressions
 - `MockConfigReader.java` - Reads mock configuration from YAML
+- `MockedFieldDetector.java` - Detects and tracks mocked fields
+- `MockingCall.java` - Represents a mocked method call
 
 ##### Logging (`evaluator/logging`)
 Tracks logging statements for test assertions.
 
 - `AKLogger.java` - Intercepts logging calls during evaluation
+- `LogRecorder.java` - Records log statements for assertion generation
 
 ---
 
