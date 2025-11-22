@@ -4,7 +4,7 @@ import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -19,11 +19,8 @@ import java.io.IOException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import java.util.Collection;
 
 class BaseRepositoryParserTest {
-
-    private BaseRepositoryParser parser;
 
     public static final String ANIMAL_ENTITY = "sa.com.cloudsolutions.antikythera.testhelper.model.Animal";
     public static final String DOG_ENTITY = "sa.com.cloudsolutions.antikythera.testhelper.model.Dog";
@@ -35,12 +32,6 @@ class BaseRepositoryParserTest {
         AbstractCompiler.preProcess();
         EntityMappingResolver.reset();
         EntityMappingResolver.build();
-    }
-
-    @BeforeEach
-    void setUp() throws IOException {
-        Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
-        parser = new BaseRepositoryParser();
     }
 
     @Test
@@ -76,7 +67,7 @@ class BaseRepositoryParserTest {
         parser.processTypes();
 
         // Test method pattern parsing
-        MethodDeclaration findByUsername = repoUnit.findAll(MethodDeclaration.class).get(0);
+        MethodDeclaration findByUsername = repoUnit.findAll(MethodDeclaration.class).getFirst();
         Callable callable = new Callable(findByUsername, null);
 
         // Test that the method doesn't throw an exception
@@ -360,7 +351,8 @@ class BaseRepositoryParserTest {
             // Complex case with ordering
             "findByInvoiceItemIdInOrderByCreatedDateDesc, 'findBy,InvoiceItemId,In,OrderBy,CreatedDate,Desc'",
     })
-    void testExtractComponents(String methodName, String expectedComponentsStr) {
+    void testExtractComponents(String methodName, String expectedComponentsStr) throws IOException {
+        BaseRepositoryParser parser = new BaseRepositoryParser();
         List<String> components = parser.extractComponents(methodName);
         List<String> expected = List.of(expectedComponentsStr.split(","));
 
@@ -370,43 +362,50 @@ class BaseRepositoryParserTest {
     }
 
     @Test
-    void testExtractComponents_EmptyMethodName() {
+    void testExtractComponents_EmptyMethodName() throws IOException {
+        BaseRepositoryParser parser = new BaseRepositoryParser();
         List<String> components = parser.extractComponents("");
         assertTrue(components.isEmpty(), "Empty method name should produce empty components");
     }
 
     @Test
-    void testExtractComponents_OnlyKeyword() {
+    void testExtractComponents_OnlyKeyword() throws IOException {
+        BaseRepositoryParser parser = new BaseRepositoryParser();
         List<String> components = parser.extractComponents("findAll");
         assertEquals(List.of("findAll"), components);
     }
 
     @Test
-    void testExtractComponents_MultipleAndOr() {
+    void testExtractComponents_MultipleAndOr() throws IOException {
+        BaseRepositoryParser parser = new BaseRepositoryParser();
         List<String> components = parser.extractComponents("findByInvoiceAndStatusOrCategory");
         assertEquals(List.of("findBy", "Invoice", "And", "Status", "Or", "Category"), components);
     }
 
     @Test
-    void testExtractComponents_BetweenClause() {
+    void testExtractComponents_BetweenClause() throws IOException {
+        BaseRepositoryParser parser = new BaseRepositoryParser();
         List<String> components = parser.extractComponents("findByInvoiceDateBetween");
         assertEquals(List.of("findBy", "InvoiceDate", "Between"), components);
     }
 
     @Test
-    void testExtractComponents_GreaterThanLessThan() {
+    void testExtractComponents_GreaterThanLessThan() throws IOException {
+        BaseRepositoryParser parser = new BaseRepositoryParser();
         List<String> components = parser.extractComponents("findByInvoiceAmountGreaterThanAndStatusIn");
         assertEquals(List.of("findBy", "InvoiceAmount", "GreaterThan", "And", "Status", "In"), components);
     }
 
     @Test
-    void testExtractComponents_IsNullIsNotNull() {
+    void testExtractComponents_IsNullIsNotNull() throws IOException {
+        BaseRepositoryParser parser = new BaseRepositoryParser();
         List<String> components = parser.extractComponents("findByInvoiceIsNullAndInternalCodeIsNotNull");
         assertEquals(List.of("findBy", "Invoice", "IsNull", "And", "InternalCode", "IsNotNull"), components);
     }
 
     @Test
-    void testExtractComponents_LikeContaining() {
+    void testExtractComponents_LikeContaining() throws IOException {
+        BaseRepositoryParser parser = new BaseRepositoryParser();
         List<String> components = parser.extractComponents("findByInvoiceNumberLikeAndDescriptionContaining");
         assertEquals(List.of("findBy", "InvoiceNumber", "Like", "And", "Description", "Containing"), components);
     }
