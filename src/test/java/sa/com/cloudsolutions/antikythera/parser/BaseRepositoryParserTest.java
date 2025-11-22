@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.parser;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 
 import org.junit.jupiter.api.Test;
@@ -58,6 +59,18 @@ class BaseRepositoryParserTest {
         assertEquals(2, BaseRepositoryParser.countPlaceholders("SELECT * FROM users WHERE id = ? AND name = ?"));
         assertEquals(3,
                 BaseRepositoryParser.countPlaceholders("SELECT * FROM users WHERE id = ? AND name = ? AND age > ?"));
+    }
+
+    @Test
+    void testIsJpaRepository() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        assertFalse(BaseRepositoryParser.isJpaRepository((TypeWrapper) null));
+        TypeDeclaration<?> type = AntikytheraRunTime.getTypeDeclaration(USER_REPOSITORY).orElseThrow();
+        assertTrue(BaseRepositoryParser.isJpaRepository(type));
+        assertTrue(BaseRepositoryParser.isJpaRepository(new TypeWrapper(type)));
     }
 
     @Test
