@@ -20,18 +20,79 @@ public final class MethodToSQLConverter {
     public static final String ENDING_WITH = "EndingWith";
     public static final String STARTING_WITH = "StartingWith";
     public static final String IGNORE_CASE = "IgnoreCase";
+    public static final String AND = "And";
+    public static final String OR = "Or";
+    public static final String NOT = "Not";
+    public static final String IN = "In";
+    public static final String NOT_IN = "NotIn";
+    public static final String LIKE = "Like";
+    public static final String BETWEEN = "Between";
+    public static final String GREATER_THAN = "GreaterThan";
+    public static final String LESS_THAN = "LessThan";
+    public static final String GREATER_THAN_EQUAL = "GreaterThanEqual";
+    public static final String LESS_THAN_EQUAL = "LessThanEqual";
+    public static final String BEFORE = "Before";
+    public static final String AFTER = "After";
+    public static final String IS_NULL = "IsNull";
+    public static final String IS_NOT_NULL = "IsNotNull";
+    public static final String TRUE = "True";
+    public static final String FALSE = "False";
+    public static final String DESC = "Desc";
+    public static final String ASC = "Asc";
+    public static final String IS = "Is";
+    public static final String EQUALS = "Equals";
+    public static final String ALL_IGNORE_CASE = "AllIgnoreCase";
+    public static final String FIND_BY = "findBy";
+    public static final String FIND_ALL = "findAll";
+    public static final String FIND_ALL_BY_ID = "findAllById";
+    public static final String COUNT_BY = "countBy";
+    public static final String DELETE_BY = "deleteBy";
+    public static final String EXISTS_BY = "existsBy";
+    public static final String FIND_FIRST_BY = "findFirstBy";
+    public static final String FIND_TOP_BY = "findTopBy";
+    public static final String FIND_DISTINCT_BY = "findDistinctBy";
+    public static final String READ_BY = "readBy";
+    public static final String QUERY_BY = "queryBy";
+    public static final String SEARCH_BY = "searchBy";
+    public static final String STREAM_BY = "streamBy";
+    public static final String REMOVE_BY = "removeBy";
+    public static final String GET = "get";
 
-    private static final Pattern KEYWORDS_PATTERN = Pattern.compile(
-            "readBy|queryBy|searchBy|streamBy|removeBy|get|findBy|findFirstBy|findTopBy|findDistinctBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|IsNotNull|IsNull|Not|Containing|StartingWith|EndingWith|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan|Before|After|True|False|Is|Equals|IgnoreCase|AllIgnoreCase|In|Desc|Asc");
+    private static final List<String> QUERY_TYPES = List.of(
+            READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY, REMOVE_BY, GET, FIND_BY,
+            FIND_FIRST_BY, FIND_TOP_BY, FIND_DISTINCT_BY, FIND_ALL, COUNT_BY, DELETE_BY, EXISTS_BY);
+
+    private static final List<String> OPERATORS = List.of(
+            AND, OR, BETWEEN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL, GREATER_THAN,
+            LESS_THAN, BEFORE, AFTER, IS_NULL, IS_NOT_NULL, LIKE, NOT, IN,
+            NOT_IN, TRUE, FALSE, CONTAINING, STARTING_WITH, ENDING_WITH);
+
+    private static final List<String> MODIFIERS = List.of(
+            BaseRepositoryParser.ORDER_BY, DESC, ASC, IS, EQUALS, IGNORE_CASE, ALL_IGNORE_CASE);
+
+    private static final Pattern KEYWORDS_PATTERN;
+
+    static {
+        List<String> allKeywords = new ArrayList<>();
+        allKeywords.addAll(QUERY_TYPES);
+        allKeywords.addAll(OPERATORS);
+        allKeywords.addAll(MODIFIERS);
+
+        // Sort by length descending to match longest keywords first
+        allKeywords.sort((a, b) -> b.length() - a.length());
+
+        String pattern = String.join("|", allKeywords);
+        KEYWORDS_PATTERN = Pattern.compile(pattern);
+    }
 
     /**
      * Set of operators that do not require an equals sign to be appended.
      * These operators handle the SQL generation themselves or are syntactic sugar.
      */
     private static final Set<String> NO_EQUALS_OPERATORS = Set.of(
-            "Between", "GreaterThan", "LessThan", "LessThanEqual", "GreaterThanEqual",
-            "IsNotNull", "IsNull", "Like", CONTAINING, "In", "NotIn", "Not", "Or", "And",
-            STARTING_WITH, ENDING_WITH, "Before", "After", "True", "False", IGNORE_CASE);
+            BETWEEN, GREATER_THAN, LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL,
+            IS_NOT_NULL, IS_NULL, LIKE, CONTAINING, IN, NOT_IN, NOT, OR, AND,
+            STARTING_WITH, ENDING_WITH, BEFORE, AFTER, TRUE, FALSE, IGNORE_CASE);
 
     private MethodToSQLConverter() {
     }
@@ -55,7 +116,7 @@ public final class MethodToSQLConverter {
             // If the keyword is followed by a lowercase letter, it's part of a field name
             // Examples: "Invoice" (In+voice), "Description" (Desc+ription), "Ordering"
             // (Or+dering)
-            if (keyword.matches("In|Or|Not|Asc|Desc") && end < methodName.length()) {
+            if (keyword.matches(IN + "|" + OR + "|" + NOT + "|" + ASC + "|" + DESC) && end < methodName.length()) {
                 char nextChar = methodName.charAt(end);
                 if (Character.isLowerCase(nextChar)) {
                     // Keyword is part of a field name, don't treat as keyword
@@ -96,7 +157,7 @@ public final class MethodToSQLConverter {
             String next = (i < components.size() - 1) ? components.get(i + 1) : "";
 
             if (handleQueryType(component, next, sql, tableNameClean)) {
-                if (component.startsWith("findFirst") || component.startsWith("findTop")) {
+                if (component.startsWith(FIND_FIRST_BY) || component.startsWith(FIND_TOP_BY)) {
                     top = true;
                 }
             } else if (handleOperator(component, next, sql)) {
@@ -123,46 +184,46 @@ public final class MethodToSQLConverter {
      */
     private static boolean handleQueryType(String component, String next, StringBuilder sql, String tableName) {
         switch (component) {
-            case "findAll" -> {
+            case FIND_ALL -> {
                 sql.append(BaseRepositoryParser.SELECT_STAR).append(tableName);
                 if (!next.isEmpty() && !next.equals(BaseRepositoryParser.ORDER_BY)) {
                     sql.append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 }
                 return true;
             }
-            case "findAllById" -> {
+            case FIND_ALL_BY_ID -> {
                 sql.append(BaseRepositoryParser.SELECT_STAR).append(tableName)
                         .append(" WHERE id IN (?)");
                 return true;
             }
-            case "findBy", "get", "readBy", "queryBy", "searchBy", "streamBy" -> {
+            case FIND_BY, GET, READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY -> {
                 sql.append(BaseRepositoryParser.SELECT_STAR).append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
             }
-            case "countBy" -> {
+            case COUNT_BY -> {
                 sql.append("SELECT COUNT(*) FROM ").append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
             }
-            case "deleteBy", "removeBy" -> {
+            case DELETE_BY, REMOVE_BY -> {
                 sql.append("DELETE FROM ").append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
             }
-            case "existsBy" -> {
+            case EXISTS_BY -> {
                 sql.append("SELECT EXISTS (SELECT 1 FROM ").append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
             }
-            case "findFirstBy", "findTopBy" -> {
+            case FIND_FIRST_BY, FIND_TOP_BY -> {
                 sql.append(BaseRepositoryParser.SELECT_STAR).append(tableName);
                 if (!next.equals(BaseRepositoryParser.ORDER_BY)) {
                     sql.append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 }
                 return true;
             }
-            case "findDistinctBy" -> {
+            case FIND_DISTINCT_BY -> {
                 sql.append("SELECT DISTINCT * FROM ").append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
@@ -183,24 +244,24 @@ public final class MethodToSQLConverter {
      */
     private static boolean handleOperator(String component, String next, StringBuilder sql) {
         switch (component) {
-            case "In" -> sql.append(" IN (?) ");
-            case "NotIn" -> sql.append(" NOT IN (?) ");
-            case "Between" -> sql.append(" BETWEEN ? AND ? ");
-            case "GreaterThan", "After" -> sql.append(" > ? ");
-            case "LessThan", "Before" -> sql.append(" < ? ");
-            case "GreaterThanEqual" -> sql.append(" >= ? ");
-            case "LessThanEqual" -> sql.append(" <= ? ");
-            case "IsNull" -> sql.append(" IS NULL ");
-            case "IsNotNull" -> sql.append(" IS NOT NULL ");
-            case "True" -> sql.append(" = true ");
-            case "False" -> sql.append(" = false ");
-            case "And", "Or" -> sql.append(" ").append(component.toUpperCase()).append(' ');
-            case "Not" -> {
+            case IN -> sql.append(" IN (?) ");
+            case NOT_IN -> sql.append(" NOT IN (?) ");
+            case BETWEEN -> sql.append(" BETWEEN ? AND ? ");
+            case GREATER_THAN, AFTER -> sql.append(" > ? ");
+            case LESS_THAN, BEFORE -> sql.append(" < ? ");
+            case GREATER_THAN_EQUAL -> sql.append(" >= ? ");
+            case LESS_THAN_EQUAL -> sql.append(" <= ? ");
+            case IS_NULL -> sql.append(" IS NULL ");
+            case IS_NOT_NULL -> sql.append(" IS NOT NULL ");
+            case TRUE -> sql.append(" = true ");
+            case FALSE -> sql.append(" = false ");
+            case AND, OR -> sql.append(" ").append(component.toUpperCase()).append(' ');
+            case NOT -> {
                 handleNotOperator(next, sql);
                 return true;
             }
-            case CONTAINING, "Like", STARTING_WITH, ENDING_WITH -> sql.append(" LIKE ? ");
-            case "Is", "Equals", IGNORE_CASE -> {
+            case CONTAINING, LIKE, STARTING_WITH, ENDING_WITH -> sql.append(" LIKE ? ");
+            case IS, EQUALS, IGNORE_CASE -> {
                 // Syntactic sugar or handled elsewhere
                 return true;
             }
@@ -220,8 +281,8 @@ public final class MethodToSQLConverter {
      * @param sql  The StringBuilder to append SQL to.
      */
     private static void handleNotOperator(String next, StringBuilder sql) {
-        if (next.equals("Like") || next.equals(CONTAINING) || next.equals(STARTING_WITH)
-                || next.equals(ENDING_WITH) || next.equals("In")) {
+        if (next.equals(LIKE) || next.equals(CONTAINING) || next.equals(STARTING_WITH)
+                || next.equals(ENDING_WITH) || next.equals(IN)) {
             sql.append(" NOT");
         } else {
             sql.append(" != ? ");
@@ -243,7 +304,7 @@ public final class MethodToSQLConverter {
                 sql.append(" ORDER BY ");
                 return true;
             }
-            case "Desc" -> {
+            case DESC -> {
                 if (ordering) {
                     sql.append("DESC");
                     appendCommaOrSpace(next, sql);
@@ -251,7 +312,7 @@ public final class MethodToSQLConverter {
                 }
                 return false;
             }
-            case "Asc" -> {
+            case ASC -> {
                 if (ordering) {
                     sql.append("ASC");
                     appendCommaOrSpace(next, sql);
@@ -273,7 +334,7 @@ public final class MethodToSQLConverter {
      * @param sql  The StringBuilder.
      */
     private static void appendCommaOrSpace(String next, StringBuilder sql) {
-        if (!next.isEmpty() && !next.equals("Desc") && !next.equals("Asc")) {
+        if (!next.isEmpty() && !next.equals(DESC) && !next.equals(ASC)) {
             sql.append(", ");
         } else {
             sql.append(' ');
@@ -294,7 +355,7 @@ public final class MethodToSQLConverter {
         if (!ordering) {
             if (shouldAppendEquals(next)) {
                 sql.append(" = ? ");
-            } else if (!next.equals("Not") && !next.equals(IGNORE_CASE)) {
+            } else if (!next.equals(NOT) && !next.equals(IGNORE_CASE)) {
                 sql.append(' ');
             }
         } else {

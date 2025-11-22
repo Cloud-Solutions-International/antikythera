@@ -24,7 +24,6 @@ import sa.com.cloudsolutions.antikythera.parser.converter.MethodToSQLConverter;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;

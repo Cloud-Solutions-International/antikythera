@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
 import org.junit.jupiter.api.Test;
-import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 
 import java.util.List;
 

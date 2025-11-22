@@ -1,11 +1,9 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
