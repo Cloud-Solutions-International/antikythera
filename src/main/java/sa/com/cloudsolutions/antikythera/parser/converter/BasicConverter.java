@@ -18,7 +18,6 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.BaseRepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
-import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
 
 import java.util.ArrayList;
 import java.util.List;
