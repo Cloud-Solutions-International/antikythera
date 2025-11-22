@@ -62,7 +62,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     protected static final Logger logger = LoggerFactory.getLogger(BaseRepositoryParser.class);
     protected static final Pattern CAMEL_TO_SNAKE_PATTERN = Pattern.compile("([a-z])([A-Z]+)");
     protected static final Pattern KEYWORDS_PATTERN = Pattern.compile(
-            "get|findBy|findFirstBy|findTopBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan|In|Desc|Asc");
+            "readBy|queryBy|searchBy|streamBy|removeBy|get|findBy|findFirstBy|findTopBy|findDistinctBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|IsNotNull|IsNull|Not|Containing|StartingWith|EndingWith|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan|Before|After|True|False|Is|Equals|IgnoreCase|AllIgnoreCase|In|Desc|Asc");
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\?");
     public static final String ORDER_BY = "OrderBy";
     /**
@@ -366,8 +366,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return queryBuilder(finalSql, QueryType.DERIVED, md);
     }
 
-
-
     /**
      * Apply dialect-specific top limit (FIRST/TOP semantics)
      */
@@ -504,7 +502,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
             // Special handling for short keywords that could be part of field names
             // If the keyword is followed by a lowercase letter, it's part of a field name
-            // Examples: "Invoice" (In+voice), "Description" (Desc+ription), "Ordering" (Or+dering)
+            // Examples: "Invoice" (In+voice), "Description" (Desc+ription), "Ordering"
+            // (Or+dering)
             if (keyword.matches("In|Or|Not|Asc|Desc") && end < methodName.length()) {
                 char nextChar = methodName.charAt(end);
                 if (Character.isLowerCase(nextChar)) {
