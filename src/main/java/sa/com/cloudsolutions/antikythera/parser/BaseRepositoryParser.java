@@ -99,11 +99,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
     public BaseRepositoryParser() throws IOException {
         super();
-        // safeguard: dialect should never be null due to earlier tests manipulating static state
-        if (dialect == null) {
-            dialect = DatabaseDialect.POSTGRESQL; // restore default
-            logger.debug("Dialect was null; reset to POSTGRESQL default");
-        }
         queries = new HashMap<>();
     }
 
@@ -197,7 +192,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (components.isEmpty()) {
             logger.warn("Method name '{}' did not produce any recognizable JPA query components", methodName);
             // Return a basic query as fallback
-            return queryBuilder("SELECT * FROM " + findTableName(entity), QueryType.DERIVED, md);
+            return queryBuilder(SELECT_STAR + findTableName(entity), QueryType.DERIVED, md);
         }
 
         StringBuilder sql = new StringBuilder();
@@ -629,7 +624,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
         while (matcher.find()) {
             String keyword = matcher.group();
-            int start = matcher.start();
             int end = matcher.end();
 
             // Special handling for short keywords that could be part of field names
