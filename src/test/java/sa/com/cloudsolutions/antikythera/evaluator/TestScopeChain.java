@@ -3,46 +3,32 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.expr.Expression;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestScopeChain extends TestHelper {
 
-    @Test
-    void testSimpleMethodCallChain() {
-        String code = "obj.method1().method2().method3()";
+    @ParameterizedTest
+    @CsvSource({
+        "obj.method1().method2().method3(), false, method call chain",
+        "obj.field1.field2.field3, false, field access chain",
+        "obj.method1().field1.method2().field2, false, mixed chain"
+    })
+    void testScopeChain(String code, boolean shouldBeEmpty, String description) {
         Expression expr = StaticJavaParser.parseExpression(code);
 
         ScopeChain scopeChain = ScopeChain.findScopeChain(expr);
 
-        assertFalse(scopeChain.isEmpty(), "ScopeChain should not be empty for a method call chain.");
-        assertTrue(scopeChain.getChain().getLast().getExpression().toString().equals("obj"),
-                   "The last scope in the chain should be 'obj'.");
-    }
-
-    @Test
-    void testFieldAccessChain() {
-        String code = "obj.field1.field2.field3";
-        Expression expr = StaticJavaParser.parseExpression(code);
-
-        ScopeChain scopeChain = ScopeChain.findScopeChain(expr);
-
-        assertFalse(scopeChain.isEmpty(), "ScopeChain should not be empty for a field access chain.");
-        assertTrue(scopeChain.getChain().getLast().getExpression().toString().equals("obj"),
-                   "The last scope in the chain should be 'obj'.");
-    }
-
-    @Test
-    void testMixedChain() {
-        String code = "obj.method1().field1.method2().field2";
-        Expression expr = StaticJavaParser.parseExpression(code);
-
-        ScopeChain scopeChain = ScopeChain.findScopeChain(expr);
-
-        assertFalse(scopeChain.isEmpty(), "ScopeChain should not be empty for a mixed chain.");
-        assertTrue(scopeChain.getChain().getLast().getExpression().toString().equals("obj"),
-                   "The last scope in the chain should be 'obj'.");
+        if (shouldBeEmpty) {
+            assertTrue(scopeChain.isEmpty(), "ScopeChain should be empty for a single object reference.");
+        } else {
+            assertFalse(scopeChain.isEmpty(), "ScopeChain should not be empty for a " + description + ".");
+            assertEquals("obj", scopeChain.getChain().getLast().getExpression().toString(), "The last scope in the chain should be 'obj'.");
+        }
     }
 
     @Test

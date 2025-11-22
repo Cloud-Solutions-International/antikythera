@@ -40,7 +40,7 @@ public final class MethodToSQLConverter {
     public static final String DESC = "Desc";
     public static final String ASC = "Asc";
     public static final String IS = "Is";
-    public static final String EQUALS = "Equals";
+    public static final String EQUAL = "Equals";
     public static final String ALL_IGNORE_CASE = "AllIgnoreCase";
     public static final String FIND_BY = "findBy";
     public static final String FIND_ALL = "findAll";
@@ -68,7 +68,7 @@ public final class MethodToSQLConverter {
             NOT_IN, TRUE, FALSE, CONTAINING, STARTING_WITH, ENDING_WITH);
 
     private static final List<String> MODIFIERS = List.of(
-            BaseRepositoryParser.ORDER_BY, DESC, ASC, IS, EQUALS, IGNORE_CASE, ALL_IGNORE_CASE);
+            BaseRepositoryParser.ORDER_BY, DESC, ASC, IS, EQUAL, IGNORE_CASE, ALL_IGNORE_CASE);
 
     private static final Pattern KEYWORDS_PATTERN;
 
@@ -261,7 +261,7 @@ public final class MethodToSQLConverter {
                 return true;
             }
             case CONTAINING, LIKE, STARTING_WITH, ENDING_WITH -> sql.append(" LIKE ? ");
-            case IS, EQUALS, IGNORE_CASE -> {
+            case IS, EQUAL, IGNORE_CASE -> {
                 // Syntactic sugar or handled elsewhere
                 return true;
             }
