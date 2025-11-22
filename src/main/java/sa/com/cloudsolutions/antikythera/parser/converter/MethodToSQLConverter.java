@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.parser.converter;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Utility to convert Spring Data repository method-name keywords into SQL
@@ -11,6 +12,12 @@ import java.util.List;
  * concerns separated.
  */
 public final class MethodToSQLConverter {
+
+    private static final Set<String> NO_EQUALS_OPERATORS = Set.of(
+            "Between", "GreaterThan", "LessThan", "LessThanEqual", "GreaterThanEqual",
+            "IsNotNull", "IsNull", "Like", "Containing", "In", "NotIn", "Not", "Or", "And",
+            "StartingWith", "EndingWith", "Before", "After", "True", "False", "IgnoreCase");
+
     private MethodToSQLConverter() {
     }
 
@@ -23,120 +30,154 @@ public final class MethodToSQLConverter {
     public static boolean buildSelectAndWhereClauses(List<String> components, StringBuilder sql, String tableName) {
         boolean top = false;
         boolean ordering = false;
-        boolean distinct = false;
         String tableNameClean = tableName.replace("\"", "");
 
         for (int i = 0; i < components.size(); i++) {
             String component = components.get(i);
             String next = (i < components.size() - 1) ? components.get(i + 1) : "";
-            String prev = (i > 0) ? components.get(i - 1) : "";
 
-            switch (component) {
-                case "findAll" -> {
-                    if (next.isEmpty() || next.equals(BaseRepositoryParser.ORDER_BY)) {
-                        sql.append(BaseRepositoryParser.SELECT_STAR).append(tableNameClean);
-                    } else {
-                        sql.append(BaseRepositoryParser.SELECT_STAR).append(tableNameClean).append(" ")
-                                .append(BaseRepositoryParser.WHERE).append(" ");
-                    }
-                }
-                case "findAllById" ->
-                    sql.append(BaseRepositoryParser.SELECT_STAR).append(tableNameClean)
-                            .append(" WHERE id IN (?)");
-                case "findBy", "get", "readBy", "queryBy", "searchBy", "streamBy" ->
-                    sql.append(BaseRepositoryParser.SELECT_STAR).append(tableNameClean)
-                            .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
-                case "countBy" ->
-                    sql.append("SELECT COUNT(*) FROM ").append(tableNameClean)
-                            .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
-                case "deleteBy", "removeBy" ->
-                    sql.append("DELETE FROM ").append(tableNameClean)
-                            .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
-                case "existsBy" ->
-                    sql.append("SELECT EXISTS (SELECT 1 FROM ").append(tableNameClean)
-                            .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
-                case "findFirstBy", "findTopBy" -> {
+            if (handleQueryType(component, next, sql, tableNameClean)) {
+                if (component.startsWith("findFirst") || component.startsWith("findTop")) {
                     top = true;
-                    if (next.equals(BaseRepositoryParser.ORDER_BY)) {
-                        sql.append(BaseRepositoryParser.SELECT_STAR).append(tableNameClean);
-                    } else {
-                        sql.append(BaseRepositoryParser.SELECT_STAR).append(tableNameClean)
-                                .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
-                    }
                 }
-                case "findDistinctBy" -> {
-                    distinct = true;
-                    sql.append("SELECT DISTINCT * FROM ").append(tableNameClean)
-                            .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
-                }
-                case "In" -> sql.append(" IN (?) ");
-                case "NotIn" -> sql.append(" NOT IN (?) ");
-                case "Between" -> sql.append(" BETWEEN ? AND ? ");
-                case "GreaterThan", "After" -> sql.append(" > ? ");
-                case "LessThan", "Before" -> sql.append(" < ? ");
-                case "GreaterThanEqual" -> sql.append(" >= ? ");
-                case "LessThanEqual" -> sql.append(" <= ? ");
-                case "IsNull" -> sql.append(" IS NULL ");
-                case "IsNotNull" -> sql.append(" IS NOT NULL ");
-                case "True" -> sql.append(" = true ");
-                case "False" -> sql.append(" = false ");
-                case "And", "Or" -> sql.append(" ").append(component.toUpperCase()).append(' ');
-                case "Not" -> {
-                    // "Not" is a prefix to the next operator or a standalone inequality
-                    // If next is "In", "Like", "Null", etc., we handle it there or here?
-                    // Actually, standard JPA: NotLike, NotIn, NotNull (handled as IsNotNull)
-                    // If we see "Not" and next is "Like", we should output "NOT LIKE"
-                    // If we see "Not" and next is "In", we should output "NOT IN" (but "NotIn" is
-                    // usually parsed as one token if in keywords)
-                    // If "Not" is standalone (e.g. findByNameNot), it means !=
-                    if (next.equals("Like") || next.equals("Containing") || next.equals("StartingWith")
-                            || next.equals("EndingWith")) {
-                        sql.append(" NOT");
-                    } else if (next.equals("In")) {
-                        sql.append(" NOT");
-                    } else {
-                        sql.append(" != ? ");
-                    }
-                }
-                case "Containing", "Like", "StartingWith", "EndingWith" -> sql.append(" LIKE ? ");
-                case "Is", "Equals" -> {
-                    /* Syntactic sugar, ignore */ }
-                case "IgnoreCase" -> {
-                    /*
-                     * Handled in field processing or ignored for now as it requires wrapping column
-                     */ }
-                case BaseRepositoryParser.ORDER_BY -> {
+            } else if (handleOperator(component, next, sql)) {
+                // Operator handled
+            } else if (handleOrderBy(component, next, sql, ordering)) {
+                if (component.equals(BaseRepositoryParser.ORDER_BY)) {
                     ordering = true;
-                    sql.append(" ORDER BY ");
                 }
-                case "Desc" -> {
-                    if (ordering) {
-                        sql.append("DESC");
-                        if (!next.isEmpty() && !next.equals("Desc") && !next.equals("Asc")) {
-                            sql.append(", ");
-                        } else {
-                            sql.append(' ');
-                        }
-                    } else {
-                        appendDefaultComponent(sql, component, next, ordering);
-                    }
-                }
-                case "Asc" -> {
-                    if (ordering) {
-                        sql.append("ASC");
-                        if (!next.isEmpty() && !next.equals("Desc") && !next.equals("Asc")) {
-                            sql.append(", ");
-                        } else {
-                            sql.append(' ');
-                        }
-                    } else {
-                        appendDefaultComponent(sql, component, next, ordering);
-                    }
-                }
-                default -> appendDefaultComponent(sql, component, next, ordering);
+            } else {
+                appendDefaultComponent(sql, component, next, ordering);
             }
         }
         return top;
+    }
+
+    private static boolean handleQueryType(String component, String next, StringBuilder sql, String tableName) {
+        switch (component) {
+            case "findAll" -> {
+                sql.append(BaseRepositoryParser.SELECT_STAR).append(tableName);
+                if (!next.isEmpty() && !next.equals(BaseRepositoryParser.ORDER_BY)) {
+                    sql.append(" ").append(BaseRepositoryParser.WHERE).append(" ");
+                }
+                return true;
+            }
+            case "findAllById" -> {
+                sql.append(BaseRepositoryParser.SELECT_STAR).append(tableName)
+                        .append(" WHERE id IN (?)");
+                return true;
+            }
+            case "findBy", "get", "readBy", "queryBy", "searchBy", "streamBy" -> {
+                sql.append(BaseRepositoryParser.SELECT_STAR).append(tableName)
+                        .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
+                return true;
+            }
+            case "countBy" -> {
+                sql.append("SELECT COUNT(*) FROM ").append(tableName)
+                        .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
+                return true;
+            }
+            case "deleteBy", "removeBy" -> {
+                sql.append("DELETE FROM ").append(tableName)
+                        .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
+                return true;
+            }
+            case "existsBy" -> {
+                sql.append("SELECT EXISTS (SELECT 1 FROM ").append(tableName)
+                        .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
+                return true;
+            }
+            case "findFirstBy", "findTopBy" -> {
+                sql.append(BaseRepositoryParser.SELECT_STAR).append(tableName);
+                if (!next.equals(BaseRepositoryParser.ORDER_BY)) {
+                    sql.append(" ").append(BaseRepositoryParser.WHERE).append(" ");
+                }
+                return true;
+            }
+            case "findDistinctBy" -> {
+                sql.append("SELECT DISTINCT * FROM ").append(tableName)
+                        .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
+                return true;
+            }
+            default -> {
+                return false;
+            }
+        }
+    }
+
+    private static boolean handleOperator(String component, String next, StringBuilder sql) {
+        switch (component) {
+            case "In" -> sql.append(" IN (?) ");
+            case "NotIn" -> sql.append(" NOT IN (?) ");
+            case "Between" -> sql.append(" BETWEEN ? AND ? ");
+            case "GreaterThan", "After" -> sql.append(" > ? ");
+            case "LessThan", "Before" -> sql.append(" < ? ");
+            case "GreaterThanEqual" -> sql.append(" >= ? ");
+            case "LessThanEqual" -> sql.append(" <= ? ");
+            case "IsNull" -> sql.append(" IS NULL ");
+            case "IsNotNull" -> sql.append(" IS NOT NULL ");
+            case "True" -> sql.append(" = true ");
+            case "False" -> sql.append(" = false ");
+            case "And", "Or" -> sql.append(" ").append(component.toUpperCase()).append(' ');
+            case "Not" -> {
+                handleNotOperator(next, sql);
+                return true;
+            }
+            case "Containing", "Like", "StartingWith", "EndingWith" -> sql.append(" LIKE ? ");
+            case "Is", "Equals", "IgnoreCase" -> {
+                // Syntactic sugar or handled elsewhere
+                return true;
+            }
+            default -> {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void handleNotOperator(String next, StringBuilder sql) {
+        if (next.equals("Like") || next.equals("Containing") || next.equals("StartingWith")
+                || next.equals("EndingWith") || next.equals("In")) {
+            sql.append(" NOT");
+        } else {
+            sql.append(" != ? ");
+        }
+    }
+
+    private static boolean handleOrderBy(String component, String next, StringBuilder sql, boolean ordering) {
+        switch (component) {
+            case BaseRepositoryParser.ORDER_BY -> {
+                sql.append(" ORDER BY ");
+                return true;
+            }
+            case "Desc" -> {
+                if (ordering) {
+                    sql.append("DESC");
+                    appendCommaOrSpace(next, sql);
+                    return true;
+                }
+                return false;
+            }
+            case "Asc" -> {
+                if (ordering) {
+                    sql.append("ASC");
+                    appendCommaOrSpace(next, sql);
+                    return true;
+                }
+                return false;
+            }
+            default -> {
+                return false;
+            }
+        }
+    }
+
+    private static void appendCommaOrSpace(String next, StringBuilder sql) {
+        if (!next.isEmpty() && !next.equals("Desc") && !next.equals("Asc")) {
+            sql.append(", ");
+        } else {
+            sql.append(' ');
+        }
     }
 
     private static void appendDefaultComponent(StringBuilder sql, String component, String next, boolean ordering) {
@@ -144,28 +185,15 @@ public final class MethodToSQLConverter {
         if (!ordering) {
             if (shouldAppendEquals(next)) {
                 sql.append(" = ? ");
-            } else if (!next.equals("Not") && !next.equals("Is") && !next.equals("Equals")
-                    && !next.equals("IgnoreCase")) {
+            } else if (!next.equals("Not") && !next.equals("IgnoreCase")) {
                 sql.append(' ');
             }
         } else {
-            if (next.equals("Desc") || next.equals("Asc")) {
-                sql.append(' ');
-            } else if (!next.isEmpty()) {
-                sql.append(", ");
-            } else {
-                sql.append(' ');
-            }
+            appendCommaOrSpace(next, sql);
         }
     }
 
     private static boolean shouldAppendEquals(String next) {
-        return next.isEmpty() || (!next.equals("Between") && !next.equals("GreaterThan") && !next.equals("LessThan") &&
-                !next.equals("LessThanEqual") && !next.equals("IsNotNull") && !next.equals("Like") &&
-                !next.equals("GreaterThanEqual") && !next.equals("IsNull") && !next.equals("Containing") &&
-                !next.equals("In") && !next.equals("NotIn") && !next.equals("Not") && !next.equals("Or") &&
-                !next.equals("And") && !next.equals("StartingWith") && !next.equals("EndingWith") &&
-                !next.equals("Before") && !next.equals("After") && !next.equals("True") && !next.equals("False") &&
-                !next.equals("IgnoreCase"));
+        return next.isEmpty() || !NO_EQUALS_OPERATORS.contains(next);
     }
 }
