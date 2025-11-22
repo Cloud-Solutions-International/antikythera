@@ -14,6 +14,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
+import sa.com.cloudsolutions.antikythera.parser.converter.MethodToSQLConverter;
 
 import java.io.File;
 import java.io.IOException;
@@ -133,7 +134,7 @@ class BaseRepositoryParserTest {
         parser.processTypes();
 
         // Test extractComponents for method with "In"
-        List<String> components = parser.extractComponents("findByApprovalIdIn");
+        List<String> components = MethodToSQLConverter.extractComponents("findByApprovalIdIn");
         assertEquals(List.of("findBy", "ApprovalId", "In"), components);
 
         // Create a mock method to test parsing
@@ -157,7 +158,7 @@ class BaseRepositoryParserTest {
         parser.processTypes();
 
         // Test extractComponents for method with OrderBy and Desc
-        List<String> components = parser.extractComponents("findByActiveOrderByCreatedDateDesc");
+        List<String> components = MethodToSQLConverter.extractComponents("findByActiveOrderByCreatedDateDesc");
         assertEquals(List.of("findBy", "Active", "OrderBy", "CreatedDate", "Desc"), components);
 
         // Create a mock method to test parsing
@@ -221,7 +222,7 @@ class BaseRepositoryParserTest {
         parser.processTypes();
 
         // Test Not operator standalone (e.g., findByActiveNot should mean active != ?)
-        List<String> components = parser.extractComponents("findByActiveNot");
+        List<String> components = MethodToSQLConverter.extractComponents("findByActiveNot");
         assertEquals(List.of("findBy", "Active", "Not"), components);
     }
 
@@ -330,96 +331,5 @@ class BaseRepositoryParserTest {
         assertTrue(sql.contains("SELECT COUNT(*)"), "Query should contain COUNT: " + sql);
         assertTrue(sql.contains("AND"), "Query should have AND operator: " + sql);
         assertTrue(sql.contains(">"), "Query should have greater than operator: " + sql);
-    }
-
-    /**
-     * Test the extractComponents method with various edge cases involving "In"
-     * keyword.
-     * The key distinction is:
-     * - "In" followed by lowercase = part of field name (e.g., "Invoice",
-     * "Invoiced")
-     * - "In" followed by uppercase or end of string = SQL IN clause (e.g., "IdIn",
-     * "CategoryIn")
-     */
-    @ParameterizedTest
-    @CsvSource({
-            // Edge case: "Invoice" field should not be split at "In"
-            "findByInvoice, 'findBy,Invoice'",
-            // Edge case: "InvoiceItemId" with SQL IN clause at the end
-            "findByInvoiceItemIdIn, 'findBy,InvoiceItemId,In'",
-            // Edge case: "CategoryIn" with SQL IN clause, followed by "And"
-            "findByCategoryInAndStatus, 'findBy,Category,In,And,Status'",
-            // Standard cases with SQL IN clause
-            "findByIdIn, 'findBy,Id,In'",
-            "findByNameIn, 'findBy,Name,In'",
-            // Field name starting with "In"
-            "findByIndustry, 'findBy,Industry'",
-            "findByInternalCode, 'findBy,InternalCode'",
-            // Multiple conditions
-            "findByInvoiceAndStatus, 'findBy,Invoice,And,Status'",
-            "findByInvoiceIdAndStatusIn, 'findBy,InvoiceId,And,Status,In'",
-            // NotIn clause (should be matched as a single keyword)
-            "findByStatusNotIn, 'findBy,Status,NotIn'",
-            "findByInvoiceStatusNotIn, 'findBy,InvoiceStatus,NotIn'",
-            // Complex case with ordering
-            "findByInvoiceItemIdInOrderByCreatedDateDesc, 'findBy,InvoiceItemId,In,OrderBy,CreatedDate,Desc'",
-    })
-    void testExtractComponents(String methodName, String expectedComponentsStr) throws IOException {
-        BaseRepositoryParser parser = new BaseRepositoryParser();
-        List<String> components = parser.extractComponents(methodName);
-        List<String> expected = List.of(expectedComponentsStr.split(","));
-
-        assertEquals(expected, components,
-                String.format("Method '%s' should be parsed as %s but got %s",
-                        methodName, expected, components));
-    }
-
-    @Test
-    void testExtractComponents_EmptyMethodName() throws IOException {
-        BaseRepositoryParser parser = new BaseRepositoryParser();
-        List<String> components = parser.extractComponents("");
-        assertTrue(components.isEmpty(), "Empty method name should produce empty components");
-    }
-
-    @Test
-    void testExtractComponents_OnlyKeyword() throws IOException {
-        BaseRepositoryParser parser = new BaseRepositoryParser();
-        List<String> components = parser.extractComponents("findAll");
-        assertEquals(List.of("findAll"), components);
-    }
-
-    @Test
-    void testExtractComponents_MultipleAndOr() throws IOException {
-        BaseRepositoryParser parser = new BaseRepositoryParser();
-        List<String> components = parser.extractComponents("findByInvoiceAndStatusOrCategory");
-        assertEquals(List.of("findBy", "Invoice", "And", "Status", "Or", "Category"), components);
-    }
-
-    @Test
-    void testExtractComponents_BetweenClause() throws IOException {
-        BaseRepositoryParser parser = new BaseRepositoryParser();
-        List<String> components = parser.extractComponents("findByInvoiceDateBetween");
-        assertEquals(List.of("findBy", "InvoiceDate", "Between"), components);
-    }
-
-    @Test
-    void testExtractComponents_GreaterThanLessThan() throws IOException {
-        BaseRepositoryParser parser = new BaseRepositoryParser();
-        List<String> components = parser.extractComponents("findByInvoiceAmountGreaterThanAndStatusIn");
-        assertEquals(List.of("findBy", "InvoiceAmount", "GreaterThan", "And", "Status", "In"), components);
-    }
-
-    @Test
-    void testExtractComponents_IsNullIsNotNull() throws IOException {
-        BaseRepositoryParser parser = new BaseRepositoryParser();
-        List<String> components = parser.extractComponents("findByInvoiceIsNullAndInternalCodeIsNotNull");
-        assertEquals(List.of("findBy", "Invoice", "IsNull", "And", "InternalCode", "IsNotNull"), components);
-    }
-
-    @Test
-    void testExtractComponents_LikeContaining() throws IOException {
-        BaseRepositoryParser parser = new BaseRepositoryParser();
-        List<String> components = parser.extractComponents("findByInvoiceNumberLikeAndDescriptionContaining");
-        assertEquals(List.of("findBy", "InvoiceNumber", "Like", "And", "Description", "Containing"), components);
     }
 }

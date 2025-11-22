@@ -2,8 +2,11 @@ package sa.com.cloudsolutions.antikythera.parser.converter;
 
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Utility to convert Spring Data repository method-name keywords into SQL
@@ -13,16 +16,64 @@ import java.util.Set;
  */
 public final class MethodToSQLConverter {
 
+    public static final String CONTAINING = "Containing";
+    public static final String ENDING_WITH = "EndingWith";
+    public static final String STARTING_WITH = "StartingWith";
+    public static final String IGNORE_CASE = "IgnoreCase";
+
+    private static final Pattern KEYWORDS_PATTERN = Pattern.compile(
+            "readBy|queryBy|searchBy|streamBy|removeBy|get|findBy|findFirstBy|findTopBy|findDistinctBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|IsNotNull|IsNull|Not|Containing|StartingWith|EndingWith|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan|Before|After|True|False|Is|Equals|IgnoreCase|AllIgnoreCase|In|Desc|Asc");
+
     /**
      * Set of operators that do not require an equals sign to be appended.
      * These operators handle the SQL generation themselves or are syntactic sugar.
      */
     private static final Set<String> NO_EQUALS_OPERATORS = Set.of(
             "Between", "GreaterThan", "LessThan", "LessThanEqual", "GreaterThanEqual",
-            "IsNotNull", "IsNull", "Like", "Containing", "In", "NotIn", "Not", "Or", "And",
-            "StartingWith", "EndingWith", "Before", "After", "True", "False", "IgnoreCase");
+            "IsNotNull", "IsNull", "Like", CONTAINING, "In", "NotIn", "Not", "Or", "And",
+            STARTING_WITH, ENDING_WITH, "Before", "After", "True", "False", IGNORE_CASE);
 
     private MethodToSQLConverter() {
+    }
+
+    /**
+     * Extracts components from a method name based on JPA keywords.
+     *
+     * @param methodName The method name to parse.
+     * @return A list of components.
+     */
+    public static List<String> extractComponents(String methodName) {
+        List<String> components = new ArrayList<>();
+        Matcher matcher = KEYWORDS_PATTERN.matcher(methodName);
+        StringBuilder sb = new StringBuilder();
+
+        while (matcher.find()) {
+            String keyword = matcher.group();
+            int end = matcher.end();
+
+            // Special handling for short keywords that could be part of field names
+            // If the keyword is followed by a lowercase letter, it's part of a field name
+            // Examples: "Invoice" (In+voice), "Description" (Desc+ription), "Ordering"
+            // (Or+dering)
+            if (keyword.matches("In|Or|Not|Asc|Desc") && end < methodName.length()) {
+                char nextChar = methodName.charAt(end);
+                if (Character.isLowerCase(nextChar)) {
+                    // Keyword is part of a field name, don't treat as keyword
+                    continue;
+                }
+            }
+
+            matcher.appendReplacement(sb, " " + keyword + " ");
+        }
+        matcher.appendTail(sb);
+
+        String[] parts = sb.toString().split("\\s+");
+        for (String part : parts) {
+            if (!part.isEmpty()) {
+                components.add(part);
+            }
+        }
+        return components;
     }
 
     /**
@@ -148,8 +199,8 @@ public final class MethodToSQLConverter {
                 handleNotOperator(next, sql);
                 return true;
             }
-            case "Containing", "Like", "StartingWith", "EndingWith" -> sql.append(" LIKE ? ");
-            case "Is", "Equals", "IgnoreCase" -> {
+            case CONTAINING, "Like", STARTING_WITH, ENDING_WITH -> sql.append(" LIKE ? ");
+            case "Is", "Equals", IGNORE_CASE -> {
                 // Syntactic sugar or handled elsewhere
                 return true;
             }
@@ -169,8 +220,8 @@ public final class MethodToSQLConverter {
      * @param sql  The StringBuilder to append SQL to.
      */
     private static void handleNotOperator(String next, StringBuilder sql) {
-        if (next.equals("Like") || next.equals("Containing") || next.equals("StartingWith")
-                || next.equals("EndingWith") || next.equals("In")) {
+        if (next.equals("Like") || next.equals(CONTAINING) || next.equals(STARTING_WITH)
+                || next.equals(ENDING_WITH) || next.equals("In")) {
             sql.append(" NOT");
         } else {
             sql.append(" != ? ");
@@ -243,7 +294,7 @@ public final class MethodToSQLConverter {
         if (!ordering) {
             if (shouldAppendEquals(next)) {
                 sql.append(" = ? ");
-            } else if (!next.equals("Not") && !next.equals("IgnoreCase")) {
+            } else if (!next.equals("Not") && !next.equals(IGNORE_CASE)) {
                 sql.append(' ');
             }
         } else {

@@ -61,8 +61,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     public static final String WHERE = "WHERE";
     protected static final Logger logger = LoggerFactory.getLogger(BaseRepositoryParser.class);
     protected static final Pattern CAMEL_TO_SNAKE_PATTERN = Pattern.compile("([a-z])([A-Z]+)");
-    protected static final Pattern KEYWORDS_PATTERN = Pattern.compile(
-            "readBy|queryBy|searchBy|streamBy|removeBy|get|findBy|findFirstBy|findTopBy|findDistinctBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|IsNotNull|IsNull|Not|Containing|StartingWith|EndingWith|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan|Before|After|True|False|Is|Equals|IgnoreCase|AllIgnoreCase|In|Desc|Asc");
+
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\?");
     public static final String ORDER_BY = "OrderBy";
     /**
@@ -335,7 +334,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     @SuppressWarnings("java:S127")
     RepositoryQuery parseNonAnnotatedMethod(Callable md) {
         String methodName = md.getNameAsString();
-        List<String> components = extractComponents(methodName);
+        List<String> components = MethodToSQLConverter.extractComponents(methodName);
 
         // Validate that we have components to work with
         if (components.isEmpty()) {
@@ -489,40 +488,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 }
             }
         }
-    }
-
-    protected List<String> extractComponents(String methodName) {
-        List<String> components = new ArrayList<>();
-        Matcher matcher = KEYWORDS_PATTERN.matcher(methodName);
-        StringBuilder sb = new StringBuilder();
-
-        while (matcher.find()) {
-            String keyword = matcher.group();
-            int end = matcher.end();
-
-            // Special handling for short keywords that could be part of field names
-            // If the keyword is followed by a lowercase letter, it's part of a field name
-            // Examples: "Invoice" (In+voice), "Description" (Desc+ription), "Ordering"
-            // (Or+dering)
-            if (keyword.matches("In|Or|Not|Asc|Desc") && end < methodName.length()) {
-                char nextChar = methodName.charAt(end);
-                if (Character.isLowerCase(nextChar)) {
-                    // Keyword is part of a field name, don't treat as keyword
-                    continue;
-                }
-            }
-
-            matcher.appendReplacement(sb, " " + keyword + " ");
-        }
-        matcher.appendTail(sb);
-
-        String[] parts = sb.toString().split("\\s+");
-        for (String part : parts) {
-            if (!part.isEmpty()) {
-                components.add(part);
-            }
-        }
-        return components;
     }
 
     public TypeWrapper getEntity() {
