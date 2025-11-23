@@ -40,6 +40,7 @@ public final class MethodToSQLConverter {
     public static final String DESC = "Desc";
     public static final String ASC = "Asc";
     public static final String IS = "Is";
+    public static final String IS_NOT = "IsNot";
     public static final String EQUAL = "Equals";
     public static final String ALL_IGNORE_CASE = "AllIgnoreCase";
     public static final String FIND_BY = "findBy";
@@ -64,7 +65,7 @@ public final class MethodToSQLConverter {
 
     private static final List<String> OPERATORS = List.of(
             AND, OR, BETWEEN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL, GREATER_THAN,
-            LESS_THAN, BEFORE, AFTER, IS_NULL, IS_NOT_NULL, LIKE, NOT, IN,
+            LESS_THAN, BEFORE, AFTER, IS_NULL, IS_NOT_NULL, IS_NOT, LIKE, NOT, IN,
             NOT_IN, TRUE, FALSE, CONTAINING, STARTING_WITH, ENDING_WITH);
 
     private static final List<String> MODIFIERS = List.of(
@@ -91,7 +92,7 @@ public final class MethodToSQLConverter {
      */
     private static final Set<String> NO_EQUALS_OPERATORS = Set.of(
             BETWEEN, GREATER_THAN, LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL,
-            IS_NOT_NULL, IS_NULL, LIKE, CONTAINING, IN, NOT_IN, NOT,
+            IS_NOT_NULL, IS_NULL, IS_NOT, LIKE, CONTAINING, IN, NOT_IN, NOT,
             STARTING_WITH, ENDING_WITH, BEFORE, AFTER, TRUE, FALSE, IGNORE_CASE);
     // Note: AND/OR are intentionally excluded so that a bare field before a logical operator
     // still receives an implicit "= ?" comparator (e.g., "...Where userId And tenantId..." -> "user_id = ? AND tenant_id = ?").
@@ -102,41 +103,112 @@ public final class MethodToSQLConverter {
     /**
      * Extracts components from a method name based on JPA keywords.
      *
+     * Handles edge cases where:
+     * - Field names start with lowercase letters (e.g., eApprovalStatus)
+     * - Keywords are followed by lowercase letters (part of field names)
+     * - Short keywords (In, Or, Not, Asc, Desc) that could be part of field names
+     *
      * @param methodName The method name to parse.
      * @return A list of components.
      */
     public static List<String> extractComponents(String methodName) {
         List<String> components = new ArrayList<>();
-        Matcher matcher = KEYWORDS_PATTERN.matcher(methodName);
-        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        List<String> keywords = getKeywordsByLengthDesc();
 
-        while (matcher.find()) {
-            String keyword = matcher.group();
-            int end = matcher.end();
+        while (i < methodName.length()) {
+            String matchedKeyword = null;
+            int matchedLength = 0;
 
-            // Special handling for short keywords that could be part of field names
-            // If the keyword is followed by a lowercase letter, it's part of a field name
-            // Examples: "Invoice" (In+voice), "Description" (Desc+ription), "Ordering"
-            // (Or+dering)
-            if (keyword.matches(IN + "|" + OR + "|" + NOT + "|" + ASC + "|" + DESC) && end < methodName.length()) {
-                char nextChar = methodName.charAt(end);
-                if (Character.isLowerCase(nextChar)) {
-                    // Keyword is part of a field name, don't treat as keyword
-                    continue;
+            // Try to match a keyword at the current position
+            for (String keyword : keywords) {
+                if (methodName.startsWith(keyword, i)) {
+                    int keywordEnd = i + keyword.length();
+
+                    // These keywords should always be recognized regardless of what follows
+                    boolean isAlwaysKeyword = QUERY_TYPES.contains(keyword) || MODIFIERS.contains(keyword);
+                    boolean isLogicalOperator = keyword.equals(AND) || keyword.equals(OR);
+
+                    // Check if followed by lowercase (part of field name)
+                    boolean followedByLowercase = keywordEnd < methodName.length() && Character.isLowerCase(methodName.charAt(keywordEnd));
+
+                    if (!isAlwaysKeyword && !isLogicalOperator && followedByLowercase) {
+                        // This keyword is part of a field name, skip to next keyword
+                        continue;
+                    }
+
+                    // Valid keyword match
+                    matchedKeyword = keyword;
+                    matchedLength = keyword.length();
+                    break;
                 }
             }
 
-            matcher.appendReplacement(sb, " " + keyword + " ");
-        }
-        matcher.appendTail(sb);
+            if (matchedKeyword != null) {
+                // Found a keyword
+                components.add(matchedKeyword);
+                i += matchedLength;
+            } else {
+                // Extract field name until we find a valid keyword
+                StringBuilder fieldName = new StringBuilder();
+                while (i < methodName.length()) {
+                    // Check if there's a valid keyword starting here
+                    String nextKeyword = null;
+                    for (String keyword : keywords) {
+                        if (methodName.startsWith(keyword, i)) {
+                            int keywordEnd = i + keyword.length();
 
-        String[] parts = sb.toString().split("\\s+");
-        for (String part : parts) {
-            if (!part.isEmpty()) {
-                components.add(part);
+                            // Query types and modifiers always mark a keyword boundary
+                            if (QUERY_TYPES.contains(keyword) || MODIFIERS.contains(keyword)) {
+                                nextKeyword = keyword;
+                                break;
+                            }
+
+                            // Logical operators always mark a keyword boundary
+                            boolean isLogicalOperator = keyword.equals(AND) || keyword.equals(OR);
+                            if (isLogicalOperator) {
+                                nextKeyword = keyword;
+                                break;
+                            }
+
+                            // Other operators are valid only if not followed by lowercase
+                            if (keywordEnd >= methodName.length() || !Character.isLowerCase(methodName.charAt(keywordEnd))) {
+                                nextKeyword = keyword;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Stop if we found a valid keyword
+                    if (nextKeyword != null) {
+                        break;
+                    }
+
+                    fieldName.append(methodName.charAt(i));
+                    i++;
+                }
+
+                if (fieldName.length() > 0) {
+                    components.add(fieldName.toString());
+                }
             }
         }
+
         return components;
+    }
+
+    /**
+     * Get all keywords sorted by length descending for longest match first
+     */
+    private static List<String> getKeywordsByLengthDesc() {
+        List<String> allKeywords = new ArrayList<>();
+        allKeywords.addAll(QUERY_TYPES);
+        allKeywords.addAll(OPERATORS);
+        allKeywords.addAll(MODIFIERS);
+
+        // Sort by length descending to match longest keywords first
+        allKeywords.sort((a, b) -> b.length() - a.length());
+        return allKeywords;
     }
 
     /**
@@ -255,6 +327,7 @@ public final class MethodToSQLConverter {
             case LESS_THAN_EQUAL -> sql.append(" <= ? ");
             case IS_NULL -> sql.append(" IS NULL ");
             case IS_NOT_NULL -> sql.append(" IS NOT NULL ");
+            case IS_NOT -> sql.append(" != ? ");
             case TRUE -> sql.append(" = true ");
             case FALSE -> sql.append(" = false ");
             case AND, OR -> sql.append(" ").append(component.toUpperCase()).append(' ');

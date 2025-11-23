@@ -135,4 +135,24 @@ class MethodToSQLConverterTest {
         MethodToSQLConverter.buildSelectAndWhereClauses(List.of("findAll", "OrderBy", "Name", "Desc"), sql, "users");
         assertEquals("SELECT * FROM users ORDER BY name DESC ", sql.toString());
     }
+
+    @Test
+    void testBuildSelectAndWhereClauses_LowercaseStartingFieldName() {
+        // Test realistic scenario: field starting with lowercase (e.g., eApprovalStatus)
+        // This demonstrates the fix for processing methods like:
+        // findByeApprovalStatusIsNotNull
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "eApprovalStatus", "IsNotNull");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "approvals");
+        assertEquals("SELECT * FROM approvals WHERE e_approval_status  IS NOT NULL ", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_MultipleLowercaseFieldsAnonymized() {
+        // Anonymized test: multiple fields starting with lowercase letters separated by And
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "xStatus", "IsNot", "And", "yDeleted", "And", "zActive");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "records");
+        assertEquals("SELECT * FROM records WHERE x_status  != ?  AND y_deleted = ?  AND z_active = ? ", sql.toString());
+    }
 }
