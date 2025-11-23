@@ -91,8 +91,10 @@ public final class MethodToSQLConverter {
      */
     private static final Set<String> NO_EQUALS_OPERATORS = Set.of(
             BETWEEN, GREATER_THAN, LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL,
-            IS_NOT_NULL, IS_NULL, LIKE, CONTAINING, IN, NOT_IN, NOT, OR, AND,
+            IS_NOT_NULL, IS_NULL, LIKE, CONTAINING, IN, NOT_IN, NOT,
             STARTING_WITH, ENDING_WITH, BEFORE, AFTER, TRUE, FALSE, IGNORE_CASE);
+    // Note: AND/OR are intentionally excluded so that a bare field before a logical operator
+    // still receives an implicit "= ?" comparator (e.g., "...Where userId And tenantId..." -> "user_id = ? AND tenant_id = ?").
 
     private MethodToSQLConverter() {
     }
