@@ -56,9 +56,10 @@ public final class MethodToSQLConverter {
     public static final String STREAM_BY = "streamBy";
     public static final String REMOVE_BY = "removeBy";
     public static final String GET = "get";
+    public static final String SAVE = "save";
 
     private static final List<String> QUERY_TYPES = List.of(
-            READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY, REMOVE_BY, GET, FIND_BY,
+            READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY, REMOVE_BY, GET, SAVE, FIND_BY,
             FIND_FIRST_BY, FIND_TOP_BY, FIND_DISTINCT_BY, FIND_ALL, COUNT_BY, DELETE_BY, EXISTS_BY);
 
     private static final List<String> OPERATORS = List.of(
@@ -350,6 +351,12 @@ public final class MethodToSQLConverter {
             case FIND_DISTINCT_BY -> {
                 sql.append("SELECT DISTINCT * FROM ").append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
+                return true;
+            }
+            case SAVE -> {
+                // Very primitive INSERT support for save()
+                // We don't attempt to list columns or placeholders; rely on DEFAULT VALUES
+                sql.append("INSERT INTO ").append(tableName).append(" DEFAULT VALUES");
                 return true;
             }
             default -> {
