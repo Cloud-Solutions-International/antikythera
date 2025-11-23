@@ -7,6 +7,7 @@ import com.raditha.hql.parser.ParseException;
 import com.raditha.hql.model.MetaData;
 import com.raditha.hql.converter.HQLToPostgreSQLConverter;
 import com.raditha.hql.converter.ConversionException;
+import com.raditha.hql.converter.JoinMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
@@ -69,6 +70,7 @@ public class HQLParserAdapter  {
      */
     private Set<String> registerMappings(MetaData analysis) {
         Set<String> tables = new HashSet<>();
+        Map<String, Map<String, JoinMapping>> relationshipMetadata = new HashMap<>();
 
         for (String name : analysis.getEntityNames()) {
             TypeWrapper typeWrapper = AbstractCompiler.findType(cu, name);
@@ -81,6 +83,11 @@ public class HQLParserAdapter  {
             }
 
             EntityMetadata meta = EntityMappingResolver.getMapping().get(fullName);
+            if (meta == null) {
+                logger.warn("No metadata found for entity: {} (fullName: {})", name, fullName);
+                continue;
+            }
+            
             tables.add(meta.tableName());
             sqlConverter.registerEntityMapping(name, meta.tableName());
 
@@ -95,17 +102,29 @@ public class HQLParserAdapter  {
                     );
                 }
             }
-            // Register mappings for joined entities (if any)
-            for (JoinMapping joinMapping : meta.relationshipMap().values()) {
-                // Register the joined entity's table mapping
-                sqlConverter.registerEntityMapping(
-                        joinMapping.targetEntity(),
-                        joinMapping.targetTable()
-                );
-                logger.debug("Registered join entity mapping: {} -> {}",
-                        joinMapping.targetEntity(), joinMapping.targetTable());
+            
+            // Collect relationship mappings for implicit join ON clause generation
+            if (meta.relationshipMap() != null && !meta.relationshipMap().isEmpty()) {
+                Map<String, JoinMapping> propertyMappings = new HashMap<>();
+                for (var entry : meta.relationshipMap().entrySet()) {
+                    propertyMappings.put(entry.getKey(), entry.getValue());
+                    // Also register the joined entity's table mapping
+                    JoinMapping joinMapping = entry.getValue();
+                    sqlConverter.registerEntityMapping(
+                            joinMapping.targetEntity(),
+                            joinMapping.targetTable()
+                    );
+                    logger.debug("Registered join entity mapping: {} -> {}",
+                            joinMapping.targetEntity(), joinMapping.targetTable());
+                }
+                // Use entity name as it appears in HQL (not FQN) as the key
+                relationshipMetadata.put(name, propertyMappings);
             }
         }
+        
+        // Pass relationship metadata to converter for implicit join ON clause generation
+        sqlConverter.setRelationshipMetadata(relationshipMetadata);
+        
         return tables;
     }
 

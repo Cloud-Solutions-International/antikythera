@@ -10,6 +10,8 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
+import com.raditha.hql.converter.JoinType;
+import com.raditha.hql.converter.JoinMapping;
 
 import javax.persistence.*;
 import java.lang.reflect.Field;
@@ -120,7 +122,7 @@ public class EntityMappingResolver {
         Map<String, String> propertyToColumnMappings = buildPropertyToColumnMapFromAST(typeDecl);
 
         // Relationship mappings not yet implemented for AST-based approach
-        Map<String, sa.com.cloudsolutions.antikythera.parser.converter.JoinMapping> relationshipMappings =
+        Map<String, JoinMapping> relationshipMappings =
                 new HashMap<>();
 
         return new EntityMetadata(new TypeWrapper(typeDecl), tableName,
