@@ -1,6 +1,6 @@
 # Antikythera - Warp AI Agent Guide
 
-This document provides comprehensive technical information for AI agents (specifically Warp) working on the Antikythera project. For basic project information, see `README.md` and `GEMINI.md`.
+This document provides comprehensive technical information for AI agents working on the Antikythera project. For basic project information, see `README.md` and `GEMINI.md`.
 
 ## Table of Contents
 1. [Project Overview](#project-overview)
