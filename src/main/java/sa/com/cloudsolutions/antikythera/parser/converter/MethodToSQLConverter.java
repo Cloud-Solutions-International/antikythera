@@ -132,9 +132,18 @@ public final class MethodToSQLConverter {
                 boolean isLogicalOperator = isLogicalOperator(keyword);
                 boolean followedByLowercase = followedByLowercase(methodName, keywordEnd);
 
-                if (!isAlwaysKeyword && !isLogicalOperator && followedByLowercase) {
-                    // This keyword occurrence is part of a field name
-                    continue;
+                // For non-always keywords (operators), only accept if not followed by lowercase.
+                // Additionally, guard logical operators AND/OR so they don't match inside field names like "OrderId".
+                if (!isAlwaysKeyword) {
+                    if (isLogicalOperator) {
+                        // Accept AND/OR only when followed by an uppercase letter (start of next field)
+                        if (keywordEnd >= methodName.length() || !Character.isUpperCase(methodName.charAt(keywordEnd))) {
+                            continue;
+                        }
+                    } else if (followedByLowercase) {
+                        // Other operators are part of a field when followed by lowercase
+                        continue;
+                    }
                 }
                 return keyword;
             }
@@ -168,7 +177,12 @@ public final class MethodToSQLConverter {
                     return keyword;
                 }
                 if (isLogicalOperator(keyword)) {
-                    return keyword;
+                    // Accept AND/OR only when followed by an uppercase letter (start of next field)
+                    if (keywordEnd < methodName.length() && Character.isUpperCase(methodName.charAt(keywordEnd))) {
+                        return keyword;
+                    } else {
+                        continue;
+                    }
                 }
                 // Other operators are valid only if not followed by lowercase
                 if (keywordEnd >= methodName.length() || !Character.isLowerCase(methodName.charAt(keywordEnd))) {

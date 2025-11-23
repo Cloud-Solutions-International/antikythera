@@ -155,4 +155,28 @@ class MethodToSQLConverterTest {
         MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "records");
         assertEquals("SELECT * FROM records WHERE x_status  != ?  AND y_deleted = ?  AND z_active = ? ", sql.toString());
     }
+
+    @Test
+    void testExtractComponents_DoesNotSplitInsideOrderFields() {
+        List<String> components = MethodToSQLConverter.extractComponents("findByOrderIdAndOrderTypeAndIsActive");
+        assertEquals(List.of("findBy", "OrderId", "And", "OrderType", "And", "Is", "Active"), components,
+                "Components should not split 'Or' inside OrderId/OrderType");
+    }
+
+    @Test
+    void testSQL_For_OrderId_OrderType_IsActive() {
+        List<String> components = MethodToSQLConverter.extractComponents("findByOrderIdAndOrderTypeAndIsActive");
+        StringBuilder sql = new StringBuilder();
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "orders");
+        assertEquals("SELECT * FROM orders WHERE order_id = ?  AND order_type = ?  AND active = ? ", sql.toString());
+    }
+
+    @Test
+    void testExtractComponents_DoesNotTreatOrInsideOrganizationAsOperator() {
+        List<String> components = MethodToSQLConverter.extractComponents("findByOrganization");
+        assertEquals(List.of("findBy", "Organization"), components);
+        StringBuilder sql = new StringBuilder();
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE organization = ? ", sql.toString());
+    }
 }
