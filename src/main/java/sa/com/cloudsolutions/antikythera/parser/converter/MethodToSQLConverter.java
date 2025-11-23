@@ -5,8 +5,6 @@ import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Utility to convert Spring Data repository method-name keywords into SQL
@@ -71,21 +69,6 @@ public final class MethodToSQLConverter {
     private static final List<String> MODIFIERS = List.of(
             BaseRepositoryParser.ORDER_BY, DESC, ASC, IS, EQUAL, IGNORE_CASE, ALL_IGNORE_CASE);
 
-    private static final Pattern KEYWORDS_PATTERN;
-
-    static {
-        List<String> allKeywords = new ArrayList<>();
-        allKeywords.addAll(QUERY_TYPES);
-        allKeywords.addAll(OPERATORS);
-        allKeywords.addAll(MODIFIERS);
-
-        // Sort by length descending to match longest keywords first
-        allKeywords.sort((a, b) -> b.length() - a.length());
-
-        String pattern = String.join("|", allKeywords);
-        KEYWORDS_PATTERN = Pattern.compile(pattern);
-    }
-
     /**
      * Set of operators that do not require an equals sign to be appended.
      * These operators handle the SQL generation themselves or are syntactic sugar.
@@ -112,90 +95,104 @@ public final class MethodToSQLConverter {
      * @return A list of components.
      */
     public static List<String> extractComponents(String methodName) {
+        // Normalize 'find...By' subjects to 'findBy' to align with Spring Data semantics
+        methodName = normalizeFindSubject(methodName);
+
         List<String> components = new ArrayList<>();
-        int i = 0;
         List<String> keywords = getKeywordsByLengthDesc();
+        int i = 0;
 
         while (i < methodName.length()) {
-            String matchedKeyword = null;
-            int matchedLength = 0;
-
-            // Try to match a keyword at the current position
-            for (String keyword : keywords) {
-                if (methodName.startsWith(keyword, i)) {
-                    int keywordEnd = i + keyword.length();
-
-                    // These keywords should always be recognized regardless of what follows
-                    boolean isAlwaysKeyword = QUERY_TYPES.contains(keyword) || MODIFIERS.contains(keyword);
-                    boolean isLogicalOperator = keyword.equals(AND) || keyword.equals(OR);
-
-                    // Check if followed by lowercase (part of field name)
-                    boolean followedByLowercase = keywordEnd < methodName.length() && Character.isLowerCase(methodName.charAt(keywordEnd));
-
-                    if (!isAlwaysKeyword && !isLogicalOperator && followedByLowercase) {
-                        // This keyword is part of a field name, skip to next keyword
-                        continue;
-                    }
-
-                    // Valid keyword match
-                    matchedKeyword = keyword;
-                    matchedLength = keyword.length();
-                    break;
-                }
+            // 1) Try to match a known keyword at the current index
+            String matchedKeyword = tryMatchKeyword(methodName, i, keywords);
+            if (matchedKeyword != null) {
+                components.add(matchedKeyword);
+                i += matchedKeyword.length();
+                continue;
             }
 
-            if (matchedKeyword != null) {
-                // Found a keyword
-                components.add(matchedKeyword);
-                i += matchedLength;
-            } else {
-                // Extract field name until we find a valid keyword
-                StringBuilder fieldName = new StringBuilder();
-                while (i < methodName.length()) {
-                    // Check if there's a valid keyword starting here
-                    String nextKeyword = null;
-                    for (String keyword : keywords) {
-                        if (methodName.startsWith(keyword, i)) {
-                            int keywordEnd = i + keyword.length();
-
-                            // Query types and modifiers always mark a keyword boundary
-                            if (QUERY_TYPES.contains(keyword) || MODIFIERS.contains(keyword)) {
-                                nextKeyword = keyword;
-                                break;
-                            }
-
-                            // Logical operators always mark a keyword boundary
-                            boolean isLogicalOperator = keyword.equals(AND) || keyword.equals(OR);
-                            if (isLogicalOperator) {
-                                nextKeyword = keyword;
-                                break;
-                            }
-
-                            // Other operators are valid only if not followed by lowercase
-                            if (keywordEnd >= methodName.length() || !Character.isLowerCase(methodName.charAt(keywordEnd))) {
-                                nextKeyword = keyword;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Stop if we found a valid keyword
-                    if (nextKeyword != null) {
-                        break;
-                    }
-
-                    fieldName.append(methodName.charAt(i));
-                    i++;
-                }
-
-                if (fieldName.length() > 0) {
-                    components.add(fieldName.toString());
-                }
+            // 2) Otherwise scan a field token until the next valid keyword boundary
+            ScanResult scan = scanField(methodName, i, keywords);
+            i = scan.nextIndex;
+            if (!scan.fieldToken.isEmpty()) {
+                components.add(scan.fieldToken);
             }
         }
 
         return components;
     }
+
+    // Attempts to match a keyword at position 'index' using boundary rules identical to the original logic.
+    private static String tryMatchKeyword(String methodName, int index, List<String> keywords) {
+        for (String keyword : keywords) {
+            if (methodName.startsWith(keyword, index)) {
+                int keywordEnd = index + keyword.length();
+
+                boolean isAlwaysKeyword = isAlwaysKeyword(keyword);
+                boolean isLogicalOperator = isLogicalOperator(keyword);
+                boolean followedByLowercase = followedByLowercase(methodName, keywordEnd);
+
+                if (!isAlwaysKeyword && !isLogicalOperator && followedByLowercase) {
+                    // This keyword occurrence is part of a field name
+                    continue;
+                }
+                return keyword;
+            }
+        }
+        return null;
+    }
+
+    // Scans characters from 'start' until a valid keyword boundary is reached, returning the token and new index.
+    private static ScanResult scanField(String methodName, int start, List<String> keywords) {
+        StringBuilder fieldName = new StringBuilder();
+        int i = start;
+
+        while (i < methodName.length()) {
+            String nextKeyword = findNextKeyword(methodName, i, keywords);
+            if (nextKeyword != null) {
+                break;
+            }
+            fieldName.append(methodName.charAt(i));
+            i++;
+        }
+        return new ScanResult(fieldName.toString(), i);
+    }
+
+    // Returns a keyword that starts at 'index' and forms a valid boundary per rules used previously; otherwise null.
+    private static String findNextKeyword(String methodName, int index, List<String> keywords) {
+        for (String keyword : keywords) {
+            if (methodName.startsWith(keyword, index)) {
+                int keywordEnd = index + keyword.length();
+
+                if (isAlwaysKeyword(keyword)) {
+                    return keyword;
+                }
+                if (isLogicalOperator(keyword)) {
+                    return keyword;
+                }
+                // Other operators are valid only if not followed by lowercase
+                if (keywordEnd >= methodName.length() || !Character.isLowerCase(methodName.charAt(keywordEnd))) {
+                    return keyword;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean isAlwaysKeyword(String keyword) {
+        return QUERY_TYPES.contains(keyword) || MODIFIERS.contains(keyword);
+    }
+
+    private static boolean isLogicalOperator(String keyword) {
+        return AND.equals(keyword) || OR.equals(keyword);
+    }
+
+    private static boolean followedByLowercase(String methodName, int endIndex) {
+        return endIndex < methodName.length() && Character.isLowerCase(methodName.charAt(endIndex));
+    }
+
+    // Small holder for scan results
+    private record ScanResult(String fieldToken, int nextIndex) {}
 
     /**
      * Get all keywords sorted by length descending for longest match first
@@ -209,6 +206,45 @@ public final class MethodToSQLConverter {
         // Sort by length descending to match longest keywords first
         allKeywords.sort((a, b) -> b.length() - a.length());
         return allKeywords;
+    }
+
+    /**
+     * Normalize method names that include a subject between the verb and the "By" keyword.
+     * For example, convert "findUserByEmail" to "findByEmail" so downstream parsing
+     * recognizes the query type correctly. This mirrors Spring Data semantics where the
+     * part between the verb and "By" is the (optional) subject and does not affect the
+     * predicate parsing.
+     *
+     * Only applies to names starting with the verb "find" to keep the change conservative.
+     */
+    private static String normalizeFindSubject(String methodName) {
+        if (!methodName.startsWith("find")) {
+            return methodName;
+        }
+        // Do not normalize when the method already uses a recognized find* query type
+        if (methodName.startsWith(FIND_BY)
+                || methodName.startsWith(FIND_FIRST_BY)
+                || methodName.startsWith(FIND_TOP_BY)
+                || methodName.startsWith(FIND_DISTINCT_BY)
+                || methodName.startsWith(FIND_ALL)
+                || methodName.startsWith(FIND_ALL_BY_ID)) {
+            return methodName;
+        }
+        // If the only occurrence of "By" is the one in "OrderBy", do not normalize.
+        int byIdx = methodName.indexOf("By", 4); // look for the first "By" after "find"
+        if (byIdx > 0) {
+            // If this By is part of OrderBy, skip normalization to preserve ordering clause
+            int orderStart = byIdx - "Order".length();
+            if (orderStart >= 0) {
+                String maybeOrder = methodName.substring(orderStart, byIdx);
+                if ("Order".equals(maybeOrder)) {
+                    return methodName;
+                }
+            }
+            // Convert things like findSomethingByXxxYyy... -> findByXxxYyy...
+            return FIND_BY + methodName.substring(byIdx + 2);
+        }
+        return methodName;
     }
 
     /**
