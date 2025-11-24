@@ -35,6 +35,8 @@ public final class MethodToSQLConverter {
     public static final String IS_NOT_NULL = "IsNotNull";
     public static final String TRUE = "True";
     public static final String FALSE = "False";
+    public static final String IS_TRUE = "IsTrue";
+    public static final String IS_FALSE = "IsFalse";
     public static final String DESC = "Desc";
     public static final String ASC = "Asc";
     public static final String IS = "Is";
@@ -65,10 +67,10 @@ public final class MethodToSQLConverter {
     private static final List<String> OPERATORS = List.of(
             AND, OR, BETWEEN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL, GREATER_THAN,
             LESS_THAN, BEFORE, AFTER, IS_NULL, IS_NOT_NULL, IS_NOT, LIKE, NOT, IN,
-            NOT_IN, TRUE, FALSE, CONTAINING, STARTING_WITH, ENDING_WITH);
+            NOT_IN, IS_TRUE, IS_FALSE, TRUE, FALSE, IS, EQUAL, CONTAINING, STARTING_WITH, ENDING_WITH);
 
     private static final List<String> MODIFIERS = List.of(
-            BaseRepositoryParser.ORDER_BY, DESC, ASC, IS, EQUAL, IGNORE_CASE, ALL_IGNORE_CASE);
+            BaseRepositoryParser.ORDER_BY, DESC, ASC, IGNORE_CASE, ALL_IGNORE_CASE);
 
     /**
      * Set of operators that do not require an equals sign to be appended.
@@ -77,9 +79,11 @@ public final class MethodToSQLConverter {
     private static final Set<String> NO_EQUALS_OPERATORS = Set.of(
             BETWEEN, GREATER_THAN, LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL,
             IS_NOT_NULL, IS_NULL, IS_NOT, LIKE, CONTAINING, IN, NOT_IN, NOT,
-            STARTING_WITH, ENDING_WITH, BEFORE, AFTER, TRUE, FALSE, IGNORE_CASE);
-    // Note: AND/OR are intentionally excluded so that a bare field before a logical operator
-    // still receives an implicit "= ?" comparator (e.g., "...Where userId And tenantId..." -> "user_id = ? AND tenant_id = ?").
+            STARTING_WITH, ENDING_WITH, BEFORE, AFTER, IS_TRUE, IS_FALSE, TRUE, FALSE, IGNORE_CASE);
+    // Note: AND/OR are intentionally excluded so that a bare field before a logical
+    // operator
+    // still receives an implicit "= ?" comparator (e.g., "...Where userId And
+    // tenantId..." -> "user_id = ? AND tenant_id = ?").
 
     private MethodToSQLConverter() {
     }
@@ -96,7 +100,8 @@ public final class MethodToSQLConverter {
      * @return A list of components.
      */
     public static List<String> extractComponents(String methodName) {
-        // Normalize 'find...By' subjects to 'findBy' to align with Spring Data semantics
+        // Normalize 'find...By' subjects to 'findBy' to align with Spring Data
+        // semantics
         methodName = normalizeFindSubject(methodName);
 
         List<String> components = new ArrayList<>();
@@ -123,7 +128,8 @@ public final class MethodToSQLConverter {
         return components;
     }
 
-    // Attempts to match a keyword at position 'index' using boundary rules identical to the original logic.
+    // Attempts to match a keyword at position 'index' using boundary rules
+    // identical to the original logic.
     private static String tryMatchKeyword(String methodName, int index, List<String> keywords) {
         for (String keyword : keywords) {
             if (methodName.startsWith(keyword, index)) {
@@ -131,16 +137,29 @@ public final class MethodToSQLConverter {
 
                 boolean isAlwaysKeyword = isAlwaysKeyword(keyword);
                 boolean isLogicalOperator = isLogicalOperator(keyword);
+                boolean isSyntacticSugar = isSyntacticSugar(keyword);
                 boolean followedByLowercase = followedByLowercase(methodName, keywordEnd);
+                boolean followedByUppercase = keywordEnd < methodName.length()
+                        && Character.isUpperCase(methodName.charAt(keywordEnd));
 
-                // For non-always keywords (operators), only accept if not followed by lowercase.
-                // Additionally, guard logical operators AND/OR so they don't match inside field names like "OrderId".
+                // For non-always keywords (operators), only accept if not followed by
+                // lowercase.
+                // Additionally, guard logical operators AND/OR so they don't match inside field
+                // names like "OrderId".
                 if (!isAlwaysKeyword) {
                     if (isLogicalOperator) {
                         // Accept AND/OR only when followed by an uppercase letter (start of next field)
-                        if (keywordEnd >= methodName.length() || !Character.isUpperCase(methodName.charAt(keywordEnd))) {
+                        if (keywordEnd >= methodName.length()
+                                || !Character.isUpperCase(methodName.charAt(keywordEnd))) {
                             continue;
                         }
+                    } else if (isSyntacticSugar && followedByUppercase
+                            && isFollowedByFieldWithBooleanOp(methodName, keywordEnd)) {
+                        // IS and EQUAL should not match when followed by a field that ends with a
+                        // boolean operator
+                        // e.g., in "IsActiveIsTrue", skip "Is" so "IsActive" + "IsTrue" are parsed
+                        // but in "IsActive" (at end), "Is" + "Active" should parse correctly
+                        continue;
                     } else if (followedByLowercase) {
                         // Other operators are part of a field when followed by lowercase
                         continue;
@@ -152,7 +171,8 @@ public final class MethodToSQLConverter {
         return null;
     }
 
-    // Scans characters from 'start' until a valid keyword boundary is reached, returning the token and new index.
+    // Scans characters from 'start' until a valid keyword boundary is reached,
+    // returning the token and new index.
     private static ScanResult scanField(String methodName, int start, List<String> keywords) {
         StringBuilder fieldName = new StringBuilder();
         int i = start;
@@ -168,7 +188,8 @@ public final class MethodToSQLConverter {
         return new ScanResult(fieldName.toString(), i);
     }
 
-    // Returns a keyword that starts at 'index' and forms a valid boundary per rules used previously; otherwise null.
+    // Returns a keyword that starts at 'index' and forms a valid boundary per rules
+    // used previously; otherwise null.
     private static String findNextKeyword(String methodName, int index, List<String> keywords) {
         for (String keyword : keywords) {
             if (methodName.startsWith(keyword, index)) {
@@ -177,6 +198,11 @@ public final class MethodToSQLConverter {
                 if (isAlwaysKeyword(keyword)) {
                     return keyword;
                 }
+
+                boolean isSyntacticSugar = isSyntacticSugar(keyword);
+                boolean followedByUppercase = keywordEnd < methodName.length()
+                        && Character.isUpperCase(methodName.charAt(keywordEnd));
+
                 if (isLogicalOperator(keyword)) {
                     // Accept AND/OR only when followed by an uppercase letter (start of next field)
                     if (keywordEnd < methodName.length() && Character.isUpperCase(methodName.charAt(keywordEnd))) {
@@ -185,6 +211,12 @@ public final class MethodToSQLConverter {
                         continue;
                     }
                 }
+
+                if (isSyntacticSugar && followedByUppercase && isFollowedByFieldWithBooleanOp(methodName, keywordEnd)) {
+                    // IS and EQUAL should not match when followed by a field with boolean operator
+                    continue;
+                }
+
                 // Other operators are valid only if not followed by lowercase
                 if (keywordEnd >= methodName.length() || !Character.isLowerCase(methodName.charAt(keywordEnd))) {
                     return keyword;
@@ -202,12 +234,38 @@ public final class MethodToSQLConverter {
         return AND.equals(keyword) || OR.equals(keyword);
     }
 
+    private static boolean isSyntacticSugar(String keyword) {
+        return IS.equals(keyword) || EQUAL.equals(keyword);
+    }
+
+    /**
+     * Checks if the position is followed by a field name that ends with a boolean
+     * operator.
+     * For example, in "IsActiveIsTrue", at position 0, this returns true because
+     * "Active" is followed by "IsTrue".
+     */
+    private static boolean isFollowedByFieldWithBooleanOp(String methodName, int startPos) {
+        // Scan ahead to find the next keyword
+        int pos = startPos;
+        while (pos < methodName.length() && Character.isLetter(methodName.charAt(pos))) {
+            // Check if we're at the start of a boolean operator
+            if (methodName.startsWith(IS_TRUE, pos) || methodName.startsWith(IS_FALSE, pos) ||
+                    methodName.startsWith(IS_NULL, pos) || methodName.startsWith(IS_NOT_NULL, pos)) {
+                // There's a field name between startPos and pos, followed by a boolean operator
+                return pos > startPos;
+            }
+            pos++;
+        }
+        return false;
+    }
+
     private static boolean followedByLowercase(String methodName, int endIndex) {
         return endIndex < methodName.length() && Character.isLowerCase(methodName.charAt(endIndex));
     }
 
     // Small holder for scan results
-    private record ScanResult(String fieldToken, int nextIndex) {}
+    private record ScanResult(String fieldToken, int nextIndex) {
+    }
 
     /**
      * Get all keywords sorted by length descending for longest match first
@@ -224,13 +282,17 @@ public final class MethodToSQLConverter {
     }
 
     /**
-     * Normalize method names that include a subject between the verb and the "By" keyword.
+     * Normalize method names that include a subject between the verb and the "By"
+     * keyword.
      * For example, convert "findUserByEmail" to "findByEmail" so downstream parsing
-     * recognizes the query type correctly. This mirrors Spring Data semantics where the
-     * part between the verb and "By" is the (optional) subject and does not affect the
+     * recognizes the query type correctly. This mirrors Spring Data semantics where
+     * the
+     * part between the verb and "By" is the (optional) subject and does not affect
+     * the
      * predicate parsing.
      *
-     * Only applies to names starting with the verb "find" to keep the change conservative.
+     * Only applies to names starting with the verb "find" to keep the change
+     * conservative.
      */
     private static String normalizeFindSubject(String methodName) {
         if (!methodName.startsWith("find")) {
@@ -385,6 +447,8 @@ public final class MethodToSQLConverter {
             case IS_NULL -> sql.append(" IS NULL ");
             case IS_NOT_NULL -> sql.append(" IS NOT NULL ");
             case IS_NOT -> sql.append(" != ? ");
+            case IS_TRUE -> sql.append(" = true ");
+            case IS_FALSE -> sql.append(" = false ");
             case TRUE -> sql.append(" = true ");
             case FALSE -> sql.append(" = false ");
             case AND, OR -> sql.append(" ").append(component.toUpperCase()).append(' ');
@@ -487,8 +551,12 @@ public final class MethodToSQLConverter {
         if (!ordering) {
             if (shouldAppendEquals(next)) {
                 sql.append(" = ? ");
-            } else if (!next.equals(NOT) && !next.equals(IGNORE_CASE)) {
-                sql.append(' ');
+            } else if (!next.equals(NOT) && !next.equals(IGNORE_CASE) && !next.equals(IS_TRUE)
+                    && !next.equals(IS_FALSE)) {
+                // Do not append a space if the next component is LIKE/CONTAINING/STARTING_WITH/ENDING_WITH
+                if (!(next.equals(LIKE) || next.equals(CONTAINING) || next.equals(STARTING_WITH) || next.equals(ENDING_WITH))) {
+                    sql.append(' ');
+                }
             }
         } else {
             appendCommaOrSpace(next, sql);
