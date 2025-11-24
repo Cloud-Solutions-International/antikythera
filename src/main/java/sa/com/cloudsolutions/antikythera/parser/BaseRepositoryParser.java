@@ -20,10 +20,10 @@ import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
 import sa.com.cloudsolutions.antikythera.parser.converter.HQLParserAdapter;
+import sa.com.cloudsolutions.antikythera.parser.converter.MethodToSQLConverter;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -54,30 +54,32 @@ import java.util.regex.Pattern;
  * </p>
  */
 public class BaseRepositoryParser extends AbstractCompiler {
-    protected static final Logger logger = LoggerFactory.getLogger(BaseRepositoryParser.class);
-
     public static final String JPA_REPOSITORY = "JpaRepository";
     public static final String SELECT_STAR = "SELECT * FROM ";
-    protected static final Pattern CAMEL_TO_SNAKE_PATTERN = Pattern.compile("([a-z])([A-Z]+)");
-    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\?");
     public static final String NATIVE_QUERY = "nativeQuery";
     public static final String WHERE = "WHERE";
+    protected static final Logger logger = LoggerFactory.getLogger(BaseRepositoryParser.class);
+    protected static final Pattern CAMEL_TO_SNAKE_PATTERN = Pattern.compile("([a-z])([A-Z]+)");
+
+    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\?");
+    public static final String ORDER_BY = "OrderBy";
     /**
      * SQL dialect, at the moment oracle or postgresql as identified from the
      * connection url
      */
     protected static DatabaseDialect dialect = DatabaseDialect.POSTGRESQL; // default dialect set to PostgreSQL
-
     /**
      * The JPA query converter for converting non-native queries to SQL
      */
     protected HQLParserAdapter parserAdapter;
-
+    /**
+     * The queries that were identified in this repository
+     */
+    protected Map<Callable, RepositoryQuery> queries = new HashMap<>();
     /**
      * The compilation unit or class associated with this entity.
      */
     TypeWrapper entity;
-
     /**
      * The table name associated with the entity
      */
@@ -86,24 +88,10 @@ public class BaseRepositoryParser extends AbstractCompiler {
      * The java parser type associated with the entity.
      */
     Type entityType;
-
-    /**
-     * The queries that were identified in this repository
-     */
-    protected Map<Callable, RepositoryQuery> queries = new HashMap<>();
-
     Evaluator eval;
-
-    protected static final Pattern KEYWORDS_PATTERN = Pattern.compile(
-             "get|findBy|findFirstBy|findTopBy|findAll|countBy|deleteBy|existsBy|And|OrderBy|NotIn|IsNotNull|IsNull|Not|Containing|Like|Or|Between|LessThanEqual|GreaterThanEqual|GreaterThan|LessThan|In|Desc|Asc");
 
     public BaseRepositoryParser() throws IOException {
         super();
-        // safeguard: dialect should never be null due to earlier tests manipulating static state
-        if (dialect == null) {
-            dialect = DatabaseDialect.POSTGRESQL; // restore default
-            logger.debug("Dialect was null; reset to POSTGRESQL default");
-        }
         queries = new HashMap<>();
     }
 
@@ -111,6 +99,160 @@ public class BaseRepositoryParser extends AbstractCompiler {
         BaseRepositoryParser parser = new BaseRepositoryParser();
         parser.cu = cu;
         return parser;
+    }
+
+    /**
+     * Find the table name from the hibernate entity.
+     * Usually the entity will have an annotation giving the actual name of the
+     * table.
+     * <p>
+     * This method is made static because when processing joins there are multiple
+     * entities
+     * and there by multiple table names involved.
+     *
+     * @param entity a TypeWrapper representing the entity
+     * @return the table name as a string.
+     */
+    public static String findTableName(TypeWrapper entity) {
+        String table = null;
+        if (entity != null) {
+            if (entity.getType() != null) {
+                return getNameFromType(entity, table);
+            } else if (entity.getClazz() != null) {
+                Class<?> cls = entity.getClazz();
+                for (Annotation ann : cls.getAnnotations()) {
+                    if (ann instanceof javax.persistence.Table t) {
+                        table = t.name();
+                    }
+                }
+            }
+        } else {
+            logger.warn("Compilation unit is null");
+        }
+        return table;
+    }
+
+    static String getNameFromType(TypeWrapper entity, String table) {
+        Optional<AnnotationExpr> ann = entity.getType().getAnnotationByName("Table");
+        if (ann.isPresent()) {
+            if (ann.get().isNormalAnnotationExpr()) {
+                for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
+                    if (pair.getNameAsString().equals("name")) {
+                        table = pair.getValue().toString().replace("\"", "");
+                    }
+                }
+            } else {
+                table = ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
+            }
+            return table;
+        } else {
+            return camelToSnake(entity.getType().getNameAsString());
+        }
+    }
+
+    /**
+     * Find and parse the given entity.
+     *
+     * @param fd FieldDeclaration for which we need to find the compilation unit
+     * @return a compilation unit
+     */
+    public static TypeWrapper findEntity(Type fd) {
+        Optional<CompilationUnit> cu = fd.findCompilationUnit();
+        if (cu.isPresent()) {
+            for (ImportWrapper wrapper : AbstractCompiler.findImport(cu.get(), fd)) {
+                if (wrapper.getType() != null) {
+                    return new TypeWrapper(wrapper.getType());
+                } else if (!wrapper.getImport().getNameAsString().startsWith("java.util")) {
+                    try {
+                        Class<?> cls = AbstractCompiler.loadClass(wrapper.getImport().getNameAsString());
+                        return new TypeWrapper(cls);
+
+                    } catch (ClassNotFoundException e) {
+                        // can be ignored, we are trying to check for the existence of the class
+                        logger.debug(e.getMessage());
+                    }
+                }
+            }
+            return new TypeWrapper(AbstractCompiler.findInSamePackage(cu.get(), fd).orElse(null));
+        }
+        return null;
+    }
+
+    /**
+     * Converts the fields in an Entity to snake case which is the usual pattern for
+     * columns
+     *
+     * @param str A camel cased variable
+     * @return a snake cased variable
+     */
+    public static String camelToSnake(String str) {
+        return CAMEL_TO_SNAKE_PATTERN.matcher(str).replaceAll("$1_$2").toLowerCase();
+    }
+
+    /**
+     * Determines if a TypeWrapper represents a JPA repository interface.
+     * Consolidates logic from QueryOptimizationChecker and HardDelete.
+     *
+     * @param typeWrapper the TypeWrapper to analyze
+     * @return true if it's a JPA repository, false otherwise
+     */
+    public static boolean isJpaRepository(TypeWrapper typeWrapper) {
+        if (typeWrapper == null) {
+            return false;
+        }
+
+        // Check by fully qualified name first (most reliable)
+        String fqn = typeWrapper.getFullyQualifiedName();
+        if ("org.springframework.data.jpa.repository.JpaRepository".equals(fqn)) {
+            return true;
+        }
+
+        // Check runtime class interfaces if available
+        if (typeWrapper.getClazz() != null) {
+            Class<?> clazz = typeWrapper.getClazz();
+            for (Class<?> iface : clazz.getInterfaces()) {
+                if (isRepositoryInterface(iface.getName())) {
+                    return true;
+                }
+            }
+        }
+        return isJpaRepository(typeWrapper.getType());
+    }
+
+    public static boolean isJpaRepository(TypeDeclaration<?> type) {
+        if (type instanceof ClassOrInterfaceDeclaration classOrInterface && classOrInterface.isInterface()) {
+
+            // Check extended types
+            for (ClassOrInterfaceType extendedType : classOrInterface.getExtendedTypes()) {
+                String typeName = extendedType.getNameAsString();
+                String fullTypeName = extendedType.toString();
+
+                if (isRepositoryInterface(typeName) || isRepositoryInterface(fullTypeName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isRepositoryInterface(String interfaceName) {
+        return interfaceName != null && (interfaceName.contains(JPA_REPOSITORY) ||
+                interfaceName.contains("CrudRepository") ||
+                interfaceName.contains("PagingAndSortingRepository") ||
+                interfaceName.contains("Repository") &&
+                        (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository")));
+    }
+
+    public static DatabaseDialect getDialect() {
+        return dialect;
+    }
+
+    protected static int countPlaceholders(String sql) { // restored as protected for external usage
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(sql);
+        int count = 0;
+        while (matcher.find())
+            count++;
+        return count;
     }
 
     public RepositoryQuery getQueryFromRepositoryMethod(Callable repoMethod) {
@@ -191,13 +333,13 @@ public class BaseRepositoryParser extends AbstractCompiler {
     @SuppressWarnings("java:S127")
     RepositoryQuery parseNonAnnotatedMethod(Callable md) {
         String methodName = md.getNameAsString();
-        List<String> components = extractComponents(methodName);
+        List<String> components = MethodToSQLConverter.extractComponents(methodName);
 
         // Validate that we have components to work with
         if (components.isEmpty()) {
             logger.warn("Method name '{}' did not produce any recognizable JPA query components", methodName);
             // Return a basic query as fallback
-            return queryBuilder("SELECT * FROM " + findTableName(entity), QueryType.DERIVED, md);
+            return queryBuilder(SELECT_STAR + findTableName(entity), QueryType.DERIVED, md);
         }
 
         StringBuilder sql = new StringBuilder();
@@ -205,7 +347,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         boolean top = false;
         boolean isExistsQuery = components.contains("existsBy");
         if (tableName != null) {
-            top = buildSelectAndWhereClauses(components, sql, tableName);
+            top = MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, tableName);
         } else {
             logger.warn("Table name cannot be null for entity");
         }
@@ -222,133 +364,9 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return queryBuilder(finalSql, QueryType.DERIVED, md);
     }
 
-    /** Refactored: returns whether a TOP/FIRST was detected */
-    private boolean buildSelectAndWhereClauses(List<String> components, StringBuilder sql, String tableName) {
-        boolean top = false;
-        boolean ordering = false;
-        for (int i = 0; i < components.size(); i++) {
-            String component = components.get(i);
-            String next = (i < components.size() - 1) ? components.get(i + 1) : "";
-            String prev = (i > 0) ? components.get(i - 1) : "";
-            switch (component) {
-                case "findAll" -> {
-                    // findAll with no suffix means SELECT * FROM table with no WHERE
-                    if (next.isEmpty() || next.equals("OrderBy")) {
-                        sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
-                    } else {
-                        sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
-                    }
-                }
-                case "findAllById" ->
-                    sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE id = ?");
-                case "findBy", "get" -> sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
-                case "countBy" ->
-                    sql.append("SELECT COUNT(*) FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
-                case "deleteBy" -> sql.append("DELETE FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
-                case "existsBy" ->
-                    sql.append("SELECT EXISTS (SELECT 1 FROM ").append(tableName.replace("\"", "")).append(" WHERE ");
-                case "findFirstBy", "findTopBy" -> {
-                    top = true;
-                    // Check if immediately followed by OrderBy (no WHERE clause)
-                    if (next.equals("OrderBy")) {
-                        sql.append(SELECT_STAR).append(tableName.replace("\"", ""));
-                    } else {
-                        sql.append(SELECT_STAR).append(tableName.replace("\"", "")).append(" WHERE ");
-                    }
-                }
-                case "In" -> sql.append(" IN (?) ");
-                case "NotIn" -> sql.append(" NOT IN (?) ");
-                case "Between" -> sql.append(" BETWEEN ? AND ? ");
-                case "GreaterThan" -> sql.append(" > ? ");
-                case "LessThan" -> sql.append(" < ? ");
-                case "GreaterThanEqual" -> sql.append(" >= ? ");
-                case "LessThanEqual" -> sql.append(" <= ? ");
-                case "IsNull" -> sql.append(" IS NULL ");
-                case "IsNotNull" -> sql.append(" IS NOT NULL ");
-                case "And", "Or" -> sql.append(" ").append(component.toUpperCase()).append(' ');
-                case "Not" -> {
-                    // "Not" can appear in two contexts:
-                    // 1. As part of a composite keyword like NotIn, IsNotNull (already handled
-                    // above)
-                    // 2. As a standalone negation operator: findByActiveNot means active != ?
-                    // We only handle case 2 here since case 1 is handled by the specific cases
-                    if (!prev.equals("Is") && !next.equals("In")) {
-                        sql.append(" != ? ");
-                    }
-                }
-                case "Containing", "Like" -> sql.append(" LIKE ? ");
-                case "OrderBy" -> {
-                    ordering = true;
-                    sql.append(" ORDER BY ");
-                }
-                case "Desc" -> {
-                    // Desc should only appear after a field name in ORDER BY context
-                    if (ordering) {
-                        sql.append("DESC");
-                        // Add comma if next is a field name (not Asc, Desc, or empty)
-                        if (!next.isEmpty() && !next.equals("Desc") && !next.equals("Asc")) {
-                            sql.append(", ");
-                        } else {
-                            sql.append(' ');
-                        }
-                    } else {
-                        // This shouldn't happen in well-formed method names, but handle it as a field
-                        appendDefaultComponent(sql, component, next, ordering);
-                    }
-                }
-                case "Asc" -> {
-                    // Asc should only appear after a field name in ORDER BY context
-                    if (ordering) {
-                        sql.append("ASC");
-                        // Add comma if next is a field name (not Asc, Desc, or empty)
-                        if (!next.isEmpty() && !next.equals("Desc") && !next.equals("Asc")) {
-                            sql.append(", ");
-                        } else {
-                            sql.append(' ');
-                        }
-                    } else {
-                        // This shouldn't happen in well-formed method names, but handle it as a field
-                        appendDefaultComponent(sql, component, next, ordering);
-                    }
-                }
-                default -> appendDefaultComponent(sql, component, next, ordering);
-            }
-        }
-        return top;
-    }
-
-    /** Updated default component handler to accept ordering flag */
-    private void appendDefaultComponent(StringBuilder sql, String component, String next, boolean ordering) {
-        sql.append(camelToSnake(component));
-        if (!ordering) {
-            if (shouldAppendEquals(next)) {
-                sql.append(" = ? ");
-            } else if (!next.equals("Not")) {
-                // Only add space if next is not "Not" (which will add its own operator)
-                sql.append(' ');
-            }
-        } else {
-            // In ORDER BY context:
-            // - If next is Asc/Desc, just add space (they will handle comma if needed)
-            // - Otherwise, add comma (for multiple fields without explicit Asc/Desc)
-            if (next.equals("Desc") || next.equals("Asc")) {
-                sql.append(' ');
-            } else if (!next.isEmpty()) {
-                sql.append(", ");
-            } else {
-                sql.append(' ');
-            }
-        }
-    }
-
-    private boolean shouldAppendEquals(String next) {
-        return next.isEmpty() || (!next.equals("Between") && !next.equals("GreaterThan") && !next.equals("LessThan") &&
-                !next.equals("LessThanEqual") && !next.equals("IsNotNull") && !next.equals("Like") &&
-                !next.equals("GreaterThanEqual") && !next.equals("IsNull") && !next.equals("Containing") &&
-                !next.equals("In") && !next.equals("NotIn") && !next.equals("Not") && !next.equals("Or"));
-    }
-
-    /** Apply dialect-specific top limit (FIRST/TOP semantics) */
+    /**
+     * Apply dialect-specific top limit (FIRST/TOP semantics)
+     */
     private void applyTopLimit(StringBuilder sql) {
         String built = sql.toString();
         String trimmedUpper = built.trim().toUpperCase();
@@ -364,7 +382,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         // For PostgreSQL and others, LIMIT is appended after the query
         if (dialect == DatabaseDialect.ORACLE) {
             // Oracle needs WHERE clause for ROWNUM
-            if (!built.toUpperCase().contains("WHERE")) {
+            if (!built.toUpperCase().contains(WHERE)) {
                 built = built + " WHERE ROWNUM = 1";
             } else {
                 built = dialect.applyLimitClause(built, 1);
@@ -378,7 +396,9 @@ public class BaseRepositoryParser extends AbstractCompiler {
         sql.append(built);
     }
 
-    /** Replace placeholders ? with numbered ?1, ?2 */
+    /**
+     * Replace placeholders ? with numbered ?1, ?2
+     */
     private String numberPlaceholders(String input) {
         StringBuilder result = new StringBuilder();
         int paramIndex = 1;
@@ -395,7 +415,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
     /**
      * Build a repository query object
-     * 
+     *
      * @param query the query
      * @param qt    what is the type of query we are dealing with
      * @return a repository query instance.
@@ -429,99 +449,11 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
     /**
      * Gets all the repository queries that have been built.
-     * 
+     *
      * @return a collection of all RepositoryQuery objects
      */
     public Collection<RepositoryQuery> getAllQueries() {
         return queries.values();
-    }
-
-    /**
-     * Find the table name from the hibernate entity.
-     * Usually the entity will have an annotation giving the actual name of the
-     * table.
-     *
-     * This method is made static because when processing joins there are multiple
-     * entities
-     * and there by multiple table names involved.
-     *
-     * @param entity a TypeWrapper representing the entity
-     * @return the table name as a string.
-     */
-    public static String findTableName(TypeWrapper entity) {
-        String table = null;
-        if (entity != null) {
-            if (entity.getType() != null) {
-                return getNameFromType(entity, table);
-            } else if (entity.getClazz() != null) {
-                Class<?> cls = entity.getClazz();
-                for (Annotation ann : cls.getAnnotations()) {
-                    if (ann instanceof javax.persistence.Table t) {
-                        table = t.name();
-                    }
-                }
-            }
-        } else {
-            logger.warn("Compilation unit is null");
-        }
-        return table;
-    }
-
-    static String getNameFromType(TypeWrapper entity, String table) {
-        Optional<AnnotationExpr> ann = entity.getType().getAnnotationByName("Table");
-        if (ann.isPresent()) {
-            if (ann.get().isNormalAnnotationExpr()) {
-                for (var pair : ann.get().asNormalAnnotationExpr().getPairs()) {
-                    if (pair.getNameAsString().equals("name")) {
-                        table = pair.getValue().toString().replace("\"", "");
-                    }
-                }
-            } else {
-                table = ann.get().asSingleMemberAnnotationExpr().getMemberValue().toString().replace("\"", "");
-            }
-            return table;
-        } else {
-            return camelToSnake(entity.getType().getNameAsString());
-        }
-    }
-
-    /**
-     * Find and parse the given entity.
-     *
-     * @param fd FieldDeclaration for which we need to find the compilation unit
-     * @return a compilation unit
-     */
-    public static TypeWrapper findEntity(Type fd) {
-        Optional<CompilationUnit> cu = fd.findCompilationUnit();
-        if (cu.isPresent()) {
-            for (ImportWrapper wrapper : AbstractCompiler.findImport(cu.get(), fd)) {
-                if (wrapper.getType() != null) {
-                    return new TypeWrapper(wrapper.getType());
-                } else if (!wrapper.getImport().getNameAsString().startsWith("java.util")) {
-                    try {
-                        Class<?> cls = AbstractCompiler.loadClass(wrapper.getImport().getNameAsString());
-                        return new TypeWrapper(cls);
-
-                    } catch (ClassNotFoundException e) {
-                        // can be ignored, we are trying to check for the existence of the class
-                        logger.debug(e.getMessage());
-                    }
-                }
-            }
-            return new TypeWrapper(AbstractCompiler.findInSamePackage(cu.get(), fd).orElse(null));
-        }
-        return null;
-    }
-
-    /**
-     * Converts the fields in an Entity to snake case which is the usual pattern for
-     * columns
-     * 
-     * @param str A camel cased variable
-     * @return a snake cased variable
-     */
-    public static String camelToSnake(String str) {
-        return CAMEL_TO_SNAKE_PATTERN.matcher(str).replaceAll("$1_$2").toLowerCase();
     }
 
     public void buildQueries() {
@@ -529,17 +461,6 @@ public class BaseRepositoryParser extends AbstractCompiler {
         parserAdapter = new HQLParserAdapter(cu, entity);
         if (cu != null && entity != null) {
             cu.accept(new Visitor(), null);
-        }
-    }
-
-    /**
-     * Visitor to iterate through the methods in the repository
-     */
-    class Visitor extends VoidVisitorAdapter<Void> {
-        @Override
-        public void visit(MethodDeclaration n, Void arg) {
-            super.visit(n, arg);
-            queryFromMethodDeclaration(n);
         }
     }
 
@@ -568,107 +489,18 @@ public class BaseRepositoryParser extends AbstractCompiler {
         }
     }
 
-    /**
-     * Determines if a TypeWrapper represents a JPA repository interface.
-     * Consolidates logic from QueryOptimizationChecker and HardDelete.
-     *
-     * @param typeWrapper the TypeWrapper to analyze
-     * @return true if it's a JPA repository, false otherwise
-     */
-    public static boolean isJpaRepository(TypeWrapper typeWrapper) {
-        if (typeWrapper == null) {
-            return false;
-        }
-
-        // Check by fully qualified name first (most reliable)
-        String fqn = typeWrapper.getFullyQualifiedName();
-        if ("org.springframework.data.jpa.repository.JpaRepository".equals(fqn)) {
-            return true;
-        }
-
-        // Check runtime class interfaces if available
-        if (typeWrapper.getClazz() != null) {
-            Class<?> clazz = typeWrapper.getClazz();
-            for (Class<?> iface : clazz.getInterfaces()) {
-                if (isRepositoryInterface(iface.getName())) {
-                    return true;
-                }
-            }
-        }
-        return isJpaRepository(typeWrapper.getType());
-    }
-
-    public static boolean isJpaRepository(TypeDeclaration<?> type) {
-        if (type instanceof ClassOrInterfaceDeclaration classOrInterface && classOrInterface.isInterface()) {
-
-            // Check extended types
-            for (ClassOrInterfaceType extendedType : classOrInterface.getExtendedTypes()) {
-                String typeName = extendedType.getNameAsString();
-                String fullTypeName = extendedType.toString();
-
-                if (isRepositoryInterface(typeName) || isRepositoryInterface(fullTypeName)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private static boolean isRepositoryInterface(String interfaceName) {
-        return interfaceName != null && (interfaceName.contains(JPA_REPOSITORY) ||
-                interfaceName.contains("CrudRepository") ||
-                interfaceName.contains("PagingAndSortingRepository") ||
-                interfaceName.contains("Repository") &&
-                        (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository")));
-    }
-
-    protected List<String> extractComponents(String methodName) {
-        List<String> components = new ArrayList<>();
-        Matcher matcher = KEYWORDS_PATTERN.matcher(methodName);
-        StringBuilder sb = new StringBuilder();
-
-        while (matcher.find()) {
-            String keyword = matcher.group();
-            int start = matcher.start();
-            int end = matcher.end();
-
-            // Special handling for short keywords that could be part of field names
-            // If the keyword is followed by a lowercase letter, it's part of a field name
-            // Examples: "Invoice" (In+voice), "Description" (Desc+ription), "Ordering" (Or+dering)
-            if (keyword.matches("In|Or|Not|Asc|Desc") && end < methodName.length()) {
-                char nextChar = methodName.charAt(end);
-                if (Character.isLowerCase(nextChar)) {
-                    // Keyword is part of a field name, don't treat as keyword
-                    continue;
-                }
-            }
-
-            matcher.appendReplacement(sb, " " + keyword + " ");
-        }
-        matcher.appendTail(sb);
-
-        String[] parts = sb.toString().split("\\s+");
-        for (String part : parts) {
-            if (!part.isEmpty()) {
-                components.add(part);
-            }
-        }
-        return components;
-    }
-
-    public static DatabaseDialect getDialect() {
-        return dialect;
-    }
-
-    protected static int countPlaceholders(String sql) { // restored as protected for external usage
-        Matcher matcher = PLACEHOLDER_PATTERN.matcher(sql);
-        int count = 0;
-        while (matcher.find())
-            count++;
-        return count;
-    }
-
     public TypeWrapper getEntity() {
         return entity;
+    }
+
+    /**
+     * Visitor to iterate through the methods in the repository
+     */
+    class Visitor extends VoidVisitorAdapter<Void> {
+        @Override
+        public void visit(MethodDeclaration n, Void arg) {
+            super.visit(n, arg);
+            queryFromMethodDeclaration(n);
+        }
     }
 }

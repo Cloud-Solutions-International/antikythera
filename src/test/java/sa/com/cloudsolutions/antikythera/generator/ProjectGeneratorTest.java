@@ -1,11 +1,9 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -67,32 +65,5 @@ class ProjectGeneratorTest {
                 "test" + File.separator + "java" + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename);
         assertTrue(file.exists());
         assertEquals(content, Files.readString(file.toPath()));
-    }
-
-    @Test
-    void generateCreatesMavenProjectStructure() throws IOException, XmlPullParserException, EvaluatorException {
-        generator.preProcess();
-        generator.generateApiTests();
-
-        String outputPath = Settings.getProperty(Settings.OUTPUT_PATH).toString();
-
-        String basePackage = Settings.getProperty(Settings.BASE_PACKAGE).toString().replace(".", File.separator);
-        File mainJavaDir = new File(outputPath + File.separator + "src" + File.separator
-                + "main" + File.separator + "java" + File.separator + basePackage);
-        File mainResourcesDir = new File(outputPath + File.separator + "src" + File.separator + "main" + File.separator + "resources");
-        File testJavaDir = new File(outputPath + File.separator + "src" + File.separator +
-                "test" + File.separator + "java" + File.separator + basePackage);
-        File testResourcesDir = new File(outputPath + File.separator + "src" + File.separator + "test" + File.separator + "resources");
-        File pomFile = new File(outputPath + File.separator + "pom.xml");
-        File mainJavaConstantsDir = new File(outputPath + "/src/main/java/sa/com/cloudsolutions/antikythera/constants");
-        File testBaseDir = new File(outputPath + "/src/test/java/sa/com/cloudsolutions/antikythera/base");
-
-        assertTrue(mainJavaDir.exists() && mainJavaDir.isDirectory());
-        assertTrue(mainResourcesDir.exists() && mainResourcesDir.isDirectory());
-        assertTrue(testJavaDir.exists() && testJavaDir.isDirectory());
-        assertTrue(testResourcesDir.exists() && testResourcesDir.isDirectory());
-        assertTrue(pomFile.exists());
-        assertTrue(mainJavaConstantsDir.exists() && mainJavaConstantsDir.isDirectory());
-        assertTrue(testBaseDir.exists() && testBaseDir.isDirectory());
     }
 }

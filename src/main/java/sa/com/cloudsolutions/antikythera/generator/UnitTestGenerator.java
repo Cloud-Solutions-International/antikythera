@@ -34,7 +34,6 @@ import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
-import sa.com.cloudsolutions.antikythera.depsolver.ClassProcessor;
 import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
 import sa.com.cloudsolutions.antikythera.depsolver.Graph;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -606,7 +605,7 @@ public class UnitTestGenerator extends TestGenerator {
             Object value = fieldVar.getValue();
             if (value instanceof List) {
                 TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
-                body.addStatement(String.format("%s.set%s(new ArrayList());", nameAsString, ClassProcessor.instanceToClassName(name)));
+                body.addStatement(String.format("%s.set%s(new ArrayList());", nameAsString, AbstractCompiler.instanceToClassName(name)));
             } else {
                 if (!fieldVar.getInitializer().isEmpty()) {
                     Expression first = fieldVar.getInitializer().getFirst();
@@ -616,7 +615,7 @@ public class UnitTestGenerator extends TestGenerator {
                     }
                     else {
                         body.addStatement(String.format("%s.set%s(%s);",
-                                nameAsString, ClassProcessor.instanceToClassName(name), first));
+                                nameAsString, AbstractCompiler.instanceToClassName(name), first));
                     }
                 }
             }
@@ -650,19 +649,19 @@ public class UnitTestGenerator extends TestGenerator {
             TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
             body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(List.of());",
                     nameAsString,
-                    ClassProcessor.instanceToClassName(name)
+                    AbstractCompiler.instanceToClassName(name)
             ));
         }
         else {
             if (value instanceof String) {
                 body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(\"%s\");",
                         nameAsString,
-                        ClassProcessor.instanceToClassName(name), value));
+                        AbstractCompiler.instanceToClassName(name), value));
             }
             else {
                 body.addStatement(String.format("Mockito.when(%s.get%s()).thenReturn(%s);",
                         nameAsString,
-                        ClassProcessor.instanceToClassName(name),
+                        AbstractCompiler.instanceToClassName(name),
                         value instanceof Long ? value + "L" : value.toString()));
             }
         }

@@ -36,15 +36,10 @@ class TestArithmetic extends  TestHelper {
     }
 
     @BeforeEach
-    void each() throws IOException {
+    void each() {
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         System.setOut(new PrintStream(outContent));
-    }
-
-    @AfterEach
-    void tearDown() {
-        System.setOut(standardOut);
     }
 
     @Test
