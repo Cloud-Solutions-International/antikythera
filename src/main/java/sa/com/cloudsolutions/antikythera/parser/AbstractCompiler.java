@@ -1003,7 +1003,6 @@ public class AbstractCompiler {
                 InterfaceSolver solver = new InterfaceSolver();
                 solver.compile(Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
             }
-
         }
     }
 

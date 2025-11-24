@@ -105,7 +105,9 @@ public class EntityMappingResolver {
         if (columnAnn.isPresent()) {
             Map<String, Expression> attributes = AbstractCompiler.extractAnnotationAttributes(columnAnn.get());
             Expression name = attributes.get("name");
-            return name.toString().replace("\"", ""); // Remove quotes
+            if (name != null) {
+                return name.toString().replace("\"", ""); // Remove quotes
+            }
         }
         return null; // No @Column annotation or no name specified
     }

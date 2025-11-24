@@ -308,13 +308,28 @@ public class BaseRepositoryParser extends AbstractCompiler {
     /**
      * Unescapes a Java string literal by converting escape sequences to actual
      * characters.
-     * Handles: \\n (newline), \\t (tab), \\r (carriage return), \\" (quote), \\\\
-     * (backslash)
+     * Handles:
+     * - \\n (newline)
+     * - \\t (tab)
+     * - \\r (carriage return)
+     * - \\" (quote)
+     * - \\\\ (backslash)
+     * - Line continuation: backslash at end of line (\ followed by newline) removes
+     * the newline and leading whitespace
      */
     private String unescapeJavaString(String str) {
         if (str == null) {
             return null;
         }
+
+        // First, handle line continuation backslashes (text block syntax)
+        // A backslash at the end of a line: \<newline><optional whitespace>
+        // Should be replaced with nothing (continuation of the same line)
+        // Pattern: \ followed by newline (and optional \r) and optional leading
+        // whitespace
+        str = str.replaceAll("\\\\\\s*[\\r\\n]+\\s*", " ");
+
+        // Then handle other escape sequences
         return str.replace("\\n", "\n")
                 .replace("\\t", "\t")
                 .replace("\\r", "\r")
