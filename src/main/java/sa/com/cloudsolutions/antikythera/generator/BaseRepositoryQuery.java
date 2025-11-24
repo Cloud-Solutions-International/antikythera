@@ -335,8 +335,10 @@ public class BaseRepositoryQuery {
             // Parse the converted SQL (not the original HQL)
             this.statement = CCJSqlParserUtil.parse(nativeSql);
             TypeWrapper entity = BaseRepositoryParser.findEntity(entityType);
-            // Apply field name conversion to snake case
-            BasicConverter.convertFieldsToSnakeCase(statement, entity);
+            // HQLToPostgreSQLConverter already handles field name conversion and join processing,
+            // so we only need minimal post-processing (projection normalization, etc.)
+            // Skip join processing since joins are already in SQL format
+            BasicConverter.convertFieldsToSnakeCase(statement, entity, true);
         } catch (JSQLParserException e) {
             throw new AntikytheraException("Exception parsing converted SQL query: " + nativeSql, e);
         }

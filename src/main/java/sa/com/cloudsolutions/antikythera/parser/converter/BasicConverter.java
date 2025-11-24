@@ -41,10 +41,25 @@ public class BasicConverter {
      * @throws AntikytheraException if we are unable to find related entities.
      */
     public static void convertFieldsToSnakeCase(Statement stmt, TypeWrapper entity) throws AntikytheraException {
+        convertFieldsToSnakeCase(stmt, entity, false);
+    }
+
+    /**
+     * Java field names need to be converted to snake case to match the table column.
+     * <p>
+     * This method does not return anything but has a side effect. The changes will be made to the
+     * select statement that is passed in.
+     *
+     * @param stmt            the sql statement
+     * @param entity           a compilation unit representing the entity.
+     * @param skipJoinProcessing if true, skip join processing (for HQL queries already converted by HQLToPostgreSQLConverter)
+     * @throws AntikytheraException if we are unable to find related entities.
+     */
+    public static void convertFieldsToSnakeCase(Statement stmt, TypeWrapper entity, boolean skipJoinProcessing) throws AntikytheraException {
         if (!(stmt instanceof Select sel)) {
             return; // only Select statements supported
         }
-        convertPlainSelectToSnakeCase(sel.getPlainSelect(), entity);
+        convertPlainSelectToSnakeCase(sel.getPlainSelect(), entity, skipJoinProcessing);
     }
 
     /**
@@ -52,13 +67,29 @@ public class BasicConverter {
      * Keeps method small by delegating to focused helpers.
      */
     private static void convertPlainSelectToSnakeCase(PlainSelect select, TypeWrapper entity) throws AntikytheraException {
+        convertPlainSelectToSnakeCase(select, entity, false);
+    }
+
+    /**
+     * Convert projections, clauses, and joins of a PlainSelect to snake case where applicable.
+     * Keeps method small by delegating to focused helpers.
+     *
+     * @param select            the PlainSelect to convert
+     * @param entity            the root entity
+     * @param skipJoinProcessing if true, skip join processing (for HQL queries already converted)
+     */
+    private static void convertPlainSelectToSnakeCase(PlainSelect select, TypeWrapper entity, boolean skipJoinProcessing) throws AntikytheraException {
         if (select == null) return;
         normalizeProjection(select);
         convertWhere(select);
         convertGroupBy(select);
         convertOrderBy(select);
         convertHaving(select);
-        processJoins(entity, select);
+        // Only process joins if not already converted by HQLToPostgreSQLConverter
+        // HQL queries have joins already converted to SQL, so skip join processing
+        if (!skipJoinProcessing) {
+            processJoins(entity, select, skipJoinProcessing);
+        }
     }
 
     // --- Projection helpers -------------------------------------------------
@@ -125,6 +156,10 @@ public class BasicConverter {
     // --- Join processing ----------------------------------------------------
 
     private static void processJoins(TypeWrapper rootEntity, PlainSelect select) throws AntikytheraException {
+        processJoins(rootEntity, select, false);
+    }
+
+    private static void processJoins(TypeWrapper rootEntity, PlainSelect select, boolean skipJoinProcessing) throws AntikytheraException {
         List<Join> joins = select.getJoins();
         if (joins == null || joins.isEmpty()) return;
         List<TypeWrapper> discovered = new ArrayList<>();
@@ -133,7 +168,7 @@ public class BasicConverter {
             var right = j.getRightItem();
             if (right instanceof ParenthesedSelect ps && ps.getSelect() instanceof Select innerSel) {
                 // recurse into nested select body
-                convertPlainSelectToSnakeCase(innerSel.getPlainSelect(), rootEntity);
+                convertPlainSelectToSnakeCase(innerSel.getPlainSelect(), rootEntity, skipJoinProcessing);
                 continue;
             }
             resolveAndRewriteJoin(j, discovered);
