@@ -293,7 +293,35 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 // Unescape the string to convert \\n to actual newlines (text blocks issue)
                 String queryString = unescapeJavaString((String) v.getValue());
 
-                if (nt != null && eval.evaluateExpression(nt).getValue().equals(true)) {
+                boolean isNativeQuery = false;
+                if (nt != null) {
+                    try {
+                        Variable nativeQueryVar = eval.evaluateExpression(nt);
+                        Object nativeQueryValue = nativeQueryVar.getValue();
+                        // Handle both Boolean objects and primitive booleans
+                        if (nativeQueryValue instanceof Boolean) {
+                            isNativeQuery = ((Boolean) nativeQueryValue).booleanValue();
+                        } else if (nativeQueryValue != null) {
+                            // Try to parse as boolean string
+                            isNativeQuery = Boolean.parseBoolean(nativeQueryValue.toString());
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Failed to evaluate nativeQuery attribute for method {}, defaulting to HQL: {}", 
+                                methodDeclaration.getNameAsString(), e.getMessage());
+                    }
+                }
+
+                // Fallback: If query looks like SQL (has COUNT(*), FROM table_name pattern, etc.)
+                // but nativeQuery wasn't detected, log a warning and treat as native SQL
+                if (!isNativeQuery && looksLikeNativeSQL(queryString)) {
+                    logger.warn("Query for method {} appears to be native SQL (contains COUNT(*) or SQL patterns) " +
+                            "but nativeQuery attribute was not detected or evaluated to false. " +
+                            "Treating as native SQL. If this is incorrect, ensure nativeQuery=true is set.",
+                            methodDeclaration.getNameAsString());
+                    isNativeQuery = true;
+                }
+
+                if (isNativeQuery) {
                     queries.put(callable, queryBuilder(queryString, QueryType.NATIVE_SQL, callable));
                 } else {
                     queries.put(callable, queryBuilder(queryString, QueryType.HQL, callable));
@@ -307,6 +335,70 @@ public class BaseRepositoryParser extends AbstractCompiler {
     }
 
     /**
+     * Checks if a query string looks like native SQL rather than HQL.
+     * Native SQL typically has patterns like:
+     * - COUNT(*) (not COUNT(e))
+     * - FROM table_name (not FROM EntityName)
+     * - Direct table/column names in snake_case or quoted identifiers
+     * - Subqueries with FROM (SELECT ... FROM table_name)
+     * 
+     * This method is conservative - it only returns true for strong SQL indicators
+     * to avoid incorrectly classifying HQL queries as SQL.
+     * 
+     * @param query the query string to check
+     * @return true if the query appears to be native SQL
+     */
+    private boolean looksLikeNativeSQL(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return false;
+        }
+        String upperQuery = query.toUpperCase().trim();
+        String lowerQuery = query.toLowerCase().trim();
+        
+        // First, check for HQL patterns - if present, it's definitely HQL
+        // HQL uses entity.field syntax (e.g., "u.vehicles", "i.patientId")
+        // SQL uses table.column syntax (e.g., "i.patient_id", "blinv_invoice_item.id")
+        // HQL entity references often have CamelCase after the dot
+        if (query.matches(".*\\bFROM\\s+[A-Z][a-zA-Z0-9]+\\s+[a-z]\\s+.*")) {
+            // Pattern: FROM EntityName alias - this is HQL
+            return false;
+        }
+        if (query.matches(".*\\b[a-z]\\.[A-Z][a-zA-Z0-9]+.*")) {
+            // Pattern: alias.EntityField (CamelCase after dot) - this is HQL
+            return false;
+        }
+        
+        // Check for SQL-specific patterns that are unlikely in HQL
+        // COUNT(*) is SQL syntax (HQL would be COUNT(e) or similar)
+        if (upperQuery.contains("COUNT(*)")) {
+            return true;
+        }
+        
+        // Check for subquery pattern: FROM (SELECT ... FROM table_name)
+        // This is a strong indicator of native SQL
+        if (upperQuery.matches(".*\\bFROM\\s*\\(\\s*SELECT.*")) {
+            return true;
+        }
+        
+        // Check for FROM table_name pattern with snake_case (strong SQL indicator)
+        // Must have multiple snake_case patterns to be confident it's SQL
+        // Pattern: FROM snake_case_table AND JOIN snake_case_table
+        if (lowerQuery.matches(".*\\bfrom\\s+[a-z_][a-z0-9_]+\\s+[a-z]\\s+.*") &&
+            lowerQuery.matches(".*\\bjoin\\s+[a-z_][a-z0-9_]+\\s+[a-z]\\s+.*")) {
+            // Both FROM and JOIN use snake_case - very likely SQL
+            return true;
+        }
+        
+        // Check for quoted table/column names (common in SQL, less common in HQL)
+        if (query.matches(".*\\bFROM\\s+\"[^\"]+\".*") || 
+            query.matches(".*\\bJOIN\\s+\"[^\"]+\".*")) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
      * Unescapes a Java string literal by converting escape sequences to actual
      * characters.
      * Handles:
@@ -316,7 +408,11 @@ public class BaseRepositoryParser extends AbstractCompiler {
      * - \\" (quote)
      * - \\\\ (backslash)
      * - Line continuation: backslash at end of line (\ followed by newline) removes
-     * the newline and leading whitespace
+     * the newline and leading whitespace on the next line
+     * 
+     * Note: For text blocks, Java processes line continuation backslashes during compilation.
+     * However, if the value still contains them (e.g., from JavaParser's getValue()), 
+     * this method will handle them.
      */
     private String unescapeJavaString(String str) {
         if (str == null) {
@@ -324,13 +420,16 @@ public class BaseRepositoryParser extends AbstractCompiler {
         }
 
         // First, handle line continuation backslashes (text block syntax)
-        // A backslash at the end of a line: \<newline><optional whitespace>
-        // Should be replaced with nothing (continuation of the same line)
-        // Pattern: \ followed by newline (and optional \r) and optional leading
-        // whitespace
+        // A backslash at the end of a line followed by newline removes the newline
+        // and any leading whitespace on the next line, effectively joining the lines.
+        // Pattern matches: backslash, optional trailing whitespace, newline(s), optional leading whitespace
+        // We replace with a single space to join the lines
+        // This handles both \n and \r\n line endings
         str = str.replaceAll("\\\\\\s*[\\r\\n]+\\s*", " ");
 
         // Then handle other escape sequences
+        // Note: Order matters - we handle line continuation first, then other escapes
+        // to avoid double-processing
         return str.replace("\\n", "\n")
                 .replace("\\t", "\t")
                 .replace("\\r", "\r")

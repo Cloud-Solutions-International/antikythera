@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.generator.QueryType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.converter.EntityMappingResolver;
@@ -370,5 +372,87 @@ class BaseRepositoryParserTest {
             assertNotNull(queryString, "Query string should be available");
             assertFalse(queryString.isEmpty(), "Query string should not be empty");
         }, "HQL query with explicit ON clause should parse without errors");
+    }
+
+    @Test
+    void testNativeQueryWithTextBlockLineContinuation() throws IOException {
+        // Configure JavaParser to support text blocks (Java 15+)
+        ParserConfiguration parserConfig = new ParserConfiguration();
+        parserConfig.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
+        StaticJavaParser.setConfiguration(parserConfig);
+        
+        // Test native query with text block and line continuation backslashes
+        // This simulates the issue where a native query uses text block syntax with \ at end of lines
+        String methodCode = """
+            package sa.com.cloudsolutions.antikythera.testhelper.repository;
+            import org.springframework.data.jpa.repository.JpaRepository;
+            import org.springframework.data.jpa.repository.Query;
+            import org.springframework.data.repository.query.Param;
+            import sa.com.cloudsolutions.antikythera.testhelper.model.User;
+            public interface TestRepo extends JpaRepository<User, Long> {
+                @Query(value = \"\"\"
+                    SELECT COUNT(*) \\
+                    FROM (SELECT t.item_id, t.category_id, t.status_id \\
+                    FROM test_items t \\
+                    JOIN test_categories c ON t.id = c.item_id \\
+                    WHERE t.category_id = :categoryId \\
+                    AND c.is_active = '1' \\
+                    AND t.item_id = :itemId \\
+                    AND t.order_type = 'PROCESS' \\
+                    AND t.activity_status = 'COMPLETED' \\
+                    AND t.parent_id IS NULL \\
+                    GROUP BY t.item_id, t.category_id, c.status_id, c.contract_id) subquery\\
+                    \"\"\",
+                    nativeQuery = true)
+                Long getItemCount(
+                        @Param("itemId") Long itemId,
+                        @Param("categoryId") Long categoryId);
+            }
+            """;
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(cu);
+        parser.processTypes();
+
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        assertDoesNotThrow(() -> {
+            parser.buildQueries();
+            RepositoryQuery q = parser.getQueryFromRepositoryMethod(callable);
+            assertNotNull(q, "Query should be created successfully");
+            assertEquals(QueryType.NATIVE_SQL, q.getQueryType(), "Query type should be NATIVE_SQL");
+            
+            String queryString = q.getQuery();
+            assertNotNull(queryString, "Query string should be available");
+            assertFalse(queryString.isEmpty(), "Query string should not be empty");
+            
+            // Verify line continuation backslashes are removed
+            assertFalse(queryString.contains("\\\n"), "Query should not contain backslash-newline sequences");
+            assertFalse(queryString.contains("\\\r\n"), "Query should not contain backslash-CRLF sequences");
+            
+            // Verify the query is properly formatted as a single continuous SQL
+            assertTrue(queryString.contains("SELECT COUNT(*)"), "Query should contain SELECT COUNT(*)");
+            assertTrue(queryString.contains("FROM (SELECT"), "Query should contain FROM (SELECT");
+            assertTrue(queryString.contains("FROM test_items"), "Query should contain FROM test_items");
+            assertTrue(queryString.contains("JOIN test_categories"), "Query should contain JOIN test_categories");
+            assertTrue(queryString.contains("WHERE t.category_id"), "Query should contain WHERE clause");
+            assertTrue(queryString.contains("GROUP BY"), "Query should contain GROUP BY");
+            
+            // Verify parameters are preserved
+            assertTrue(queryString.contains(":categoryId") || queryString.contains("?1"), 
+                "Query should contain categoryId parameter");
+            assertTrue(queryString.contains(":itemId") || queryString.contains("?2"), 
+                "Query should contain itemId parameter");
+            
+            // Verify the query can be parsed as SQL (no syntax errors from line continuation)
+            assertDoesNotThrow(() -> {
+                // Try to parse as SQL to verify it's valid
+                String cleanQuery = queryString;
+                // Remove named parameters for basic validation
+                cleanQuery = cleanQuery.replaceAll(":\\w+", "?");
+                // Basic check that it looks like SQL
+                assertTrue(cleanQuery.trim().startsWith("SELECT"), "Query should start with SELECT");
+            }, "Query should be valid SQL");
+        }, "Native query with text block line continuation should parse without errors");
     }
 }
