@@ -146,4 +146,42 @@ class BasicConverterTest extends TestHelper {
         PlainSelect innerPs = innerSel.getPlainSelect();
         assertInstanceOf(AllColumns.class, innerPs.getSelectItems().getFirst().getExpression());
     }
+
+    @Test
+    void testSchemaQualifiedTableNotProcessedAsHQLPath() throws Exception {
+        // Test that schema-qualified tables (e.g., "public.vehicles v") are not incorrectly
+        // processed as HQL paths. Schema-qualified tables should be left as-is.
+        TypeDeclaration<?> type = AntikytheraRunTime.getTypeDeclaration(USER_MODEL).orElseThrow();
+        TypeWrapper wrapper = new TypeWrapper(type);
+        Statement stmt = CCJSqlParserUtil.parse("SELECT u FROM user u");
+        Select sel = (Select) stmt;
+        PlainSelect ps = sel.getPlainSelect();
+        Join j1 = new Join();
+        j1.setFromItem(ps.getFromItem());
+        
+        // Create a schema-qualified table (simulating output from hql-parser)
+        // This should NOT be processed as an HQL path
+        Table schemaTable = new Table("vehicles");
+        schemaTable.setSchemaName("public");
+        schemaTable.setAlias(new Alias("v"));
+        j1.setRightItem(schemaTable);
+        
+        String originalTableName = schemaTable.getName();
+        String originalSchema = schemaTable.getSchemaName();
+        
+        ps.setJoins(List.of(j1));
+        BasicConverter.convertFieldsToSnakeCase(stmt, wrapper);
+        
+        // Verify the schema-qualified table was NOT processed as an HQL path
+        // The table name and schema should remain unchanged
+        assertInstanceOf(Table.class, j1.getRightItem());
+        Table resultTable = (Table) j1.getRightItem();
+        assertEquals(originalTableName, resultTable.getName(), 
+            "Table name should remain unchanged for schema-qualified tables");
+        assertEquals(originalSchema, resultTable.getSchemaName(), 
+            "Schema name should remain unchanged for schema-qualified tables");
+        // Should have no ON expressions added (wasn't processed as HQL path)
+        assertEquals(0, j1.getOnExpressions().size(), 
+            "Schema-qualified tables should not get ON expressions added");
+    }
 }

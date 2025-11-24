@@ -142,6 +142,44 @@ public class BasicConverter {
 
     private static void resolveAndRewriteJoin(Join join, List<TypeWrapper> known) throws AntikytheraException {
         String raw = join.getRightItem().toString();
+        
+        // If the right item is a Table object, check if it's already a real table name
+        // (not an HQL path like "u.vehicles j"). We need to distinguish:
+        // - HQL paths: "u.vehicles j" (alias.field alias) - needs conversion
+        // - Schema-qualified tables: "public.vehicles v" (schema.table alias) - already SQL, skip
+        // - Regular tables: "vehicles v" (table alias) - already SQL, skip
+        if (join.getRightItem() instanceof Table table) {
+            // If the Table has a schema name set, it's definitely a schema-qualified table
+            // (not an HQL path). Skip processing.
+            if (table.getSchemaName() != null && !table.getSchemaName().isEmpty()) {
+                return; // Schema-qualified table, already in SQL format
+            }
+            
+            // If no dot in the string representation, it's a regular table - skip
+            if (!raw.contains(".")) {
+                return; // Already in SQL format (regular table name), no conversion needed
+            }
+            
+            // If it contains a dot but no schema name, check if it's schema-qualified vs HQL path
+            // Schema names are typically longer (4+ chars: "public", "dbo", "schema_name")
+            // HQL aliases are typically short (1-3 chars: "u", "i", "ip")
+            // This heuristic handles cases where schema-qualified tables are represented as
+            // "schema.table alias" in the string but schema isn't set in the Table object
+            String[] dotParts = raw.split("\\.", 2);
+            if (dotParts.length == 2) {
+                String firstPart = dotParts[0].trim();
+                // If first part is 4+ characters, likely a schema name (schema-qualified table)
+                // If first part is 1-3 characters, likely an HQL alias (needs conversion)
+                // This heuristic works because:
+                // - Schema names: "public", "dbo", "my_schema" (typically 4+ chars)
+                // - HQL aliases: "u", "i", "ip", "usr" (typically 1-3 chars)
+                if (firstPart.length() >= 4) {
+                    return; // Likely schema-qualified table, already in SQL format
+                }
+                // Otherwise, treat as HQL path and continue processing
+            }
+        }
+        
         String[] dotParts = raw.split("\\.");
         if (dotParts.length != 2) {
             return; // not an HQL path style join (ignore)

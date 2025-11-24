@@ -330,4 +330,45 @@ class BaseRepositoryParserTest {
         assertTrue(sql.contains("AND"), "Query should have AND operator: " + sql);
         assertTrue(sql.contains(">"), "Query should have greater than operator: " + sql);
     }
+
+    @Test
+    void testHQLQueryWithExplicitOnClause() throws IOException {
+        // Create a mock repository with HQL query containing explicit ON clause
+        // This simulates the error case: "SELECT i FROM Invoice i LEFT JOIN i.procedures ip ON i.id = ip.invoiceId WHERE..."
+        String methodCode = """
+            package sa.com.cloudsolutions.antikythera.testhelper.repository;
+            import org.springframework.data.jpa.repository.JpaRepository;
+            import org.springframework.data.jpa.repository.Query;
+            import sa.com.cloudsolutions.antikythera.testhelper.model.User;
+            import java.util.List;
+            public interface TestRepo extends JpaRepository<User, Long> {
+                @Query("SELECT u FROM User u LEFT JOIN u.vehicles v ON u.id = v.userId WHERE v.active = :active")
+                List<User> findUsersWithActiveVehicles(Boolean active);
+            }
+            """;
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(cu);
+        parser.processTypes();
+
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        // This should not throw "Unable to determine table name for join field" exception
+        assertDoesNotThrow(() -> {
+            parser.buildQueries();
+            RepositoryQuery q = parser.getQueryFromRepositoryMethod(callable);
+            assertNotNull(q, "Query should be created successfully");
+            assertNotNull(q.getConversionResult(), "ConversionResult should be set for HQL queries");
+            assertNotNull(q.getConversionResult().getNativeSql(), "Converted SQL should be available");
+            assertTrue(q.getConversionResult().getNativeSql().contains("LEFT JOIN"), 
+                "Converted SQL should contain LEFT JOIN");
+            assertTrue(q.getConversionResult().getNativeSql().contains("ON"), 
+                "Converted SQL should contain ON clause");
+            assertNotNull(q.getStatement(), "Statement should be set from converted SQL");
+            // Verify the statement can be converted to string without errors
+            String queryString = q.getQuery();
+            assertNotNull(queryString, "Query string should be available");
+            assertFalse(queryString.isEmpty(), "Query string should not be empty");
+        }, "HQL query with explicit ON clause should parse without errors");
+    }
 }

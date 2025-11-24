@@ -18,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.QueryType;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
+import sa.com.cloudsolutions.antikythera.parser.converter.ConversionResult;
 import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
 import sa.com.cloudsolutions.antikythera.parser.converter.HQLParserAdapter;
 import sa.com.cloudsolutions.antikythera.parser.converter.MethodToSQLConverter;
@@ -446,8 +447,12 @@ public class BaseRepositoryParser extends AbstractCompiler {
             try {
                 // Trim query to remove leading/trailing whitespace from text blocks
                 String trimmedQuery = query.trim();
-                rql.setConversionResult(parserAdapter.convertToNativeSQL(trimmedQuery));
-                rql.setQuery(trimmedQuery);
+                ConversionResult conversionResult = parserAdapter.convertToNativeSQL(trimmedQuery);
+                rql.setConversionResult(conversionResult);
+                // Store original HQL query for reference
+                rql.setOriginalQuery(trimmedQuery);
+                // Use converted SQL to set the statement instead of parsing HQL
+                rql.setStatementFromConversionResult(conversionResult);
             } catch (Exception e) {
                 logger.error("Failed to parse HQL query: {}", query);
                 throw new AntikytheraException(e);

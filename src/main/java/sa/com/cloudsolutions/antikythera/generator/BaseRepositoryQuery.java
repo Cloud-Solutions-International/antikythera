@@ -164,6 +164,9 @@ public class BaseRepositoryQuery {
     }
 
     public String getQuery() {
+        if (statement == null) {
+            return originalQuery != null ? originalQuery : "";
+        }
         return statement.toString();
     }
 
@@ -309,6 +312,44 @@ public class BaseRepositoryQuery {
 
     public void setConversionResult(ConversionResult conversionResult) {
         this.conversionResult = conversionResult;
+    }
+
+    /**
+     * Sets the statement from a ConversionResult (for HQL queries that have been converted to SQL).
+     * This method parses the converted SQL and applies field name conversion.
+     *
+     * @param conversionResult The conversion result containing the native SQL
+     * @throws AntikytheraException if parsing fails
+     */
+    public void setStatementFromConversionResult(ConversionResult conversionResult) {
+        if (conversionResult == null || !conversionResult.isSuccessful()) {
+            throw new AntikytheraException("Cannot set statement from failed or null conversion result");
+        }
+        
+        String nativeSql = conversionResult.getNativeSql();
+        if (nativeSql == null || nativeSql.trim().isEmpty()) {
+            throw new AntikytheraException("Conversion result contains empty SQL");
+        }
+        
+        try {
+            // Parse the converted SQL (not the original HQL)
+            this.statement = CCJSqlParserUtil.parse(nativeSql);
+            TypeWrapper entity = BaseRepositoryParser.findEntity(entityType);
+            // Apply field name conversion to snake case
+            BasicConverter.convertFieldsToSnakeCase(statement, entity);
+        } catch (JSQLParserException e) {
+            throw new AntikytheraException("Exception parsing converted SQL query: " + nativeSql, e);
+        }
+    }
+
+    /**
+     * Sets the original query string (for HQL queries, this is the HQL; for others, it's the SQL).
+     * This is separate from setQuery() to allow storing HQL while using converted SQL for the statement.
+     *
+     * @param query The original query string
+     */
+    public void setOriginalQuery(String query) {
+        this.originalQuery = query;
     }
 
     public void setQueryType(QueryType qt) {
