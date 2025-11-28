@@ -18,14 +18,21 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Adapter that bridges antikythera's converter interface with raditha's hql-parser.
- * Replaces the mock implementation in HibernateQueryConverter with real ANTLR4-based parsing.
+ * Adapter that bridges antikythera's converter interface with raditha's
+ * hql-parser.
+ * Replaces the mock implementation in HibernateQueryConverter with real
+ * ANTLR4-based parsing.
  */
-public class HQLParserAdapter  {
-    
+public class HQLParserAdapter {
+
     private static final Logger logger = LoggerFactory.getLogger(HQLParserAdapter.class);
-    // Pattern to match SpEL expressions: :#{#variableName}, :#{#object.property}, :#{#object.method()}
+    // Pattern to match SpEL expressions: :#{#variableName}, :#{#object.property},
+    // :#{#object.method()}
     private static final Pattern SPEL_PATTERN = Pattern.compile(":#\\{#([^}]+)\\}");
+    private static final Pattern CONSTRUCTOR_PATTERN = Pattern.compile("(?i)(SELECT\\s+NEW\\s+[\\w.]+\\s*\\()",
+            Pattern.DOTALL);
+    private static final Pattern CAST_PATTERN = Pattern.compile("(?i)CAST\\s*\\([^)]+\\s+AS\\s+[^)]+\\)");
+    private static final Pattern AS_ALIAS_PATTERN = Pattern.compile("(?i)\\s+AS\\s+([a-zA-Z_][a-zA-Z0-9_]*)");
     private final CompilationUnit cu;
     private final HQLParser hqlParser;
     private final HQLToPostgreSQLConverter sqlConverter;
@@ -51,15 +58,15 @@ public class HQLParserAdapter  {
         // Preprocess: Replace SpEL expressions with simple named parameters
         SpELPreprocessingResult preprocessing = preprocessSpELExpressions(jpaQuery);
         String preprocessedQuery = preprocessing.preprocessedQuery;
-        
+
         // Preprocess: Remove AS aliases from inside SELECT NEW constructor expressions
         preprocessedQuery = removeASFromConstructorExpressions(preprocessedQuery);
-        
+
         MetaData analysis = hqlParser.analyze(preprocessedQuery);
 
         Set<String> referencedTables = registerMappings(analysis);
         String nativeSql = sqlConverter.convert(preprocessedQuery, analysis);
-        
+
         // Postprocess: Restore SpEL expressions in the SQL output
         nativeSql = postprocessSpELExpressions(nativeSql, preprocessing.spelMapping);
 
@@ -68,39 +75,36 @@ public class HQLParserAdapter  {
         result.setMetaData(analysis);
         return result;
     }
-    
+
     /**
      * Removes AS aliases from inside SELECT NEW constructor expressions.
      * HQL doesn't allow AS aliases inside constructor argument lists.
-     * Pattern: SELECT NEW ClassName(..., expr AS alias, ...) -> SELECT NEW ClassName(..., expr, ...)
+     * Pattern: SELECT NEW ClassName(..., expr AS alias, ...) -> SELECT NEW
+     * ClassName(..., expr, ...)
      * 
      * This handles cases like:
-     * SELECT NEW DTO(SUM(...) AS discountAmount, ...) -> SELECT NEW DTO(SUM(...), ...)
+     * SELECT NEW DTO(SUM(...) AS discountAmount, ...) -> SELECT NEW DTO(SUM(...),
+     * ...)
      */
     String removeASFromConstructorExpressions(String query) {
         // Pattern to match: SELECT NEW ... ( ... AS identifier ... )
         // Match SELECT NEW followed by qualified class name and opening parenthesis
-        Pattern constructorPattern = Pattern.compile(
-            "(?i)(SELECT\\s+NEW\\s+[\\w.]+\\s*\\()", 
-            Pattern.DOTALL
-        );
-        
-        Matcher matcher = constructorPattern.matcher(query);
+        Matcher matcher = CONSTRUCTOR_PATTERN.matcher(query);
         if (!matcher.find()) {
             return query; // No constructor expression found
         }
-        
+
         int openParenPos = matcher.end() - 1; // Position of opening parenthesis after class name
-        
+
         // Find the matching closing parenthesis for the constructor
         int depth = 0;
         int closeParenPos = -1;
         boolean inString = false;
         char stringChar = 0;
-        
+
         for (int i = openParenPos; i < query.length(); i++) {
             char c = query.charAt(i);
-            
+
             // Handle string literals to avoid counting parens inside strings
             if (!inString && (c == '\'' || c == '"')) {
                 inString = true;
@@ -124,31 +128,31 @@ public class HQLParserAdapter  {
                 }
             }
         }
-        
+
         if (closeParenPos == -1) {
             // Couldn't find matching parenthesis, return as-is
             logger.warn("Could not find matching closing parenthesis for SELECT NEW constructor");
             return query;
         }
-        
+
         // Extract the constructor argument list
         String beforeConstructor = query.substring(0, openParenPos + 1);
         String constructorArgs = query.substring(openParenPos + 1, closeParenPos);
         String afterConstructor = query.substring(closeParenPos);
-        
+
         // Remove AS aliases from inside the constructor arguments
         // Pattern: AS followed by identifier
         // We need to be careful not to remove AS from CAST expressions
         // Strategy: Remove " AS identifier" but preserve "CAST(...AS type)"
-        // We'll do this by first protecting CAST expressions, then removing AS, then restoring CAST
-        
+        // We'll do this by first protecting CAST expressions, then removing AS, then
+        // restoring CAST
+
         // Step 1: Protect CAST expressions by temporarily replacing them
         Map<String, String> castProtections = new HashMap<>();
-        Pattern castPattern = Pattern.compile("(?i)CAST\\s*\\([^)]+\\s+AS\\s+[^)]+\\)");
-        Matcher castMatcher = castPattern.matcher(constructorArgs);
+        Matcher castMatcher = CAST_PATTERN.matcher(constructorArgs);
         StringBuffer protectedArgs = new StringBuffer();
         int castIndex = 0;
-        
+
         while (castMatcher.find()) {
             String castExpr = castMatcher.group();
             String placeholder = "__CAST_PLACEHOLDER_" + castIndex + "__";
@@ -157,28 +161,28 @@ public class HQLParserAdapter  {
             castIndex++;
         }
         castMatcher.appendTail(protectedArgs);
-        
+
         // Step 2: Remove AS aliases from the protected string
         String cleanedArgs = protectedArgs.toString();
         // Match: whitespace + AS + whitespace + identifier (not part of CAST)
-        cleanedArgs = cleanedArgs.replaceAll("(?i)\\s+AS\\s+([a-zA-Z_][a-zA-Z0-9_]*)", "");
-        
+        cleanedArgs = AS_ALIAS_PATTERN.matcher(cleanedArgs).replaceAll("");
+
         // Step 3: Restore CAST expressions
         for (Map.Entry<String, String> entry : castProtections.entrySet()) {
             cleanedArgs = cleanedArgs.replace(entry.getKey(), entry.getValue());
         }
-        
+
         // Step 4: Clean up any double commas that might result
         cleanedArgs = cleanedArgs.replaceAll(",\\s*,", ",");
         cleanedArgs = cleanedArgs.replaceAll("^\\s*,", ""); // Remove leading comma
         cleanedArgs = cleanedArgs.replaceAll(",\\s*$", ""); // Remove trailing comma
-        
-        logger.debug("Removed AS aliases from constructor expression. Original args length: {}, Cleaned: {}", 
-                    constructorArgs.length(), cleanedArgs.length());
-        
+
+        logger.debug("Removed AS aliases from constructor expression. Original args length: {}, Cleaned: {}",
+                constructorArgs.length(), cleanedArgs.length());
+
         return beforeConstructor + cleanedArgs + afterConstructor;
     }
-    
+
     /**
      * Preprocesses SpEL expressions by replacing them with simple named parameters.
      * SpEL expressions like :#{#variableName} are replaced with :spel_param_N
@@ -192,27 +196,27 @@ public class HQLParserAdapter  {
         StringBuffer result = new StringBuffer();
         Matcher matcher = SPEL_PATTERN.matcher(query);
         int paramIndex = 1;
-        
+
         while (matcher.find()) {
             String originalSpel = matcher.group(0); // e.g., :#{#inPatientPhrSearchModel.admissionId}
             String spelContent = matcher.group(1); // e.g., #inPatientPhrSearchModel.admissionId
-            
+
             // Create a simple parameter name
             // Extract a meaningful name from the SpEL content if possible
             String paramName = extractParameterName(spelContent, paramIndex);
             String replacement = ":" + paramName;
-            
+
             spelMapping.put(originalSpel, replacement);
             reverseMapping.put(replacement, originalSpel);
             matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
             paramIndex++;
         }
         matcher.appendTail(result);
-        
+
         logger.debug("Preprocessed {} SpEL expressions in query", spelMapping.size());
         return new SpELPreprocessingResult(result.toString(), spelMapping, reverseMapping);
     }
-    
+
     /**
      * Extracts a meaningful parameter name from SpEL content.
      * For :#{#inPatientPhrSearchModel.admissionId}, extracts "admissionId"
@@ -223,7 +227,7 @@ public class HQLParserAdapter  {
         if (spelContent.startsWith("#")) {
             spelContent = spelContent.substring(1);
         }
-        
+
         // Try to extract the last meaningful identifier
         // For "inPatientPhrSearchModel.admissionId" -> "admissionId"
         // For "inPatientPhrSearchModel.getPayerGroupId()" -> "payerGroupId"
@@ -239,11 +243,11 @@ public class HQLParserAdapter  {
                 return lastPart;
             }
         }
-        
+
         // Fallback to generic name
         return "spel_param_" + index;
     }
-    
+
     /**
      * Postprocesses the SQL to restore SpEL expressions.
      * Replaces the simple parameters back with their original SpEL expressions.
@@ -260,7 +264,7 @@ public class HQLParserAdapter  {
         }
         return result;
     }
-    
+
     /**
      * Result of SpEL preprocessing containing the preprocessed query and mappings.
      */
@@ -268,9 +272,9 @@ public class HQLParserAdapter  {
         final String preprocessedQuery;
         final Map<String, String> spelMapping; // original -> replacement
         final Map<String, String> reverseMapping; // replacement -> original
-        
-        SpELPreprocessingResult(String preprocessedQuery, Map<String, String> spelMapping, 
-                               Map<String, String> reverseMapping) {
+
+        SpELPreprocessingResult(String preprocessedQuery, Map<String, String> spelMapping,
+                Map<String, String> reverseMapping) {
             this.preprocessedQuery = preprocessedQuery;
             this.spelMapping = spelMapping;
             this.reverseMapping = reverseMapping;
@@ -286,9 +290,10 @@ public class HQLParserAdapter  {
     public boolean supportsDialect(DatabaseDialect dialect) {
         return supportedDialects.contains(dialect);
     }
-    
+
     /**
-     * Registers entity and field mappings from EntityMetadata into the hql-parser converter.
+     * Registers entity and field mappings from EntityMetadata into the hql-parser
+     * converter.
      */
     private Set<String> registerMappings(MetaData analysis) {
         Set<String> tables = new HashSet<>();
@@ -299,8 +304,7 @@ public class HQLParserAdapter  {
             String fullName = null;
             if (typeWrapper == null) {
                 fullName = getEntiyNameForEntity(name);
-            }
-            else {
+            } else {
                 fullName = typeWrapper.getFullyQualifiedName();
             }
 
@@ -309,7 +313,7 @@ public class HQLParserAdapter  {
                 logger.warn("No metadata found for entity: {} (fullName: {})", name, fullName);
                 continue;
             }
-            
+
             tables.add(meta.tableName());
             sqlConverter.registerEntityMapping(name, meta.tableName());
 
@@ -320,11 +324,10 @@ public class HQLParserAdapter  {
                     sqlConverter.registerFieldMapping(
                             name,
                             propertyName,
-                            columnName
-                    );
+                            columnName);
                 }
             }
-            
+
             // Collect relationship mappings for implicit join ON clause generation
             if (meta.relationshipMap() != null && !meta.relationshipMap().isEmpty()) {
                 Map<String, JoinMapping> propertyMappings = new HashMap<>();
@@ -334,8 +337,7 @@ public class HQLParserAdapter  {
                     JoinMapping joinMapping = entry.getValue();
                     sqlConverter.registerEntityMapping(
                             joinMapping.targetEntity(),
-                            joinMapping.targetTable()
-                    );
+                            joinMapping.targetTable());
                     logger.debug("Registered join entity mapping: {} -> {}",
                             joinMapping.targetEntity(), joinMapping.targetTable());
                 }
@@ -343,10 +345,11 @@ public class HQLParserAdapter  {
                 relationshipMetadata.put(name, propertyMappings);
             }
         }
-        
-        // Pass relationship metadata to converter for implicit join ON clause generation
+
+        // Pass relationship metadata to converter for implicit join ON clause
+        // generation
         sqlConverter.setRelationshipMetadata(relationshipMetadata);
-        
+
         return tables;
     }
 
@@ -367,23 +370,24 @@ public class HQLParserAdapter  {
                     }
                 }
             }
-        }
-        else if (entity.getClazz().getName().equals(name)) {
+        } else if (entity.getClazz().getName().equals(name)) {
             return entity.getFullyQualifiedName();
         }
         return null;
     }
+
     /**
      * Extracts parameter mappings from the query analysis.
-     * If SpEL mapping is provided, maps the preprocessed parameter names back to original SpEL expressions.
+     * If SpEL mapping is provided, maps the preprocessed parameter names back to
+     * original SpEL expressions.
      */
-    private List<ParameterMapping> extractParameterMappings(MetaData analysis, 
-                                                           Map<String, String> spelMapping) {
+    private List<ParameterMapping> extractParameterMappings(MetaData analysis,
+            Map<String, String> spelMapping) {
         List<ParameterMapping> mappings = new ArrayList<>();
-        
+
         // hql-parser provides parameter names from the preprocessed query
         Set<String> parameters = analysis.getParameters();
-        
+
         // Build reverse lookup: replacement parameter -> original SpEL
         Map<String, String> replacementToOriginal = new HashMap<>();
         if (spelMapping != null) {
@@ -395,17 +399,17 @@ public class HQLParserAdapter  {
                 replacementToOriginal.put(replacementKey, original);
             }
         }
-        
+
         int position = 1;
         for (String paramName : parameters) {
             // Check if this parameter was a SpEL expression replacement
             String originalName = replacementToOriginal.getOrDefault(paramName, ":" + paramName);
-            
+
             // ParameterMapping requires: originalName, position, type, columnName
             ParameterMapping mapping = new ParameterMapping(originalName, position++, Object.class, null);
             mappings.add(mapping);
         }
-        
+
         return mappings;
     }
 }
