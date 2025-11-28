@@ -313,8 +313,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
                         Variable nativeQueryVar = eval.evaluateExpression(nt);
                         Object nativeQueryValue = nativeQueryVar.getValue();
                         // Handle both Boolean objects and primitive booleans
-                        if (nativeQueryValue instanceof Boolean) {
-                            isNativeQuery = ((Boolean) nativeQueryValue).booleanValue();
+                        if (nativeQueryValue instanceof Boolean b) {
+                            isNativeQuery = b;
                         } else if (nativeQueryValue != null) {
                             // Try to parse as boolean string
                             isNativeQuery = Boolean.parseBoolean(nativeQueryValue.toString());
@@ -403,12 +403,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
         }
 
         // Check for quoted table/column names (common in SQL, less common in HQL)
-        if (SQL_QUOTED_FROM_PATTERN.matcher(query).find() ||
-                SQL_QUOTED_JOIN_PATTERN.matcher(query).find()) {
-            return true;
-        }
-
-        return false;
+        return (SQL_QUOTED_FROM_PATTERN.matcher(query).find() ||
+                SQL_QUOTED_JOIN_PATTERN.matcher(query).find());
     }
 
     /**
