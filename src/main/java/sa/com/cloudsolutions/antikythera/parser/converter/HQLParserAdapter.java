@@ -36,11 +36,9 @@ public class HQLParserAdapter {
     private static final Pattern SPEL_PATTERN = Pattern.compile(":#\\{#([^}]+?)\\}");
     private static final Pattern CONSTRUCTOR_PATTERN = Pattern.compile("(?i)(SELECT\\s+NEW\\s+[\\w.]+\\s*\\()",
             Pattern.DOTALL);
-    // Improved CAST pattern to handle one level of nested parentheses, e.g.,
-    // CAST(SUM(x) AS DECIMAL)
-    private static final Pattern CAST_PATTERN = Pattern
-            .compile("(?i)CAST\\s*\\((?:[^()]+|\\([^()]*\\))+\\s+AS\\s+(?:[^()]+|\\([^()]*\\))+\\)");
-    private static final Pattern AS_ALIAS_PATTERN = Pattern.compile("(?i)\\s+AS\\s+([a-zA-Z_][a-zA-Z0-9_]*)");
+    // Pattern to find CAST keywords (used as a starting point, actual matching uses parenthesis balancing)
+    private static final Pattern CAST_KEYWORD_PATTERN = Pattern.compile("(?i)CAST\\s*\\(");
+    private static final Pattern AS_ALIAS_PATTERN = Pattern.compile("(?i)\\s+AS\\s+([^\\d\\W]\\w*)");
     private final CompilationUnit cu;
     private final HQLParser hqlParser;
     private final HQLToPostgreSQLConverter sqlConverter;
@@ -85,6 +83,83 @@ public class HQLParserAdapter {
     }
 
     /**
+     * Skips over a string literal starting at the given position.
+     * Returns the position after the string literal, or the original position if not a string.
+     */
+    private int skipStringLiteral(String text, int pos) {
+        if (pos >= text.length()) {
+            return pos;
+        }
+        char quote = text.charAt(pos);
+        if (quote != '\'' && quote != '"') {
+            return pos;
+        }
+        
+        for (int i = pos + 1; i < text.length(); i++) {
+            if (text.charAt(i) == quote) {
+                // Check for escaped quote (two quotes in a row)
+                if (i + 1 < text.length() && text.charAt(i + 1) == quote) {
+                    i++; // Skip escaped quote
+                } else {
+                    return i + 1; // Return position after closing quote
+                }
+            }
+        }
+        return text.length(); // Unterminated string
+    }
+    
+    /**
+     * Finds the position of the matching closing parenthesis, handling nested parens and strings.
+     * Returns -1 if no matching paren is found.
+     */
+    private int findMatchingParen(String text, int openParenPos) {
+        int depth = 1;
+        
+        for (int i = openParenPos + 1; i < text.length(); i++) {
+            char c = text.charAt(i);
+            
+            // Skip string literals completely
+            if (c == '\'' || c == '"') {
+                i = skipStringLiteral(text, i) - 1; // -1 because loop will increment
+                continue;
+            }
+            
+            // Track parentheses depth
+            if (c == '(') {
+                depth++;
+            } else if (c == ')') {
+                if (--depth == 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+    
+    /**
+     * Finds all CAST expressions in the given text using safe parenthesis balancing.
+     * Returns a list of [start, end] position pairs for each CAST expression.
+     */
+    private List<int[]> findCastExpressions(String text) {
+        List<int[]> results = new ArrayList<>();
+        Matcher matcher = CAST_KEYWORD_PATTERN.matcher(text);
+        
+        while (matcher.find()) {
+            int start = matcher.start();
+            int openParen = matcher.end() - 1;
+            int closeParen = findMatchingParen(text, openParen);
+            
+            if (closeParen != -1) {
+                String expr = text.substring(start, closeParen + 1);
+                if (expr.toUpperCase().contains(" AS ")) {
+                    results.add(new int[]{start, closeParen + 1});
+                }
+            }
+        }
+        return results;
+    }
+
+    /**
      * Removes AS aliases from inside SELECT NEW constructor expressions.
      * HQL doesn't allow AS aliases inside constructor argument lists.
      * Pattern: SELECT NEW ClassName(..., expr AS alias, ...) -> SELECT NEW
@@ -102,43 +177,10 @@ public class HQLParserAdapter {
             return query; // No constructor expression found
         }
 
-        int openParenPos = matcher.end() - 1; // Position of opening parenthesis after class name
-
-        // Find the matching closing parenthesis for the constructor
-        int depth = 0;
-        int closeParenPos = -1;
-        boolean inString = false;
-        char stringChar = 0;
-
-        for (int i = openParenPos; i < query.length(); i++) {
-            char c = query.charAt(i);
-
-            // Handle string literals to avoid counting parens inside strings
-            if (!inString && (c == '\'' || c == '"')) {
-                inString = true;
-                stringChar = c;
-            } else if (inString && c == stringChar) {
-                // Check for escaped quotes
-                if (i + 1 < query.length() && query.charAt(i + 1) == stringChar) {
-                    i++; // Skip escaped quote
-                } else {
-                    inString = false;
-                }
-            } else if (!inString) {
-                if (c == '(') {
-                    depth++;
-                } else if (c == ')') {
-                    depth--;
-                    if (depth == 0) {
-                        closeParenPos = i;
-                        break;
-                    }
-                }
-            }
-        }
-
+        int openParenPos = matcher.end() - 1;
+        int closeParenPos = findMatchingParen(query, openParenPos);
+        
         if (closeParenPos == -1) {
-            // Couldn't find matching parenthesis, return as-is
             logger.warn("Could not find matching closing parenthesis for SELECT NEW constructor");
             return query;
         }
@@ -155,35 +197,28 @@ public class HQLParserAdapter {
         // We'll do this by first protecting CAST expressions, then removing AS, then
         // restoring CAST
 
-        // Step 1: Protect CAST expressions by temporarily replacing them
-        Map<String, String> castProtections = new HashMap<>();
-        Matcher castMatcher = CAST_PATTERN.matcher(constructorArgs);
-        StringBuffer protectedArgs = new StringBuffer();
-        int castIndex = 0;
-
-        while (castMatcher.find()) {
-            String castExpr = castMatcher.group();
-            String placeholder = "__CAST_PLACEHOLDER_" + castIndex + "__";
-            castProtections.put(placeholder, castExpr);
-            castMatcher.appendReplacement(protectedArgs, Matcher.quoteReplacement(placeholder));
-            castIndex++;
+        // Protect CAST expressions by replacing them with placeholders
+        Map<String, String> placeholders = new HashMap<>();
+        List<int[]> castPositions = findCastExpressions(constructorArgs);
+        StringBuilder buffer = new StringBuilder(constructorArgs);
+        
+        // Replace from end to start to preserve indices
+        for (int i = castPositions.size() - 1; i >= 0; i--) {
+            int[] pos = castPositions.get(i);
+            String castExpr = constructorArgs.substring(pos[0], pos[1]);
+            String placeholder = "__CAST_" + i + "__";
+            placeholders.put(placeholder, castExpr);
+            buffer.replace(pos[0], pos[1], placeholder);
         }
-        castMatcher.appendTail(protectedArgs);
-
-        // Step 2: Remove AS aliases from the protected string
-        String cleanedArgs = protectedArgs.toString();
-        // Match: whitespace + AS + whitespace + identifier (not part of CAST)
-        cleanedArgs = AS_ALIAS_PATTERN.matcher(cleanedArgs).replaceAll("");
-
-        // Step 3: Restore CAST expressions
-        for (Map.Entry<String, String> entry : castProtections.entrySet()) {
+        
+        // Remove AS aliases (CAST expressions are now protected by placeholders)
+        String cleanedArgs = AS_ALIAS_PATTERN.matcher(buffer.toString()).replaceAll("");
+        
+        // Restore CAST expressions and clean up extra commas
+        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
             cleanedArgs = cleanedArgs.replace(entry.getKey(), entry.getValue());
         }
-
-        // Step 4: Clean up any double commas that might result
-        cleanedArgs = cleanedArgs.replaceAll(",\\s*,", ",");
-        cleanedArgs = cleanedArgs.replaceAll("^\\s*,", ""); // Remove leading comma
-        cleanedArgs = cleanedArgs.replaceAll(",\\s*$", ""); // Remove trailing comma
+        cleanedArgs = cleanedArgs.replaceAll(",\\s*,", ",").replaceAll("^\\s*,|,\\s*$", "");
 
         logger.debug("Removed AS aliases from constructor expression. Original args length: {}, Cleaned: {}",
                 constructorArgs.length(), cleanedArgs.length());
@@ -247,7 +282,7 @@ public class HQLParserAdapter {
                 lastPart = Character.toLowerCase(lastPart.charAt(3)) + lastPart.substring(4);
             }
             // Use the last part if it's a valid identifier
-            if (lastPart.matches("[a-zA-Z_][a-zA-Z0-9_]*")) {
+            if (lastPart.matches("[^\\d\\W]\\w*")) {
                 return lastPart;
             }
         }
