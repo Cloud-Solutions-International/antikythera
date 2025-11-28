@@ -29,13 +29,17 @@ public class HQLParserAdapter {
     private static final Logger logger = LoggerFactory.getLogger(HQLParserAdapter.class);
 
     /*
-     * Pattern to match SpEL expressions: such as :#{#variableName}, or :#{#object.property}
+     * Pattern to match SpEL expressions: such as :#{#variableName}, or
+     * :#{#object.property}
      * and also :#{#object.method()}
      */
-    private static final Pattern SPEL_PATTERN = Pattern.compile(":#\\{#([^}]+)\\}");
+    private static final Pattern SPEL_PATTERN = Pattern.compile(":#\\{#([^}]+?)\\}");
     private static final Pattern CONSTRUCTOR_PATTERN = Pattern.compile("(?i)(SELECT\\s+NEW\\s+[\\w.]+\\s*\\()",
             Pattern.DOTALL);
-    private static final Pattern CAST_PATTERN = Pattern.compile("(?i)CAST\\s*\\([^)]+\\s+AS\\s+[^)]+\\)");
+    // Improved CAST pattern to handle one level of nested parentheses, e.g.,
+    // CAST(SUM(x) AS DECIMAL)
+    private static final Pattern CAST_PATTERN = Pattern
+            .compile("(?i)CAST\\s*\\((?:[^()]+|\\([^()]*\\))+\\s+AS\\s+(?:[^()]+|\\([^()]*\\))+\\)");
     private static final Pattern AS_ALIAS_PATTERN = Pattern.compile("(?i)\\s+AS\\s+([a-zA-Z_][a-zA-Z0-9_]*)");
     private final CompilationUnit cu;
     private final HQLParser hqlParser;
