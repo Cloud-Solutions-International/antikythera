@@ -220,7 +220,10 @@ public class HQLParserAdapter {
         for (Map.Entry<String, String> entry : placeholders.entrySet()) {
             cleanedArgs = cleanedArgs.replace(entry.getKey(), entry.getValue());
         }
-        cleanedArgs = cleanedArgs.replaceAll(",\\s*,", ",").replaceAll("(?:^\\s*,|,\\s*$)", "");
+        cleanedArgs = cleanedArgs
+                .replaceAll(",\\s*,", ",")
+                .replaceAll("^\\s*,", "")
+                .replaceAll(",\\s*$", "");
 
         logger.debug("Removed AS aliases from constructor expression. Original args length: {}, Cleaned: {}",
                 constructorArgs.length(), cleanedArgs.length());
