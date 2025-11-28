@@ -5,7 +5,10 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import java.util.stream.Stream;
+import org.junit.jupiter.params.provider.Arguments;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.TestHelper;
@@ -41,44 +44,41 @@ class HQLParseAdapterTest extends TestHelper {
     void testGetEntiyNameForEntity(String model) {
         TypeDeclaration<?> type = AntikytheraRunTime.getTypeDeclaration(model).orElseThrow();
         CompilationUnit cu = type.findCompilationUnit().orElseThrow();
-        HQLParserAdapter adapter = new HQLParserAdapter(cu, new TypeWrapper(type));
+        adapter = new HQLParserAdapter(cu, new TypeWrapper(type));
         assertEquals(USER_MODEL, adapter.getEntiyNameForEntity(USER_MODEL));
         assertEquals(USER_MODEL, adapter.getEntiyNameForEntity("User"));
         assertEquals(VEHICAL_MODEL, adapter.getEntiyNameForEntity(VEHICAL_MODEL));
         assertNull(adapter.getEntiyNameForEntity("xx"));
     }
 
-    @Test
-    void testPreprocessSpELExpressions_SimpleVariable() {
-        String query = "SELECT u FROM User u WHERE u.id = :#{#userId}";
-        HQLParserAdapter.SpELPreprocessingResult result = adapter.preprocessSpELExpressions(query);
-
-        assertEquals("SELECT u FROM User u WHERE u.id = :userId", result.preprocessedQuery);
-        assertEquals(1, result.spelMapping.size());
-        assertTrue(result.spelMapping.containsKey(":#{#userId}"));
-        assertEquals(":userId", result.spelMapping.get(":#{#userId}"));
+    static Stream<Arguments> spelPreprocessingProvider() {
+        return Stream.of(
+            Arguments.of(
+                "SELECT u FROM User u WHERE u.id = :#{#userId}",
+                ":#{#userId}",
+                ":userId"
+            ),
+            Arguments.of(
+                "SELECT u FROM User u WHERE u.id = :#{#searchModel.userId}",
+                ":#{#searchModel.userId}",
+                ":userId"
+            ),
+            Arguments.of(
+                "SELECT u FROM User u WHERE u.id = :#{#searchModel.getUserId()}",
+                ":#{#searchModel.getUserId()}",
+                ":userId"
+            )
+        );
     }
 
-    @Test
-    void testPreprocessSpELExpressions_PropertyAccess() {
-        String query = "SELECT u FROM User u WHERE u.id = :#{#searchModel.userId}";
+    @ParameterizedTest
+    @MethodSource("spelPreprocessingProvider")
+    void testPreprocessSpELExpressions(String query, String spelKey, String expectedMapping) {
         HQLParserAdapter.SpELPreprocessingResult result = adapter.preprocessSpELExpressions(query);
-
         assertEquals("SELECT u FROM User u WHERE u.id = :userId", result.preprocessedQuery);
         assertEquals(1, result.spelMapping.size());
-        assertTrue(result.spelMapping.containsKey(":#{#searchModel.userId}"));
-        assertEquals(":userId", result.spelMapping.get(":#{#searchModel.userId}"));
-    }
-
-    @Test
-    void testPreprocessSpELExpressions_MethodCall() {
-        String query = "SELECT u FROM User u WHERE u.id = :#{#searchModel.getUserId()}";
-        HQLParserAdapter.SpELPreprocessingResult result = adapter.preprocessSpELExpressions(query);
-
-        assertEquals("SELECT u FROM User u WHERE u.id = :userId", result.preprocessedQuery);
-        assertEquals(1, result.spelMapping.size());
-        assertTrue(result.spelMapping.containsKey(":#{#searchModel.getUserId()}"));
-        assertEquals(":userId", result.spelMapping.get(":#{#searchModel.getUserId()}"));
+        assertTrue(result.spelMapping.containsKey(spelKey));
+        assertEquals(expectedMapping, result.spelMapping.get(spelKey));
     }
 
     @Test

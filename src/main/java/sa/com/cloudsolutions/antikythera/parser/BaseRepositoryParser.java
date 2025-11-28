@@ -326,8 +326,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 }
 
                 // Fallback: If query looks like SQL (has COUNT(*), FROM table_name pattern,
-                // etc.)
-                // but nativeQuery wasn't detected, log a warning and treat as native SQL
+                // etc.) but nativeQuery wasn't detected, log a warning and treat as native SQL
                 if (!isNativeQuery && looksLikeNativeSQL(queryString)) {
                     logger.warn("Query for method {} appears to be native SQL (contains COUNT(*) or SQL patterns) " +
                             "but nativeQuery attribute was not detected or evaluated to false. " +
