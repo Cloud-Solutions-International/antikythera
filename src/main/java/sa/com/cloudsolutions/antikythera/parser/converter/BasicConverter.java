@@ -65,14 +65,6 @@ public class BasicConverter {
     /**
      * Convert projections, clauses, and joins of a PlainSelect to snake case where applicable.
      * Keeps method small by delegating to focused helpers.
-     */
-    private static void convertPlainSelectToSnakeCase(PlainSelect select, TypeWrapper entity) throws AntikytheraException {
-        convertPlainSelectToSnakeCase(select, entity, false);
-    }
-
-    /**
-     * Convert projections, clauses, and joins of a PlainSelect to snake case where applicable.
-     * Keeps method small by delegating to focused helpers.
      *
      * @param select            the PlainSelect to convert
      * @param entity            the root entity
@@ -151,12 +143,6 @@ public class BasicConverter {
         if (select.getHaving() != null) {
             select.setHaving(BaseRepositoryQuery.convertExpressionToSnakeCase(select.getHaving()));
         }
-    }
-
-    // --- Join processing ----------------------------------------------------
-
-    private static void processJoins(TypeWrapper rootEntity, PlainSelect select) throws AntikytheraException {
-        processJoins(rootEntity, select, false);
     }
 
     private static void processJoins(TypeWrapper rootEntity, PlainSelect select, boolean skipJoinProcessing) throws AntikytheraException {

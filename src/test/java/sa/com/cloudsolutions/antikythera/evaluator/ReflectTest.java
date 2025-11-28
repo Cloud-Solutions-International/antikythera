@@ -1,12 +1,9 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import org.junit.jupiter.api.Test;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 

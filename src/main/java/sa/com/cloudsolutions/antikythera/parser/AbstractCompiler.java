@@ -1067,12 +1067,6 @@ public class AbstractCompiler {
         }
     }
 
-    private void solveInterfaces(ClassOrInterfaceDeclaration cdecl) {
-        // Delegate with a shared visited set so nested/interface lookups don't loop
-        // endlessly.
-        solveInterfaces(cdecl, visitedInterfaces);
-    }
-
     /**
      * Resolves interface implementations for the given class or interface
      * declaration.
@@ -1084,16 +1078,14 @@ public class AbstractCompiler {
      * re-entry while
      * loading compilation units that reference each other.
      */
-    private void solveInterfaces(ClassOrInterfaceDeclaration cdecl, Set<String> visited) {
+    private void solveInterfaces(ClassOrInterfaceDeclaration cdecl) {
         // If we are examining an interface itself (not a concrete class) guard against
         // cycles.
         if (cdecl.isInterface()) {
             String ifaceName = cdecl.getFullyQualifiedName().orElse(null);
-            if (ifaceName != null) {
-                // If already visited, bail out to prevent infinite recursion.
-                if (!visited.add(ifaceName)) {
-                    return;
-                }
+            // If already visited, bail out to prevent infinite recursion.
+            if (ifaceName != null && !visitedInterfaces.add(ifaceName)) {
+                return;
             }
         }
 
@@ -1121,24 +1113,28 @@ public class AbstractCompiler {
                  */
                 CompilationUnit interfaceCu = AntikytheraRunTime.getCompilationUnit(interfaceName);
                 if (interfaceCu != null) {
-                    for (TypeDeclaration<?> ifaceType : interfaceCu.getTypes()) {
-                        if (ifaceType.isClassOrInterfaceDeclaration()) {
-                            ClassOrInterfaceDeclaration ifaceDecl = ifaceType.asClassOrInterfaceDeclaration();
-                            // Only recurse into interfaces; recursing into concrete classes declared in the
-                            // same
-                            // source can cause infinite loops (class -> interface -> class ...).
-                            if (ifaceDecl.isInterface()) {
-                                solveInterfaces(ifaceDecl, visited);
-                            }
-                            for (ClassOrInterfaceType parent : ifaceDecl.getExtendedTypes()) {
-                                String parentName = AbstractCompiler.findFullyQualifiedName(interfaceCu,
-                                        parent.getNameAsString());
-                                if (parentName != null) {
-                                    AntikytheraRunTime.addImplementation(parentName,
-                                            cdecl.getFullyQualifiedName().orElseThrow());
-                                }
-                            }
-                        }
+                    solveInterfaces(cdecl, interfaceCu);
+                }
+            }
+        }
+    }
+
+    private void solveInterfaces(ClassOrInterfaceDeclaration cdecl,CompilationUnit interfaceCu) {
+        for (TypeDeclaration<?> ifaceType : interfaceCu.getTypes()) {
+            if (ifaceType.isClassOrInterfaceDeclaration()) {
+                ClassOrInterfaceDeclaration ifaceDecl = ifaceType.asClassOrInterfaceDeclaration();
+                // Only recurse into interfaces; recursing into concrete classes declared in the
+                // same
+                // source can cause infinite loops (class -> interface -> class ...).
+                if (ifaceDecl.isInterface()) {
+                    solveInterfaces(ifaceDecl);
+                }
+                for (ClassOrInterfaceType parent : ifaceDecl.getExtendedTypes()) {
+                    String parentName = AbstractCompiler.findFullyQualifiedName(interfaceCu,
+                            parent.getNameAsString());
+                    if (parentName != null) {
+                        AntikytheraRunTime.addImplementation(parentName,
+                                cdecl.getFullyQualifiedName().orElseThrow());
                     }
                 }
             }

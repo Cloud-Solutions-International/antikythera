@@ -114,13 +114,14 @@ public class HQLParserAdapter {
      */
     private int findMatchingParen(String text, int openParenPos) {
         int depth = 1;
+        int i = openParenPos + 1;
         
-        for (int i = openParenPos + 1; i < text.length(); i++) {
+        while (i < text.length()) {
             char c = text.charAt(i);
             
             // Skip string literals completely
             if (c == '\'' || c == '"') {
-                i = skipStringLiteral(text, i) - 1; // -1 because loop will increment
+                i = skipStringLiteral(text, i);
                 continue;
             }
             
@@ -132,6 +133,7 @@ public class HQLParserAdapter {
                     return i;
                 }
             }
+            i++;
         }
         return -1;
     }
