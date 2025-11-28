@@ -23,11 +23,15 @@ import java.util.regex.Pattern;
  * Replaces the mock implementation in HibernateQueryConverter with real
  * ANTLR4-based parsing.
  */
+@SuppressWarnings("java:S125")
 public class HQLParserAdapter {
 
     private static final Logger logger = LoggerFactory.getLogger(HQLParserAdapter.class);
-    // Pattern to match SpEL expressions: :#{#variableName}, :#{#object.property},
-    // :#{#object.method()}
+
+    /*
+     * Pattern to match SpEL expressions: such as :#{#variableName}, or :#{#object.property}
+     * and also :#{#object.method()}
+     */
     private static final Pattern SPEL_PATTERN = Pattern.compile(":#\\{#([^}]+)\\}");
     private static final Pattern CONSTRUCTOR_PATTERN = Pattern.compile("(?i)(SELECT\\s+NEW\\s+[\\w.]+\\s*\\()",
             Pattern.DOTALL);
@@ -256,8 +260,7 @@ public class HQLParserAdapter {
         String result = sql;
         // Replace in reverse order to avoid partial matches
         List<Map.Entry<String, String>> entries = new ArrayList<>(reverseMapping.entrySet());
-        Collections.reverse(entries);
-        for (Map.Entry<String, String> entry : entries) {
+        for (Map.Entry<String, String> entry : entries.reversed()) {
             String replacement = entry.getKey();
             String original = entry.getValue();
             result = result.replace(replacement, original);
@@ -359,7 +362,7 @@ public class HQLParserAdapter {
         }
         Optional<String> n = EntityMappingResolver.getFullNamesForEntity(name).stream().findFirst();
         if (n.isPresent()) {
-            return n.stream().findFirst().get();
+            return n.stream().findFirst().orElseThrow();
         }
 
         if (entity.getClazz() == null) {
