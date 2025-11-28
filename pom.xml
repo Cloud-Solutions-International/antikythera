@@ -26,7 +26,7 @@
         <api-framework-version>2.0.0</api-framework-version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <antikythera.agent.path>${project.basedir}/../antikythera-agent/target/antikythera-agent-0.0.2.jar</antikythera.agent.path>
+        <antikythera.agent.path>${settings.localRepository}/com/github/Cloud-Solutions-International/antikythera-agent/1.0.0.2/antikythera-agent-1.0.0.2.jar</antikythera.agent.path>
     </properties>
 
     <repositories>
@@ -58,6 +58,13 @@
             <groupId>com.github.Cloud-Solutions-International</groupId>
             <artifactId>antikythera-common</artifactId>
             <version>0.0.5</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.Cloud-Solutions-International</groupId>
+            <artifactId>antikythera-agent</artifactId>
+            <version>1.0.0.2</version>
+            <scope>test</scope>
         </dependency>
 
         <dependency>
