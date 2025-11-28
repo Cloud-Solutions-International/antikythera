@@ -128,47 +128,10 @@ public final class MethodToSQLConverter {
         return components;
     }
 
-    // Attempts to match a keyword at position 'index' using boundary rules
-    // identical to the original logic.
+    // Attempts to match a keyword at position 'index' using the same boundary rules
+    // as {@link #findNextKeyword(String, int, List)}.
     private static String tryMatchKeyword(String methodName, int index, List<String> keywords) {
-        for (String keyword : keywords) {
-            if (methodName.startsWith(keyword, index)) {
-                int keywordEnd = index + keyword.length();
-
-                boolean isAlwaysKeyword = isAlwaysKeyword(keyword);
-                boolean isLogicalOperator = isLogicalOperator(keyword);
-                boolean isSyntacticSugar = isSyntacticSugar(keyword);
-                boolean followedByLowercase = followedByLowercase(methodName, keywordEnd);
-                boolean followedByUppercase = keywordEnd < methodName.length()
-                        && Character.isUpperCase(methodName.charAt(keywordEnd));
-
-                // For non-always keywords (operators), only accept if not followed by
-                // lowercase.
-                // Additionally, guard logical operators AND/OR so they don't match inside field
-                // names like "OrderId".
-                if (!isAlwaysKeyword) {
-                    if (isLogicalOperator) {
-                        // Accept AND/OR only when followed by an uppercase letter (start of next field)
-                        if (keywordEnd >= methodName.length()
-                                || !Character.isUpperCase(methodName.charAt(keywordEnd))) {
-                            continue;
-                        }
-                    } else if (isSyntacticSugar && followedByUppercase
-                            && isFollowedByFieldWithBooleanOp(methodName, keywordEnd)) {
-                        // IS and EQUAL should not match when followed by a field that ends with a
-                        // boolean operator
-                        // e.g., in "IsActiveIsTrue", skip "Is" so "IsActive" + "IsTrue" are parsed
-                        // but in "IsActive" (at end), "Is" + "Active" should parse correctly
-                        continue;
-                    } else if (followedByLowercase) {
-                        // Other operators are part of a field when followed by lowercase
-                        continue;
-                    }
-                }
-                return keyword;
-            }
-        }
-        return null;
+        return findNextKeyword(methodName, index, keywords);
     }
 
     // Scans characters from 'start' until a valid keyword boundary is reached,
@@ -192,38 +155,46 @@ public final class MethodToSQLConverter {
     // used previously; otherwise null.
     private static String findNextKeyword(String methodName, int index, List<String> keywords) {
         for (String keyword : keywords) {
-            if (methodName.startsWith(keyword, index)) {
-                int keywordEnd = index + keyword.length();
+            if (!methodName.startsWith(keyword, index)) {
+                continue;
+            }
 
-                if (isAlwaysKeyword(keyword)) {
-                    return keyword;
-                }
+            int keywordEnd = index + keyword.length();
 
-                boolean isSyntacticSugar = isSyntacticSugar(keyword);
-                boolean followedByUppercase = keywordEnd < methodName.length()
-                        && Character.isUpperCase(methodName.charAt(keywordEnd));
+            if (isAlwaysKeyword(keyword)) {
+                return keyword;
+            }
 
-                if (isLogicalOperator(keyword)) {
-                    // Accept AND/OR only when followed by an uppercase letter (start of next field)
-                    if (keywordEnd < methodName.length() && Character.isUpperCase(methodName.charAt(keywordEnd))) {
-                        return keyword;
-                    } else {
-                        continue;
-                    }
-                }
-
-                if (isSyntacticSugar && followedByUppercase && isFollowedByFieldWithBooleanOp(methodName, keywordEnd)) {
-                    // IS and EQUAL should not match when followed by a field with boolean operator
-                    continue;
-                }
-
-                // Other operators are valid only if not followed by lowercase
-                if (keywordEnd >= methodName.length() || !Character.isLowerCase(methodName.charAt(keywordEnd))) {
-                    return keyword;
-                }
+            if (isValidOperatorBoundary(methodName, keyword, keywordEnd)) {
+                return keyword;
             }
         }
         return null;
+    }
+
+    private static boolean isValidOperatorBoundary(String methodName, String keyword, int keywordEnd) {
+        if (isLogicalOperator(keyword)) {
+            return hasFollowingUppercase(methodName, keywordEnd);
+        }
+
+        if (isSyntacticSugar(keyword) && isSyntacticSugarFollowedByBooleanOp(methodName, keywordEnd)) {
+            return false;
+        }
+
+        return isGeneralOperatorBoundary(methodName, keywordEnd);
+    }
+
+    private static boolean hasFollowingUppercase(String methodName, int keywordEnd) {
+        return keywordEnd < methodName.length() && Character.isUpperCase(methodName.charAt(keywordEnd));
+    }
+
+    private static boolean isSyntacticSugarFollowedByBooleanOp(String methodName, int keywordEnd) {
+        return hasFollowingUppercase(methodName, keywordEnd)
+                && isFollowedByFieldWithBooleanOp(methodName, keywordEnd);
+    }
+
+    private static boolean isGeneralOperatorBoundary(String methodName, int keywordEnd) {
+        return keywordEnd >= methodName.length() || !Character.isLowerCase(methodName.charAt(keywordEnd));
     }
 
     private static boolean isAlwaysKeyword(String keyword) {
@@ -257,10 +228,6 @@ public final class MethodToSQLConverter {
             pos++;
         }
         return false;
-    }
-
-    private static boolean followedByLowercase(String methodName, int endIndex) {
-        return endIndex < methodName.length() && Character.isLowerCase(methodName.charAt(endIndex));
     }
 
     // Small holder for scan results

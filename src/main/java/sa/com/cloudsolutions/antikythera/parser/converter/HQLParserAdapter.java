@@ -95,15 +95,17 @@ public class HQLParserAdapter {
             return pos;
         }
         
-        for (int i = pos + 1; i < text.length(); i++) {
+        int i = pos + 1;
+        while (i < text.length()) {
             if (text.charAt(i) == quote) {
                 // Check for escaped quote (two quotes in a row)
                 if (i + 1 < text.length() && text.charAt(i + 1) == quote) {
-                    i++; // Skip escaped quote
-                } else {
-                    return i + 1; // Return position after closing quote
+                    i += 2; // Skip escaped quote entirely
+                    continue;
                 }
+                return i + 1; // Return position after closing quote
             }
+            i++;
         }
         return text.length(); // Unterminated string
     }
@@ -128,10 +130,8 @@ public class HQLParserAdapter {
             // Track parentheses depth
             if (c == '(') {
                 depth++;
-            } else if (c == ')') {
-                if (--depth == 0) {
-                    return i;
-                }
+            } else if (c == ')' && --depth == 0) {
+                return i;
             }
             i++;
         }
@@ -220,7 +220,7 @@ public class HQLParserAdapter {
         for (Map.Entry<String, String> entry : placeholders.entrySet()) {
             cleanedArgs = cleanedArgs.replace(entry.getKey(), entry.getValue());
         }
-        cleanedArgs = cleanedArgs.replaceAll(",\\s*,", ",").replaceAll("^\\s*,|,\\s*$", "");
+        cleanedArgs = cleanedArgs.replaceAll(",\\s*,", ",").replaceAll("(?:^\\s*,|,\\s*$)", "");
 
         logger.debug("Removed AS aliases from constructor expression. Original args length: {}, Cleaned: {}",
                 constructorArgs.length(), cleanedArgs.length());
@@ -238,7 +238,7 @@ public class HQLParserAdapter {
     SpELPreprocessingResult preprocessSpELExpressions(String query) {
         Map<String, String> spelMapping = new LinkedHashMap<>(); // original -> replacement
         Map<String, String> reverseMapping = new LinkedHashMap<>(); // replacement -> original
-        StringBuffer result = new StringBuffer();
+        StringBuilder result = new StringBuilder();
         Matcher matcher = SPEL_PATTERN.matcher(query);
         int paramIndex = 1;
 
@@ -373,21 +373,7 @@ public class HQLParserAdapter {
             }
 
             // Collect relationship mappings for implicit join ON clause generation
-            if (meta.relationshipMap() != null && !meta.relationshipMap().isEmpty()) {
-                Map<String, JoinMapping> propertyMappings = new HashMap<>();
-                for (var entry : meta.relationshipMap().entrySet()) {
-                    propertyMappings.put(entry.getKey(), entry.getValue());
-                    // Also register the joined entity's table mapping
-                    JoinMapping joinMapping = entry.getValue();
-                    sqlConverter.registerEntityMapping(
-                            joinMapping.targetEntity(),
-                            joinMapping.targetTable());
-                    logger.debug("Registered join entity mapping: {} -> {}",
-                            joinMapping.targetEntity(), joinMapping.targetTable());
-                }
-                // Use entity name as it appears in HQL (not FQN) as the key
-                relationshipMetadata.put(name, propertyMappings);
-            }
+            registerRelationshipMappings(name, meta, relationshipMetadata);
         }
 
         // Pass relationship metadata to converter for implicit join ON clause
@@ -395,6 +381,24 @@ public class HQLParserAdapter {
         sqlConverter.setRelationshipMetadata(relationshipMetadata);
 
         return tables;
+    }
+
+    private void registerRelationshipMappings(String name, EntityMetadata meta, Map<String, Map<String, JoinMapping>> relationshipMetadata) {
+        if (meta.relationshipMap() != null && !meta.relationshipMap().isEmpty()) {
+            Map<String, JoinMapping> propertyMappings = new HashMap<>();
+            for (var entry : meta.relationshipMap().entrySet()) {
+                propertyMappings.put(entry.getKey(), entry.getValue());
+                // Also register the joined entity's table mapping
+                JoinMapping joinMapping = entry.getValue();
+                sqlConverter.registerEntityMapping(
+                        joinMapping.targetEntity(),
+                        joinMapping.targetTable());
+                logger.debug("Registered join entity mapping: {} -> {}",
+                        joinMapping.targetEntity(), joinMapping.targetTable());
+            }
+            // Use entity name as it appears in HQL (not FQN) as the key
+            relationshipMetadata.put(name, propertyMappings);
+        }
     }
 
     String getEntiyNameForEntity(String name) {

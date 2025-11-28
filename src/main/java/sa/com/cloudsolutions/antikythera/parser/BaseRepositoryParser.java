@@ -307,23 +307,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 // Unescape the string to convert \\n to actual newlines (text blocks issue)
                 String queryString = unescapeJavaString((String) v.getValue());
 
-                boolean isNativeQuery = false;
-                if (nt != null) {
-                    try {
-                        Variable nativeQueryVar = eval.evaluateExpression(nt);
-                        Object nativeQueryValue = nativeQueryVar.getValue();
-                        // Handle both Boolean objects and primitive booleans
-                        if (nativeQueryValue instanceof Boolean b) {
-                            isNativeQuery = b;
-                        } else if (nativeQueryValue != null) {
-                            // Try to parse as boolean string
-                            isNativeQuery = Boolean.parseBoolean(nativeQueryValue.toString());
-                        }
-                    } catch (Exception e) {
-                        logger.warn("Failed to evaluate nativeQuery attribute for method {}, defaulting to HQL: {}",
-                                methodDeclaration.getNameAsString(), e.getMessage());
-                    }
-                }
+                boolean isNativeQuery = evaluateNativeQueryAttribute(nt, methodDeclaration);
 
                 // Fallback: If query looks like SQL (has COUNT(*), FROM table_name pattern,
                 // etc.) but nativeQuery wasn't detected, log a warning and treat as native SQL
@@ -404,6 +388,36 @@ public class BaseRepositoryParser extends AbstractCompiler {
         // Check for quoted table/column names (common in SQL, less common in HQL)
         return (SQL_QUOTED_FROM_PATTERN.matcher(query).find() ||
                 SQL_QUOTED_JOIN_PATTERN.matcher(query).find());
+    }
+
+    /**
+     * Evaluates the nativeQuery attribute from a Query annotation expression.
+     * 
+     * @param nativeQueryExpr the Expression representing the nativeQuery attribute
+     * @param methodDeclaration the method declaration for logging purposes
+     * @return true if the query is native SQL, false otherwise (defaults to false if evaluation fails)
+     */
+    private boolean evaluateNativeQueryAttribute(Expression nativeQueryExpr, MethodDeclaration methodDeclaration) {
+        if (nativeQueryExpr == null) {
+            return false;
+        }
+        
+        try {
+            Variable nativeQueryVar = eval.evaluateExpression(nativeQueryExpr);
+            Object nativeQueryValue = nativeQueryVar.getValue();
+            // Handle both Boolean objects and primitive booleans
+            if (nativeQueryValue instanceof Boolean b) {
+                return b;
+            } else if (nativeQueryValue != null) {
+                // Try to parse as boolean string
+                return Boolean.parseBoolean(nativeQueryValue.toString());
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to evaluate nativeQuery attribute for method {}, defaulting to HQL: {}",
+                    methodDeclaration.getNameAsString(), e.getMessage());
+        }
+        
+        return false;
     }
 
     /**
