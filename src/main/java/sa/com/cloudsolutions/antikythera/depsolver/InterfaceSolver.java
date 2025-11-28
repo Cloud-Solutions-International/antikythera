@@ -9,11 +9,16 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Builds the relation between interfaces and classes that implement them.
  */
 public class InterfaceSolver extends AbstractCompiler {
+
+    // Tracks visited interface FQNs to avoid infinite recursion in cyclic/interface hierarchies.
+    private final Set<String> visitedInterfaces = new HashSet<>();
 
     /**
      * Constructs an InterfaceSolver instance and initializes the superclass.
@@ -39,7 +44,7 @@ public class InterfaceSolver extends AbstractCompiler {
         for (TypeDeclaration<?> t : cu.getTypes()) {
             if (t.isClassOrInterfaceDeclaration() && t.getFullyQualifiedName().isPresent()) {
                 ClassOrInterfaceDeclaration cdecl = t.asClassOrInterfaceDeclaration();
-                solveInterfaces(cdecl);
+                solveInterfaces(cdecl); // now guarded against cycles
                 solveExtends(cdecl);
             }
         }
@@ -56,6 +61,30 @@ public class InterfaceSolver extends AbstractCompiler {
     }
 
     private void solveInterfaces(ClassOrInterfaceDeclaration cdecl) {
+        // Delegate with a shared visited set so nested/interface lookups don't loop endlessly.
+        solveInterfaces(cdecl, visitedInterfaces);
+    }
+
+    /**
+     * Resolves interface implementations for the given class or interface declaration.
+     * Adds implementation records for the current class against all directly implemented interfaces
+     * and their parent interfaces. Uses a visited set to prevent infinite recursion in cases of
+     * cyclic interface inheritance (e.g., A extends B, B extends A) or repeated re-entry while
+     * loading compilation units that reference each other.
+     */
+    private void solveInterfaces(ClassOrInterfaceDeclaration cdecl, Set<String> visited) {
+        // If we are examining an interface itself (not a concrete class) guard against cycles.
+        if (cdecl.isInterface()) {
+            String ifaceName = cdecl.getFullyQualifiedName().orElse(null);
+            if (ifaceName != null) {
+                // If already visited, bail out to prevent infinite recursion.
+                if (!visited.add(ifaceName)) {
+                    return;
+                }
+            }
+        }
+
+        // Only concrete classes (or records) will have implemented interfaces; for interfaces this loop is a no-op.
         for (ClassOrInterfaceType iface : cdecl.getImplementedTypes()) {
             String interfaceName = AbstractCompiler.findFullyQualifiedName(cu, iface.getNameAsString());
             if (interfaceName != null) {
@@ -77,7 +106,11 @@ public class InterfaceSolver extends AbstractCompiler {
                     for (TypeDeclaration<?> ifaceType : interfaceCu.getTypes()) {
                         if (ifaceType.isClassOrInterfaceDeclaration()) {
                             ClassOrInterfaceDeclaration ifaceDecl = ifaceType.asClassOrInterfaceDeclaration();
-                            solveInterfaces(ifaceDecl);
+                            // Only recurse into interfaces; recursing into concrete classes declared in the same
+                            // source can cause infinite loops (class -> interface -> class ...).
+                            if (ifaceDecl.isInterface()) {
+                                solveInterfaces(ifaceDecl, visited);
+                            }
                             for (ClassOrInterfaceType parent : ifaceDecl.getExtendedTypes()) {
                                 String parentName = AbstractCompiler.findFullyQualifiedName(interfaceCu, parent.getNameAsString());
                                 if (parentName != null) {
@@ -91,4 +124,3 @@ public class InterfaceSolver extends AbstractCompiler {
         }
     }
 }
-

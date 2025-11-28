@@ -43,6 +43,21 @@ class InterfaceSolverTest {
         assertEquals(2, impl.size());
         assertTrue(impl.contains("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Contact"));
     }
+
+    /**
+     * Test that cyclic interface hierarchies don't cause infinite recursion.
+     * The fixture has InterfaceA -> InterfaceB -> InterfaceC -> InterfaceA cycle.
+     * This test verifies that the visited set prevents infinite recursion.
+     */
+    @Test
+    void testCyclicInterfacesNoInfiniteRecursion() throws IOException {
+        // Verify that implementations are registered for all interfaces in the hierarchy
+        Set<String> implA = AntikytheraRunTime.findImplementations("sa.com.cloudsolutions.antikythera.depsolver.fixtures.InterfaceA");
+        assertTrue(implA.contains("sa.com.cloudsolutions.antikythera.depsolver.fixtures.ConcreteImplementation"),
+                "ConcreteImplementation should be registered as implementation of InterfaceA");
+
+        // If we get here without a StackOverflowError or hanging, the recursion guard works
+    }
 }
 
 
