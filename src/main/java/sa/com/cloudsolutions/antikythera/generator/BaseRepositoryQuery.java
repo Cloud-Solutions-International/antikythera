@@ -20,8 +20,6 @@ import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.Statement;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
@@ -34,8 +32,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class BaseRepositoryQuery {
-    private static final Logger logger = LoggerFactory.getLogger(BaseRepositoryQuery.class);
-
     /**
      * This is the list of parameters that are defined in the function signature
      */
