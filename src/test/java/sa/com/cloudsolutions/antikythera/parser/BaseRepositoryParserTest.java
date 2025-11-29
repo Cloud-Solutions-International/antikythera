@@ -462,63 +462,44 @@ class BaseRepositoryParserTest {
 
     @Test
     void testCountStarHQL() throws IOException {
-        // This query mimics the one reported by the user.
-        // It uses COUNT(*) which is valid in Hibernate HQL but might fail in the
-        // current parser.
-        String methodCode = """
-                package sa.com.cloudsolutions.antikythera.testhelper.repository;
-                import org.springframework.data.jpa.repository.JpaRepository;
-                import org.springframework.data.jpa.repository.Query;
-                import sa.com.cloudsolutions.antikythera.testhelper.model.User;
-                import java.util.List;
-
-                public interface TestRepo extends JpaRepository<User, Long> {
-                    @Query("SELECT COUNT(*) FROM User u WHERE u.id = :id")
-                    Long countUsers(Long id);
-                }
-                """;
-        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
         BaseRepositoryParser parser = BaseRepositoryParser.create(cu);
         parser.processTypes();
 
-        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("countUsers"))
+                .orElseThrow();
         Callable callable = new Callable(md, null);
 
-        // This is expected to fail currently
         assertDoesNotThrow(() -> {
             parser.buildQueries();
             RepositoryQuery q = parser.getQueryFromRepositoryMethod(callable);
             assertNotNull(q);
+            String sql = q.getQuery();
+            assertTrue(sql.toLowerCase().contains("select count(*)"), "Query should contain SELECT COUNT(*): " + sql);
+            assertTrue(sql.contains("users"), "Query should reference users table: " + sql);
+            // The alias is u, so it might be u.id
+            assertTrue(sql.contains("id"), "Query should reference id column: " + sql);
         });
     }
 
     @Test
     void testInParameterHQL() throws IOException {
-        // This query mimics the one reported by the user containing IN :parameter
-        // without parentheses
-        String methodCode = """
-                package sa.com.cloudsolutions.antikythera.testhelper.repository;
-                import org.springframework.data.jpa.repository.JpaRepository;
-                import org.springframework.data.jpa.repository.Query;
-                import sa.com.cloudsolutions.antikythera.testhelper.model.User;
-                import java.util.List;
-
-                public interface TestRepo extends JpaRepository<User, Long> {
-                    @Query("SELECT u FROM User u WHERE CASE WHEN u.status IN :statusList THEN 1 ELSE 0 END = 1")
-                    List<User> findByStatusIn(List<String> statusList);
-                }
-                """;
-        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
         BaseRepositoryParser parser = BaseRepositoryParser.create(cu);
         parser.processTypes();
 
-        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("findByStatusIn"))
+                .orElseThrow();
         Callable callable = new Callable(md, null);
 
         assertDoesNotThrow(() -> {
             parser.buildQueries();
             RepositoryQuery q = parser.getQueryFromRepositoryMethod(callable);
             assertNotNull(q);
+            String sql = q.getQuery();
+            assertTrue(sql.contains("CASE WHEN"), "Query should contain CASE WHEN: " + sql);
+            assertTrue(sql.contains("IN"), "Query should contain IN: " + sql);
+            assertTrue(sql.contains("first_name"), "Query should reference first_name column: " + sql);
         });
     }
 }
