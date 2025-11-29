@@ -163,59 +163,27 @@ public class BasicConverter {
 
     private static void resolveAndRewriteJoin(Join join, List<TypeWrapper> known) throws AntikytheraException {
         String raw = join.getRightItem().toString();
-        
-        // If the right item is a Table object, check if it's already a real table name
-        // (not an HQL path like "u.vehicles j"). We need to distinguish:
-        // - HQL paths: "u.vehicles j" (alias.field alias) - needs conversion
-        // - Schema-qualified tables: "public.vehicles v" (schema.table alias) - already SQL, skip
-        // - Regular tables: "vehicles v" (table alias) - already SQL, skip
-        if (join.getRightItem() instanceof Table table) {
-            // If the Table has a schema name set, it's definitely a schema-qualified table
-            // (not an HQL path). Skip processing.
-            if (table.getSchemaName() != null && !table.getSchemaName().isEmpty()) {
-                return; // Schema-qualified table, already in SQL format
-            }
-            
-            // If no dot in the string representation, it's a regular table - skip
-            if (!raw.contains(".")) {
-                return; // Already in SQL format (regular table name), no conversion needed
-            }
-            
-            // If it contains a dot but no schema name, check if it's schema-qualified vs HQL path
-            // Schema names are typically longer (4+ chars: "public", "dbo", "schema_name")
-            // HQL aliases are typically short (1-3 chars: "u", "i", "ip")
-            // This heuristic handles cases where schema-qualified tables are represented as
-            // "schema.table alias" in the string but schema isn't set in the Table object
-            String[] dotParts = raw.split("\\.", 2);
-            if (dotParts.length == 2) {
-                String firstPart = dotParts[0].trim();
-                // If first part is 4+ characters, likely a schema name (schema-qualified table)
-                // If first part is 1-3 characters, likely an HQL alias (needs conversion)
-                // This heuristic works because:
-                // - Schema names: "public", "dbo", "my_schema" (typically 4+ chars)
-                // - HQL aliases: "u", "i", "ip", "usr" (typically 1-3 chars)
-                if (firstPart.length() >= 4) {
-                    return; // Likely schema-qualified table, already in SQL format
-                }
-                // Otherwise, treat as HQL path and continue processing
-            }
-        }
-        
-        String[] dotParts = raw.split("\\.");
-        if (dotParts.length != 2) {
-            return; // not an HQL path style join (ignore)
-        }
-        String lhsAlias = dotParts[0];
-        String fieldAndAlias = dotParts[1];
-        String[] fieldParts = fieldAndAlias.split(" ");
-        if (fieldParts.length != 2) return;
-        String fieldName = fieldParts[0];
-        String joinAlias = fieldParts[1];
 
-        // Attempt resolution against each known entity
+        // 1) Short-circuit if the right item already looks like a concrete SQL table reference
+        if (isAlreadySqlRightItem(join, raw)) {
+            return;
+        }
+
+        // 2) Parse expected HQL path form inline: "<lhsAlias>.<fieldName> <joinAlias>"
+        String[] dotParts = raw.split("\\.", 2);
+        if (dotParts.length != 2) return; // not an HQL-style path
+        String lhsAlias = dotParts[0].trim();
+        String[] fieldAlias = dotParts[1].trim().split("\\s+");
+        if (lhsAlias.isEmpty() || fieldAlias.length < 2) return;
+        String fieldName = fieldAlias[0].trim();
+        String joinAlias = fieldAlias[1].trim();
+        if (fieldName.isEmpty() || joinAlias.isEmpty()) return;
+
+        // 3) Attempt resolution against each known entity
         for (TypeWrapper entity : known) {
             Optional<FieldDeclaration> fieldDeclOpt = entity.getType().getFieldByName(fieldName);
             if (fieldDeclOpt.isEmpty()) continue;
+
             FieldDeclaration fieldDecl = fieldDeclOpt.get();
             com.github.javaparser.ast.type.Type targetType = resolveTargetEntityType(fieldDecl);
             TypeWrapper targetWrapper = BaseRepositoryParser.findEntity(targetType);
@@ -223,7 +191,9 @@ public class BasicConverter {
             if (tableName == null) {
                 throw new AntikytheraException("Unable to determine table name for join field '" + fieldName + "' of type " + targetType);
             }
-            if (DatabaseDialect.ORACLE.equals(BaseRepositoryParser.getDialect())) tableName = tableName.replace("\"", "");
+            if (DatabaseDialect.ORACLE.equals(BaseRepositoryParser.getDialect())) {
+                tableName = tableName.replace("\"", "");
+            }
 
             // Replace right side with actual table + alias
             Table rightTable = new Table(tableName);
@@ -237,7 +207,37 @@ public class BasicConverter {
         }
     }
 
-    /** Resolve generic collection element (List<X>) or direct type. */
+    /**
+     * Heuristic to determine if the right item is already a concrete SQL table (and not an HQL path)
+     */
+    private static boolean isAlreadySqlRightItem(Join join, String raw) {
+        if (!(join.getRightItem() instanceof Table table)) {
+            return false; // Not a Table; could be a Subselect or other — let caller handle
+        }
+        // If schema explicitly set, it's a schema-qualified table => already SQL
+        if (table.getSchemaName() != null && !table.getSchemaName().isEmpty()) {
+            return true;
+        }
+        // No dot means it's a simple table name => already SQL
+        if (!raw.contains(".")) {
+            return true;
+        }
+        // If it contains a dot but schema isn't set, distinguish schema.table vs alias.field
+        String[] dotParts = raw.split("\\.", 2);
+        if (dotParts.length == 2) {
+            String firstPart = dotParts[0].trim();
+            // 4+ chars: likely schema (e.g., "public", "dbo", "my_schema"). Treat as SQL.
+            if (firstPart.length() >= 4) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    /**
+     * Resolve generic collection element (List<X>) or direct type.
+     */
     private static com.github.javaparser.ast.type.Type resolveTargetEntityType(FieldDeclaration fd) {
         com.github.javaparser.ast.type.Type resolved = fd.getElementType();
         if (resolved.isClassOrInterfaceType()) {
