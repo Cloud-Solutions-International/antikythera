@@ -491,4 +491,34 @@ class BaseRepositoryParserTest {
             assertNotNull(q);
         });
     }
+
+    @Test
+    void testInParameterHQL() throws IOException {
+        // This query mimics the one reported by the user containing IN :parameter
+        // without parentheses
+        String methodCode = """
+                package sa.com.cloudsolutions.antikythera.testhelper.repository;
+                import org.springframework.data.jpa.repository.JpaRepository;
+                import org.springframework.data.jpa.repository.Query;
+                import sa.com.cloudsolutions.antikythera.testhelper.model.User;
+                import java.util.List;
+
+                public interface TestRepo extends JpaRepository<User, Long> {
+                    @Query("SELECT u FROM User u WHERE CASE WHEN u.status IN :statusList THEN 1 ELSE 0 END = 1")
+                    List<User> findByStatusIn(List<String> statusList);
+                }
+                """;
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(cu);
+        parser.processTypes();
+
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        assertDoesNotThrow(() -> {
+            parser.buildQueries();
+            RepositoryQuery q = parser.getQueryFromRepositoryMethod(callable);
+            assertNotNull(q);
+        });
+    }
 }

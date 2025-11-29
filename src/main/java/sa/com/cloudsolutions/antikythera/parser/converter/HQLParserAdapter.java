@@ -36,7 +36,8 @@ public class HQLParserAdapter {
     private static final Pattern SPEL_PATTERN = Pattern.compile(":#\\{#([^}]+?)\\}");
     private static final Pattern CONSTRUCTOR_PATTERN = Pattern.compile("(?i)(SELECT\\s+NEW\\s+[\\w.]+\\s*\\()",
             Pattern.DOTALL);
-    // Pattern to find CAST keywords (used as a starting point, actual matching uses parenthesis balancing)
+    // Pattern to find CAST keywords (used as a starting point, actual matching uses
+    // parenthesis balancing)
     private static final Pattern CAST_KEYWORD_PATTERN = Pattern.compile("(?i)CAST\\s*\\(");
     private static final Pattern AS_ALIAS_PATTERN = Pattern.compile("(?i)\\s+AS\\s+([^\\d\\W]\\w*)");
     private final CompilationUnit cu;
@@ -84,7 +85,8 @@ public class HQLParserAdapter {
 
     /**
      * Skips over a string literal starting at the given position.
-     * Returns the position after the string literal, or the original position if not a string.
+     * Returns the position after the string literal, or the original position if
+     * not a string.
      */
     private int skipStringLiteral(String text, int pos) {
         if (pos >= text.length()) {
@@ -94,7 +96,7 @@ public class HQLParserAdapter {
         if (quote != '\'' && quote != '"') {
             return pos;
         }
-        
+
         int i = pos + 1;
         while (i < text.length()) {
             if (text.charAt(i) == quote) {
@@ -109,24 +111,25 @@ public class HQLParserAdapter {
         }
         return text.length(); // Unterminated string
     }
-    
+
     /**
-     * Finds the position of the matching closing parenthesis, handling nested parens and strings.
+     * Finds the position of the matching closing parenthesis, handling nested
+     * parens and strings.
      * Returns -1 if no matching paren is found.
      */
     private int findMatchingParen(String text, int openParenPos) {
         int depth = 1;
         int i = openParenPos + 1;
-        
+
         while (i < text.length()) {
             char c = text.charAt(i);
-            
+
             // Skip string literals completely
             if (c == '\'' || c == '"') {
                 i = skipStringLiteral(text, i);
                 continue;
             }
-            
+
             // Track parentheses depth
             if (c == '(') {
                 depth++;
@@ -137,24 +140,25 @@ public class HQLParserAdapter {
         }
         return -1;
     }
-    
+
     /**
-     * Finds all CAST expressions in the given text using safe parenthesis balancing.
+     * Finds all CAST expressions in the given text using safe parenthesis
+     * balancing.
      * Returns a list of [start, end] position pairs for each CAST expression.
      */
     private List<int[]> findCastExpressions(String text) {
         List<int[]> results = new ArrayList<>();
         Matcher matcher = CAST_KEYWORD_PATTERN.matcher(text);
-        
+
         while (matcher.find()) {
             int start = matcher.start();
             int openParen = matcher.end() - 1;
             int closeParen = findMatchingParen(text, openParen);
-            
+
             if (closeParen != -1) {
                 String expr = text.substring(start, closeParen + 1);
                 if (expr.toUpperCase().contains(" AS ")) {
-                    results.add(new int[]{start, closeParen + 1});
+                    results.add(new int[] { start, closeParen + 1 });
                 }
             }
         }
@@ -181,7 +185,7 @@ public class HQLParserAdapter {
 
         int openParenPos = matcher.end() - 1;
         int closeParenPos = findMatchingParen(query, openParenPos);
-        
+
         if (closeParenPos == -1) {
             logger.warn("Could not find matching closing parenthesis for SELECT NEW constructor");
             return query;
@@ -203,7 +207,7 @@ public class HQLParserAdapter {
         Map<String, String> placeholders = new HashMap<>();
         List<int[]> castPositions = findCastExpressions(constructorArgs);
         StringBuilder buffer = new StringBuilder(constructorArgs);
-        
+
         // Replace from end to start to preserve indices
         for (int i = castPositions.size() - 1; i >= 0; i--) {
             int[] pos = castPositions.get(i);
@@ -212,10 +216,10 @@ public class HQLParserAdapter {
             placeholders.put(placeholder, castExpr);
             buffer.replace(pos[0], pos[1], placeholder);
         }
-        
+
         // Remove AS aliases (CAST expressions are now protected by placeholders)
         String cleanedArgs = AS_ALIAS_PATTERN.matcher(buffer.toString()).replaceAll("");
-        
+
         // Restore CAST expressions and clean up extra commas
         for (Map.Entry<String, String> entry : placeholders.entrySet()) {
             cleanedArgs = cleanedArgs.replace(entry.getKey(), entry.getValue());
@@ -386,7 +390,8 @@ public class HQLParserAdapter {
         return tables;
     }
 
-    private void registerRelationshipMappings(String name, EntityMetadata meta, Map<String, Map<String, JoinMapping>> relationshipMetadata) {
+    private void registerRelationshipMappings(String name, EntityMetadata meta,
+            Map<String, Map<String, JoinMapping>> relationshipMetadata) {
         if (meta.relationshipMap() != null && !meta.relationshipMap().isEmpty()) {
             Map<String, JoinMapping> propertyMappings = new HashMap<>();
             for (var entry : meta.relationshipMap().entrySet()) {

@@ -393,15 +393,17 @@ public class BaseRepositoryParser extends AbstractCompiler {
     /**
      * Evaluates the nativeQuery attribute from a Query annotation expression.
      * 
-     * @param nativeQueryExpr the Expression representing the nativeQuery attribute
+     * @param nativeQueryExpr   the Expression representing the nativeQuery
+     *                          attribute
      * @param methodDeclaration the method declaration for logging purposes
-     * @return true if the query is native SQL, false otherwise (defaults to false if evaluation fails)
+     * @return true if the query is native SQL, false otherwise (defaults to false
+     *         if evaluation fails)
      */
     private boolean evaluateNativeQueryAttribute(Expression nativeQueryExpr, MethodDeclaration methodDeclaration) {
         if (nativeQueryExpr == null) {
             return false;
         }
-        
+
         try {
             Variable nativeQueryVar = eval.evaluateExpression(nativeQueryExpr);
             Object nativeQueryValue = nativeQueryVar.getValue();
@@ -416,7 +418,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
             logger.warn("Failed to evaluate nativeQuery attribute for method {}, defaulting to HQL: {}",
                     methodDeclaration.getNameAsString(), e.getMessage());
         }
-        
+
         return false;
     }
 
@@ -433,7 +435,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
      * the newline and leading whitespace on the next line
      * 
      * Note: For text blocks, Java processes line continuation backslashes during
-     * compilation. However, if the value still contains them (e.g., from JavaParser's
+     * compilation. However, if the value still contains them (e.g., from
+     * JavaParser's
      * getValue()), this method will handle them.
      */
     private String unescapeJavaString(String str) {
