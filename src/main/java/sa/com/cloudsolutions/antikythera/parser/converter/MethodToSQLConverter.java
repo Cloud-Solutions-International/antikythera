@@ -513,6 +513,7 @@ public final class MethodToSQLConverter {
      * @param next      The next component.
      * @param ordering  Whether we are in an ORDER BY clause.
      */
+    @SuppressWarnings("java:S1066")
     private static void appendDefaultComponent(StringBuilder sql, String component, String next, boolean ordering) {
         sql.append(BaseRepositoryParser.camelToSnake(component));
         if (!ordering) {
