@@ -41,24 +41,47 @@ public class BasicConverter {
      * @throws AntikytheraException if we are unable to find related entities.
      */
     public static void convertFieldsToSnakeCase(Statement stmt, TypeWrapper entity) throws AntikytheraException {
+        convertFieldsToSnakeCase(stmt, entity, false);
+    }
+
+    /**
+     * Java field names need to be converted to snake case to match the table column.
+     * <p>
+     * This method does not return anything but has a side effect. The changes will be made to the
+     * select statement that is passed in.
+     *
+     * @param stmt            the sql statement
+     * @param entity           a compilation unit representing the entity.
+     * @param skipJoinProcessing if true, skip join processing (for HQL queries already converted by HQLToPostgreSQLConverter)
+     * @throws AntikytheraException if we are unable to find related entities.
+     */
+    public static void convertFieldsToSnakeCase(Statement stmt, TypeWrapper entity, boolean skipJoinProcessing) throws AntikytheraException {
         if (!(stmt instanceof Select sel)) {
             return; // only Select statements supported
         }
-        convertPlainSelectToSnakeCase(sel.getPlainSelect(), entity);
+        convertPlainSelectToSnakeCase(sel.getPlainSelect(), entity, skipJoinProcessing);
     }
 
     /**
      * Convert projections, clauses, and joins of a PlainSelect to snake case where applicable.
      * Keeps method small by delegating to focused helpers.
+     *
+     * @param select            the PlainSelect to convert
+     * @param entity            the root entity
+     * @param skipJoinProcessing if true, skip join processing (for HQL queries already converted)
      */
-    private static void convertPlainSelectToSnakeCase(PlainSelect select, TypeWrapper entity) throws AntikytheraException {
+    private static void convertPlainSelectToSnakeCase(PlainSelect select, TypeWrapper entity, boolean skipJoinProcessing) throws AntikytheraException {
         if (select == null) return;
         normalizeProjection(select);
         convertWhere(select);
         convertGroupBy(select);
         convertOrderBy(select);
         convertHaving(select);
-        processJoins(entity, select);
+        // Only process joins if not already converted by HQLToPostgreSQLConverter
+        // HQL queries have joins already converted to SQL, so skip join processing
+        if (!skipJoinProcessing) {
+            processJoins(entity, select, skipJoinProcessing);
+        }
     }
 
     // --- Projection helpers -------------------------------------------------
@@ -122,9 +145,7 @@ public class BasicConverter {
         }
     }
 
-    // --- Join processing ----------------------------------------------------
-
-    private static void processJoins(TypeWrapper rootEntity, PlainSelect select) throws AntikytheraException {
+    private static void processJoins(TypeWrapper rootEntity, PlainSelect select, boolean skipJoinProcessing) throws AntikytheraException {
         List<Join> joins = select.getJoins();
         if (joins == null || joins.isEmpty()) return;
         List<TypeWrapper> discovered = new ArrayList<>();
@@ -133,7 +154,7 @@ public class BasicConverter {
             var right = j.getRightItem();
             if (right instanceof ParenthesedSelect ps && ps.getSelect() instanceof Select innerSel) {
                 // recurse into nested select body
-                convertPlainSelectToSnakeCase(innerSel.getPlainSelect(), rootEntity);
+                convertPlainSelectToSnakeCase(innerSel.getPlainSelect(), rootEntity, skipJoinProcessing);
                 continue;
             }
             resolveAndRewriteJoin(j, discovered);
@@ -142,21 +163,27 @@ public class BasicConverter {
 
     private static void resolveAndRewriteJoin(Join join, List<TypeWrapper> known) throws AntikytheraException {
         String raw = join.getRightItem().toString();
-        String[] dotParts = raw.split("\\.");
-        if (dotParts.length != 2) {
-            return; // not an HQL path style join (ignore)
-        }
-        String lhsAlias = dotParts[0];
-        String fieldAndAlias = dotParts[1];
-        String[] fieldParts = fieldAndAlias.split(" ");
-        if (fieldParts.length != 2) return;
-        String fieldName = fieldParts[0];
-        String joinAlias = fieldParts[1];
 
-        // Attempt resolution against each known entity
+        // 1) Short-circuit if the right item already looks like a concrete SQL table reference
+        if (isAlreadySqlRightItem(join, raw)) {
+            return;
+        }
+
+        // 2) Parse expected HQL path form inline: "<lhsAlias>.<fieldName> <joinAlias>"
+        String[] dotParts = raw.split("\\.", 2);
+        if (dotParts.length != 2) return; // not an HQL-style path
+        String lhsAlias = dotParts[0].trim();
+        String[] fieldAlias = dotParts[1].trim().split("\\s+");
+        if (lhsAlias.isEmpty() || fieldAlias.length < 2) return;
+        String fieldName = fieldAlias[0].trim();
+        String joinAlias = fieldAlias[1].trim();
+        if (fieldName.isEmpty() || joinAlias.isEmpty()) return;
+
+        // 3) Attempt resolution against each known entity
         for (TypeWrapper entity : known) {
             Optional<FieldDeclaration> fieldDeclOpt = entity.getType().getFieldByName(fieldName);
             if (fieldDeclOpt.isEmpty()) continue;
+
             FieldDeclaration fieldDecl = fieldDeclOpt.get();
             com.github.javaparser.ast.type.Type targetType = resolveTargetEntityType(fieldDecl);
             TypeWrapper targetWrapper = BaseRepositoryParser.findEntity(targetType);
@@ -164,7 +191,9 @@ public class BasicConverter {
             if (tableName == null) {
                 throw new AntikytheraException("Unable to determine table name for join field '" + fieldName + "' of type " + targetType);
             }
-            if (DatabaseDialect.ORACLE.equals(BaseRepositoryParser.getDialect())) tableName = tableName.replace("\"", "");
+            if (DatabaseDialect.ORACLE.equals(BaseRepositoryParser.getDialect())) {
+                tableName = tableName.replace("\"", "");
+            }
 
             // Replace right side with actual table + alias
             Table rightTable = new Table(tableName);
@@ -178,7 +207,37 @@ public class BasicConverter {
         }
     }
 
-    /** Resolve generic collection element (List<X>) or direct type. */
+    /**
+     * Heuristic to determine if the right item is already a concrete SQL table (and not an HQL path)
+     */
+    private static boolean isAlreadySqlRightItem(Join join, String raw) {
+        if (!(join.getRightItem() instanceof Table table)) {
+            return false; // Not a Table; could be a Subselect or other — let caller handle
+        }
+        // If schema explicitly set, it's a schema-qualified table => already SQL
+        if (table.getSchemaName() != null && !table.getSchemaName().isEmpty()) {
+            return true;
+        }
+        // No dot means it's a simple table name => already SQL
+        if (!raw.contains(".")) {
+            return true;
+        }
+        // If it contains a dot but schema isn't set, distinguish schema.table vs alias.field
+        String[] dotParts = raw.split("\\.", 2);
+        if (dotParts.length == 2) {
+            String firstPart = dotParts[0].trim();
+            // 4+ chars: likely schema (e.g., "public", "dbo", "my_schema"). Treat as SQL.
+            if (firstPart.length() >= 4) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    /**
+     * Resolve generic collection element (List<X>) or direct type.
+     */
     private static com.github.javaparser.ast.type.Type resolveTargetEntityType(FieldDeclaration fd) {
         com.github.javaparser.ast.type.Type resolved = fd.getElementType();
         if (resolved.isClassOrInterfaceType()) {

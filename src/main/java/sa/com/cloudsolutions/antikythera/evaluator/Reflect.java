@@ -41,6 +41,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Reflect {
     public static final String ANTIKYTHERA = "Antikythera";
@@ -79,7 +80,6 @@ public class Reflect {
     public static final String JAVA_UTIL_LIST = "java.util.List";
     public static final String JAVA_UTIL_SET = "java.util.Set";
     public static final String JAVA_UTIL_MAP = "java.util.Map";
-
 
     /**
      * Keeps a map of wrapper types to their primitive counterpart
@@ -146,36 +146,86 @@ public class Reflect {
 
     }
 
+    private static final ClassValue<Map<String, Method>> METHOD_CACHE = new ClassValue<>() {
+        @Override
+        protected Map<String, Method> computeValue(Class<?> type) {
+            return new ConcurrentHashMap<>();
+        }
+    };
+
+    private static final ClassValue<Map<String, Constructor<?>>> CONSTRUCTOR_CACHE = new ClassValue<>() {
+        @Override
+        protected Map<String, Constructor<?>> computeValue(Class<?> type) {
+            return new ConcurrentHashMap<>();
+        }
+    };
+
+    private static String generateMethodKey(String methodName, Class<?>[] argumentTypes) {
+        StringBuilder key = new StringBuilder(methodName);
+        if (argumentTypes != null) {
+            for (Class<?> type : argumentTypes) {
+                if (type == null) {
+                    key.append("#null");
+                } else {
+                    key.append('#').append(type.getName());
+                }
+            }
+        }
+        return key.toString();
+    }
+
+    private static String generateConstructorKey(Class<?>[] argumentTypes) {
+        StringBuilder key = new StringBuilder("<init>");
+        if (argumentTypes != null) {
+            for (Class<?> type : argumentTypes) {
+                if (type == null) {
+                    key.append("#null");
+                } else {
+                    key.append('#').append(type.getName());
+                }
+            }
+        }
+        return key.toString();
+    }
+
     private Reflect() {
     }
 
     /**
      * Build the suitable set of arguments for use with a reflective method call
      *
-     * @param methodCall ObjectCreationExpr from java parser, which will be used as the basis for finding the
-     *                   *            method to be called along with its arguments.
+     * @param methodCall ObjectCreationExpr from java parser, which will be used as
+     *                   the basis for finding the
+     *                   * method to be called along with its arguments.
      * @param evaluator  the evaluator to use to evaluate the arguments if any
-     * @return A ReflectionArguments object which contains all the information required to execute a method
-     * using reflection.
-     * @throws AntikytheraException         if something goes wrong with the parser related code
+     * @return A ReflectionArguments object which contains all the information
+     *         required to execute a method
+     *         using reflection.
+     * @throws AntikytheraException         if something goes wrong with the parser
+     *                                      related code
      * @throws ReflectiveOperationException if reflective operations fail
      */
     public static ReflectionArguments buildArguments(MethodCallExpr methodCall, Evaluator evaluator, Variable scope)
             throws AntikytheraException, ReflectiveOperationException {
-        ReflectionArguments args = buildArgumentsCommon(methodCall.getNameAsString(), methodCall.getArguments(), evaluator, scope);
+        ReflectionArguments args = buildArgumentsCommon(methodCall.getNameAsString(), methodCall.getArguments(),
+                evaluator, scope);
         args.setMethodCallExpression(methodCall);
         return args;
     }
 
     /**
-     * Build the set of arguments to be used with instantiating a class using reflection.
+     * Build the set of arguments to be used with instantiating a class using
+     * reflection.
      *
-     * @param oce       ObjectCreationExpr from java parser , which will be used as the basis for finding the right
+     * @param oce       ObjectCreationExpr from java parser , which will be used as
+     *                  the basis for finding the right
      *                  constructor to use.
      * @param evaluator the evaluator to use to evaluate the arguments if any
-     * @return A ReflectionArguments object which contains all the information required to execute a method
-     * *          using reflection.
-     * @throws AntikytheraException         if the reflection arguments cannot be solved
+     * @return A ReflectionArguments object which contains all the information
+     *         required to execute a method
+     *         * using reflection.
+     * @throws AntikytheraException         if the reflection arguments cannot be
+     *                                      solved
      * @throws ReflectiveOperationException if the reflective methods failed.
      */
     public static ReflectionArguments buildArguments(ObjectCreationExpr oce, Evaluator evaluator, Variable scope)
@@ -186,7 +236,7 @@ public class Reflect {
     }
 
     private static ReflectionArguments buildArgumentsCommon(String methodName, List<Expression> arguments,
-                                                            Evaluator evaluator, Variable scope)
+            Evaluator evaluator, Variable scope)
             throws AntikytheraException, ReflectiveOperationException {
         Variable[] argValues = new Variable[arguments.size()];
         Class<?>[] argumentTypes = new Class<?>[arguments.size()];
@@ -249,13 +299,12 @@ public class Reflect {
             if (evaluator != null) {
                 Object proxy = Proxy.newProxyInstance(
                         argumentTypes[i].getClassLoader(),
-                        new Class<?>[]{functional},
-                        new FunctionalInvocationHandler(evaluator)
-                );
+                        new Class<?>[] { functional },
+                        new FunctionalInvocationHandler(evaluator));
                 args[i] = proxy;
                 argumentTypes[i] = functional;
             }
-        } else if (args[i] instanceof Evaluator eval){
+        } else if (args[i] instanceof Evaluator eval) {
             MethodInterceptor interceptor = new MethodInterceptor(eval);
             try {
                 Class<?> c = AKBuddy.createDynamicClass(interceptor);
@@ -318,7 +367,7 @@ public class Reflect {
             case INTEGER -> new IntegerLiteralExpr(value.toString());
             case "Long" -> new LongLiteralExpr(value.toString());
             case DOUBLE, FLOAT -> new DoubleLiteralExpr(value.toString());
-            case PRIMITIVE_BOOLEAN , BOOLEAN -> new BooleanLiteralExpr(Boolean.parseBoolean(value.toString()));
+            case PRIMITIVE_BOOLEAN, BOOLEAN -> new BooleanLiteralExpr(Boolean.parseBoolean(value.toString()));
             case CHARACTER -> new CharLiteralExpr(value.toString().charAt(0));
             default -> new StringLiteralExpr(value.toString());
         };
@@ -362,12 +411,12 @@ public class Reflect {
             case "Long", DOUBLE, INTEGER, FLOAT, BOOLEAN -> {
                 Expression scope = new NameExpr(typeName);
                 Expression mce = new MethodCallExpr(scope, "valueOf")
-                    .addArgument(new StringLiteralExpr(initialValue.toString()));
+                        .addArgument(new StringLiteralExpr(initialValue.toString()));
                 v.setInitializer(List.of(mce));
             }
             case JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST -> {
                 ObjectCreationExpr init = new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName("ArrayList<>"));
+                        .setType(new ClassOrInterfaceType().setName("ArrayList<>"));
                 v.setInitializer(List.of(init));
             }
             case JAVA_UTIL_SET, JAVA_UTIL_HASH_SET -> {
@@ -424,7 +473,7 @@ public class Reflect {
         String baseType = qualifiedName.substring(0, qualifiedName.length() - 2);
         return switch (baseType) {
             case STRING, JAVA_LANG_STRING -> {
-                String[] arr = new String[]{ANTIKYTHERA};
+                String[] arr = new String[] { ANTIKYTHERA };
                 Variable v = new Variable(arr);
                 ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(STRING))
@@ -433,7 +482,7 @@ public class Reflect {
                 yield v;
             }
             case INTEGER, JAVA_LANG_INTEGER -> {
-                Integer[] arr = new Integer[]{1};
+                Integer[] arr = new Integer[] { 1 };
                 Variable v = new Variable(arr);
                 ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(INTEGER))
@@ -442,7 +491,7 @@ public class Reflect {
                 yield v;
             }
             case LONG, JAVA_LANG_LONG -> {
-                Long[] arr = new Long[]{1L};
+                Long[] arr = new Long[] { 1L };
                 Variable v = new Variable(arr);
                 ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName("Long"))
@@ -451,7 +500,7 @@ public class Reflect {
                 yield v;
             }
             case DOUBLE, JAVA_LANG_DOUBLE -> {
-                Double[] arr = new Double[]{1.0};
+                Double[] arr = new Double[] { 1.0 };
                 Variable v = new Variable(arr);
                 ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(DOUBLE))
@@ -460,7 +509,7 @@ public class Reflect {
                 yield v;
             }
             case BOOLEAN, JAVA_LANG_BOOLEAN -> {
-                Boolean[] arr = new Boolean[]{true};
+                Boolean[] arr = new Boolean[] { true };
                 Variable v = new Variable(arr);
                 ArrayCreationExpr init = new ArrayCreationExpr()
                         .setElementType(new ClassOrInterfaceType().setName(BOOLEAN))
@@ -475,18 +524,18 @@ public class Reflect {
     public static Variable generateDefaultVariable(String qualifiedName) {
         return switch (qualifiedName) {
             case "List", JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST, "java.lang.Iterable" ->
-                    createVariable(new ArrayList<>(), JAVA_UTIL_ARRAY_LIST, null);
+                createVariable(new ArrayList<>(), JAVA_UTIL_ARRAY_LIST, null);
             case "java.util.LinkedList" -> createVariable(new LinkedList<>(), "java.util.LinkedList", null);
             case "Map", JAVA_UTIL_MAP, JAVA_UTIL_HASH_MAP ->
-                    createVariable(new HashMap<>(), JAVA_UTIL_HASH_MAP, null);
+                createVariable(new HashMap<>(), JAVA_UTIL_HASH_MAP, null);
             case "java.util.TreeMap" -> createVariable(new TreeMap<>(), "java.util.TreeMap", null);
             case "Set", JAVA_UTIL_SET, JAVA_UTIL_HASH_SET ->
-                    createVariable(new HashSet<>(), JAVA_UTIL_HASH_SET, null);
+                createVariable(new HashSet<>(), JAVA_UTIL_HASH_SET, null);
             case "java.util.TreeSet" -> createVariable(new TreeSet<>(), "java.util.TreeSet", null);
             case JAVA_UTIL_OPTIONAL, OPTIONAL -> createVariable(Optional.empty(), JAVA_UTIL_OPTIONAL, null);
             case BOOLEAN, PRIMITIVE_BOOLEAN, JAVA_LANG_BOOLEAN -> createVariable(true, BOOLEAN, "true");
             case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, JAVA_LANG_DOUBLE ->
-                    createVariable(0.0, DOUBLE, "0.0");
+                createVariable(0.0, DOUBLE, "0.0");
             case INTEGER, "int", JAVA_LANG_INTEGER -> createVariable(0, INTEGER, "0");
             case "Long", "long", JAVA_LANG_LONG -> createVariable(0L, "Long", "0");
             case STRING, JAVA_LANG_STRING -> {
@@ -503,7 +552,7 @@ public class Reflect {
             case JAVA_UTIL_OPTIONAL, OPTIONAL -> createVariable(Optional.empty(), JAVA_UTIL_OPTIONAL, null);
             case BOOLEAN, PRIMITIVE_BOOLEAN, JAVA_LANG_BOOLEAN -> createVariable(true, BOOLEAN, "true");
             case PRIMITIVE_FLOAT, FLOAT, PRIMITIVE_DOUBLE, DOUBLE, JAVA_LANG_DOUBLE ->
-                    createVariable(1.0, DOUBLE, "1.0");
+                createVariable(1.0, DOUBLE, "1.0");
             case INTEGER, "int", JAVA_LANG_INTEGER -> createVariable(1, INTEGER, "0");
             case "Long", "long", JAVA_LANG_LONG -> createVariable(1L, "Long", "0");
             case STRING, JAVA_LANG_STRING -> {
@@ -518,9 +567,10 @@ public class Reflect {
     /**
      * Finds a matching method using parameters.
      * <p>
-     * This function has side effects. The paramTypes in reflectionArguments may end up being
-     * converted from a boxed to primitive or vice versa.
-     * This is because the Variable class that we use has an Object representing the value.
+     * This function has side effects. The paramTypes in reflectionArguments may end
+     * up being converted from a boxed to primitive or vice versa.
+     * This is because the Variable class that we use has an Object representing the
+     * value.
      * Whereas some of the methods have parameters that require a primitive type.
      * Hence, the conversion needs to happen.
      *
@@ -533,6 +583,16 @@ public class Reflect {
         Class<?>[] argumentTypes = reflectionArguments.getArgumentTypes();
         Object[] arguments = reflectionArguments.getArguments();
 
+        String key = generateMethodKey(methodName, argumentTypes);
+        Map<String, Method> methods = METHOD_CACHE.get(clazz);
+        Method cachedMethod = methods.get(key);
+
+        if (isCacheHit(cachedMethod, argumentTypes, arguments)) {
+            // Apply side effects to argumentTypes
+            reflectionArguments.setMethod(cachedMethod);
+            return cachedMethod;
+        }
+
         for (Method m : getMethodsByName(clazz, methodName)) {
             Class<?>[] parameterTypes = m.getParameterTypes();
 
@@ -542,6 +602,7 @@ public class Reflect {
             }
 
             if (matchParameters(argumentTypes, parameterTypes, arguments, isVarArgs)) {
+                methods.put(key, m);
                 reflectionArguments.setMethod(m);
                 return m;
             }
@@ -549,30 +610,40 @@ public class Reflect {
         return null;
     }
 
-    private static boolean isArgumentCountValid(Class<?>[] argumentTypes, Class<?>[] parameterTypes, boolean isVarArgs) {
-        if (argumentTypes == null) return false;
-        if (!isVarArgs && parameterTypes.length != argumentTypes.length) return false;
+    private static boolean isCacheHit(java.lang.reflect.Executable cachedExecutable, Class<?>[] argumentTypes,
+            Object[] arguments) {
+        return cachedExecutable != null && matchParameters(argumentTypes, cachedExecutable.getParameterTypes(),
+                arguments, cachedExecutable.isVarArgs());
+    }
+
+    private static boolean isArgumentCountValid(Class<?>[] argumentTypes, Class<?>[] parameterTypes,
+            boolean isVarArgs) {
+        if (argumentTypes == null)
+            return false;
+        if (!isVarArgs && parameterTypes.length != argumentTypes.length)
+            return false;
         return !(isVarArgs && argumentTypes.length < parameterTypes.length - 1);
     }
 
     @SuppressWarnings("java:S1872")
-    private static boolean matchParameters(Class<?>[] argumentTypes, Class<?>[] parameterTypes, Object[] arguments, boolean isVarArgs) {
+    private static boolean matchParameters(Class<?>[] argumentTypes, Class<?>[] parameterTypes, Object[] arguments,
+            boolean isVarArgs) {
         int regularParamCount = isVarArgs ? parameterTypes.length - 1 : parameterTypes.length;
         for (int i = 0; i < regularParamCount; i++) {
             if (matchArgumentVsParameter(argumentTypes, parameterTypes, arguments, i) ||
-                parameterTypes[i].getName().equals("java.lang.Object")) {
+                    parameterTypes[i].equals(Object.class)) {
                 continue;
             }
             return false;
         }
         if (isVarArgs && argumentTypes.length >= regularParamCount) {
             Class<?> varArgComponentType = parameterTypes[parameterTypes.length - 1].getComponentType();
-            
+
             // Special case for Arrays.asList and similar methods with generic varargs
             if (varArgComponentType.equals(Object.class)) {
                 return true;
             }
-            
+
             for (int i = regularParamCount; i < argumentTypes.length; i++) {
                 if (!matchVarArg(varArgComponentType, argumentTypes[i], arguments[i])) {
                     return false;
@@ -585,23 +656,25 @@ public class Reflect {
     @SuppressWarnings("java:S1872")
     private static boolean matchVarArg(Class<?> varArgComponentType, Class<?> argType, Object argument) {
         if (argument == null ||
-            varArgComponentType.isAssignableFrom(argType) ||
-            varArgComponentType.equals(argType) ||
-            varArgComponentType.getName().equals("java.lang.Object")) {
+                varArgComponentType.isAssignableFrom(argType) ||
+                varArgComponentType.equals(argType) ||
+                varArgComponentType.equals(Object.class)) {
             return true;
         }
-        return  (
-                (wrapperToPrimitive.get(varArgComponentType) != null && wrapperToPrimitive.get(varArgComponentType).equals(argType)) ||
-                (primitiveToWrapper.get(varArgComponentType) != null && primitiveToWrapper.get(varArgComponentType).equals(argType))
-        );
+        return ((wrapperToPrimitive.get(varArgComponentType) != null
+                && wrapperToPrimitive.get(varArgComponentType).equals(argType)) ||
+                (primitiveToWrapper.get(varArgComponentType) != null
+                        && primitiveToWrapper.get(varArgComponentType).equals(argType)));
     }
 
     /**
      * Get methods matching a name from the given class
-     * by using this you are probably making one more iteration than you have to, but it's worth
+     * by using this you are probably making one more iteration than you have to,
+     * but it's worth
      * the reduction in method complexity.
+     * 
      * @param clazz the haystack to search
-     * @param name the needle to find.
+     * @param name  the needle to find.
      * @return a list of methods that match the name
      */
     public static List<Method> getMethodsByName(Class<?> clazz, String name) {
@@ -611,67 +684,89 @@ public class Reflect {
                 methods.add(m);
             }
         }
-
+        methods.sort(java.util.Comparator.comparing(Method::toString));
         return methods;
     }
 
     /**
-     * <p>Find a constructor matching the given parameters.</p>
+     * <p>
+     * Find a constructor matching the given parameters.
+     * </p>
      *
-     * This method has side effects. The argumentTypes may end up being converted from a boxed to primitive
+     * This method has side effects. The argumentTypes may end up being converted
+     * from a boxed to primitive
      * or vice verce
      *
-     * @param clazz      the Class for which we need to find a constructor
+     * @param clazz         the Class for which we need to find a constructor
      * @param argumentTypes the types of the parameters we are looking for.
      * @return a Constructor instance or null.
      */
-    @SuppressWarnings("java:S1452")
-    public static Constructor<?> findConstructor(Class<?> clazz, Class<?>[] argumentTypes, Object[] arguments) {
+    @SuppressWarnings("unchecked")
+    public static <T> Constructor<T> findConstructor(Class<T> clazz, Class<?>[] argumentTypes, Object[] arguments) {
+        String key = generateConstructorKey(argumentTypes);
+        Map<String, Constructor<?>> constructors = CONSTRUCTOR_CACHE.get(clazz);
+        Constructor<?> cachedConstructor = constructors.get(key);
+
+        if (isCacheHit(cachedConstructor, argumentTypes, arguments)) {
+            // Apply side effects to argumentTypes
+            return (Constructor<T>) cachedConstructor;
+        }
+
         for (Constructor<?> c : clazz.getDeclaredConstructors()) {
             Class<?>[] parameterTypes = c.getParameterTypes();
-            if (parameterTypes.length != argumentTypes.length) {
+            boolean isVarArgs = c.isVarArgs();
+
+            if (!isArgumentCountValid(argumentTypes, parameterTypes, isVarArgs)) {
                 continue;
             }
-            boolean found = true;
-            for (int i = 0; i < argumentTypes.length; i++) {
-                if (matchArgumentVsParameter(argumentTypes, parameterTypes, arguments, i)) continue;
-                found = false;
-            }
-            if (found) {
-                return c;
+
+            if (matchParameters(argumentTypes, parameterTypes, arguments, isVarArgs)) {
+                constructors.put(key, c);
+                return (Constructor<T>) c;
             }
         }
         return null;
     }
 
     /**
-     * <p>Determine if the ith parameter matches the ith argument</p>
+     * <p>
+     * Determine if the ith parameter matches the ith argument
+     * </p>
      *
-     * <p>This method does part of it's job through side effects, hence the reason that arrays are
-     * passed as arguments instead of single values.</p>
+     * <p>
+     * This method does part of it's job through side effects, hence the reason that
+     * arrays are
+     * passed as arguments instead of single values.
+     * </p>
      *
-     * @param argumentTypes the array of types that we are trying to pass in as arguments
-     * @param parameterTypes the array of types that the function is expecting as parameters
-     * @param i the position in the array that we are looking at.
-     *          arrays are used because the function operates via side effects.
+     * @param argumentTypes  the array of types that we are trying to pass in as
+     *                       arguments
+     * @param parameterTypes the array of types that the function is expecting as
+     *                       parameters
+     * @param i              the position in the array that we are looking at.
+     *                       arrays are used because the function operates via side
+     *                       effects.
      * @return true if a match has been found.
      */
     private static boolean matchArgumentVsParameter(Class<?>[] argumentTypes, Class<?>[] parameterTypes,
-                                                    Object[] arguments, int i) {
+            Object[] arguments, int i) {
         if (arguments.length < parameterTypes.length) {
             return false;
         }
         Class<?> parameterType = parameterTypes[i];
 
-        if (arguments[i] == null || parameterType.isAssignableFrom(argumentTypes[i]) || parameterType.equals(argumentTypes[i])) {
+        if (arguments[i] == null || parameterType.isAssignableFrom(argumentTypes[i])
+                || parameterType.equals(argumentTypes[i])) {
             return true;
         }
 
-        if (wrapperToPrimitive.get(parameterType) != null && wrapperToPrimitive.get(parameterType).equals(argumentTypes[i])) {
+        if (wrapperToPrimitive.get(parameterType) != null
+                && wrapperToPrimitive.get(parameterType).equals(argumentTypes[i])) {
             argumentTypes[i] = wrapperToPrimitive.get(parameterType);
             return true;
         }
-        if (primitiveToWrapper.get(parameterType) != null && primitiveToWrapper.get(parameterType).equals(argumentTypes[i])) {
+        if (primitiveToWrapper.get(parameterType) != null
+                && primitiveToWrapper.get(parameterType).equals(argumentTypes[i])) {
             argumentTypes[i] = primitiveToWrapper.get(parameterType);
             return true;
         }
@@ -706,17 +801,20 @@ public class Reflect {
     public static Method findAccessibleMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
         // First check direct method lookup
         Method method = Reflect.findMethod(clazz, reflectionArguments);
-        if (method != null) return method;
+        if (method != null)
+            return method;
 
         // Search interfaces
         for (Class<?> iface : clazz.getInterfaces()) {
             method = Reflect.findMethod(iface, reflectionArguments);
-            if (method != null) return method;
+            if (method != null)
+                return method;
 
             // Try super-interfaces
             for (Class<?> superIface : iface.getInterfaces()) {
                 method = findAccessibleMethod(superIface, reflectionArguments);
-                if (method != null) return method;
+                if (method != null)
+                    return method;
             }
         }
 
@@ -780,7 +878,8 @@ public class Reflect {
 
     public static boolean isPrimitiveOrBoxed(String type) {
         try {
-            return primitiveToWrapper.containsKey(getComponentClass(type)) || wrapperToPrimitive.containsKey(getComponentClass(type));
+            return primitiveToWrapper.containsKey(getComponentClass(type))
+                    || wrapperToPrimitive.containsKey(getComponentClass(type));
         } catch (ClassNotFoundException e) {
             return false;
         }

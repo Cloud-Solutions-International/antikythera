@@ -102,7 +102,7 @@ class MethodToSQLConverterTest {
         StringBuilder sql = new StringBuilder();
         MethodToSQLConverter.buildSelectAndWhereClauses(
                 List.of("findBy", "Name", "StartingWith", "And", "Email", "EndingWith"), sql, "users");
-        assertEquals("SELECT * FROM users WHERE name  LIKE ?  AND email  LIKE ? ", sql.toString());
+        assertEquals("SELECT * FROM users WHERE name LIKE ?  AND email LIKE ? ", sql.toString());
     }
 
     @Test
@@ -138,7 +138,8 @@ class MethodToSQLConverterTest {
 
     @Test
     void testBuildSelectAndWhereClauses_LowercaseStartingFieldName() {
-        // Test realistic scenario: field starting with lowercase (e.g., eApprovalStatus)
+        // Test realistic scenario: field starting with lowercase (e.g.,
+        // eApprovalStatus)
         // This demonstrates the fix for processing methods like:
         // findByeApprovalStatusIsNotNull
         StringBuilder sql = new StringBuilder();
@@ -149,10 +150,128 @@ class MethodToSQLConverterTest {
 
     @Test
     void testBuildSelectAndWhereClauses_MultipleLowercaseFieldsAnonymized() {
-        // Anonymized test: multiple fields starting with lowercase letters separated by And
+        // Anonymized test: multiple fields starting with lowercase letters separated by
+        // And
         StringBuilder sql = new StringBuilder();
         List<String> components = List.of("findBy", "xStatus", "IsNot", "And", "yDeleted", "And", "zActive");
         MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "records");
-        assertEquals("SELECT * FROM records WHERE x_status  != ?  AND y_deleted = ?  AND z_active = ? ", sql.toString());
+        assertEquals("SELECT * FROM records WHERE x_status  != ?  AND y_deleted = ?  AND z_active = ? ",
+                sql.toString());
+    }
+
+    @Test
+    void testExtractComponents_DoesNotSplitInsideOrderFields() {
+        List<String> components = MethodToSQLConverter.extractComponents("findByOrderIdAndOrderTypeAndIsActive");
+        assertEquals(List.of("findBy", "OrderId", "And", "OrderType", "And", "Is", "Active"), components,
+                "Components should not split 'Or' inside OrderId/OrderType");
+    }
+
+    @Test
+    void testSQL_For_OrderId_OrderType_IsActive() {
+        List<String> components = MethodToSQLConverter.extractComponents("findByOrderIdAndOrderTypeAndIsActive");
+        StringBuilder sql = new StringBuilder();
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "orders");
+        assertEquals("SELECT * FROM orders WHERE order_id = ?  AND order_type = ?  AND active = ? ", sql.toString());
+    }
+
+    @Test
+    void testExtractComponents_DoesNotTreatOrInsideOrganizationAsOperator() {
+        List<String> components = MethodToSQLConverter.extractComponents("findByOrganization");
+        assertEquals(List.of("findBy", "Organization"), components);
+        StringBuilder sql = new StringBuilder();
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE organization = ? ", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_IsTrue_Anonymized() {
+        // Anonymized test for methods with IsTrue hardcoded in signature
+        // e.g., findByContractIdAndStatusIsTrue(long contractId)
+        // should generate: WHERE contract_id = ? AND status = true
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "ContractId", "And", "Status", "IsTrue");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "records");
+        assertEquals("SELECT * FROM records WHERE contract_id = ?  AND status = true ", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_IsFalse_Anonymized() {
+        // Anonymized test for methods with IsFalse hardcoded in signature
+        // e.g., findByUserIdAndDeletedIsFalse(long userId)
+        // should generate: WHERE user_id = ? AND deleted = false
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "UserId", "And", "Deleted", "IsFalse");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "records");
+        assertEquals("SELECT * FROM records WHERE user_id = ?  AND deleted = false ", sql.toString());
+    }
+
+    @Test
+    void testExtractComponents_IsTrue() {
+        // Verify that IsTrue is recognized as a separate keyword from the field name
+        List<String> components = MethodToSQLConverter.extractComponents("findByContractIdAndStatusIsTrue");
+        assertEquals(List.of("findBy", "ContractId", "And", "Status", "IsTrue"), components);
+    }
+
+    @Test
+    void testExtractComponents_IsFalse() {
+        // Verify that IsFalse is recognized as a separate keyword from the field name
+        List<String> components = MethodToSQLConverter.extractComponents("findByUserIdAndDeletedIsFalse");
+        assertEquals(List.of("findBy", "UserId", "And", "Deleted", "IsFalse"), components);
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_IsActiveIsFalse() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "PayerContractId", "And", "IsActive", "IsFalse");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "contracts");
+        assertEquals("SELECT * FROM contracts WHERE payer_contract_id = ?  AND is_active = false ", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_IsActiveIsTrueAndDeletedIsFalse() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "IsActive", "IsTrue", "And", "Deleted", "IsFalse");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE is_active = true  AND deleted = false ", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_StatusIsTrueOrStatusIsFalse() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "Status", "IsTrue", "Or", "Status", "IsFalse");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "records");
+        assertEquals("SELECT * FROM records WHERE status = true  OR status = false ", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_IsActiveNot() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "IsActive", "Not");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE is_active != ? ", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_IsActiveIsTrueAndNameContaining() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "IsActive", "IsTrue", "And", "Name", "Containing");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE is_active = true  AND name LIKE ? ", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_IsActiveIsTrueOrderByCreatedAtDesc() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "IsActive", "IsTrue", "OrderBy", "CreatedAt", "Desc");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE is_active = true  ORDER BY created_at DESC ", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_IsActiveIsTrueAndIsVerifiedIsFalse() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "IsActive", "IsTrue", "And", "IsVerified", "IsFalse");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE is_active = true  AND is_verified = false ", sql.toString());
     }
 }

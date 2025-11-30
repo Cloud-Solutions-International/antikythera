@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
+import com.raditha.hql.converter.JoinMapping;
 
 import java.util.Map;
 

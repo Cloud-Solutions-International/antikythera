@@ -20,8 +20,6 @@ import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.Statement;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
@@ -34,20 +32,21 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class BaseRepositoryQuery {
-    private static final Logger logger = LoggerFactory.getLogger(BaseRepositoryQuery.class);
-
     /**
      * This is the list of parameters that are defined in the function signature
      */
     protected final List<QueryMethodParameter> methodParameters;
 
     /**
-     * This is the list of arguments that are passed to the function when being called.
+     * This is the list of arguments that are passed to the function when being
+     * called.
      */
     protected final List<QueryMethodArgument> methodArguments;
-    private final Pattern selectPattern = Pattern.compile("SELECT\\s+\\w+\\s+FROM\\s+(\\w+)\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
+    private final Pattern selectPattern = Pattern.compile("SELECT\\s+\\w+\\s+FROM\\s+(\\w+)\\s+(\\w+)",
+            Pattern.CASE_INSENSITIVE);
     @SuppressWarnings("java:S5852")
-    private final Pattern newEntityPattern = Pattern.compile("new\\s+.*?\\s+from\\s+", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private final Pattern newEntityPattern = Pattern.compile("new\\s+.*?\\s+from\\s+",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     /**
      * The method declaration that represents the query on the JPARepository
@@ -73,10 +72,13 @@ public class BaseRepositoryQuery {
     /**
      * The jsqlparser statement that represents the query.
      *
-     * When we are dealing with derived queries, this will be the statement that we derived through
+     * When we are dealing with derived queries, this will be the statement that we
+     * derived through
      * the intermediate HQL.
-     * For an annotated native query this will be directly created from the query text.
-     * JPQL queries will first be parsed with the JQL parser to create an AST, then converted to SQL syntax
+     * For an annotated native query this will be directly created from the query
+     * text.
+     * JPQL queries will first be parsed with the JQL parser to create an AST, then
+     * converted to SQL syntax
      */
     private Statement statement;
 
@@ -104,21 +106,25 @@ public class BaseRepositoryQuery {
      * @return the converted expression
      */
     @SuppressWarnings("java:S3740")
-    public static net.sf.jsqlparser.expression.Expression convertExpressionToSnakeCase(net.sf.jsqlparser.expression.Expression expr) {
+    public static net.sf.jsqlparser.expression.Expression convertExpressionToSnakeCase(
+            net.sf.jsqlparser.expression.Expression expr) {
         if (expr instanceof AndExpression andExpr) {
             andExpr.setLeftExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(andExpr.getLeftExpression()));
             andExpr.setRightExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(andExpr.getRightExpression()));
         } else if (expr instanceof Between between) {
             between.setLeftExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(between.getLeftExpression()));
-            between.setBetweenExpressionStart(BaseRepositoryQuery.convertExpressionToSnakeCase(between.getBetweenExpressionStart()));
-            between.setBetweenExpressionEnd(BaseRepositoryQuery.convertExpressionToSnakeCase(between.getBetweenExpressionEnd()));
+            between.setBetweenExpressionStart(
+                    BaseRepositoryQuery.convertExpressionToSnakeCase(between.getBetweenExpressionStart()));
+            between.setBetweenExpressionEnd(
+                    BaseRepositoryQuery.convertExpressionToSnakeCase(between.getBetweenExpressionEnd()));
         } else if (expr instanceof InExpression ine) {
             ine.setLeftExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(ine.getLeftExpression()));
         } else if (expr instanceof IsNullExpression isNull) {
             isNull.setLeftExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(isNull.getLeftExpression()));
         } else if (expr instanceof ParenthesedExpressionList pel) {
             for (int i = 0; i < pel.size(); i++) {
-                pel.getExpressions().set(i, BaseRepositoryQuery.convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) pel.get(i)));
+                pel.getExpressions().set(i, BaseRepositoryQuery
+                        .convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) pel.get(i)));
             }
         } else if (expr instanceof CaseExpression ce) {
             convertCaseExpression(ce);
@@ -129,15 +135,18 @@ public class BaseRepositoryQuery {
             if (function.getParameters() != null &&
                     function.getParameters().getExpressions() instanceof ExpressionList params) {
                 for (int i = 0; i < params.size(); i++) {
-                    params.getExpressions().set(i, BaseRepositoryQuery.convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) params.get(i)));
+                    params.getExpressions().set(i, BaseRepositoryQuery
+                            .convertExpressionToSnakeCase((net.sf.jsqlparser.expression.Expression) params.get(i)));
                 }
             }
         } else if (expr instanceof ComparisonOperator compare) {
             compare.setRightExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(compare.getRightExpression()));
             compare.setLeftExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(compare.getLeftExpression()));
         } else if (expr instanceof BinaryExpression binaryExpr) {
-            binaryExpr.setLeftExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(binaryExpr.getLeftExpression()));
-            binaryExpr.setRightExpression(BaseRepositoryQuery.convertExpressionToSnakeCase(binaryExpr.getRightExpression()));
+            binaryExpr.setLeftExpression(
+                    BaseRepositoryQuery.convertExpressionToSnakeCase(binaryExpr.getLeftExpression()));
+            binaryExpr.setRightExpression(
+                    BaseRepositoryQuery.convertExpressionToSnakeCase(binaryExpr.getRightExpression()));
         } else if (expr instanceof Column column) {
             column.setColumnName(BaseRepositoryParser.camelToSnake(column.getColumnName()));
         }
@@ -164,6 +173,9 @@ public class BaseRepositoryQuery {
     }
 
     public String getQuery() {
+        if (statement == null) {
+            return originalQuery != null ? originalQuery : "";
+        }
         return statement.toString();
     }
 
@@ -172,7 +184,8 @@ public class BaseRepositoryQuery {
         if (methodDeclaration.isMethodDeclaration()) {
             NodeList<Parameter> parameters = methodDeclaration.asMethodDeclaration().getParameters();
             for (int i = 0; i < parameters.size(); i++) {
-                methodParameters.add(new QueryMethodParameter(methodDeclaration.asMethodDeclaration().getParameter(i), i));
+                methodParameters
+                        .add(new QueryMethodParameter(methodDeclaration.asMethodDeclaration().getParameter(i), i));
             }
         }
     }
@@ -184,7 +197,6 @@ public class BaseRepositoryQuery {
     public List<QueryMethodArgument> getMethodArguments() {
         return methodArguments;
     }
-
 
     public void setEntityType(Type entityType) {
         this.entityType = entityType;
@@ -199,10 +211,12 @@ public class BaseRepositoryQuery {
         query = cleanUp(query);
         try {
             this.statement = CCJSqlParserUtil.parse(query);
-            TypeWrapper entity = BaseRepositoryParser.findEntity(entityType);
-            BasicConverter.convertFieldsToSnakeCase(statement, entity);
+            if (entityType != null) {
+                TypeWrapper entity = BaseRepositoryParser.findEntity(entityType);
+                BasicConverter.convertFieldsToSnakeCase(statement, entity);
+            }
         } catch (JSQLParserException e) {
-                throw new AntikytheraException("Exception parsing SQL query: " + query, e);
+            throw new AntikytheraException("Exception parsing SQL query: " + query, e);
         }
     }
 
@@ -225,14 +239,18 @@ public class BaseRepositoryQuery {
         }
 
         /*
-         * If a JPA query is using a projection via a DTO, we will have a new keyword immediately after
-         * the select. Since this is Hibernate syntax and not SQL, the JSQL parser does not recognize it.
-         * So lets remove everything starting at the NEW keyword and finishing at the FROM keyword.
-         * The constructor call will be replaced by  the '*' character.
+         * If a JPA query is using a projection via a DTO, we will have a new keyword
+         * immediately after
+         * the select. Since this is Hibernate syntax and not SQL, the JSQL parser does
+         * not recognize it.
+         * So lets remove everything starting at the NEW keyword and finishing at the
+         * FROM keyword.
+         * The constructor call will be replaced by the '*' character.
          *
          * A second newEntityPattern is SELECT t FROM EntityClassName t ...
          *
-         * The first step is to Use a case-insensitive regex to find and replace the NEW keyword
+         * The first step is to Use a case-insensitive regex to find and replace the NEW
+         * keyword
          * and the FROM keyword
          */
         Matcher matcher = newEntityPattern.matcher(sql);
@@ -240,7 +258,8 @@ public class BaseRepositoryQuery {
             sql = matcher.replaceAll(" * from ");
         }
 
-        // Remove '+' signs only when they have spaces and a quotation mark on either side
+        // Remove '+' signs only when they have spaces and a quotation mark on either
+        // side
         sql = sql.replaceAll("\"\\s*\\+\\s*\"", " ");
 
         // Remove quotation marks
@@ -251,6 +270,9 @@ public class BaseRepositoryQuery {
             sql = selectMatcher.replaceAll("SELECT * FROM $1 $2");
             sql = sql.replace(" as ", " ");
         }
+
+        // Remove backslashes used for line continuation
+        sql = sql.replace("\\", " ");
 
         return sql;
     }
@@ -276,7 +298,8 @@ public class BaseRepositoryQuery {
     }
 
     public String getClassname() {
-        // First try to get from stored repository class name (avoids AST traversal issues)
+        // First try to get from stored repository class name (avoids AST traversal
+        // issues)
         if (repositoryClassName != null) {
             // Extract simple class name from fully qualified name
             int lastDotIndex = repositoryClassName.lastIndexOf('.');
@@ -284,7 +307,8 @@ public class BaseRepositoryQuery {
         }
 
         // Fallback to AST traversal (original approach)
-        return methodDeclaration.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow().getNameAsString();
+        return methodDeclaration.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).orElseThrow()
+                .getNameAsString();
     }
 
     public String getPrimaryTable() {
@@ -309,6 +333,50 @@ public class BaseRepositoryQuery {
 
     public void setConversionResult(ConversionResult conversionResult) {
         this.conversionResult = conversionResult;
+    }
+
+    /**
+     * Sets the statement from a ConversionResult (for HQL queries that have been
+     * converted to SQL).
+     * This method parses the converted SQL and applies field name conversion.
+     *
+     * @param conversionResult The conversion result containing the native SQL
+     * @throws AntikytheraException if parsing fails
+     */
+    public void setStatementFromConversionResult(ConversionResult conversionResult) {
+        if (conversionResult == null || !conversionResult.isSuccessful()) {
+            throw new AntikytheraException("Cannot set statement from failed or null conversion result");
+        }
+
+        String nativeSql = conversionResult.getNativeSql();
+        if (nativeSql == null || nativeSql.trim().isEmpty()) {
+            throw new AntikytheraException("Conversion result contains empty SQL");
+        }
+
+        try {
+            // Parse the converted SQL (not the original HQL)
+            this.statement = CCJSqlParserUtil.parse(nativeSql);
+            TypeWrapper entity = BaseRepositoryParser.findEntity(entityType);
+            // HQLToPostgreSQLConverter already handles field name conversion and join
+            // processing,
+            // so we only need minimal post-processing (projection normalization, etc.)
+            // Skip join processing since joins are already in SQL format
+            BasicConverter.convertFieldsToSnakeCase(statement, entity, true);
+        } catch (JSQLParserException e) {
+            throw new AntikytheraException("Exception parsing converted SQL query: " + nativeSql, e);
+        }
+    }
+
+    /**
+     * Sets the original query string (for HQL queries, this is the HQL; for others,
+     * it's the SQL).
+     * This is separate from setQuery() to allow storing HQL while using converted
+     * SQL for the statement.
+     *
+     * @param query The original query string
+     */
+    public void setOriginalQuery(String query) {
+        this.originalQuery = query;
     }
 
     public void setQueryType(QueryType qt) {

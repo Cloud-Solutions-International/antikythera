@@ -5,8 +5,6 @@ import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Utility to convert Spring Data repository method-name keywords into SQL
@@ -37,6 +35,8 @@ public final class MethodToSQLConverter {
     public static final String IS_NOT_NULL = "IsNotNull";
     public static final String TRUE = "True";
     public static final String FALSE = "False";
+    public static final String IS_TRUE = "IsTrue";
+    public static final String IS_FALSE = "IsFalse";
     public static final String DESC = "Desc";
     public static final String ASC = "Asc";
     public static final String IS = "Is";
@@ -58,33 +58,19 @@ public final class MethodToSQLConverter {
     public static final String STREAM_BY = "streamBy";
     public static final String REMOVE_BY = "removeBy";
     public static final String GET = "get";
+    public static final String SAVE = "save";
 
     private static final List<String> QUERY_TYPES = List.of(
-            READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY, REMOVE_BY, GET, FIND_BY,
+            READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY, REMOVE_BY, GET, SAVE, FIND_BY,
             FIND_FIRST_BY, FIND_TOP_BY, FIND_DISTINCT_BY, FIND_ALL, COUNT_BY, DELETE_BY, EXISTS_BY);
 
     private static final List<String> OPERATORS = List.of(
             AND, OR, BETWEEN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL, GREATER_THAN,
             LESS_THAN, BEFORE, AFTER, IS_NULL, IS_NOT_NULL, IS_NOT, LIKE, NOT, IN,
-            NOT_IN, TRUE, FALSE, CONTAINING, STARTING_WITH, ENDING_WITH);
+            NOT_IN, IS_TRUE, IS_FALSE, TRUE, FALSE, IS, EQUAL, CONTAINING, STARTING_WITH, ENDING_WITH);
 
     private static final List<String> MODIFIERS = List.of(
-            BaseRepositoryParser.ORDER_BY, DESC, ASC, IS, EQUAL, IGNORE_CASE, ALL_IGNORE_CASE);
-
-    private static final Pattern KEYWORDS_PATTERN;
-
-    static {
-        List<String> allKeywords = new ArrayList<>();
-        allKeywords.addAll(QUERY_TYPES);
-        allKeywords.addAll(OPERATORS);
-        allKeywords.addAll(MODIFIERS);
-
-        // Sort by length descending to match longest keywords first
-        allKeywords.sort((a, b) -> b.length() - a.length());
-
-        String pattern = String.join("|", allKeywords);
-        KEYWORDS_PATTERN = Pattern.compile(pattern);
-    }
+            BaseRepositoryParser.ORDER_BY, DESC, ASC, IGNORE_CASE, ALL_IGNORE_CASE);
 
     /**
      * Set of operators that do not require an equals sign to be appended.
@@ -93,9 +79,11 @@ public final class MethodToSQLConverter {
     private static final Set<String> NO_EQUALS_OPERATORS = Set.of(
             BETWEEN, GREATER_THAN, LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL,
             IS_NOT_NULL, IS_NULL, IS_NOT, LIKE, CONTAINING, IN, NOT_IN, NOT,
-            STARTING_WITH, ENDING_WITH, BEFORE, AFTER, TRUE, FALSE, IGNORE_CASE);
-    // Note: AND/OR are intentionally excluded so that a bare field before a logical operator
-    // still receives an implicit "= ?" comparator (e.g., "...Where userId And tenantId..." -> "user_id = ? AND tenant_id = ?").
+            STARTING_WITH, ENDING_WITH, BEFORE, AFTER, IS_TRUE, IS_FALSE, TRUE, FALSE, IGNORE_CASE);
+    // Note: AND/OR are intentionally excluded so that a bare field before a logical
+    // operator
+    // still receives an implicit "= ?" comparator (e.g., "...Where userId And
+    // tenantId..." -> "user_id = ? AND tenant_id = ?").
 
     private MethodToSQLConverter() {
     }
@@ -112,89 +100,138 @@ public final class MethodToSQLConverter {
      * @return A list of components.
      */
     public static List<String> extractComponents(String methodName) {
+        // Normalize 'find...By' subjects to 'findBy' to align with Spring Data
+        // semantics
+        methodName = normalizeFindSubject(methodName);
+
         List<String> components = new ArrayList<>();
-        int i = 0;
         List<String> keywords = getKeywordsByLengthDesc();
+        int i = 0;
 
         while (i < methodName.length()) {
-            String matchedKeyword = null;
-            int matchedLength = 0;
-
-            // Try to match a keyword at the current position
-            for (String keyword : keywords) {
-                if (methodName.startsWith(keyword, i)) {
-                    int keywordEnd = i + keyword.length();
-
-                    // These keywords should always be recognized regardless of what follows
-                    boolean isAlwaysKeyword = QUERY_TYPES.contains(keyword) || MODIFIERS.contains(keyword);
-                    boolean isLogicalOperator = keyword.equals(AND) || keyword.equals(OR);
-
-                    // Check if followed by lowercase (part of field name)
-                    boolean followedByLowercase = keywordEnd < methodName.length() && Character.isLowerCase(methodName.charAt(keywordEnd));
-
-                    if (!isAlwaysKeyword && !isLogicalOperator && followedByLowercase) {
-                        // This keyword is part of a field name, skip to next keyword
-                        continue;
-                    }
-
-                    // Valid keyword match
-                    matchedKeyword = keyword;
-                    matchedLength = keyword.length();
-                    break;
-                }
+            // 1) Try to match a known keyword at the current index
+            String matchedKeyword = tryMatchKeyword(methodName, i, keywords);
+            if (matchedKeyword != null) {
+                components.add(matchedKeyword);
+                i += matchedKeyword.length();
+                continue;
             }
 
-            if (matchedKeyword != null) {
-                // Found a keyword
-                components.add(matchedKeyword);
-                i += matchedLength;
-            } else {
-                // Extract field name until we find a valid keyword
-                StringBuilder fieldName = new StringBuilder();
-                while (i < methodName.length()) {
-                    // Check if there's a valid keyword starting here
-                    String nextKeyword = null;
-                    for (String keyword : keywords) {
-                        if (methodName.startsWith(keyword, i)) {
-                            int keywordEnd = i + keyword.length();
-
-                            // Query types and modifiers always mark a keyword boundary
-                            if (QUERY_TYPES.contains(keyword) || MODIFIERS.contains(keyword)) {
-                                nextKeyword = keyword;
-                                break;
-                            }
-
-                            // Logical operators always mark a keyword boundary
-                            boolean isLogicalOperator = keyword.equals(AND) || keyword.equals(OR);
-                            if (isLogicalOperator) {
-                                nextKeyword = keyword;
-                                break;
-                            }
-
-                            // Other operators are valid only if not followed by lowercase
-                            if (keywordEnd >= methodName.length() || !Character.isLowerCase(methodName.charAt(keywordEnd))) {
-                                nextKeyword = keyword;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Stop if we found a valid keyword
-                    if (nextKeyword != null) {
-                        break;
-                    }
-
-                    fieldName.append(methodName.charAt(i));
-                    i++;
-                }
-
-                if (fieldName.length() > 0) {
-                    components.add(fieldName.toString());
-                }
+            // 2) Otherwise scan a field token until the next valid keyword boundary
+            ScanResult scan = scanField(methodName, i, keywords);
+            i = scan.nextIndex;
+            if (!scan.fieldToken.isEmpty()) {
+                components.add(scan.fieldToken);
             }
         }
 
         return components;
+    }
+
+    // Attempts to match a keyword at position 'index' using the same boundary rules
+    // as {@link #findNextKeyword(String, int, List)}.
+    private static String tryMatchKeyword(String methodName, int index, List<String> keywords) {
+        return findNextKeyword(methodName, index, keywords);
+    }
+
+    // Scans characters from 'start' until a valid keyword boundary is reached,
+    // returning the token and new index.
+    private static ScanResult scanField(String methodName, int start, List<String> keywords) {
+        StringBuilder fieldName = new StringBuilder();
+        int i = start;
+
+        while (i < methodName.length()) {
+            String nextKeyword = findNextKeyword(methodName, i, keywords);
+            if (nextKeyword != null) {
+                break;
+            }
+            fieldName.append(methodName.charAt(i));
+            i++;
+        }
+        return new ScanResult(fieldName.toString(), i);
+    }
+
+    // Returns a keyword that starts at 'index' and forms a valid boundary per rules
+    // used previously; otherwise null.
+    private static String findNextKeyword(String methodName, int index, List<String> keywords) {
+        for (String keyword : keywords) {
+            if (!methodName.startsWith(keyword, index)) {
+                continue;
+            }
+
+            int keywordEnd = index + keyword.length();
+
+            if (isAlwaysKeyword(keyword)) {
+                return keyword;
+            }
+
+            if (isValidOperatorBoundary(methodName, keyword, keywordEnd)) {
+                return keyword;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isValidOperatorBoundary(String methodName, String keyword, int keywordEnd) {
+        if (isLogicalOperator(keyword)) {
+            return hasFollowingUppercase(methodName, keywordEnd);
+        }
+
+        if (isSyntacticSugar(keyword) && isSyntacticSugarFollowedByBooleanOp(methodName, keywordEnd)) {
+            return false;
+        }
+
+        return isGeneralOperatorBoundary(methodName, keywordEnd);
+    }
+
+    private static boolean hasFollowingUppercase(String methodName, int keywordEnd) {
+        return keywordEnd < methodName.length() && Character.isUpperCase(methodName.charAt(keywordEnd));
+    }
+
+    private static boolean isSyntacticSugarFollowedByBooleanOp(String methodName, int keywordEnd) {
+        return hasFollowingUppercase(methodName, keywordEnd)
+                && isFollowedByFieldWithBooleanOp(methodName, keywordEnd);
+    }
+
+    private static boolean isGeneralOperatorBoundary(String methodName, int keywordEnd) {
+        return keywordEnd >= methodName.length() || !Character.isLowerCase(methodName.charAt(keywordEnd));
+    }
+
+    private static boolean isAlwaysKeyword(String keyword) {
+        return QUERY_TYPES.contains(keyword) || MODIFIERS.contains(keyword);
+    }
+
+    private static boolean isLogicalOperator(String keyword) {
+        return AND.equals(keyword) || OR.equals(keyword);
+    }
+
+    private static boolean isSyntacticSugar(String keyword) {
+        return IS.equals(keyword) || EQUAL.equals(keyword);
+    }
+
+    /**
+     * Checks if the position is followed by a field name that ends with a boolean
+     * operator.
+     * For example, in "IsActiveIsTrue", at position 0, this returns true because
+     * "Active" is followed by "IsTrue".
+     */
+    private static boolean isFollowedByFieldWithBooleanOp(String methodName, int startPos) {
+        // Scan ahead to find the next keyword
+        int pos = startPos;
+        while (pos < methodName.length() && Character.isLetter(methodName.charAt(pos))) {
+            // Check if we're at the start of a boolean operator
+            if (methodName.startsWith(IS_TRUE, pos) || methodName.startsWith(IS_FALSE, pos) ||
+                    methodName.startsWith(IS_NULL, pos) || methodName.startsWith(IS_NOT_NULL, pos)) {
+                // There's a field name between startPos and pos, followed by a boolean operator
+                return pos > startPos;
+            }
+            pos++;
+        }
+        return false;
+    }
+
+    // Small holder for scan results
+    private record ScanResult(String fieldToken, int nextIndex) {
     }
 
     /**
@@ -209,6 +246,49 @@ public final class MethodToSQLConverter {
         // Sort by length descending to match longest keywords first
         allKeywords.sort((a, b) -> b.length() - a.length());
         return allKeywords;
+    }
+
+    /**
+     * Normalize method names that include a subject between the verb and the "By"
+     * keyword.
+     * For example, convert "findUserByEmail" to "findByEmail" so downstream parsing
+     * recognizes the query type correctly. This mirrors Spring Data semantics where
+     * the
+     * part between the verb and "By" is the (optional) subject and does not affect
+     * the
+     * predicate parsing.
+     *
+     * Only applies to names starting with the verb "find" to keep the change
+     * conservative.
+     */
+    private static String normalizeFindSubject(String methodName) {
+        if (!methodName.startsWith("find")) {
+            return methodName;
+        }
+        // Do not normalize when the method already uses a recognized find* query type
+        if (methodName.startsWith(FIND_BY)
+                || methodName.startsWith(FIND_FIRST_BY)
+                || methodName.startsWith(FIND_TOP_BY)
+                || methodName.startsWith(FIND_DISTINCT_BY)
+                || methodName.startsWith(FIND_ALL)
+                || methodName.startsWith(FIND_ALL_BY_ID)) {
+            return methodName;
+        }
+        // If the only occurrence of "By" is the one in "OrderBy", do not normalize.
+        int byIdx = methodName.indexOf("By", 4); // look for the first "By" after "find"
+        if (byIdx > 0) {
+            // If this By is part of OrderBy, skip normalization to preserve ordering clause
+            int orderStart = byIdx - "Order".length();
+            if (orderStart >= 0) {
+                String maybeOrder = methodName.substring(orderStart, byIdx);
+                if ("Order".equals(maybeOrder)) {
+                    return methodName;
+                }
+            }
+            // Convert things like findSomethingByXxxYyy... -> findByXxxYyy...
+            return FIND_BY + methodName.substring(byIdx + 2);
+        }
+        return methodName;
     }
 
     /**
@@ -302,6 +382,12 @@ public final class MethodToSQLConverter {
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
             }
+            case SAVE -> {
+                // Very primitive INSERT support for save()
+                // We don't attempt to list columns or placeholders; rely on DEFAULT VALUES
+                sql.append("INSERT INTO ").append(tableName).append(" DEFAULT VALUES");
+                return true;
+            }
             default -> {
                 return false;
             }
@@ -328,6 +414,8 @@ public final class MethodToSQLConverter {
             case IS_NULL -> sql.append(" IS NULL ");
             case IS_NOT_NULL -> sql.append(" IS NOT NULL ");
             case IS_NOT -> sql.append(" != ? ");
+            case IS_TRUE -> sql.append(" = true ");
+            case IS_FALSE -> sql.append(" = false ");
             case TRUE -> sql.append(" = true ");
             case FALSE -> sql.append(" = false ");
             case AND, OR -> sql.append(" ").append(component.toUpperCase()).append(' ');
@@ -425,13 +513,18 @@ public final class MethodToSQLConverter {
      * @param next      The next component.
      * @param ordering  Whether we are in an ORDER BY clause.
      */
+    @SuppressWarnings("java:S1066")
     private static void appendDefaultComponent(StringBuilder sql, String component, String next, boolean ordering) {
         sql.append(BaseRepositoryParser.camelToSnake(component));
         if (!ordering) {
             if (shouldAppendEquals(next)) {
                 sql.append(" = ? ");
-            } else if (!next.equals(NOT) && !next.equals(IGNORE_CASE)) {
-                sql.append(' ');
+            } else if (!next.equals(NOT) && !next.equals(IGNORE_CASE) && !next.equals(IS_TRUE)
+                    && !next.equals(IS_FALSE)) {
+                // Do not append a space if the next component is LIKE/CONTAINING/STARTING_WITH/ENDING_WITH
+                if (!(next.equals(LIKE) || next.equals(CONTAINING) || next.equals(STARTING_WITH) || next.equals(ENDING_WITH))) {
+                    sql.append(' ');
+                }
             }
         } else {
             appendCommaOrSpace(next, sql);

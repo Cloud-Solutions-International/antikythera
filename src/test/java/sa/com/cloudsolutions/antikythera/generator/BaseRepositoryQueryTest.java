@@ -105,4 +105,13 @@ class BaseRepositoryQueryTest {
             fail("CASE expression conversion should not throw exception: " + e.getMessage());
         }
     }
+
+    @Test
+    void testSetQueryWithBackslashes() {
+        BaseRepositoryQuery query = new BaseRepositoryQuery();
+        String sql = "SELECT count(*) \\\n" +
+                "FROM table_name";
+        query.setQuery(sql);
+        assertNotNull(query.getStatement());
+    }
 }
