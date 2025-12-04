@@ -57,8 +57,7 @@ public class EntityMappingResolver {
 
             if (typeDecl != null && typeDecl.getAnnotationByName("Entity").isPresent()) {
                 mapping.put(fullyQualifiedName, buildMetadataFromSources(typeDecl));
-            }
-            else if (type.getClazz() != null && type.getClazz().isAnnotationPresent(Entity.class)) {
+            } else if (type.getClazz() != null && type.getClazz().isAnnotationPresent(Entity.class)) {
                 mapping.put(fullyQualifiedName, buildEntityMetadata(type.getClazz()));
             }
         }
@@ -67,7 +66,7 @@ public class EntityMappingResolver {
     /**
      * Builds property to column map from TypeDeclaration.
      */
-    private static Map<String, String> buildPropertyToColumnMapFromAST(TypeDeclaration<?> typeDecl)  {
+    private static Map<String, String> buildPropertyToColumnMapFromAST(TypeDeclaration<?> typeDecl) {
         Map<String, String> propertyToColumnMap = new HashMap<>();
 
         // Get all fields from the entity
@@ -98,9 +97,8 @@ public class EntityMappingResolver {
     /**
      * Gets column name from @Column annotation or returns null.
      */
-    private static String getColumnNameFromAST(FieldDeclaration field)  {
-        Optional<com.github.javaparser.ast.expr.AnnotationExpr> columnAnn =
-                field.getAnnotationByName("Column");
+    private static String getColumnNameFromAST(FieldDeclaration field) {
+        Optional<com.github.javaparser.ast.expr.AnnotationExpr> columnAnn = field.getAnnotationByName("Column");
 
         if (columnAnn.isPresent()) {
             Map<String, Expression> attributes = AbstractCompiler.extractAnnotationAttributes(columnAnn.get());
@@ -111,7 +109,6 @@ public class EntityMappingResolver {
         }
         return null; // No @Column annotation or no name specified
     }
-
 
     /**
      * Builds entity metadata using Antikythera's TypeWrapper and AbstractCompiler.
@@ -124,13 +121,11 @@ public class EntityMappingResolver {
         Map<String, String> propertyToColumnMappings = buildPropertyToColumnMapFromAST(typeDecl);
 
         // Relationship mappings not yet implemented for AST-based approach
-        Map<String, JoinMapping> relationshipMappings =
-                new HashMap<>();
+        Map<String, JoinMapping> relationshipMappings = new HashMap<>();
 
         return new EntityMetadata(new TypeWrapper(typeDecl), tableName,
                 propertyToColumnMappings, relationshipMappings);
     }
-
 
     private static EntityMetadata buildEntityMetadata(Class<?> entityClass) {
         String entityName = getEntityName(entityClass);
@@ -138,11 +133,10 @@ public class EntityMappingResolver {
 
         Map<String, String> propertyToColumnMappings = buildPropertyToColumnMappings(entityClass);
         Map<String, JoinMapping> relationshipMappings = buildRelationshipMappings(entityClass, tableMapping);
-        
+
         return new EntityMetadata(new TypeWrapper(entityClass), getTableName(entityClass),
                 propertyToColumnMappings, relationshipMappings);
     }
-
 
     /**
      * Gets the discriminator value from @DiscriminatorValue.
@@ -150,7 +144,7 @@ public class EntityMappingResolver {
      * @param typeDecl The entity type declaration
      * @return Discriminator value, or null if not specified
      */
-    public static String getDiscriminatorValue(TypeDeclaration<?> typeDecl)  {
+    public static String getDiscriminatorValue(TypeDeclaration<?> typeDecl) {
         Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorValue");
 
         if (discAnn.isPresent()) {
@@ -168,9 +162,10 @@ public class EntityMappingResolver {
      * Gets the inheritance strategy from @Inheritance annotation.
      *
      * @param typeDecl The entity type declaration
-     * @return Inheritance strategy ("SINGLE_TABLE", "JOINED", "TABLE_PER_CLASS"), or null
+     * @return Inheritance strategy ("SINGLE_TABLE", "JOINED", "TABLE_PER_CLASS"),
+     *         or null
      */
-    public static String getInheritanceStrategy(TypeDeclaration<?> typeDecl)  {
+    public static String getInheritanceStrategy(TypeDeclaration<?> typeDecl) {
         Optional<AnnotationExpr> inhAnn = typeDecl.getAnnotationByName("Inheritance");
 
         if (inhAnn.isPresent()) {
@@ -188,8 +183,7 @@ public class EntityMappingResolver {
         return null; // No inheritance specified
     }
 
-
-    static Optional<String>  getAnnotationValue(AnnotationExpr expr, String name)  {
+    static Optional<String> getAnnotationValue(AnnotationExpr expr, String name) {
         Map<String, Expression> attributes = AbstractCompiler.extractAnnotationAttributes(expr);
         Expression value = attributes.get(name);
         if (value == null) {
@@ -204,7 +198,7 @@ public class EntityMappingResolver {
      * @param typeDecl The entity type declaration
      * @return Table name
      */
-    public static String getTableName(TypeDeclaration<?> typeDecl)  {
+    public static String getTableName(TypeDeclaration<?> typeDecl) {
         Optional<AnnotationExpr> tableAnn = typeDecl.getAnnotationByName("Table");
 
         if (tableAnn.isPresent()) {
@@ -224,7 +218,7 @@ public class EntityMappingResolver {
      * @param typeDecl The entity type declaration
      * @return Entity name
      */
-    public static String getEntityName(TypeDeclaration<?> typeDecl)  {
+    public static String getEntityName(TypeDeclaration<?> typeDecl) {
         Optional<AnnotationExpr> entityAnn = typeDecl.getAnnotationByName("Entity");
 
         if (entityAnn.isPresent()) {
@@ -243,7 +237,7 @@ public class EntityMappingResolver {
      * @param typeDecl The entity type declaration
      * @return Discriminator column name, or "dtype" if not specified
      */
-    public static String getDiscriminatorColumn(TypeDeclaration<?> typeDecl)  {
+    public static String getDiscriminatorColumn(TypeDeclaration<?> typeDecl) {
         Optional<AnnotationExpr> discAnn = typeDecl.getAnnotationByName("DiscriminatorColumn");
 
         if (discAnn.isPresent()) {
@@ -261,16 +255,16 @@ public class EntityMappingResolver {
         String name = entityAnnotation.name();
         return name.isEmpty() ? entityClass.getSimpleName() : name;
     }
-    
+
     private static TableMapping buildTableMapping(Class<?> entityClass, String entityName) {
         Table tableAnnotation = entityClass.getAnnotation(Table.class);
-        
+
         String tableName;
         String schema = null;
-        
+
         if (tableAnnotation != null) {
-            tableName = tableAnnotation.name().isEmpty() ?
-                 AbstractCompiler.camelToSnakeCase(entityName) : tableAnnotation.name();
+            tableName = tableAnnotation.name().isEmpty() ? AbstractCompiler.camelToSnakeCase(entityName)
+                    : tableAnnotation.name();
             schema = tableAnnotation.schema().isEmpty() ? null : tableAnnotation.schema();
         } else {
             tableName = AbstractCompiler.camelToSnakeCase(entityName);
@@ -293,8 +287,7 @@ public class EntityMappingResolver {
             inheritanceType = inheritanceAnnotation.strategy().name();
         }
 
-        DiscriminatorColumn discriminatorColumnAnnotation =
-            entityClass.getAnnotation(DiscriminatorColumn.class);
+        DiscriminatorColumn discriminatorColumnAnnotation = entityClass.getAnnotation(DiscriminatorColumn.class);
         if (discriminatorColumnAnnotation != null) {
             discriminatorColumn = discriminatorColumnAnnotation.name();
             if (discriminatorColumn.isEmpty()) {
@@ -304,8 +297,7 @@ public class EntityMappingResolver {
             discriminatorColumn = DTYPE; // Default for SINGLE_TABLE
         }
 
-        DiscriminatorValue discriminatorValueAnnotation =
-            entityClass.getAnnotation(DiscriminatorValue.class);
+        DiscriminatorValue discriminatorValueAnnotation = entityClass.getAnnotation(DiscriminatorValue.class);
         if (discriminatorValueAnnotation != null) {
             discriminatorValue = discriminatorValueAnnotation.value();
         }
@@ -326,85 +318,84 @@ public class EntityMappingResolver {
 
     private static Map<String, String> buildPropertyToColumnMap(Class<?> entityClass) {
         Map<String, String> propertyToColumnMap = new HashMap<>();
-        
+
         for (Field field : getAllFields(entityClass)) {
             if (isTransientField(field)) {
                 continue;
             }
-            
+
             String propertyName = field.getName();
             String columnName = getColumnName(field);
             propertyToColumnMap.put(propertyName, columnName);
         }
-        
+
         return propertyToColumnMap;
     }
-    
+
     private static Map<String, String> buildPropertyToColumnMappings(Class<?> entityClass) {
         Map<String, String> columnMappings = new HashMap<>();
-        
+
         for (Field field : getAllFields(entityClass)) {
             if (isTransientField(field) || isRelationshipField(field)) {
                 continue;
             }
-            
+
             String propertyName = field.getName();
             String columnName = getColumnName(field);
             String fullPropertyName = entityClass.getName() + "." + propertyName;
 
             columnMappings.put(fullPropertyName, columnName);
         }
-        
+
         return columnMappings;
     }
-    
+
     private static Map<String, JoinMapping> buildRelationshipMappings(Class<?> entityClass, TableMapping tableMapping) {
         Map<String, JoinMapping> joinMappings = new HashMap<>();
-        
+
         for (Field field : getAllFields(entityClass)) {
             if (!isRelationshipField(field)) {
                 continue;
             }
-            
+
             JoinMapping joinMapping = buildJoinMapping(field, tableMapping);
             joinMappings.put(field.getName(), joinMapping);
         }
-        
+
         return joinMappings;
     }
-    
+
     private static JoinMapping buildJoinMapping(Field field, TableMapping sourceTableMapping) {
         String propertyName = field.getName();
         Class<?> targetEntityClass = getTargetEntityClass(field);
         String targetEntityName = getEntityName(targetEntityClass);
         String targetTableName = getTableName(targetEntityClass);
-        
+
         JoinColumn joinColumn = field.getAnnotation(JoinColumn.class);
         String joinColumnName;
         String referencedColumnName = "id"; // Default assumption
-        
+
         if (joinColumn != null) {
-            joinColumnName = joinColumn.name().isEmpty() ?
-                AbstractCompiler.camelToSnakeCase(propertyName) + "_id" : joinColumn.name();
-            referencedColumnName = joinColumn.referencedColumnName().isEmpty() ? 
-                "id" : joinColumn.referencedColumnName();
+            joinColumnName = joinColumn.name().isEmpty() ? AbstractCompiler.camelToSnakeCase(propertyName) + "_id"
+                    : joinColumn.name();
+            referencedColumnName = joinColumn.referencedColumnName().isEmpty() ? "id"
+                    : joinColumn.referencedColumnName();
         } else {
             joinColumnName = AbstractCompiler.camelToSnakeCase(propertyName) + "_id";
         }
-        
+
         JoinType joinType = determineJoinType(field);
-        
+
         return new JoinMapping(
-            propertyName,
-            targetEntityName,
-            joinColumnName,
-            referencedColumnName,
-            joinType,
-            sourceTableMapping.tableName(),
-            targetTableName
-        );
+                propertyName,
+                targetEntityName,
+                joinColumnName,
+                referencedColumnName,
+                joinType,
+                sourceTableMapping.tableName(),
+                targetTableName);
     }
-    
+
     private static Class<?> getTargetEntityClass(Field field) {
         if (field.isAnnotationPresent(ManyToOne.class) || field.isAnnotationPresent(OneToOne.class)) {
             return field.getType();
@@ -419,7 +410,7 @@ public class EntityMappingResolver {
         }
         return field.getType();
     }
-    
+
     private static JoinType determineJoinType(Field field) {
         // For now, default to LEFT join for optional relationships, INNER for required
         if (field.isAnnotationPresent(ManyToOne.class)) {
@@ -432,7 +423,7 @@ public class EntityMappingResolver {
         // OneToMany and ManyToMany are typically LEFT joins
         return JoinType.LEFT;
     }
-    
+
     private static String getTableName(Class<?> entityClass) {
         Table tableAnnotation = entityClass.getAnnotation(Table.class);
         if (tableAnnotation != null && !tableAnnotation.name().isEmpty()) {
@@ -440,32 +431,32 @@ public class EntityMappingResolver {
         }
         return AbstractCompiler.camelToSnakeCase(getEntityName(entityClass));
     }
-    
+
     private static List<Field> getAllFields(Class<?> clazz) {
         List<Field> fields = new ArrayList<>();
         Class<?> currentClass = clazz;
-        
+
         while (currentClass != null && currentClass != Object.class) {
             fields.addAll(Arrays.asList(currentClass.getDeclaredFields()));
             currentClass = currentClass.getSuperclass();
         }
-        
+
         return fields;
     }
-    
+
     private static boolean isTransientField(Field field) {
         return field.isAnnotationPresent(Transient.class) ||
-               java.lang.reflect.Modifier.isTransient(field.getModifiers()) ||
-               java.lang.reflect.Modifier.isStatic(field.getModifiers());
+                java.lang.reflect.Modifier.isTransient(field.getModifiers()) ||
+                java.lang.reflect.Modifier.isStatic(field.getModifiers());
     }
-    
+
     private static boolean isRelationshipField(Field field) {
         return field.isAnnotationPresent(OneToOne.class) ||
-               field.isAnnotationPresent(OneToMany.class) ||
-               field.isAnnotationPresent(ManyToOne.class) ||
-               field.isAnnotationPresent(ManyToMany.class);
+                field.isAnnotationPresent(OneToMany.class) ||
+                field.isAnnotationPresent(ManyToOne.class) ||
+                field.isAnnotationPresent(ManyToMany.class);
     }
-    
+
     private static String getColumnName(Field field) {
         Column columnAnnotation = field.getAnnotation(Column.class);
         if (columnAnnotation != null && !columnAnnotation.name().isEmpty()) {
@@ -487,7 +478,8 @@ public class EntityMappingResolver {
         if (meta == null) {
             Set<String> n = EntityMappingResolver.getFullNamesForEntity(entityName);
             if (n.size() != 1) {
-                throw new AntikytheraException("Unresolable entity name: " + entityName);
+                // Fallback: assume snake_case of the entity name
+                return AbstractCompiler.camelToSnakeCase(entityName);
             }
             EntityMetadata m = mapping.get(n.stream().findFirst().orElseThrow());
             return m.tableName();

@@ -336,18 +336,19 @@ class BaseRepositoryParserTest {
     @Test
     void testHQLQueryWithExplicitOnClause() throws IOException {
         // Create a mock repository with HQL query containing explicit ON clause
-        // This simulates the error case: "SELECT i FROM Invoice i LEFT JOIN i.procedures ip ON i.id = ip.invoiceId WHERE..."
+        // This simulates the error case: "SELECT i FROM Invoice i LEFT JOIN
+        // i.procedures ip ON i.id = ip.invoiceId WHERE..."
         String methodCode = """
-            package sa.com.cloudsolutions.antikythera.testhelper.repository;
-            import org.springframework.data.jpa.repository.JpaRepository;
-            import org.springframework.data.jpa.repository.Query;
-            import sa.com.cloudsolutions.antikythera.testhelper.model.User;
-            import java.util.List;
-            public interface TestRepo extends JpaRepository<User, Long> {
-                @Query("SELECT u FROM User u LEFT JOIN u.vehicles v ON u.id = v.userId WHERE v.active = :active")
-                List<User> findUsersWithActiveVehicles(Boolean active);
-            }
-            """;
+                package sa.com.cloudsolutions.antikythera.testhelper.repository;
+                import org.springframework.data.jpa.repository.JpaRepository;
+                import org.springframework.data.jpa.repository.Query;
+                import sa.com.cloudsolutions.antikythera.testhelper.model.User;
+                import java.util.List;
+                public interface TestRepo extends JpaRepository<User, Long> {
+                    @Query("SELECT u FROM User u LEFT JOIN u.vehicles v ON u.id = v.userId WHERE v.active = :active")
+                    List<User> findUsersWithActiveVehicles(Boolean active);
+                }
+                """;
         CompilationUnit cu = StaticJavaParser.parse(methodCode);
         BaseRepositoryParser parser = BaseRepositoryParser.create(cu);
         parser.processTypes();
@@ -355,17 +356,18 @@ class BaseRepositoryParserTest {
         MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
         Callable callable = new Callable(md, null);
 
-        // This should not throw "Unable to determine table name for join field" exception
+        // This should not throw "Unable to determine table name for join field"
+        // exception
         assertDoesNotThrow(() -> {
             parser.buildQueries();
             RepositoryQuery q = parser.getQueryFromRepositoryMethod(callable);
             assertNotNull(q, "Query should be created successfully");
             assertNotNull(q.getConversionResult(), "ConversionResult should be set for HQL queries");
             assertNotNull(q.getConversionResult().getNativeSql(), "Converted SQL should be available");
-            assertTrue(q.getConversionResult().getNativeSql().contains("LEFT JOIN"), 
-                "Converted SQL should contain LEFT JOIN");
-            assertTrue(q.getConversionResult().getNativeSql().contains("ON"), 
-                "Converted SQL should contain ON clause");
+            assertTrue(q.getConversionResult().getNativeSql().contains("LEFT JOIN"),
+                    "Converted SQL should contain LEFT JOIN");
+            assertTrue(q.getConversionResult().getNativeSql().contains("ON"),
+                    "Converted SQL should contain ON clause");
             assertNotNull(q.getStatement(), "Statement should be set from converted SQL");
             // Verify the statement can be converted to string without errors
             String queryString = q.getQuery();
@@ -380,35 +382,36 @@ class BaseRepositoryParserTest {
         ParserConfiguration parserConfig = new ParserConfiguration();
         parserConfig.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
         StaticJavaParser.setConfiguration(parserConfig);
-        
+
         // Test native query with text block and line continuation backslashes
-        // This simulates the issue where a native query uses text block syntax with \ at end of lines
+        // This simulates the issue where a native query uses text block syntax with \
+        // at end of lines
         String methodCode = """
-            package sa.com.cloudsolutions.antikythera.testhelper.repository;
-            import org.springframework.data.jpa.repository.JpaRepository;
-            import org.springframework.data.jpa.repository.Query;
-            import org.springframework.data.repository.query.Param;
-            import sa.com.cloudsolutions.antikythera.testhelper.model.User;
-            public interface TestRepo extends JpaRepository<User, Long> {
-                @Query(value = \"\"\"
-                    SELECT COUNT(*) \\
-                    FROM (SELECT t.item_id, t.category_id, t.status_id \\
-                    FROM test_items t \\
-                    JOIN test_categories c ON t.id = c.item_id \\
-                    WHERE t.category_id = :categoryId \\
-                    AND c.is_active = '1' \\
-                    AND t.item_id = :itemId \\
-                    AND t.order_type = 'PROCESS' \\
-                    AND t.activity_status = 'COMPLETED' \\
-                    AND t.parent_id IS NULL \\
-                    GROUP BY t.item_id, t.category_id, c.status_id, c.contract_id) subquery\\
-                    \"\"\",
-                    nativeQuery = true)
-                Long getItemCount(
-                        @Param("itemId") Long itemId,
-                        @Param("categoryId") Long categoryId);
-            }
-            """;
+                package sa.com.cloudsolutions.antikythera.testhelper.repository;
+                import org.springframework.data.jpa.repository.JpaRepository;
+                import org.springframework.data.jpa.repository.Query;
+                import org.springframework.data.repository.query.Param;
+                import sa.com.cloudsolutions.antikythera.testhelper.model.User;
+                public interface TestRepo extends JpaRepository<User, Long> {
+                    @Query(value = \"\"\"
+                        SELECT COUNT(*) \\
+                        FROM (SELECT t.item_id, t.category_id, t.status_id \\
+                        FROM test_items t \\
+                        JOIN test_categories c ON t.id = c.item_id \\
+                        WHERE t.category_id = :categoryId \\
+                        AND c.is_active = '1' \\
+                        AND t.item_id = :itemId \\
+                        AND t.order_type = 'PROCESS' \\
+                        AND t.activity_status = 'COMPLETED' \\
+                        AND t.parent_id IS NULL \\
+                        GROUP BY t.item_id, t.category_id, c.status_id, c.contract_id) subquery\\
+                        \"\"\",
+                        nativeQuery = true)
+                    Long getItemCount(
+                            @Param("itemId") Long itemId,
+                            @Param("categoryId") Long categoryId);
+                }
+                """;
         CompilationUnit cu = StaticJavaParser.parse(methodCode);
         BaseRepositoryParser parser = BaseRepositoryParser.create(cu);
         parser.processTypes();
@@ -421,15 +424,15 @@ class BaseRepositoryParserTest {
             RepositoryQuery q = parser.getQueryFromRepositoryMethod(callable);
             assertNotNull(q, "Query should be created successfully");
             assertEquals(QueryType.NATIVE_SQL, q.getQueryType(), "Query type should be NATIVE_SQL");
-            
+
             String queryString = q.getQuery();
             assertNotNull(queryString, "Query string should be available");
             assertFalse(queryString.isEmpty(), "Query string should not be empty");
-            
+
             // Verify line continuation backslashes are removed
             assertFalse(queryString.contains("\\\n"), "Query should not contain backslash-newline sequences");
             assertFalse(queryString.contains("\\\r\n"), "Query should not contain backslash-CRLF sequences");
-            
+
             // Verify the query is properly formatted as a single continuous SQL
             assertTrue(queryString.contains("SELECT COUNT(*)"), "Query should contain SELECT COUNT(*)");
             assertTrue(queryString.contains("FROM (SELECT"), "Query should contain FROM (SELECT");
@@ -437,14 +440,15 @@ class BaseRepositoryParserTest {
             assertTrue(queryString.contains("JOIN test_categories"), "Query should contain JOIN test_categories");
             assertTrue(queryString.contains("WHERE t.category_id"), "Query should contain WHERE clause");
             assertTrue(queryString.contains("GROUP BY"), "Query should contain GROUP BY");
-            
+
             // Verify parameters are preserved
-            assertTrue(queryString.contains(":categoryId") || queryString.contains("?1"), 
-                "Query should contain categoryId parameter");
-            assertTrue(queryString.contains(":itemId") || queryString.contains("?2"), 
-                "Query should contain itemId parameter");
-            
-            // Verify the query can be parsed as SQL (no syntax errors from line continuation)
+            assertTrue(queryString.contains(":categoryId") || queryString.contains("?1"),
+                    "Query should contain categoryId parameter");
+            assertTrue(queryString.contains(":itemId") || queryString.contains("?2"),
+                    "Query should contain itemId parameter");
+
+            // Verify the query can be parsed as SQL (no syntax errors from line
+            // continuation)
             assertDoesNotThrow(() -> {
                 // Try to parse as SQL to verify it's valid
                 String cleanQuery = queryString;
@@ -454,5 +458,48 @@ class BaseRepositoryParserTest {
                 assertTrue(cleanQuery.trim().startsWith("SELECT"), "Query should start with SELECT");
             }, "Query should be valid SQL");
         }, "Native query with text block line continuation should parse without errors");
+    }
+
+    @Test
+    void testCountStarHQL() throws IOException {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(cu);
+        parser.processTypes();
+
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("countUsers"))
+                .orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        assertDoesNotThrow(() -> {
+            parser.buildQueries();
+            RepositoryQuery q = parser.getQueryFromRepositoryMethod(callable);
+            assertNotNull(q);
+            String sql = q.getQuery();
+            assertTrue(sql.toLowerCase().contains("select count(*)"), "Query should contain SELECT COUNT(*): " + sql);
+            assertTrue(sql.contains("users"), "Query should reference users table: " + sql);
+            // The alias is u, so it might be u.id
+            assertTrue(sql.contains("id"), "Query should reference id column: " + sql);
+        });
+    }
+
+    @Test
+    void testInParameterHQL() throws IOException {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(cu);
+        parser.processTypes();
+
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("findByStatusIn"))
+                .orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        assertDoesNotThrow(() -> {
+            parser.buildQueries();
+            RepositoryQuery q = parser.getQueryFromRepositoryMethod(callable);
+            assertNotNull(q);
+            String sql = q.getQuery();
+            assertTrue(sql.contains("CASE WHEN"), "Query should contain CASE WHEN: " + sql);
+            assertTrue(sql.contains("IN"), "Query should contain IN: " + sql);
+            assertTrue(sql.contains("first_name"), "Query should reference first_name column: " + sql);
+        });
     }
 }
