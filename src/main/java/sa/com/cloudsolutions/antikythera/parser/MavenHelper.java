@@ -135,18 +135,22 @@ public class MavenHelper {
      * @throws IOException thrown if the copy operation failed
      */
     public String copyTemplate(String filename, String... subPath) throws IOException {
-        Path destinationPath = Path.of(Settings.getOutputPath(), subPath);     // Path where template file should be copied into
-        Files.createDirectories(destinationPath);
-        String name = destinationPath + File.separator + filename;
-        try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/" + filename);
-             FileOutputStream destStream = new FileOutputStream(name);
-             FileChannel destChannel = destStream.getChannel()) {
-            if (sourceStream == null) {
-                throw new IOException("Template file not found");
+        String outputPath = Settings.getOutputPath();
+        if (outputPath != null) {
+            Path destinationPath = Path.of(outputPath, subPath);     // Path where template file should be copied into
+            Files.createDirectories(destinationPath);
+            String name = destinationPath + File.separator + filename;
+            try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/" + filename);
+                 FileOutputStream destStream = new FileOutputStream(name);
+                 FileChannel destChannel = destStream.getChannel()) {
+                if (sourceStream == null) {
+                    throw new IOException("Template file not found");
+                }
+                destChannel.transferFrom(Channels.newChannel(sourceStream), 0, Long.MAX_VALUE);
             }
-            destChannel.transferFrom(Channels.newChannel(sourceStream), 0, Long.MAX_VALUE);
+            return name;
         }
-        return name;
+        return null;
     }
 
     /**

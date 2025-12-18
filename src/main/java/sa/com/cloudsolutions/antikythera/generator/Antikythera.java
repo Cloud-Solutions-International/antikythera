@@ -107,6 +107,10 @@ public class Antikythera {
         String testPath = PACKAGE_PATH.replace("main", "test");
         mavenHelper.copyPom();
         String name = mavenHelper.copyTemplate("TestHelper.txt", testPath, "base");
+        if (name == null) {
+            return;
+        }
+
         String java = name.replace(".txt", JAVA);
         File f = new File(name);
         if (f.renameTo(new File(java))) {
