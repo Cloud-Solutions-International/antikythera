@@ -157,7 +157,9 @@ public class AbstractCompiler {
         }
 
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
-        ParserConfiguration parserConfiguration = new ParserConfiguration().setSymbolResolver(symbolResolver);
+        ParserConfiguration parserConfiguration = new ParserConfiguration()
+            .setSymbolResolver(symbolResolver)
+            .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
         javaParser = new JavaParser(parserConfiguration);
     }
 
