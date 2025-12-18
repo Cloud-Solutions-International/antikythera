@@ -6,6 +6,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.CastExpr;
+import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
@@ -165,6 +166,11 @@ public class MockingRegistry {
     public static Variable createMockitoMockInstance(Class<?> cls) {
         Variable v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
         v.setClazz(cls);
+        // Set initializer so test generator knows to use Mockito.mock()
+        v.setInitializer(List.of(new MethodCallExpr(
+            new NameExpr(MOCKITO), "mock",
+            new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
+        )));
         return v;
     }
 
@@ -316,10 +322,50 @@ public class MockingRegistry {
 
             case "String", "java.lang.String" -> new StringLiteralExpr("Ibuprofen");
 
-            default -> new ObjectCreationExpr()
+            default -> createExpressionForUnknownType(qualifiedName);
+        };
+    }
+
+    /**
+     * Creates an expression for types not explicitly handled in expressionFactory.
+     * For interfaces and abstract classes, or classes without no-arg constructors,
+     * generates Mockito.mock(). Otherwise generates new ClassName().
+     */
+    private static Expression createExpressionForUnknownType(String qualifiedName) {
+        try {
+            Class<?> cls = AbstractCompiler.loadClass(qualifiedName);
+            if (cls.isInterface() || java.lang.reflect.Modifier.isAbstract(cls.getModifiers())) {
+                return createMockExpression(cls.getSimpleName());
+            }
+            // Try to find no-arg constructor
+            cls.getDeclaredConstructor();
+            return new ObjectCreationExpr()
                     .setType(new ClassOrInterfaceType().setName(qualifiedName))
                     .setArguments(new NodeList<>());
-        };
+        } catch (NoSuchMethodException e) {
+            // No no-arg constructor, use Mockito.mock()
+            String simpleName = qualifiedName.contains(".")
+                    ? qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1)
+                    : qualifiedName;
+            // Handle inner class names (replace $ with .)
+            simpleName = simpleName.replace('$', '.');
+            return createMockExpression(simpleName);
+        } catch (ClassNotFoundException e) {
+            // Fallback to object creation
+            return new ObjectCreationExpr()
+                    .setType(new ClassOrInterfaceType().setName(qualifiedName))
+                    .setArguments(new NodeList<>());
+        }
+    }
+
+    /**
+     * Creates a Mockito.mock(ClassName.class) expression.
+     */
+    private static Expression createMockExpression(String simpleName) {
+        return new MethodCallExpr(
+                new NameExpr(MOCKITO), "mock",
+                new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, simpleName)))
+        );
     }
 
     public static Expression createMockitoArgument(String typeName) {

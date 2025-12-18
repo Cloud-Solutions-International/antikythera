@@ -39,7 +39,11 @@ public class MockReturnValueHandler implements Answer<Object> {
             result = Reflect.getDefault(returnType);
             if (result == null) {
                 Class<?> cls = AbstractCompiler.loadClass(clsName);
+                // Create mock with a proper name based on the class simple name
+                String mockName = cls.getSimpleName();
+                mockName = Character.toLowerCase(mockName.charAt(0)) + mockName.substring(1);
                 result = Mockito.mock(cls, withSettings()
+                    .name(mockName)
                     .defaultAnswer(new MockReturnValueHandler())
                     .strictness(Strictness.LENIENT));
             }
