@@ -218,13 +218,13 @@ public class MavenHelper {
                 }
             }
 
-            return versions.stream().max(this::compareVersions).orElse(null);
+            return versions.stream().max(MavenHelper::compareVersions).orElse(null);
         } catch (IOException e) {
             return null;
         }
     }
 
-    private int compareVersions(String v1, String v2) {
+    public static int compareVersions(String v1, String v2) {
         try {
             String[] parts1 = v1.split("\\.");
             String[] parts2 = v2.split("\\.");
