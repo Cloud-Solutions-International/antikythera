@@ -99,10 +99,13 @@ public class MavenHelper {
     private void readPomFile(Path p) throws IOException, XmlPullParserException {
         MavenXpp3Reader reader = new MavenXpp3Reader();
         pomModel = reader.read(new FileReader(p.toFile()));
+        pomPath = p;
     }
 
     /**
      * Get POM model, reading it if not already loaded.
+     * If pomPath has been set via setPomPath(), uses that path.
+     * Otherwise, resolves path from Settings.getBasePath().
      * 
      * @return the Maven POM model
      * @throws IOException            if reading the POM file fails
@@ -110,7 +113,13 @@ public class MavenHelper {
      */
     public Model getPomModel() throws IOException, XmlPullParserException {
         if (pomModel == null) {
-            readPomFile();
+            if (pomPath != null) {
+                // Use custom path if set
+                readPomFile(pomPath);
+            } else {
+                // Use Settings-based resolution
+                readPomFile();
+            }
         }
         return pomModel;
     }
