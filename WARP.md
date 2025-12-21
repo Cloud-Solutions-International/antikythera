@@ -30,18 +30,39 @@ This document provides comprehensive technical information for AI agents working
 - **JSQLParser 5.3** (for SQL query manipulation)
 
 ### Key Dependencies
-- `javaparser-core` & `javaparser-symbol-solver-core` - Source code parsing
-- `byte-buddy` - Runtime class generation for mocking
-- `rest-assured` - API test generation
-- `jsqlparser` - Query parsing and conversion
-- `spring-boot-starter-data-jpa` - JPA entity metadata
-- `hql-parser` (GitHub dependency from raditha) - HQL to SQL conversion
-- `antikythera-common` (GitHub dependency) - Shared utilities
+- `javaparser-core` & `javaparser-symbol-solver-core` (3.27.0) - Source code parsing
+- `byte-buddy` (1.15.3) - Runtime class generation for mocking
+- `rest-assured` (5.5.5) - API test generation
+- `jsqlparser` (5.3) - SQL query manipulation
+- `spring-boot-starter-data-jpa` (2.7.14) - JPA entity metadata
+- `hql-parser` (0.0.15, com.github.e4c5) - ANTLR4-based HQL/JPQL to SQL conversion
+- `antlr4-runtime` (4.13.1) - ANTLR4 runtime for HQL parsing
+- `antikythera-common` (0.0.5, GitHub) - Shared utilities
+- `jackson-dataformat-yaml` (2.17.2) - YAML configuration parsing
+- `slf4j-api` (1.7.36) - Logging framework
+- `mockito-core` (5.11.0) - Mocking framework for tests
+- `junit-jupiter` (5.9.3) - JUnit 5 test framework
 
 ### Related Repositories
-- `antikythera-sample-project` - Sample application for testing
-- `antikythera-test-helper` - Test utilities and fixtures
-- `antikythera-agent` - Java agent for bytecode instrumentation
+- `antikythera-sample-project` - Sample Spring Boot application for testing Antikythera
+- `antikythera-test-helper` - Test utilities and fixtures shared across test suites
+- `antikythera-agent` - Java agent for bytecode instrumentation supporting reflective field access
+- `antikythera-examples` - Query optimization tools and practical examples built on Antikythera
+- `hql-parser` - Standalone HQL/JPQL parser with PostgreSQL conversion support
+
+### Recent Integrations & Improvements
+
+**HQL Parser Integration (Phase 1 Complete)**
+- Replaced mock HQL parsing with production-ready ANTLR4-based parser
+- `HQLParserAdapter` now bridges antikythera with `com.raditha.hql.parser`
+- Supports PostgreSQL dialect conversion
+- Better accuracy for complex HQL queries (joins, subqueries, aggregates)
+
+**Method-to-SQL Converter**
+- New `MethodToSQLConverter` utility extracted from BaseRepositoryParser
+- Handles Spring Data JPA method name keywords (findBy, countBy, deleteBy, etc.)
+- Supports complex method patterns (findByXAndY, OrderBy, Between, etc.)
+- Normalizes method names (e.g., `findUserByEmail` → `findByEmail`)
 
 ---
 
@@ -223,21 +244,65 @@ Static utility class for converting Java field names to snake_case SQL columns.
 - `processJoins(TypeWrapper, PlainSelect)` - Handles JOIN clauses with entity metadata
 
 **`HQLParserAdapter.java`**
-Adapter that bridges Antikythera's converter interface with the external hql-parser library (ANTLR4-based).
+Adapter that bridges Antikythera's converter interface with the external hql-parser library (ANTLR4-based). **This is the primary HQL converter used in production.**
 
 **Key Features:**
-- Uses `com.raditha.hql.parser.HQLParser` for HQL/JPQL parsing
+- Uses `com.raditha.hql.parser.HQLParser` for HQL/JPQL parsing with ANTLR4 grammar
 - Converts parsed HQL to PostgreSQL dialect using `HQLToPostgreSQLConverter`
-- Registers entity metadata mappings from JavaParser annotations
-- Provides ConversionResult with native SQL and metadata
+- Registers entity metadata mappings from JavaParser annotations automatically
+- Provides ConversionResult with native SQL, parameter mappings, and referenced tables
+- Handles SpEL expressions (`:#{#variableName}` patterns)
+- Supports CAST expressions and AS aliases
+- Processes constructor expressions (SELECT NEW)
 
 **Key Methods:**
-- `convertToNativeSQL(String jpaQuery)` - Parses and converts HQL to SQL
-- `registerMappings(MetaData)` - Registers entity-to-table mappings from HQL analysis
+- `convertToNativeSQL(String jpaQuery)` - Main entry point: parses HQL and converts to SQL
+- `registerMappings(MetaData)` - Registers entity-to-table and field-to-column mappings
+- Handles special HQL features like subqueries, aggregates, and complex joins
 
 **Dependencies:**
-- External library: `com.raditha:hql-parser` (GitHub dependency)
-- Supports PostgreSQL dialect conversion
+- External library: `com.github.e4c5:hql-parser:0.0.15` (via JitPack)
+- ANTLR4 runtime: `org.antlr:antlr4-runtime:4.13.1`
+- Currently supports PostgreSQL dialect; Oracle support planned
+
+**`MethodToSQLConverter.java`**
+Utility class that converts Spring Data JPA repository method names to SQL fragments.
+
+**Purpose:** Extract SQL generation logic from BaseRepositoryParser for better separation of concerns.
+
+**Key Features:**
+- Parses method names using JPA keywords (findBy, countBy, deleteBy, etc.)
+- Handles complex method patterns:
+  - `findByXAndY` → `WHERE x = ? AND y = ?`
+  - `findByXOrY` → `WHERE x = ? OR y = ?`
+  - `findByXBetween` → `WHERE x BETWEEN ? AND ?`
+  - `findByXGreaterThan` → `WHERE x > ?`
+  - `findByXIn` → `WHERE x IN (?)`
+  - `findByXContaining` → `WHERE x LIKE ?`
+  - `OrderByXDesc` → `ORDER BY x DESC`
+- Normalizes method names (e.g., `findUserByEmail` → `findByEmail`)
+- Handles edge cases: field names starting with lowercase, short keywords (In, Or, Not)
+
+**Key Methods:**
+- `extractComponents(String methodName)` - Parses method name into components (keywords and fields)
+- `buildSelectAndWhereClauses(List<String> components, StringBuilder sql, String tableName)` - Builds SQL from components
+- `handleQueryType()` - Handles query type keywords (findAll, findBy, countBy, etc.)
+- `handleOperator()` - Handles comparison and logical operators
+- `handleOrderBy()` - Handles ORDER BY clauses
+
+**Supported Query Types:**
+- `findAll`, `findAllById`, `findBy`, `findFirstBy`, `findTopBy`, `findDistinctBy`
+- `countBy`, `deleteBy`, `removeBy`, `existsBy`
+- `readBy`, `queryBy`, `searchBy`, `streamBy`, `get`
+
+**Supported Operators:**
+- Comparison: `GreaterThan`, `LessThan`, `Between`, `Before`, `After`
+- Equality: `Equals`, `Is`, `IsNot`
+- Null checks: `IsNull`, `IsNotNull`
+- Collections: `In`, `NotIn`
+- Strings: `Like`, `Containing`, `StartingWith`, `EndingWith`
+- Boolean: `IsTrue`, `IsFalse`, `True`, `False`
+- Logical: `And`, `Or`, `Not`
 
 ##### Dialect Support System
 
@@ -870,13 +935,34 @@ Central configuration management.
 - `base_path` - Root directory of target project
 - `base_package` - Base package name of target project
 - `output_path` - Where to write generated tests
-- `controllers` - List of controller classes to process
-- `services` - List of service classes to process
-- `jar_files` - Additional JAR dependencies
-- `skip` - Patterns for files to skip
-- `extra_exports` - Additional imports to resolve
-- `finch` - External source directories
-- `database` - Database connection settings (for repository parsing)
+- `controllers` - List of controller classes to process (can include `.java` extension or `#methodName` suffix)
+- `services` - List of service classes to process (can be class name or package path)
+- `jar_files` - Additional JAR dependencies to load
+- `dependencies.artifact_ids` - Maven artifact IDs for classpath resolution
+- `skip` - Patterns for files to skip during parsing
+- `extra_exports` or `extra_imports` - Additional imports to resolve (for problematic types)
+- `finch` - External source directories to include in parsing
+- `database` - Database connection settings:
+  - `url` - JDBC connection URL (dialect auto-detected)
+  - `username`, `password` - Database credentials
+  - `run_queries` - Execute queries during test generation (boolean)
+  - `query_conversion.enabled` - Enable JPA/HQL to SQL conversion
+  - `query_conversion.fallback_on_failure` - Fallback to original query on conversion failure
+  - `query_conversion.log_conversion_failures` - Log conversion errors
+  - `query_conversion.cache_results` - Cache conversion results
+- `variables` - YAML variables for substitution (supports `${VAR}` syntax)
+- `application.host` - Application hostname for API tests
+- `mock_with` - Mocking framework for generated tests (e.g., "mockito")
+- `mock_with_internal` - Mocking framework for internal evaluation
+- `base_test_class` - Base class for generated test classes
+- `log_appender` - Logging configuration
+
+**Configuration Features:**
+- Supports environment variable substitution: `${ENV_VAR_NAME}`
+- Supports YAML variable substitution: `${variable_name}`
+- Supports `${USERDIR}` replacement with user home directory
+- Nested properties accessed via dot notation (e.g., `database.url`)
+- List properties automatically converted to Collections
 
 **Methods:**
 - `loadConfigMap()` - Load configuration from YAML
@@ -908,17 +994,18 @@ sa.com.cloudsolutions.antikythera/
 │   ├── MCEWrapper.java                  # Method call expression wrapper
 │   ├── MavenHelper.java                 # Maven POM parsing
 │   ├── Stats.java                       # Statistics tracking
-│   └── converter/                       # JPA query conversion (12 classes)
+│   └── converter/                       # JPA query conversion (13 classes)
 │       ├── BasicConverter.java          # Field name conversion utility
-│       ├── HQLParserAdapter.java        # HQL to SQL adapter
-│       ├── EntityMappingResolver.java   # JPA entity metadata
+│       ├── HQLParserAdapter.java        # HQL to SQL adapter (ANTLR4-based)
+│       ├── MethodToSQLConverter.java    # Spring Data method name to SQL
+│       ├── EntityMappingResolver.java   # JPA entity metadata extraction
 │       ├── EntityMetadata.java          # Entity metadata container
-│       ├── TableMapping.java            # Entity-to-table mapping
-│       ├── JoinMapping.java             # Relationship mapping
-│       ├── JoinType.java                # JOIN type enum
+│       ├── TableMapping.java            # Entity-to-table mapping (Record)
+│       ├── JoinMapping.java             # Relationship mapping (Record)
+│       ├── JoinType.java                # JOIN type enum (INNER, LEFT, RIGHT, FULL)
 │       ├── ParameterMapping.java        # Parameter mapping
-│       ├── DatabaseDialect.java         # Database dialect enum
-│       ├── ConversionResult.java        # Conversion result
+│       ├── DatabaseDialect.java         # Database dialect enum (ORACLE, POSTGRESQL)
+│       ├── ConversionResult.java        # Conversion result wrapper
 │       ├── ConversionFailureReason.java # Failure reason enum
 │       └── QueryConversionException.java # Conversion exception
 │
@@ -1013,7 +1100,9 @@ sa.com.cloudsolutions.antikythera/
     └── AUTException.java                # Application Under Test errors
 ```
 
-**Total:** 102 Java source files
+**Total:** 103+ Java source files (exact count may vary with recent additions)
+
+**Note:** The converter package now includes `MethodToSQLConverter` which was extracted from `BaseRepositoryParser` to improve code organization and maintainability.
 
 ---
 
@@ -1210,12 +1299,28 @@ database:
 **Supported Method Name Patterns:**
 - `findBy[Field]` → `SELECT * FROM table WHERE field = ?`
 - `findBy[Field]And[Field2]` → `WHERE field = ? AND field2 = ?`
-- `findFirstBy[Field]` → `... LIMIT 1`
+- `findBy[Field]Or[Field2]` → `WHERE field = ? OR field2 = ?`
+- `findFirstBy[Field]` / `findTopBy[Field]` → `... LIMIT 1` (or ROWNUM for Oracle)
 - `findBy[Field]Between` → `WHERE field BETWEEN ? AND ?`
-- `findBy[Field]GreaterThan` → `WHERE field > ?`
+- `findBy[Field]GreaterThan` / `findBy[Field]After` → `WHERE field > ?`
+- `findBy[Field]LessThan` / `findBy[Field]Before` → `WHERE field < ?`
 - `findBy[Field]In` → `WHERE field IN (?)`
-- `findBy[Field]Containing` → `WHERE field LIKE ?`
-- `findBy[Field]OrderBy[Field2]` → Adds ORDER BY clause
+- `findBy[Field]NotIn` → `WHERE field NOT IN (?)`
+- `findBy[Field]Containing` / `findBy[Field]Like` → `WHERE field LIKE ?`
+- `findBy[Field]StartingWith` → `WHERE field LIKE ?` (prefix pattern)
+- `findBy[Field]EndingWith` → `WHERE field LIKE ?` (suffix pattern)
+- `findBy[Field]IsNull` → `WHERE field IS NULL`
+- `findBy[Field]IsNotNull` → `WHERE field IS NOT NULL`
+- `findBy[Field]IsTrue` / `findBy[Field]True` → `WHERE field = true`
+- `findBy[Field]IsFalse` / `findBy[Field]False` → `WHERE field = false`
+- `findBy[Field]OrderBy[Field2]Desc` / `OrderBy[Field2]Asc` → Adds ORDER BY clause
+- `countBy[Field]` → `SELECT COUNT(*) FROM table WHERE field = ?`
+- `deleteBy[Field]` / `removeBy[Field]` → `DELETE FROM table WHERE field = ?`
+- `existsBy[Field]` → `SELECT EXISTS (SELECT 1 FROM table WHERE field = ?)`
+- `findAll()` → `SELECT * FROM table`
+- `findAllById` → `SELECT * FROM table WHERE id IN (?)`
+
+**Note:** Method name parsing is handled by `MethodToSQLConverter` utility class. Complex patterns like `findByXAndYOrZ` are parsed correctly, with proper keyword boundary detection.
 
 #### BaseRepositoryQuery & RepositoryQuery
 **Purpose:** Represent queries with SQL manipulation and execution.
@@ -1624,13 +1729,61 @@ private static String applyDialect(String sql) {
 
 ---
 
+## Related Projects & Tools
+
+### Antikythera Examples Module
+The `antikythera-examples` project provides practical tools built on Antikythera:
+
+**Query Optimization Tools:**
+- **QueryOptimizationChecker** - Analyzes JPA repository queries for optimization opportunities
+- **QueryOptimizer** - Automatically applies query optimizations
+- **CardinalityAnalyzer** - Analyzes column cardinality (HIGH/MEDIUM/LOW) for index recommendations
+- **GeminiAIService** - AI-powered query optimization recommendations
+- **LiquibaseGenerator** - Generates Liquibase changesets for index creation/drops
+
+**Query Analysis:**
+- **QueryOptimizationExtractor** - Extracts WHERE and JOIN conditions from queries
+- **WhereClauseCollector** - Separates WHERE and JOIN ON conditions
+- **QueryAnalysisEngine** - Core optimization rule engine
+
+**Other Tools:**
+- **Usage Finder** - Finds usages of classes/methods across codebase
+- **Test Fixer** - Automated test repair and migration
+- **Logger Tool** - Analyzes and optimizes logging statements
+- **Hard Delete Tool** - Analyzes hard delete operations in codebase
+
+See `antikythera-examples/README.md` and `antikythera-examples/docs/` for detailed documentation.
+
+### HQL Parser Project
+Standalone HQL/JPQL parser with PostgreSQL conversion:
+- ANTLR4-based grammar for accurate parsing
+- Supports SELECT, UPDATE, DELETE, INSERT statements
+- Entity detection and field mapping
+- Parameter extraction (named and positional)
+- Join support (INNER, LEFT, RIGHT)
+- Aggregate function support
+
+Located in `hql-parser/` directory. See `hql-parser/README.md` for details.
+
+### Integration Status
+- ✅ **Phase 1 Complete:** HQL parser integration into Antikythera core
+- ✅ **Production Ready:** HQLParserAdapter is default converter
+- 🔄 **Future:** Oracle dialect support in hql-parser
+- 🔄 **Future:** Enhanced QueryOptimizationChecker with hql-parser integration
+
+---
+
 ## Additional Resources
 
-- **README.md** - Project overview and setup
-- **GEMINI.md** - Quick reference for Gemini
+- **README.md** - Project overview and setup instructions
+- **GEMINI.md** - Quick reference guide for Gemini AI
+- **PACKAGE.md** - GitHub Packages usage instructions
 - **pom.xml** - Dependencies and build configuration
 - **JavaParser docs** - https://javaparser.org/
 - **ByteBuddy docs** - https://bytebuddy.net/
+- **ANTLR4 docs** - https://www.antlr.org/
+- **Spring Data JPA Reference** - https://docs.spring.io/spring-data/jpa/docs/current/reference/html/
+- **HQL Parser Integration Docs** - See `docs/HQL_PARSER_INTEGRATION_STRATEGY.md` and `docs/INTEGRATION_PHASE1_COMPLETE.md`
 
 ---
 
@@ -1641,7 +1794,20 @@ When making changes:
 1. Create a feature branch
 2. Add tests for new functionality
 3. Run full test suite (`mvn test`)
-4. Update this documentation if needed
-5. Create a pull request
+4. Ensure tests pass (requires cloned `antikythera-sample-project` and `antikythera-test-helper`)
+5. Update this documentation if needed
+6. Create a pull request
+
+**Testing Requirements:**
+- Must have `antikythera-sample-project` and `antikythera-test-helper` cloned
+- JVM flags required: `--add-opens java.base/java.util.stream=ALL-UNNAMED`
+- Java 21+ required for compilation
+- ~620 unit and integration tests must pass
+
+**Common Development Tasks:**
+- Adding new Spring Data JPA method keywords → Update `MethodToSQLConverter`
+- Supporting new database dialects → Extend `DatabaseDialect` enum and add conversion logic
+- Adding new expression types → Extend `Evaluator.evaluateExpression()`
+- Adding new parser types → Create new parser extending `AbstractCompiler`
 
 For questions or issues, refer to the project repository or contact the maintainers.
