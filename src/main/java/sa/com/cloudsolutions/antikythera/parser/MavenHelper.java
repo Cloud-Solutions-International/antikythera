@@ -12,7 +12,6 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -63,16 +62,9 @@ public class MavenHelper {
                 Path pom = Paths.get(m2, groupIdPath, artifactId, version,
                         artifactId + "-" + version + ".pom");
                 if (Files.exists(pom)) {
-                    try {
-                        MavenHelper pomHelper = new MavenHelper();
-                        pomHelper.readPomFile(pom);
-                        pomHelper.buildJarPaths();
-                    } catch (XmlPullParserException e) {
-                        // Skip POMs with encoding issues (e.g., UTF-8 BOM with ISO-8859-1 declaration)
-                        // This can happen with third-party Maven artifacts that have malformed POMs
-                        logger.warn("Failed to read POM file {}: {}. Skipping transitive dependencies.",
-                                pom, e.getMessage());
-                    }
+                    MavenHelper pomHelper = new MavenHelper();
+                    pomHelper.readPomFile(pom);
+                    pomHelper.buildJarPaths();
                 }
             }
         } else {
@@ -105,8 +97,13 @@ public class MavenHelper {
 
     private void readPomFile(Path p) throws IOException, XmlPullParserException {
         MavenXpp3Reader reader = new MavenXpp3Reader();
-        pomModel = reader.read(new FileReader(p.toFile()));
-        pomPath = p;
+        // Use InputStream instead of Reader to let XML parser respect the file's
+        // declared encoding
+        // This handles POMs with encoding="ISO-8859-1" declaration correctly
+        try (java.io.InputStream is = java.nio.file.Files.newInputStream(p)) {
+            pomModel = reader.read(is);
+            pomPath = p;
+        }
     }
 
     /**
@@ -297,6 +294,7 @@ public class MavenHelper {
                             try {
                                 addJarPath(dependency, m2);
                             } catch (XmlPullParserException | IOException e) {
+                                System.out.println("Dependency " + dependency);
                                 throw new AntikytheraException(e);
                             }
                         }
