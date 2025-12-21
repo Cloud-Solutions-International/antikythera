@@ -63,9 +63,16 @@ public class MavenHelper {
                 Path pom = Paths.get(m2, groupIdPath, artifactId, version,
                         artifactId + "-" + version + ".pom");
                 if (Files.exists(pom)) {
-                    MavenHelper pomHelper = new MavenHelper();
-                    pomHelper.readPomFile(pom);
-                    pomHelper.buildJarPaths();
+                    try {
+                        MavenHelper pomHelper = new MavenHelper();
+                        pomHelper.readPomFile(pom);
+                        pomHelper.buildJarPaths();
+                    } catch (XmlPullParserException e) {
+                        // Skip POMs with encoding issues (e.g., UTF-8 BOM with ISO-8859-1 declaration)
+                        // This can happen with third-party Maven artifacts that have malformed POMs
+                        logger.warn("Failed to read POM file {}: {}. Skipping transitive dependencies.",
+                                pom, e.getMessage());
+                    }
                 }
             }
         } else {
