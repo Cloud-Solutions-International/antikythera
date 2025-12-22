@@ -88,7 +88,11 @@ public class ServicesParser {
     }
 
     public void writeFiles() throws IOException {
-        generator.save();
+        if (generator != null) {
+            generator.save();
+        }
+        // If generator is null, it means no methods were evaluated (e.g., interface with no default methods)
+        // This is expected and we can safely skip writing files
     }
 
     public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {

@@ -36,7 +36,20 @@ public class ImportUtils {
                 GraphNode n = Graph.createGraphNode(wrapper.getType());
                 if (!packageName.equals(
                         findPackage(wrapper.getType())) && !packageName.isEmpty()) {
-                    node.getDestination().addImport(n.getTypeDeclaration().getFullyQualifiedName().orElseThrow());
+                    // Check if typeDeclaration is null before accessing it
+                    TypeDeclaration<?> typeDecl = n.getTypeDeclaration();
+                    if (typeDecl != null) {
+                        node.getDestination().addImport(typeDecl.getFullyQualifiedName().orElseThrow());
+                    } else {
+                        // Fallback: use the wrapper's fully qualified name or find it from the type
+                        String fqn = wrapper.getFullyQualifiedName();
+                        if (fqn == null) {
+                            fqn = AbstractCompiler.findFullyQualifiedName(compilationUnit, wrapper.getType().getNameAsString());
+                        }
+                        if (fqn != null && !fqn.equals(packageName) && !packageName.isEmpty()) {
+                            node.getDestination().addImport(fqn);
+                        }
+                    }
                 }
                 return n;
             }

@@ -1,15 +1,19 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.ClassExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockedFieldDetector;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
@@ -106,8 +110,27 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         }
 
         Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
-        if (opt.isPresent() ) {
-            v = createObjectWithSimplestConstructor(opt.get(), param.getNameAsString());
+        if (opt.isPresent()) {
+            TypeDeclaration<?> typeDecl = opt.get();
+            // Check if it's an interface - if so, use Mockito.mock() instead of trying to instantiate
+            if (typeDecl.isClassOrInterfaceDeclaration() && typeDecl.asClassOrInterfaceDeclaration().isInterface()) {
+                // For interfaces, we need to use Mockito.mock() - but we need the Class object
+                // Try to load it, or create a mock with the type name
+                try {
+                    Class<?> interfaceClass = AbstractCompiler.loadClass(fullClassName);
+                    return MockingRegistry.createMockitoMockInstance(interfaceClass);
+                } catch (ClassNotFoundException e) {
+                    // Can't load the class, create a Variable with Mockito.mock() initializer
+                    Variable mockVar = new Variable(null);
+                    MethodCallExpr mockExpr = new MethodCallExpr(
+                        new NameExpr("Mockito"), "mock",
+                        new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, typeDecl.getNameAsString())))
+                    );
+                    mockVar.setInitializer(List.of(mockExpr));
+                    return mockVar;
+                }
+            }
+            v = createObjectWithSimplestConstructor(typeDecl, param.getNameAsString());
         }
 
         return v;

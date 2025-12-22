@@ -102,7 +102,15 @@ public class Graph {
             CompilationUnit parentCompilationUnit = parentGraphNode.getDestination();
             g.setDestination(parentCompilationUnit);
 
-            ClassOrInterfaceDeclaration parentClass = parentGraphNode.getTypeDeclaration().asClassOrInterfaceDeclaration();
+            TypeDeclaration<?> parentTypeDecl = parentGraphNode.getTypeDeclaration();
+            if (parentTypeDecl == null || !parentTypeDecl.isClassOrInterfaceDeclaration()) {
+                // Fallback: create a new class declaration in the destination
+                target = g.getDestination().addClass(cdecl.getNameAsString());
+                target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
+                g.setTypeDeclaration(target);
+                return;
+            }
+            ClassOrInterfaceDeclaration parentClass = parentTypeDecl.asClassOrInterfaceDeclaration();
             ClassOrInterfaceDeclaration innerClass = cdecl.asClassOrInterfaceDeclaration().clone();
             target = parentClass.addMember(innerClass);
             target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
