@@ -88,7 +88,7 @@ public class UnitTestGenerator extends TestGenerator {
      * in the case of a variable created with mockito the value will be true. For non mockito
      * variables, it will be false.
      */
-    private Map<String, Boolean> variables = new HashMap<>();
+    private final Map<String, Boolean> variables = new HashMap<>();
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);

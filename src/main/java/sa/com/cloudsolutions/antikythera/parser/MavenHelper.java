@@ -294,7 +294,6 @@ public class MavenHelper {
                             try {
                                 addJarPath(dependency, m2);
                             } catch (XmlPullParserException | IOException e) {
-                                System.out.println("Dependency " + dependency);
                                 throw new AntikytheraException(e);
                             }
                         }
