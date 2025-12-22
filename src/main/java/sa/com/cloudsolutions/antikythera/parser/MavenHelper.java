@@ -12,7 +12,6 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,6 +34,7 @@ public class MavenHelper {
     private static final Logger logger = LoggerFactory.getLogger(MavenHelper.class);
     private static final Map<String, Artifact> artifacts = new HashMap<>();
     private Model pomModel;
+    private Path pomPath;
 
     public static String[] getJarPaths() {
         List<String> paths = new ArrayList<>();
@@ -44,10 +44,11 @@ public class MavenHelper {
             }
         }
 
-        return paths.toArray(new String[]{});
+        return paths.toArray(new String[] {});
     }
 
-    private static void addDependency(String m2, String groupIdPath, String artifactId, String version) throws IOException, XmlPullParserException {
+    private static void addDependency(String m2, String groupIdPath, String artifactId, String version)
+            throws IOException, XmlPullParserException {
         Path p = Paths.get(m2, groupIdPath, artifactId, version,
                 artifactId + "-" + version + ".jar");
         if (Files.exists(p)) {
@@ -73,7 +74,7 @@ public class MavenHelper {
 
     public void readPomFile() throws IOException, XmlPullParserException {
         String basePath = Settings.getBasePath();
-        Path p = null;
+        Path p;
         if (basePath.contains("src/main/java")) {
             p = Paths.get(basePath.replace("/src/main/java", ""), POM_XML);
         } else if (basePath.contains("src/test/java")) {
@@ -81,26 +82,126 @@ public class MavenHelper {
         } else {
             p = Paths.get(basePath, POM_XML);
         }
+
+        // Parent fallback logic from PomUtils
+        if (!p.toFile().exists()) {
+            Path parent = p.getParent();
+            if (parent != null) {
+                p = parent.getParent().resolve(POM_XML);
+            }
+        }
+
+        pomPath = p;
         readPomFile(p);
     }
 
     private void readPomFile(Path p) throws IOException, XmlPullParserException {
         MavenXpp3Reader reader = new MavenXpp3Reader();
-        pomModel = reader.read(new FileReader(p.toFile()));
+        // Use InputStream instead of Reader to let XML parser respect the file's
+        // declared encoding
+        // This handles POMs with encoding="ISO-8859-1" declaration correctly
+        try (java.io.InputStream is = java.nio.file.Files.newInputStream(p)) {
+            pomModel = reader.read(is);
+            pomPath = p;
+        }
     }
 
     /**
-     * Copy the pom.xml file to the specified path, injecting the dependencies as needed.
+     * Get POM model, reading it if not already loaded.
+     * If pomPath has been set via setPomPath(), uses that path.
+     * Otherwise, resolves path from Settings.getBasePath().
+     * 
+     * @return the Maven POM model
+     * @throws IOException            if reading the POM file fails
+     * @throws XmlPullParserException if parsing the POM file fails
+     */
+    public Model getPomModel() throws IOException, XmlPullParserException {
+        if (pomModel == null) {
+            if (pomPath != null) {
+                // Use custom path if set
+                readPomFile(pomPath);
+            } else {
+                // Use Settings-based resolution
+                readPomFile();
+            }
+        }
+        return pomModel;
+    }
+
+    /**
+     * Set a custom POM path and invalidate cached model.
+     * 
+     * @param path the path to the POM file
+     */
+    public void setPomPath(Path path) {
+        this.pomPath = path;
+        this.pomModel = null;
+    }
+
+    /**
+     * Get the resolved POM path.
+     * 
+     * @return the path to the POM file
+     * @throws IOException            if resolving the POM path fails
+     * @throws XmlPullParserException if reading the POM file fails
+     */
+    public Path getPomPath() throws IOException, XmlPullParserException {
+        if (pomPath == null) {
+            readPomFile();
+        }
+        return pomPath;
+    }
+
+    /**
+     * Write POM model to the tracked path.
+     * 
+     * @param model the Maven model to write
+     * @throws IOException if writing fails
+     */
+    public void writePomModel(Model model) throws IOException {
+        if (pomPath == null) {
+            throw new IllegalStateException("POM path not set. Call getPomModel() or setPomPath() first.");
+        }
+        MavenXpp3Writer writer = new MavenXpp3Writer();
+        try (FileWriter fileWriter = new FileWriter(pomPath.toFile())) {
+            writer.write(fileWriter, model);
+        }
+        this.pomModel = model;
+    }
+
+    /**
+     * Write POM model to a specific path.
+     * 
+     * @param path  the path to write to
+     * @param model the Maven model to write
+     * @throws IOException if writing fails
+     */
+    public void writePomModel(Path path, Model model) throws IOException {
+        MavenXpp3Writer writer = new MavenXpp3Writer();
+        try (FileWriter fileWriter = new FileWriter(path.toFile())) {
+            writer.write(fileWriter, model);
+        }
+        this.pomPath = path;
+        this.pomModel = model;
+    }
+
+    /**
+     * Copy the pom.xml file to the specified path, injecting the dependencies as
+     * needed.
      * <p>
-     * The configuration file needs to have a dependencies section that provides the list of
-     * `artifactids` that need to be included in the output pom file. If these dependencies
+     * The configuration file needs to have a dependencies section that provides the
+     * list of
+     * `artifactids` that need to be included in the output pom file. If these
+     * dependencies
      * require any variables, those are copied as well.
      * <p>
-     * The primary source file is the file from the template folder. The dependencies are
+     * The primary source file is the file from the template folder. The
+     * dependencies are
      * supposed to be listed in the pom file of the application under test.
      *
      * @throws IOException            if the POM file cannot be copied
-     * @throws XmlPullParserException if the POM file cannot be converted to an XML Tree
+     * @throws XmlPullParserException if the POM file cannot be converted to an XML
+     *                                Tree
      */
     public void copyPom() throws IOException, XmlPullParserException {
         String[] dependencies = Settings.getArtifacts();
@@ -137,12 +238,12 @@ public class MavenHelper {
     public String copyTemplate(String filename, String... subPath) throws IOException {
         String outputPath = Settings.getOutputPath();
         if (outputPath != null) {
-            Path destinationPath = Path.of(outputPath, subPath);     // Path where template file should be copied into
+            Path destinationPath = Path.of(outputPath, subPath); // Path where template file should be copied into
             Files.createDirectories(destinationPath);
             String name = destinationPath + File.separator + filename;
             try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/" + filename);
-                 FileOutputStream destStream = new FileOutputStream(name);
-                 FileChannel destChannel = destStream.getChannel()) {
+                    FileOutputStream destStream = new FileOutputStream(name);
+                    FileChannel destChannel = destStream.getChannel()) {
                 if (sourceStream == null) {
                     throw new IOException("Template file not found");
                 }
@@ -154,7 +255,8 @@ public class MavenHelper {
     }
 
     /**
-     * Copy the properties of the dependency from the source model to the template model
+     * Copy the properties of the dependency from the source model to the template
+     * model
      *
      * @param srcModel      the pom file model from the application under test
      * @param templateModel from the template folder
@@ -166,7 +268,8 @@ public class MavenHelper {
         Pattern pattern = Pattern.compile("\\$\\{(.+?)\\}");
 
         // Check all fields of the dependency for property references
-        String[] fields = {dependency.getGroupId(), dependency.getArtifactId(), dependency.getVersion(), dependency.getScope()};
+        String[] fields = { dependency.getGroupId(), dependency.getArtifactId(), dependency.getVersion(),
+                dependency.getScope() };
         for (String field : fields) {
             if (field != null) {
                 Matcher matcher = pattern.matcher(field);
@@ -191,6 +294,7 @@ public class MavenHelper {
                             try {
                                 addJarPath(dependency, m2);
                             } catch (XmlPullParserException | IOException e) {
+                                System.out.println("Dependency " + dependency);
                                 throw new AntikytheraException(e);
                             }
                         }
@@ -218,13 +322,13 @@ public class MavenHelper {
                 }
             }
 
-            return versions.stream().max(this::compareVersions).orElse(null);
+            return versions.stream().max(MavenHelper::compareVersions).orElse(null);
         } catch (IOException e) {
             return null;
         }
     }
 
-    private int compareVersions(String v1, String v2) {
+    public static int compareVersions(String v1, String v2) {
         try {
             String[] parts1 = v1.split("\\.");
             String[] parts2 = v2.split("\\.");
