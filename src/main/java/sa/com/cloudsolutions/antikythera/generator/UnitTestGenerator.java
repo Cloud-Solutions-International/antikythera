@@ -47,7 +47,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
@@ -542,7 +541,7 @@ public class UnitTestGenerator extends TestGenerator {
                     (mce.getScope().get().toString().equals("Mockito") || 
                      mce.getScope().get().toString().contains("Mockito"));
                 boolean hasClassExprArg = mce.getArguments().size() == 1 && 
-                    mce.getArguments().get(0).isClassExpr();
+                    mce.getArgument(0).isClassExpr();
                 if (hasMockitoScope || hasClassExprArg) {
                     // Already a Mockito.mock() call, use it directly
                     body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + firstInitializer + ";");
