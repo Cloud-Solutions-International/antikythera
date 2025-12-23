@@ -1,366 +1,476 @@
-# Antikythera - Warp AI Agent Guide
+# Antikythera - AI Agent Guide
 
-This document provides comprehensive technical information for AI agents working on the Antikythera project. For basic project information, see `README.md` and `GEMINI.md`.
+**Technical reference for AI agents working with Antikythera**
 
-## Table of Contents
-1. [Quick Start - For AI Agents](#quick-start---for-ai-agents)
-2. [Project Overview](#project-overview)
-3. [Architecture](#architecture)
-4. [Core Modules](#core-modules)
-5. [Package Structure](#package-structure)
-6. [Key Workflows](#key-workflows)
-7. [API Entry Points](#api-entry-points)
-8. [Development Guidelines](#development-guidelines)
-9. [Testing Strategy](#testing-strategy)
-10. [Common Tasks](#common-tasks)
-11. [Decision Guide](#decision-guide)
+For project overview and capabilities, see [README.md](README.md).
 
 ---
 
-## Quick Start - For AI Agents
+## Table of Contents
+1. [Quick Start](#quick-start)
+2. [Core Capabilities](#core-capabilities)
+3. [Key Modules](#key-modules)
+4. [Common Patterns](#common-patterns)
+5. [Configuration](#configuration)
+6. [Development Guide](#development-guide)
 
-### Primary Entry Points
+---
 
-**Main Class for Test Generation:**
+## Quick Start
+
+### Entry Points
+
+**Generate Tests:**
 ```java
-// 1. Initialize (loads configuration from generator.yml)
 Antikythera antk = Antikythera.getInstance();
-
-// 2. Pre-process (parses all source files, copies base files)
-antk.preProcess();
-
-// 3. Generate API tests for REST controllers
-antk.generateApiTests();
-
-// 4. Generate unit tests for services
-antk.generateUnitTests();
+antk.preProcess();           // Parse source files
+antk.generateApiTests();     // REST controller tests
+antk.generateUnitTests();    // Service class tests
 ```
 
-**Configuration Loading:**
+**Extract Dependencies:**
 ```java
-// Load from default generator.yml in resources
-Settings.loadConfigMap();
-
-// Or load from custom file
-Settings.loadConfigMap(new File("path/to/config.yml"));
-
-// Access configuration
-String basePath = Settings.getBasePath();
-Collection<String> controllers = Settings.getPropertyList(Settings.CONTROLLERS, String.class);
+DepSolver solver = DepSolver.createSolver();
+solver.processMethod("com.example.UserService#createUser");
+solver.dfs();                // Build dependency graph
+solver.writeFiles();         // Output minimal codebase
 ```
 
-**Type Resolution (Most Common Operation):**
+**Parse & Analyze Code:**
 ```java
-// Get compilation unit from cache
-CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
-
-// Resolve type name to TypeWrapper
-TypeWrapper type = AbstractCompiler.findType(cu, "TypeName");
-
-// Check if type is service/controller/component
-if (type.isService()) { /* handle service */ }
-if (type.isController()) { /* handle controller */ }
-```
-
-**Parser Usage:**
-```java
-// Parse a REST controller
+// Controllers
 RestControllerParser parser = new RestControllerParser("com.example.UserController");
-parser.start(); // Generates tests automatically
+parser.start();
 
-// Parse a service
+// Services
 ServicesParser serviceParser = new ServicesParser("com.example.UserService");
 serviceParser.start();
-serviceParser.writeFiles(); // Write generated test files
 
-// Parse a repository
+// Repositories (with query extraction)
 RepositoryParser repoParser = new RepositoryParser("com.example.UserRepository");
-// Queries are automatically extracted and converted to SQL
 ```
 
-**Expression Evaluation:**
+---
+
+## Core Capabilities
+
+### 1. Automated Test Generation
+**Purpose:** Generate JUnit tests with assertions, mocks, and preconditions
+
+**Key Classes:**
+- `Antikythera` - Main entry point
+- `SpringTestGenerator` - REST controller tests (RESTAssured)
+- `UnitTestGenerator` - Service class tests (Mockito)
+- `TestGenerator` - Base test generation logic
+
+**What It Does:**
+- Explores all code branches automatically
+- Creates meaningful assertions from return values
+- Generates mock setups for dependencies
+- Handles void methods via logging/side effects
+
+### 2. Dependency Analysis & Extraction
+**Purpose:** Extract minimal, compilable code for migration or microservices
+
+**Key Classes:**
+- `DepSolver` - Dependency graph builder (DFS algorithm)
+- `Graph` & `GraphNode` - Graph data structures
+- `InterfaceSolver` - Interface implementation resolution
+- `DTOHandler` - DTO/Entity handling
+
+**What It Does:**
+- Identifies all dependencies (fields, parameters, return types, annotations)
+- Handles inheritance, interfaces, generics, nested classes
+- Generates properly sorted, compilable code
+- Organizes imports and member ordering
+
+### 3. Query Parsing & Analysis
+**Purpose:** Parse SQL, HQL/JPQL, and SpEL from JPA repositories
+
+**Key Classes:**
+- `BaseRepositoryParser` - Query extraction and parsing
+- `HQLParserAdapter` - HQL/JPQL → SQL conversion
+- `MethodToSQLConverter` - Derive SQL from method names
+- `EntityMappingResolver` - JPA entity metadata
+
+**What It Does:**
+- Extracts @Query annotations (native SQL, HQL, JPQL)
+- Derives queries from method names (findByUsernameAndEmail, etc.)
+- Converts HQL/JPQL to native SQL
+- Handles SpEL expressions (`:#{#variableName}`)
+- Supports PostgreSQL and Oracle dialects
+
+**Supported Patterns:**
+- `findBy[Field]`, `countBy[Field]`, `deleteBy[Field]`
+- `findBy[Field]And[Field2]`, `findBy[Field]Or[Field2]`
+- `findBy[Field]GreaterThan`, `findBy[Field]Between`
+- `findBy[Field]Containing`, `findBy[Field]StartingWith`
+- `findBy[Field]OrderBy[Field2]Asc/Desc`
+- And 20+ more patterns
+
+### 4. Expression Evaluation
+**Purpose:** Symbolically execute Java code to discover behavior
+
+**Key Classes:**
+- `Evaluator` - Base expression evaluation engine
+- `SpringEvaluator` - Spring-aware evaluation
+- `ControlFlowEvaluator` - Branch/loop handling
+- `FPEvaluator` - Lambda/functional programming support
+
+**What It Does:**
+- Executes code paths using reflection
+- Tracks variables, fields, scopes
+- Handles branching (if/else, switch, loops)
+- Supports functional programming (lambdas, streams)
+- Generates test data from execution traces
+
+---
+
+## Key Modules
+
+### Parser Module (`parser/`)
+**Core:** `AbstractCompiler` - JavaParser wrapper with type resolution
+
+**Specialized Parsers:**
+- `RestControllerParser` - REST endpoints (@RestController, @GetMapping, etc.)
+- `ServicesParser` - Business logic (@Service, @Component)
+- `RepositoryParser` - JPA repositories (extends BaseRepositoryParser)
+- `BaseRepositoryParser` - Query extraction & conversion
+
+**Utilities:**
+- `TypeWrapper` - Enhanced type information
+- `ImportUtils` - Import management
+- `Callable` - Method/constructor abstraction
+
+### Evaluator Module (`evaluator/`)
+**Core:** `Evaluator` - Expression evaluation engine
+
+**Specialized Evaluators:**
+- `SpringEvaluator` - Spring framework support
+- `ControlFlowEvaluator` - Branching logic
+- `MockingEvaluator` - Mocked dependencies
+- `FPEvaluator` - Functional interfaces
+
+**Support:**
+- `Variable` - Variable state tracking
+- `AntikytheraRunTime` - Global caches (compilation units, types)
+- `ArgumentGenerator` - Test argument generation
+
+### Generator Module (`generator/`)
+**Core:** `TestGenerator` - Base test generation
+
+**Specialized Generators:**
+- `SpringTestGenerator` - API tests
+- `UnitTestGenerator` - Unit tests
+- `MethodResponse` - Captures method execution results
+
+**Utilities:**
+- `CopyUtils` - File/project structure creation
+- `TestCaseWriter` - Test file writing
+
+### DepSolver Module (`depsolver/`)
+**Core:** `DepSolver` - Dependency extraction
+
+**Support:**
+- `Graph` & `GraphNode` - Dependency graph
+- `InterfaceSolver` - Find implementations
+- `Resolver` - Type resolution
+- `DTOHandler` - DTO/Entity handling
+
+### Configuration Module (`configuration/`)
+**Core:** `Settings` - YAML configuration management
+
+**Key Properties:**
+- `base_path` - Source code location
+- `output_path` - Generated test location
+- `controllers` - Controller classes to test
+- `services` - Service classes to test
+- `database.url` - Database connection for query execution
+
+---
+
+## Common Patterns
+
+### Pattern: Type Resolution
 ```java
-// Create evaluator for a class
-Evaluator evaluator = EvaluatorFactory.create("com.example.UserService", Evaluator.class);
+// Always check cache first
+CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(className);
 
-// Evaluate a method call expression
-MethodCallExpr mce = /* get from AST */;
-Variable result = evaluator.evaluateMethodCall(mce);
+// Resolve types
+TypeWrapper type = AbstractCompiler.findType(cu, "TypeName");
+```
 
-// Get variable value
+### Pattern: Query Conversion
+```java
+// HQL → SQL
+HQLParserAdapter adapter = new HQLParserAdapter(cu, entityWrapper);
+ConversionResult result = adapter.convertToNativeSQL(hqlQuery);
+String sql = result.getSql();
+
+// Method name → SQL
+List<String> components = MethodToSQLConverter.extractComponents("findByUsernameAndEmail");
+StringBuilder sql = new StringBuilder();
+MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+```
+
+### Pattern: Dependency Extraction
+```java
+// Extract dependencies for a method
+DepSolver solver = DepSolver.createSolver();
+solver.processMethod("com.example.UserService#createUser");
+solver.dfs();
+
+// Or for entire class
+for (MethodDeclaration md : classDecl.getMethods()) {
+    Graph.createGraphNode(md);
+}
+solver.dfs();
+solver.writeFiles();
+```
+
+### Pattern: Expression Evaluation
+```java
+// Create evaluator
+Evaluator evaluator = EvaluatorFactory.create(className, SpringEvaluator.class);
+
+// Evaluate expression
+Variable result = evaluator.evaluateExpression(expression);
 Object value = result.getValue();
 ```
 
-### Quick Decision Tree
+---
 
-**Need to generate tests?**
-- → Use `Antikythera.getInstance()` → `preProcess()` → `generateApiTests()` or `generateUnitTests()`
+## Configuration
 
-**Need to parse source code?**
-- Controllers → `RestControllerParser`
-- Services → `ServicesParser`  
-- Repositories → `RepositoryParser` or `BaseRepositoryParser`
-- Generic parsing → `AbstractCompiler.compile(path)`
+### YAML Structure
 
-**Need to resolve types?**
-- → `AbstractCompiler.findType(cu, typeName)`
-- → Check `AntikytheraRunTime.getCompilationUnit(className)` first
+**generator.yml** - Main configuration file
 
-**Need to convert HQL to SQL?**
-- → `HQLParserAdapter.convertToNativeSQL(hqlQuery)`
-- → Requires `EntityMetadata` from `EntityMappingResolver`
+```yaml
+base_path: /path/to/source/code/src/main/java
+output_path: /path/to/output/src/test/java
+base_package: com.example
+skip_getters_setters: true
 
-**Need to convert method name to SQL?**
-- → `MethodToSQLConverter.extractComponents(methodName)`
-- → `MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, tableName)`
+controllers:
+  - com.example.UserController
+  - com.example.OrderController
 
-**Need to evaluate Java code?**
-- → `Evaluator.evaluateExpression(expression)`
-- → For Spring classes → `SpringEvaluator`
-- → For mocking → `MockingEvaluator`
+services:
+  - com.example.UserService
+  - com.example.OrderService
 
-### Common Patterns
-
-**Pattern 1: Parse and Generate Tests**
-```java
-Antikythera antk = Antikythera.getInstance();
-antk.preProcess();
-antk.generateApiTests();    // For controllers
-antk.generateUnitTests();   // For services
+database:
+  url: jdbc:postgresql://localhost:5432/mydb
+  username: user
+  password: pass
+  run_queries: true              # Execute queries during test generation
+  
+query_conversion:
+  enabled: true                  # Enable HQL→SQL conversion
+  fallback_on_failure: true      # Use original query if conversion fails
+  cache_results: true
 ```
 
-**Pattern 2: Custom Parsing**
-```java
-AbstractCompiler compiler = new AbstractCompiler();
-compiler.compile("path/to/Class.java");
-CompilationUnit cu = compiler.getCompilationUnit();
-TypeWrapper type = AbstractCompiler.findType(cu, "ClassName");
+**depsolver.yml** - Dependency extraction configuration
+
+```yaml
+base_path: /path/to/source/src/main/java
+output_path: /path/to/output/src/main/java
+base_package: com.example
+
+methods:
+  - com.example.UserService#createUser
+  - com.example.OrderService#processOrder
 ```
 
-**Pattern 3: Query Conversion**
-```java
-EntityMappingResolver resolver = new EntityMappingResolver();
-EntityMetadata metadata = resolver.resolveEntityMetadata(User.class);
-HQLParserAdapter adapter = new HQLParserAdapter(cu, entityTypeWrapper);
-ConversionResult result = adapter.convertToNativeSQL("SELECT u FROM User u WHERE u.id = :id");
-```
+### Key Settings
 
-**Pattern 4: Repository Method Parsing**
-```java
-List<String> components = MethodToSQLConverter.extractComponents("findByUsernameAndAgeGreaterThan");
-StringBuilder sql = new StringBuilder();
-MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
-// sql now contains: "SELECT * FROM users WHERE username = ? AND age > ? "
-```
+- `base_path` - Source code location (must include `src/main/java`)
+- `output_path` - Generated code output location
+- `base_package` - Base Java package for generated code
+- `controllers` - REST controller classes to process
+- `services` - Service classes to process
+- `repositories` - JPA repository interfaces
+- `extra_exports` - Additional packages to include in classpath
+- `skip_getters_setters` - Ignore simple getters/setters
+- `test_privates` - Generate tests for private methods (default: false)
 
 ---
 
-## Project Overview
+## Architecture Overview
 
-**Antikythera** is an automated test generator and refactoring tool for Java projects. It generates:
-- **Unit tests** for service classes and business logic
-- **API tests** for REST endpoints using REST Assured
+### Three-Phase Pipeline for test generation
 
-### Technology Stack
-- **Java 21** (requires `--add-opens` JVM flags for reflection)
-- **Maven** for build management
-- **JavaParser 3.27.0** for parsing source code
-- **ByteBuddy 1.15.3** for dynamic class generation
-- **Spring Boot 2.7.14** (for Spring integration support)
-- **JPA/Hibernate** (for repository parsing)
-- **JSQLParser 5.3** (for SQL query manipulation)
+```
+Parse → Analyze → Generate
+  │        │         │
+  ├─ JavaParser     ├─ Reflection    ├─ JUnit Tests
+  ├─ Type Cache     ├─ Branching     ├─ Mockito Setup
+  └─ Symbol Solver  └─ Execution     └─ Assertions
+```
 
-### Key Dependencies
-- `javaparser-core` & `javaparser-symbol-solver-core` (3.27.0) - Source code parsing
-- `byte-buddy` (1.15.3) - Runtime class generation for mocking
-- `rest-assured` (5.5.5) - API test generation
-- `jsqlparser` (5.3) - SQL query manipulation
-- `spring-boot-starter-data-jpa` (2.7.14) - JPA entity metadata
-- `hql-parser` (0.0.15, com.github.e4c5) - ANTLR4-based HQL/JPQL to SQL conversion
-- `antlr4-runtime` (4.13.1) - ANTLR4 runtime for HQL parsing
-- `antikythera-common` (0.0.5, GitHub) - Shared utilities
-- `jackson-dataformat-yaml` (2.17.2) - YAML configuration parsing
-- `slf4j-api` (1.7.36) - Logging framework
-- `mockito-core` (5.11.0) - Mocking framework for tests
-- `junit-jupiter` (5.9.3) - JUnit 5 test framework
+**Phase 1: Parse**
+- JavaParser builds ASTs from source files
+- Types are resolved and cached in `AntikytheraRunTime`
+- Imports, inheritance, and references are tracked
 
-### Related Repositories
-- `antikythera-sample-project` - Sample Spring Boot application for testing Antikythera
-- `antikythera-test-helper` - Test utilities and fixtures shared across test suites
-- `antikythera-agent` - Java agent for bytecode instrumentation supporting reflective field access
-- `antikythera-examples` - Query optimization tools and practical examples built on Antikythera
-- `hql-parser` - Standalone HQL/JPQL parser with PostgreSQL conversion support
+**Phase 2: Analyze** 
+- Expression evaluator executes code symbolically
+- Branches are explored via truth tables
+- Dependencies are tracked via `DepSolver`
+- Return values and side effects are captured
 
-### Recent Integrations & Improvements
+**Phase 3: Generate**
+- Test methods with proper assertions
+- Mock setups for dependencies
+- Preconditions and argument generation
+- Organized file structure
 
-**HQL Parser Integration (Phase 1 Complete)**
-- Replaced mock HQL parsing with production-ready ANTLR4-based parser
-- `HQLParserAdapter` now bridges antikythera with `com.raditha.hql.parser`
-- Supports PostgreSQL dialect conversion
-- Better accuracy for complex HQL queries (joins, subqueries, aggregates)
+### Key Design Patterns
 
-**Method-to-SQL Converter**
-- New `MethodToSQLConverter` utility extracted from BaseRepositoryParser
-- Handles Spring Data JPA method name keywords (findBy, countBy, deleteBy, etc.)
-- Supports complex method patterns (findByXAndY, OrderBy, Between, etc.)
-- Normalizes method names (e.g., `findUserByEmail` → `findByEmail`)
+**Factory Pattern:**
+- `EvaluatorFactory` - Creates appropriate evaluator instances
+- `Graph.createGraphNode()` - Graph node factory
+
+**Visitor Pattern:**
+- `VoidVisitorAdapter` - AST traversal (JavaParser)
+- Custom visitors for dependency resolution
+
+**Strategy Pattern:**
+- Different test generators for different architectures
+- Multiple evaluators for different contexts
+
+**Singleton Pattern:**
+- `Antikythera.getInstance()`
+- `DepSolver.createSolver()`
+- `AntikytheraRunTime` - Global caches
 
 ---
 
-## Architecture
+## Development Guide
 
-### Three-Phase Pipeline
+### Adding New Capabilities
 
+**New Expression Type:**
+1. Add case in `Evaluator.evaluateExpression()`
+2. Implement evaluation logic
+3. Add test cases
+
+**New Repository Method Pattern:**
+1. Update `MethodToSQLConverter.extractComponents()`
+2. Add keyword to component list
+3. Test with various method names
+
+**New Database Dialect:**
+1. Add to `DatabaseDialect` enum
+2. Update query conversion logic in `BaseRepositoryParser`
+3. Handle dialect-specific syntax (LIMIT vs ROWNUM, etc.)
+
+**New Parser Type:**
+1. Extend `AbstractCompiler`
+2. Implement parsing logic
+3. Add to `Antikythera` workflow if needed
+
+### Testing Requirements
+
+**VM Arguments Required:**
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   PARSING    │────▶│  EVALUATION  │────▶│  GENERATION  │
-└──────────────┘     └──────────────┘     └──────────────┘
-      ▲                     ▲                     ▲
-      │                     │                     │
-AbstractCompiler       Evaluator           TestGenerator
+--add-opens java.base/java.util.stream=ALL-UNNAMED
 ```
 
-#### 1. Parser Phase (AbstractCompiler)
-- **Input:** Java source files from target project
-- **Process:**
-  - Parses source code using JavaParser
-  - Resolves types, imports, and dependencies
-  - Builds compilation units and type cache
-  - Identifies controllers, services, and repositories
-- **Output:** Parsed AST (Abstract Syntax Tree) with resolved types
+**Test Dependencies:**
+- Clone `antikythera-sample-project` repository
+- Clone `antikythera-test-helper` repository
+- Maintain folder structure as documented
 
-#### 2. Evaluation Phase (Evaluator)
-- **Input:** Parsed AST nodes (methods, constructors)
-- **Process:**
-  - Executes code symbolically using an expression evaluation engine
-  - Tracks variables, fields, and scopes
-  - Handles branching (if/else, switch, loops)
-  - Executes method calls (reflectively or via sub-evaluators)
-  - Captures return values and side effects
-- **Output:** Variable states, return values, execution traces
-
-#### 3. Generation Phase (TestGenerator)
-- **Input:** Evaluation results and execution traces
-- **Process:**
-  - Generates test methods with appropriate assertions
-  - Creates mock setups for dependencies
-  - Generates preconditions and argument values
-  - Handles both void methods (logging/side effects) and non-void (return values)
-- **Output:** JUnit test files written to output directory
-
-### Data Flow
-
+**Running Tests:**
+```bash
+mvn test
 ```
-Target Project Source Files
-        │
-        ▼
-   [AbstractCompiler]
-        │
-        ├─▶ CompilationUnit Cache (AntikytheraRunTime)
-        ├─▶ Type Resolution (findType, findImport)
-        └─▶ Symbol Resolution (JavaSymbolSolver)
-        │
-        ▼
-   [Parser Subclasses]
-        ├─▶ RestControllerParser (for API tests)
-        ├─▶ ServicesParser (for unit tests)
-        └─▶ RepositoryParser (for JPA repositories)
-        │
-        ▼
-   [Evaluator & Subclasses]
-        ├─▶ Variable tracking (locals, fields)
-        ├─▶ Expression evaluation
-        ├─▶ Method call execution
-        ├─▶ Branching support (Branching.java)
-        └─▶ Functional programming (FPEvaluator)
-        │
-        ▼
-   [TestGenerator]
-        ├─▶ SpringTestGenerator (for REST controllers)
-        ├─▶ UnitTestGenerator (for services)
-        ├─▶ Test method generation
-        ├─▶ Mock setup generation (Mockito)
-        ├─▶ Assertion generation (JUnit/TestNG)
-        └─▶ File writing (Antikythera.writeFilesToTest)
-        │
-        ▼
-Output Directory (JUnit/TestNG Test Files)
-```
+
+Currently 660+ unit and integration tests.
+
+### Common Pitfalls
+
+**Type Resolution:**
+- Always check `AntikytheraRunTime` cache first
+- Resolution order: Current CU → imports → same package → java.lang → classpath
+
+**Query Conversion:**
+- HQL/JPQL entities must map to database tables
+- SpEL expressions are preserved during conversion
+- Always enable fallback mode for robustness
+
+**Dependency Extraction:**
+- Cyclic dependencies handled via `visited` flag
+- Abstract methods trigger subclass discovery
+- Generic types require careful handling
+
+**Evaluation:**
+- Reflection requires proper VM flags
+- Not all Java constructs can be evaluated
+- Some expressions return null legitimately
 
 ---
 
-## Core Modules
+## Quick Reference
 
-### 1. Parser Module (`sa.com.cloudsolutions.antikythera.parser`)
+### Most Used Classes
 
-**Purpose:** Parse Java source code and extract structural information.
+| Class | Purpose | Package |
+|-------|---------|---------|
+| `Antikythera` | Main entry point | (root) |
+| `Settings` | Configuration | configuration |
+| `AbstractCompiler` | Base parser | parser |
+| `DepSolver` | Dependency extraction | depsolver |
+| `Evaluator` | Expression evaluation | evaluator |
+| `SpringEvaluator` | Spring-aware evaluation | evaluator |
+| `BaseRepositoryParser` | Query parsing | parser |
+| `HQLParserAdapter` | HQL conversion | parser.converter |
+| `TestGenerator` | Test generation | generator |
+| `AntikytheraRunTime` | Global caches | evaluator |
 
-#### Key Classes
+### Most Used Methods
 
-##### `AbstractCompiler.java`
-The foundational parser class that sets up JavaParser and maintains type caches.
+| Method | Purpose |
+|--------|---------|
+| `AntikytheraRunTime.getCompilationUnit(String)` | Get cached AST |
+| `AbstractCompiler.findType(CompilationUnit, String)` | Resolve type |
+| `AbstractCompiler.findFullyQualifiedName(CompilationUnit, String)` | Get FQN |
+| `Graph.createGraphNode(Node)` | Create dependency node |
+| `DepSolver.dfs()` | Build dependency graph |
+| `Evaluator.evaluateExpression(Expression)` | Evaluate code |
+| `Settings.getProperty(String)` | Get configuration |
 
-**Core Responsibilities:**
-- Initialize JavaParser with symbol resolver
-- Load JAR files and external dependencies
-- Parse Java files into CompilationUnits
-- Resolve types, imports, and method declarations
-- Cache compilation units and types
+---
 
-**Important Methods:**
-- `setupParser()` - Initializes JavaParser, symbol solver, and class loaders
-- `compile(String relativePath)` - Parses a Java file and caches it
-- `findType(CompilationUnit, String)` - Resolves a type name to TypeWrapper
-- `findFullyQualifiedName(CompilationUnit, String)` - Resolves short names to FQN
-- `findMethodDeclaration(MCEWrapper, TypeDeclaration)` - Finds method matching a call
-- `findConstructorDeclaration(MCEWrapper, TypeDeclaration)` - Finds constructor
-- `preProcess()` - Pre-parses all Java files in the project
+## Additional Resources
 
-**Type Resolution Strategy:**
-1. Check if type exists in current compilation unit
-2. Check imports (non-wildcard, then wildcard)
-3. Check same package
-4. Check java.lang package
-5. Try Class.forName with project class loader
-6. Check `extra_exports` in configuration
+- **[README.md](README.md)** - Project overview and capabilities
+- **[AGENT.md](AGENT.md)** - Quick reference guide
+- **[docs/](docs/)** - Additional guides and specifications
+- **[antikythera-examples/](../antikythera-examples/)** - Tools and examples
+- **JavaParser Documentation** - https://javaparser.org/
+- **Spring Data JPA Reference** - https://docs.spring.io/spring-data/jpa/
 
-##### `RestControllerParser.java`
-Parses Spring REST controllers to generate API tests.
+---
 
-**Features:**
-- Extracts `@RequestMapping`, `@GetMapping`, `@PostMapping`, etc.
-- Identifies path variables and request parameters
-- Generates REST Assured test methods
-- Handles authentication and authorization annotations
+## Contributing
 
-##### `ServicesParser.java`
-Parses service classes to generate unit tests.
+1. Create feature branch
+2. Add tests for new functionality
+3. Run full test suite (`mvn test`)
+4. Update documentation
+5. Create pull request
 
-**Features:**
-- Identifies `@Service` and `@Component` classes
-- Extracts business logic methods
-- Generates unit tests with mocks for dependencies
-- Handles transaction boundaries
+**Code Style:**
+- Follow existing patterns
+- Add JavaDoc for public APIs
+- Keep methods focused and testable
+- Use meaningful variable names
 
-##### `RepositoryParser.java`
-Parses JPA repositories to extract and execute queries.
-
-**Features:**
-- Parses `@Query` annotations (JPA/HQL)
-- Derives queries from method names (`findByUsername`, etc.)
-- Executes queries against database (optional)
-- Converts JPA/HQL to native SQL
-- Creates simplified queries for test data discovery
-
-**See Also:** [Repository Parser & Query System](#repository-parser--query-system)
-
-##### Supporting Classes
-- `Callable.java` - Wraps method/constructor declarations with metadata
-- `ImportWrapper.java` - Wraps import declarations with resolved types
-- `ImportUtils.java` - Utilities for managing imports in generated code
-- `MCEWrapper.java` - Wraps MethodCallExpr with argument type information
-- `MavenHelper.java` - Parses pom.xml and builds classpath
-- `Stats.java` - Tracks parsing statistics
+For questions or issues, refer to the project repository.
 
 #### Parser Converter Subpackage
 Located at `parser/converter`, this is a JPA/HQL to SQL conversion subsystem.
@@ -1681,134 +1791,6 @@ Integration tests should:
 
 ---
 
-## Common Tasks
-
-### Task 1: Add Support for New Annotation
-
-**Example:** Add support for `@Scheduled` methods
-
-```java
-// In ServicesParser or new ScheduledParser
-public void processScheduledMethods() {
-    TypeDeclaration<?> type = AbstractCompiler.getPublicType(cu);
-    
-    for (MethodDeclaration method : type.getMethods()) {
-        if (method.isAnnotationPresent("Scheduled")) {
-            Optional<AnnotationExpr> ann = method.getAnnotationByName("Scheduled");
-            if (ann.isPresent()) {
-                String cron = extractCronExpression(ann.get());
-                generateScheduledTest(method, cron);
-            }
-        }
-    }
-}
-```
-
-### Task 2: Improve Type Resolution
-
-**Example:** Handle inner classes better
-
-```java
-// In AbstractCompiler.findType()
-if (className.contains(".")) {
-    // Might be OuterClass.InnerClass
-    String[] parts = className.split("\\.");
-    TypeWrapper outer = findType(cu, parts[0]);
-    if (outer != null && outer.getType() != null) {
-        for (TypeDeclaration<?> inner : outer.getType().findAll(TypeDeclaration.class)) {
-            if (inner.getNameAsString().equals(parts[1])) {
-                return new TypeWrapper(inner);
-            }
-        }
-    }
-}
-```
-
-### Task 3: Add New Mock Strategy
-
-**Example:** Mock external API calls
-
-```java
-// In MockingRegistry
-public static void registerExternalApiMock(String apiClass, String method) {
-    String key = apiClass + "." + method;
-    Expression mockExpr = StaticJavaParser.parseExpression(
-        "return new ResponseEntity<>(mockData, HttpStatus.OK)"
-    );
-    customMockExpressions.put(key, List.of(mockExpr));
-}
-```
-
-### Task 4: Extend Query Parser
-
-**Example:** Support custom query methods
-
-```java
-// In BaseRepositoryParser
-protected String parseCustomMethod(MethodDeclaration method) {
-    String methodName = method.getNameAsString();
-    
-    if (methodName.startsWith("searchBy")) {
-        String field = methodName.substring("searchBy".length());
-        String column = camelToSnakeCase(field);
-        return "SELECT * FROM " + tableName + 
-               " WHERE " + column + " LIKE CONCAT('%', ?, '%')";
-    }
-    
-    return null; // Fall back to standard parsing
-}
-```
-
-### Task 5: Debug Type Resolution Issues
-
-When type resolution fails:
-
-1. **Enable debug logging:**
-```java
-logger.debug("Attempting to resolve type: {}", className);
-logger.debug("Imports in CU: {}", cu.getImports());
-```
-
-2. **Check cache:**
-```java
-TypeWrapper cached = AntikytheraRunTime.getTypeDeclaration(className);
-if (cached != null) {
-    logger.debug("Found in cache: {}", cached);
-}
-```
-
-3. **Verify imports:**
-```java
-ImportWrapper imp = AbstractCompiler.findImport(cu, className);
-if (imp == null) {
-    logger.warn("No import found for: {}", className);
-}
-```
-
-4. **Add to `extra_exports`:**
-```yaml
-extra_exports:
-  - com.problematic.UnresolvedClass
-```
-
-### Task 6: Handle New Database Dialect
-
-**Example:** Add MySQL support
-
-```java
-// In RepositoryParser
-private static String applyDialect(String sql) {
-    if (Settings.getDialect().equals("mysql")) {
-        sql = sql.replaceAll("ROWNUM <= (\\d+)", "LIMIT $1");
-        sql = sql.replaceAll("(?i)FROM DUAL", "");
-        return sql;
-    }
-    return sql;
-}
-```
-
----
-
 ## API Entry Points
 
 This section documents the main public APIs agents should use when working with Antikythera.
@@ -2025,8 +2007,6 @@ Use this guide to decide which class/API to use for common tasks.
 - Use `Settings` for all configuration
 - Run full test suite before committing
 - Add javadoc for public methods
-- Use try-catch for reflection operations
-- Check `shouldSkip()` before processing files
 
 ### Don'ts ❌
 - Don't hardcode file paths or package names
@@ -2042,7 +2022,7 @@ Use this guide to decide which class/API to use for common tasks.
 - Use Optional for nullable returns
 - Prefer switch expressions over if-else chains
 - Use records for simple data classes
-- Keep methods under 50 lines where possible
+- Keep methods short
 - Extract complex logic into private methods
 - Use meaningful variable names
 - Add comments for complex algorithms
