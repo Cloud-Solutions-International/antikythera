@@ -180,12 +180,7 @@ RepositoryParser repoParser = new RepositoryParser("com.example.UserRepository")
 ### Configuration Module (`configuration/`)
 **Core:** `Settings` - YAML configuration management
 
-**Key Properties:**
-- `base_path` - Source code location
-- `output_path` - Generated test location
-- `controllers` - Controller classes to test
-- `services` - Service classes to test
-- `database.url` - Database connection for query execution
+See [Configuration](#configuration) section for complete YAML structure and key properties.
 
 ---
 
@@ -445,32 +440,10 @@ Currently 660+ unit and integration tests.
 
 ---
 
-## Additional Resources
+For additional resources and contributing guidelines, see the end of this document.
 
-- **[README.md](README.md)** - Project overview and capabilities
-- **[AGENT.md](AGENT.md)** - Quick reference guide
-- **[docs/](docs/)** - Additional guides and specifications
-- **[antikythera-examples/](../antikythera-examples/)** - Tools and examples
-- **JavaParser Documentation** - https://javaparser.org/
-- **Spring Data JPA Reference** - https://docs.spring.io/spring-data/jpa/
-
----
-
-## Contributing
-
-1. Create feature branch
-2. Add tests for new functionality
-3. Run full test suite (`mvn test`)
-4. Update documentation
-5. Create pull request
-
-**Code Style:**
-- Follow existing patterns
-- Add JavaDoc for public APIs
-- Keep methods focused and testable
-- Use meaningful variable names
-
-For questions or issues, refer to the project repository.
+- [Additional Resources](#additional-resources)
+- [Contributing](#contributing)
 
 #### Parser Converter Subpackage
 Located at `parser/converter`, this is a JPA/HQL to SQL conversion subsystem.
@@ -923,7 +896,128 @@ Tracks logging statements for test assertions.
 - `AKLogger.java` - Intercepts logging calls during evaluation
 - `LogRecorder.java` - Records log statements for assertion generation
 
+##### Dynamic Class Generation (`AKBuddy` & `MethodInterceptor`)
+
+The AKBuddy subsystem uses Byte Buddy to generate dynamic classes at runtime, enabling the evaluation engine to intercept and execute code during symbolic execution.
+
+**`AKBuddy.java`**
+
+**Purpose:** Generate dynamic subclasses that mirror source code structure while routing all invocations through the evaluation engine.
+
+**Key Responsibilities:**
+- Generate dynamic classes from JavaParser source AST (fields, methods, constructors, Lombok accessors)
+- Generate dynamic classes from bytecode when no source is available
+- Cache generated classes by fully-qualified name to avoid regeneration
+- Create instances with injected interceptors for method routing
+
+**Generation Strategies:**
+
+1. **Source-based** (`createDynamicClassBasedOnSourceCode`):
+   - Synthesizes fields visible to reflection matching source declarations
+   - Creates methods with signatures matching source MethodDeclarations
+   - Intercepts constructors (explicit or implicit default)
+   - Generates Lombok-derived accessors when `@Getter`, `@Setter`, or `@Data` annotations present
+   - Implements interfaces declared in source
+   
+2. **Bytecode-based** (`createDynamicClassBasedOnByteCode`):
+   - Subclasses the wrapped binary class directly
+   - Delegates all methods to the interceptor
+   - Preserves original constructors via `SuperMethodCall`
+
+**Key Methods:**
+- `createDynamicClass(MethodInterceptor)` - Build or retrieve cached dynamic class
+- `createInstance(Class<?>, MethodInterceptor)` - Create instance with interceptor injection and field synchronization
+- `addFields(List<FieldDeclaration>, ...)` - Define fields with annotations
+- `addMethods(List<MethodDeclaration>, ...)` - Define methods with delegation
+- `addConstructors(TypeDeclaration, ...)` - Intercept constructor invocations
+- `addLombokAccessors(TypeDeclaration, ...)` - Synthesize getters/setters for Lombok annotations
+
+**Caching:** The static `registry` map caches generated classes by fully-qualified name, preventing duplicate generation within the same JVM session.
+
+**`MethodInterceptor.java`**
+
+**Purpose:** Bridge between Byte Buddy–generated instances and the Antikythera evaluation engine, handling constructor/method invocation and bidirectional field synchronization.
+
+**Key Responsibilities:**
+- Forward constructor/method calls to `EvaluationEngine`
+- Synchronize fields between generated instance and evaluator in both directions
+- Optimize simple getter/setter invocations (direct field access)
+- Provide fallback to `MockingRegistry` stubs or direct reflection when no evaluator present
+
+**Interception Flow:**
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                     Constructor Interception                       │
+├────────────────────────────────────────────────────────────────────┤
+│ 1. Push args to AntikytheraRunTime stack (reverse order)          │
+│ 2. Execute ConstructorDeclaration via evaluator                   │
+│ 3. Sync instance fields → evaluator (seed with instance values)   │
+│ 4. Sync evaluator fields → instance (write evaluator state back)  │
+└────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────┐
+│                       Method Interception                          │
+├────────────────────────────────────────────────────────────────────┤
+│ Simple getter (getX/isX):                                         │
+│   → Read from evaluator field map, fallback to instance field     │
+│                                                                    │
+│ Simple setter (setX):                                              │
+│   → Write to both instance field and evaluator field map          │
+│   → Execute method body if MethodDeclaration available            │
+│                                                                    │
+│ General methods:                                                   │
+│   → Push args to stack                                            │
+│   → Execute MethodDeclaration via evaluator                       │
+│   → Sync evaluator fields → instance                              │
+│   → Wrap returned EvaluationEngine values as dynamic proxies      │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**No-evaluator Fallback:**
+When constructed with a `Class<?>` instead of an `EvaluationEngine`:
+1. Check `MockingRegistry` for stubbed return value
+2. Attempt reflective invocation on wrapped class 
+3. Return type-appropriate default value
+
+**Helper Classes:**
+- `MethodDeclarationSupport` - Carries `MethodDeclaration` AST; handles setter field updates and delegates to parent interceptor
+- `ConstructorDeclarationSupport` - Carries `ConstructorDeclaration` AST; creates fresh evaluator and wires interceptor on construction
+
+**Usage Example:**
+
+```java
+// Create evaluator for a source class
+Evaluator evaluator = EvaluatorFactory.create("com.example.User", SpringEvaluator.class);
+
+// Create interceptor wrapping the evaluator
+MethodInterceptor interceptor = new MethodInterceptor(evaluator);
+
+// Generate and load dynamic class (cached)
+Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
+
+// Create instance with interceptor injected into INSTANCE_INTERCEPTOR field
+Object user = AKBuddy.createInstance(dynamicClass, interceptor);
+
+// All method calls now route through the evaluator:
+// user.getName() → evaluator.executeMethod(getNameMethodDeclaration)
+// user.setName("John") → evaluator.setField("name", new Variable("John"))
+
+// For mock scenarios without source:
+MethodInterceptor mockInterceptor = new MethodInterceptor(SomeInterface.class);
+Class<?> mockClass = AKBuddy.createDynamicClass(mockInterceptor);
+SomeInterface mock = (SomeInterface) mockClass.getDeclaredConstructor().newInstance();
+// mock.someMethod() → returns default value or MockingRegistry stub
+```
+
+**Integration Points:**
+- `Evaluator.createArray()` - Wraps evaluator array elements as dynamic instances
+- `Reflect.dynamicProxy()` - Converts evaluators to dynamic instances for reflection
+- `MockingEvaluator.optionalByteBuddy()` - Creates Optional-wrapped dynamic instances
+- `MockingRegistry.createByteBuddyMockInstance()` - Creates mock instances for dependency injection
+
 ---
+
 
 ### 3. Generator Module (`sa.com.cloudsolutions.antikythera.generator`)
 
@@ -1182,31 +1276,13 @@ Central configuration management.
 2. Environment variables
 3. Programmatic settings
 
-**Key Settings:**
-- `base_path` - Root directory of target project
-- `base_package` - Base package name of target project
-- `output_path` - Where to write generated tests
-- `controllers` - List of controller classes to process (can include `.java` extension or `#methodName` suffix)
-- `services` - List of service classes to process (can be class name or package path)
-- `jar_files` - Additional JAR dependencies to load
-- `dependencies.artifact_ids` - Maven artifact IDs for classpath resolution
-- `skip` - Patterns for files to skip during parsing
-- `extra_exports` or `extra_imports` - Additional imports to resolve (for problematic types)
+**Key Settings:** See [Configuration](#configuration) section for complete YAML configuration properties.
+
+**Additional Settings (programmatic):**
+- `controllers` - Can include `.java` extension or `#methodName` suffix for specific methods
+- `services` - Can be class name or package path
+- `extra_exports` or `extra_imports` - Additional imports to resolve for problematic types
 - `finch` - External source directories to include in parsing
-- `database` - Database connection settings:
-  - `url` - JDBC connection URL (dialect auto-detected)
-  - `username`, `password` - Database credentials
-  - `run_queries` - Execute queries during test generation (boolean)
-  - `query_conversion.enabled` - Enable JPA/HQL to SQL conversion
-  - `query_conversion.fallback_on_failure` - Fallback to original query on conversion failure
-  - `query_conversion.log_conversion_failures` - Log conversion errors
-  - `query_conversion.cache_results` - Cache conversion results
-- `variables` - YAML variables for substitution (supports `${VAR}` syntax)
-- `application.host` - Application hostname for API tests
-- `mock_with` - Mocking framework for generated tests (e.g., "mockito")
-- `mock_with_internal` - Mocking framework for internal evaluation
-- `base_test_class` - Base class for generated test classes
-- `log_appender` - Logging configuration
 
 **Configuration Features:**
 - Supports environment variable substitution: `${ENV_VAR_NAME}`
@@ -1275,8 +1351,8 @@ sa.com.cloudsolutions.antikythera/
 │   ├── DatabaseArgumentGenerator.java   # DB-based argument generation
 │   ├── DummyArgumentGenerator.java      # Dummy argument generation
 │   ├── NullArgumentGenerator.java       # Null argument generation
-│   ├── AKBuddy.java                     # ByteBuddy integration
-│   ├── MethodInterceptor.java           # Method call interception
+│   ├── AKBuddy.java                     # Dynamic class generation via ByteBuddy
+│   ├── MethodInterceptor.java           # Evaluator-instance bridge, field sync
 │   ├── Reflect.java                     # Reflection utilities
 │   ├── ReflectionArguments.java         # Reflection argument handling
 │   ├── AntikytheraGenerated.java        # Generated class marker
@@ -1516,19 +1592,7 @@ The RepositoryParser analyzes JPA Repository interfaces to extract and execute q
 - `convertFieldsToSnakeCase(Statement, TypeWrapper)` - Convert camelCase to snake_case
 - `processTypes()` - Identify entity types from repository declaration
 
-**Configuration (YAML):**
-```yaml
-database:
-  url: jdbc:postgresql://localhost:5432/mydb
-  username: user
-  password: pass
-  run_queries: true              # Execute queries during test generation
-  query_conversion:
-    enabled: true                # Enable JPA-to-SQL conversion
-    fallback_on_failure: true    # Fallback to original query if conversion fails
-    log_conversion_failures: true
-    cache_results: true          # Cache conversion results
-```
+**Configuration:** See [Configuration](#configuration) section for `database` and `query_conversion` YAML settings.
 
 #### RepositoryParser
 **Purpose:** Extends BaseRepositoryParser with database execution.
@@ -1547,31 +1611,7 @@ database:
 - `bindParameters(QueryMethodArgument, PreparedStatement, int)` - Bind Java values to SQL
 - `createConnection()` - Establish database connection
 
-**Supported Method Name Patterns:**
-- `findBy[Field]` → `SELECT * FROM table WHERE field = ?`
-- `findBy[Field]And[Field2]` → `WHERE field = ? AND field2 = ?`
-- `findBy[Field]Or[Field2]` → `WHERE field = ? OR field2 = ?`
-- `findFirstBy[Field]` / `findTopBy[Field]` → `... LIMIT 1` (or ROWNUM for Oracle)
-- `findBy[Field]Between` → `WHERE field BETWEEN ? AND ?`
-- `findBy[Field]GreaterThan` / `findBy[Field]After` → `WHERE field > ?`
-- `findBy[Field]LessThan` / `findBy[Field]Before` → `WHERE field < ?`
-- `findBy[Field]In` → `WHERE field IN (?)`
-- `findBy[Field]NotIn` → `WHERE field NOT IN (?)`
-- `findBy[Field]Containing` / `findBy[Field]Like` → `WHERE field LIKE ?`
-- `findBy[Field]StartingWith` → `WHERE field LIKE ?` (prefix pattern)
-- `findBy[Field]EndingWith` → `WHERE field LIKE ?` (suffix pattern)
-- `findBy[Field]IsNull` → `WHERE field IS NULL`
-- `findBy[Field]IsNotNull` → `WHERE field IS NOT NULL`
-- `findBy[Field]IsTrue` / `findBy[Field]True` → `WHERE field = true`
-- `findBy[Field]IsFalse` / `findBy[Field]False` → `WHERE field = false`
-- `findBy[Field]OrderBy[Field2]Desc` / `OrderBy[Field2]Asc` → Adds ORDER BY clause
-- `countBy[Field]` → `SELECT COUNT(*) FROM table WHERE field = ?`
-- `deleteBy[Field]` / `removeBy[Field]` → `DELETE FROM table WHERE field = ?`
-- `existsBy[Field]` → `SELECT EXISTS (SELECT 1 FROM table WHERE field = ?)`
-- `findAll()` → `SELECT * FROM table`
-- `findAllById` → `SELECT * FROM table WHERE id IN (?)`
-
-**Note:** Method name parsing is handled by `MethodToSQLConverter` utility class. Complex patterns like `findByXAndYOrZ` are parsed correctly, with proper keyword boundary detection.
+**Supported Method Name Patterns:** See [MethodToSQLConverter](#parser-converter-subpackage) for the complete list of 20+ supported query patterns including `findBy`, `countBy`, `deleteBy`, comparison operators, and ORDER BY clauses.
 
 #### BaseRepositoryQuery & RepositoryQuery
 **Purpose:** Represent queries with SQL manipulation and execution.
@@ -1701,6 +1741,8 @@ mvn test
 Requires:
 - JVM flag: `--add-opens java.base/java.util.stream=ALL-UNNAMED`
 - Cloned repos: `antikythera-sample-project`, `antikythera-test-helper`
+
+See [Contributing](#contributing) section for complete testing requirements.
 
 ### Performance Considerations
 

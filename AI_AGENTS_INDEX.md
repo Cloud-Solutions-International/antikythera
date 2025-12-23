@@ -26,8 +26,8 @@ This document provides an index to all AI-specific documentation files in the An
    - **`gemini.md`** - Gemini-optimized quick reference
    - Location: Root directory
 
-5. **Google Anti Gravity**
-   - **`.antigravity.md`** - Anti Gravity-specific instructions with table format
+5. **Google Antigravity**
+   - **`ANTIGRAVITY.md`** - Antigravity agent guide with WARP.md references
    - Location: Root directory
 
 ## Quick Navigation
@@ -40,7 +40,7 @@ This document provides an index to all AI-specific documentation files in the An
 | Copilot | `.github/copilot-instructions.md` | GitHub Copilot patterns |
 | Junie | `.idea/ai-config.md` | IntelliJ AI configuration |
 | Gemini | `gemini.md` | Gemini CLI reference |
-| Anti Gravity | `.antigravity.md` | Anti Gravity instructions |
+| Antigravity | `ANTIGRAVITY.md` | Antigravity agent guide |
 
 ## File Purposes
 
@@ -82,11 +82,11 @@ This document provides an index to all AI-specific documentation files in the An
 - Quick reference format
 - Essential APIs and workflows
 
-### .antigravity.md
-- **Google Anti Gravity specific**
-- Table-formatted information
-- Structured API reference
-- Quick task reference
+### ANTIGRAVITY.md
+- **Google Antigravity agent optimized**
+- WARP.md reference integration
+- Essential patterns and decision guide
+- AKBuddy and dynamic class documentation
 
 ## Usage Recommendations
 
