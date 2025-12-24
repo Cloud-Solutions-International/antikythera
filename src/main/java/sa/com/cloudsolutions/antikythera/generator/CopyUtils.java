@@ -14,9 +14,11 @@ public class CopyUtils {
     public static void createMavenProjectStructure(String basePackage, String path) throws IOException {
         String basePackagePath = basePackage.replace(".", File.separator);
         String[] directories = {
-                path + File.separator + SRC + File.separator + "main" + File.separator + "java" + File.separator + basePackagePath,
+                path + File.separator + SRC + File.separator + "main" + File.separator + "java" + File.separator
+                        + basePackagePath,
                 path + File.separator + SRC + File.separator + "main" + File.separator + "resources",
-                path + File.separator + SRC + File.separator + "test" + File.separator + "java" + File.separator + basePackagePath,
+                path + File.separator + SRC + File.separator + "test" + File.separator + "java" + File.separator
+                        + basePackagePath,
                 path + File.separator + SRC + File.separator + "test" + File.separator + "resources"
         };
 
@@ -25,7 +27,7 @@ public class CopyUtils {
         }
     }
 
-    public static void writeFile( String relativePath, String content) throws IOException {
+    public static void writeFile(String relativePath, String content) throws IOException {
         String filePath = Settings.getProperty(Settings.OUTPUT_PATH).toString() +
                 File.separator + SRC + File.separator + "main" + File.separator + "java" +
                 File.separator + relativePath;
@@ -38,5 +40,22 @@ public class CopyUtils {
         }
     }
 
-
+    /**
+     * Write content to an absolute file path.
+     * Unlike writeFile, this does NOT prepend Settings.OUTPUT_PATH.
+     *
+     * @param absolutePath The full absolute path to the file
+     * @param content      The content to write
+     * @throws IOException if writing fails
+     */
+    public static void writeFileAbsolute(String absolutePath, String content) throws IOException {
+        File file = new File(absolutePath);
+        File parentDir = file.getParentFile();
+        if (parentDir != null) {
+            Files.createDirectories(parentDir.toPath());
+        }
+        try (FileWriter writer = new FileWriter(file)) {
+            writer.write(content);
+        }
+    }
 }
