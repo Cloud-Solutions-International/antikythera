@@ -168,19 +168,7 @@ public class BeanDependencyGraph {
                 String fieldName = var.getNameAsString();
                 Type fieldType = var.getType();
                 
-                // Debug output for extraction package
-                if (beanFqn != null && beanFqn.contains("extraction")) {
-                    System.out.println("DEBUG analyzeFieldInjection: beanFqn=" + beanFqn + 
-                        ", fieldName=" + fieldName + ", fieldType=" + fieldType + 
-                        ", fieldType.class=" + fieldType.getClass().getSimpleName());
-                }
-                
                 String targetFqn = resolveTypeFqn(fieldType, cid, cu);
-
-                // Debug output for extraction package
-                if (beanFqn != null && beanFqn.contains("extraction")) {
-                    System.out.println("DEBUG: Resolved targetFqn=" + targetFqn + " for field " + fieldName);
-                }
 
                 if (targetFqn != null && !targetFqn.equals(beanFqn)) {
                     List<String> qualifiers = extractQualifiers(field);
@@ -339,27 +327,17 @@ public class BeanDependencyGraph {
     private String resolveTypeFqn(Type type, ClassOrInterfaceDeclaration context, CompilationUnit cu) {
         try {
             String typeName;
-            boolean debug = false;
             
             // For ClassOrInterfaceType (including parameterized types), extract the raw type name
             if (type instanceof ClassOrInterfaceType classOrInterfaceType) {
                 // Get the name without type parameters
                 typeName = classOrInterfaceType.getNameAsString();
                 
-                // Debug for extraction package
-                if (context.getFullyQualifiedName().isPresent() && 
-                    context.getFullyQualifiedName().get().contains("extraction")) {
-                    debug = true;
-                }
-                
                 // If the type has a scope (e.g., com.example.TypedService), use it directly
                 if (classOrInterfaceType.getScope().isPresent()) {
                     String scopedName = classOrInterfaceType.getScope().orElseThrow().asString() + "." + typeName;
                     // Check if this FQN exists in AntikytheraRunTime
                     if (AntikytheraRunTime.getTypeDeclaration(scopedName).isPresent()) {
-                        if (debug) {
-                            System.out.println("DEBUG: Found scoped name: " + scopedName);
-                        }
                         return scopedName;
                     }
                 }
@@ -402,15 +380,8 @@ public class BeanDependencyGraph {
                 }
             }
             
-            if (debug) {
-                System.out.println("DEBUG resolveTypeFqn: typeName=" + typeName + ", packageName=" + packageName);
-            }
-            
             // Try exact match first
             if (AntikytheraRunTime.getTypeDeclaration(typeName).isPresent()) {
-                if (debug) {
-                    System.out.println("DEBUG: Found exact match: " + typeName);
-                }
                 return typeName;
             }
             
@@ -418,9 +389,6 @@ public class BeanDependencyGraph {
             if (!packageName.isEmpty()) {
                 String samePackageFqn = packageName + "." + typeName;
                 if (AntikytheraRunTime.getTypeDeclaration(samePackageFqn).isPresent()) {
-                    if (debug) {
-                        System.out.println("DEBUG: Found same-package match: " + samePackageFqn);
-                    }
                     return samePackageFqn;
                 }
             }
@@ -428,9 +396,6 @@ public class BeanDependencyGraph {
             // Search all resolved types for a match (ends with pattern)
             for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
                 if (resolvedFqn.equals(typeName) || resolvedFqn.endsWith("." + typeName)) {
-                    if (debug) {
-                        System.out.println("DEBUG: Found pattern match: " + resolvedFqn);
-                    }
                     return resolvedFqn;
                 }
             }
@@ -443,29 +408,14 @@ public class BeanDependencyGraph {
                 fqn = AbstractCompiler.findFullyQualifiedName(cu, typeName);
             }
             
-            if (debug && fqn != null) {
-                System.out.println("DEBUG: Found via findFullyQualifiedName: " + fqn);
-            }
-            
-            if (debug && cu == null) {
-                System.out.println("DEBUG: cu is null, skipping findFullyQualifiedName");
-            }
-            
             // Strategy 3: Final fallback - search AntikytheraRunTime again (in case it was added)
             if (fqn == null) {
                 for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
                     if (resolvedFqn.endsWith("." + typeName) || resolvedFqn.equals(typeName)) {
                         fqn = resolvedFqn;
-                        if (debug) {
-                            System.out.println("DEBUG: Found in final fallback: " + fqn);
-                        }
                         break;
                     }
                 }
-            }
-            
-            if (debug && fqn == null) {
-                System.out.println("DEBUG: Failed to resolve typeName: " + typeName);
             }
             
             return fqn;
