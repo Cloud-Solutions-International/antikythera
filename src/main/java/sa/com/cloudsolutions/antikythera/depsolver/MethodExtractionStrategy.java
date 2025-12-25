@@ -311,18 +311,26 @@ public class MethodExtractionStrategy {
 
     /**
      * Remove the field that causes the cycle.
+     * Compares both FQN and simple names to handle cases where typeAsString
+     * might return either format.
      */
     private void removeCycleField(ClassOrInterfaceDeclaration clazz, List<String> cycle) {
-        Set<String> cycleTypes = new HashSet<>();
+        Set<String> cycleFqns = new HashSet<>(cycle);
+        Set<String> cycleSimpleNames = new HashSet<>();
         for (String c : cycle) {
-            cycleTypes.add(getSimpleName(c));
+            cycleSimpleNames.add(getSimpleName(c));
         }
 
         // Collect fields to remove (can't modify during iteration)
         List<FieldDeclaration> toRemove = new ArrayList<>();
         for (FieldDeclaration field : clazz.getFields()) {
-            String type = field.getVariables().get(0).getTypeAsString();
-            if (cycleTypes.contains(type)) {
+            String typeAsString = field.getVariables().get(0).getTypeAsString();
+            String typeSimpleName = getSimpleName(typeAsString);
+            
+            // Check if field type matches any cycle type (FQN or simple name)
+            if (cycleFqns.contains(typeAsString) || 
+                cycleSimpleNames.contains(typeAsString) ||
+                cycleSimpleNames.contains(typeSimpleName)) {
                 toRemove.add(field);
             }
         }
