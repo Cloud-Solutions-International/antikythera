@@ -73,10 +73,11 @@ class BeanDependencyGraphTypeResolutionTest {
         Method resolveMethod = BeanDependencyGraph.class.getDeclaredMethod(
                 "resolveTypeFqn", 
                 com.github.javaparser.ast.type.Type.class,
-                ClassOrInterfaceDeclaration.class);
+                ClassOrInterfaceDeclaration.class,
+                CompilationUnit.class);
         resolveMethod.setAccessible(true);
         
-        String fqn = (String) resolveMethod.invoke(graph, listType, clazz);
+        String fqn = (String) resolveMethod.invoke(graph, listType, clazz, cu);
         assertEquals("java.util.List", fqn, "Should extract raw type from parameterized type");
     }
 
@@ -95,10 +96,11 @@ class BeanDependencyGraphTypeResolutionTest {
         Method resolveMethod = BeanDependencyGraph.class.getDeclaredMethod(
                 "resolveTypeFqn",
                 com.github.javaparser.ast.type.Type.class,
-                ClassOrInterfaceDeclaration.class);
+                ClassOrInterfaceDeclaration.class,
+                CompilationUnit.class);
         resolveMethod.setAccessible(true);
         
-        String fqn = (String) resolveMethod.invoke(graph, stringType, clazz);
+        String fqn = (String) resolveMethod.invoke(graph, stringType, clazz, cu);
         assertEquals("java.lang.String", fqn);
     }
 
@@ -137,10 +139,11 @@ class BeanDependencyGraphTypeResolutionTest {
         Method resolveMethod = BeanDependencyGraph.class.getDeclaredMethod(
                 "resolveTypeFqn",
                 com.github.javaparser.ast.type.Type.class,
-                ClassOrInterfaceDeclaration.class);
+                ClassOrInterfaceDeclaration.class,
+                CompilationUnit.class);
         resolveMethod.setAccessible(true);
         
-        String fqn = (String) resolveMethod.invoke(graph, serviceBType, class1);
+        String fqn = (String) resolveMethod.invoke(graph, serviceBType, class1, cu1);
         assertEquals(fqn2, fqn, "Should resolve same-package type");
     }
 
@@ -173,10 +176,11 @@ class BeanDependencyGraphTypeResolutionTest {
         Method resolveMethod = BeanDependencyGraph.class.getDeclaredMethod(
                 "resolveTypeFqn",
                 com.github.javaparser.ast.type.Type.class,
-                ClassOrInterfaceDeclaration.class);
+                ClassOrInterfaceDeclaration.class,
+                CompilationUnit.class);
         resolveMethod.setAccessible(true);
         
-        String fqn = (String) resolveMethod.invoke(graph, genericType, clazz);
+        String fqn = (String) resolveMethod.invoke(graph, genericType, clazz, cu);
         assertEquals(typedServiceFqn, fqn, "Should resolve generic type to raw type");
     }
 
@@ -197,10 +201,11 @@ class BeanDependencyGraphTypeResolutionTest {
         Method resolveMethod = BeanDependencyGraph.class.getDeclaredMethod(
                 "resolveTypeFqn",
                 com.github.javaparser.ast.type.Type.class,
-                ClassOrInterfaceDeclaration.class);
+                ClassOrInterfaceDeclaration.class,
+                CompilationUnit.class);
         resolveMethod.setAccessible(true);
         
-        String fqn = (String) resolveMethod.invoke(graph, arrayType, clazz);
+        String fqn = (String) resolveMethod.invoke(graph, arrayType, clazz, cu);
         assertEquals("java.lang.String", fqn, "Should extract component type from array");
     }
 
@@ -217,12 +222,13 @@ class BeanDependencyGraphTypeResolutionTest {
         Method resolveMethod = BeanDependencyGraph.class.getDeclaredMethod(
                 "resolveTypeFqn",
                 com.github.javaparser.ast.type.Type.class,
-                ClassOrInterfaceDeclaration.class);
+                ClassOrInterfaceDeclaration.class,
+                CompilationUnit.class);
         resolveMethod.setAccessible(true);
         
         // Test with null - should handle gracefully
         try {
-            String fqn = (String) resolveMethod.invoke(graph, (com.github.javaparser.ast.type.Type) null, clazz);
+            String fqn = (String) resolveMethod.invoke(graph, (com.github.javaparser.ast.type.Type) null, clazz, cu);
             // May return null or throw - either is acceptable
         } catch (Exception e) {
             // Exception is acceptable for null input

@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -61,13 +62,20 @@ public class BeanDependencyGraph {
             TypeDeclaration<?> type = wrapper.getType();
 
             if (type instanceof ClassOrInterfaceDeclaration cid) {
-                analyzeFieldInjection(beanFqn, cid);
-                analyzeConstructorInjection(beanFqn, cid);
-                analyzeSetterInjection(beanFqn, cid);
+                // Get the compilation unit from AntikytheraRunTime for better reliability
+                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(beanFqn);
+                if (cu == null) {
+                    // Fallback to finding it from the type
+                    cu = cid.findCompilationUnit().orElse(null);
+                }
+                
+                analyzeFieldInjection(beanFqn, cid, cu);
+                analyzeConstructorInjection(beanFqn, cid, cu);
+                analyzeSetterInjection(beanFqn, cid, cu);
 
                 // Check for @Configuration class for @Bean methods
                 if (isConfiguration(cid)) {
-                    analyzeBeanMethods(beanFqn, cid);
+                    analyzeBeanMethods(beanFqn, cid, cu);
                 }
                 
                 // Ensure the bean is in the graph even if it has no outgoing dependencies
@@ -145,7 +153,7 @@ public class BeanDependencyGraph {
      * Analyze fields with @Autowired, @Inject, or @Resource.
      * Skip fields with @Lazy annotation as they don't participate in cycles.
      */
-    private void analyzeFieldInjection(String beanFqn, ClassOrInterfaceDeclaration cid) {
+    private void analyzeFieldInjection(String beanFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
         for (FieldDeclaration field : cid.getFields()) {
             if (!isInjectedField(field)) {
                 continue;
@@ -159,7 +167,20 @@ public class BeanDependencyGraph {
             field.getVariables().forEach(var -> {
                 String fieldName = var.getNameAsString();
                 Type fieldType = var.getType();
-                String targetFqn = resolveTypeFqn(fieldType, cid);
+                
+                // Debug output for extraction package
+                if (beanFqn != null && beanFqn.contains("extraction")) {
+                    System.out.println("DEBUG analyzeFieldInjection: beanFqn=" + beanFqn + 
+                        ", fieldName=" + fieldName + ", fieldType=" + fieldType + 
+                        ", fieldType.class=" + fieldType.getClass().getSimpleName());
+                }
+                
+                String targetFqn = resolveTypeFqn(fieldType, cid, cu);
+
+                // Debug output for extraction package
+                if (beanFqn != null && beanFqn.contains("extraction")) {
+                    System.out.println("DEBUG: Resolved targetFqn=" + targetFqn + " for field " + fieldName);
+                }
 
                 if (targetFqn != null && !targetFqn.equals(beanFqn)) {
                     List<String> qualifiers = extractQualifiers(field);
@@ -173,7 +194,7 @@ public class BeanDependencyGraph {
      * Analyze constructors for injection (single constructor or @Autowired marked).
      * Skip parameters with @Lazy annotation as they don't participate in cycles.
      */
-    private void analyzeConstructorInjection(String beanFqn, ClassOrInterfaceDeclaration cid) {
+    private void analyzeConstructorInjection(String beanFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
         List<ConstructorDeclaration> constructors = cid.getConstructors();
 
         ConstructorDeclaration injectedConstructor = null;
@@ -203,7 +224,7 @@ public class BeanDependencyGraph {
 
             String paramName = param.getNameAsString();
             Type paramType = param.getType();
-            String targetFqn = resolveTypeFqn(paramType, cid);
+            String targetFqn = resolveTypeFqn(paramType, cid, cu);
 
             if (targetFqn != null && !targetFqn.equals(beanFqn)) {
                 List<String> qualifiers = extractQualifiers(param);
@@ -217,7 +238,7 @@ public class BeanDependencyGraph {
      * Analyze setter methods with @Autowired.
      * Skip setters with @Lazy annotation as they don't participate in cycles.
      */
-    private void analyzeSetterInjection(String beanFqn, ClassOrInterfaceDeclaration cid) {
+    private void analyzeSetterInjection(String beanFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
         for (MethodDeclaration method : cid.getMethods()) {
             if (!method.getAnnotationByName("Autowired").isPresent()) {
                 continue;
@@ -236,7 +257,7 @@ public class BeanDependencyGraph {
             Parameter param = method.getParameter(0);
             String paramName = param.getNameAsString();
             Type paramType = param.getType();
-            String targetFqn = resolveTypeFqn(paramType, cid);
+            String targetFqn = resolveTypeFqn(paramType, cid, cu);
 
             if (targetFqn != null && !targetFqn.equals(beanFqn)) {
                 List<String> qualifiers = extractQualifiers(method);
@@ -248,7 +269,7 @@ public class BeanDependencyGraph {
     /**
      * Analyze @Bean methods in @Configuration classes.
      */
-    private void analyzeBeanMethods(String configFqn, ClassOrInterfaceDeclaration cid) {
+    private void analyzeBeanMethods(String configFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
         for (MethodDeclaration method : cid.getMethods()) {
             if (!method.getAnnotationByName("Bean").isPresent()) {
                 continue;
@@ -259,7 +280,7 @@ public class BeanDependencyGraph {
             for (Parameter param : method.getParameters()) {
                 String paramName = param.getNameAsString();
                 Type paramType = param.getType();
-                String targetFqn = resolveTypeFqn(paramType, cid);
+                String targetFqn = resolveTypeFqn(paramType, cid, cu);
 
                 if (targetFqn != null) {
                     List<String> qualifiers = extractQualifiers(param);
@@ -315,14 +336,33 @@ public class BeanDependencyGraph {
         return Optional.empty();
     }
 
-    private String resolveTypeFqn(Type type, ClassOrInterfaceDeclaration context) {
+    private String resolveTypeFqn(Type type, ClassOrInterfaceDeclaration context, CompilationUnit cu) {
         try {
             String typeName;
+            boolean debug = false;
             
             // For ClassOrInterfaceType (including parameterized types), extract the raw type name
             if (type instanceof ClassOrInterfaceType classOrInterfaceType) {
                 // Get the name without type parameters
                 typeName = classOrInterfaceType.getNameAsString();
+                
+                // Debug for extraction package
+                if (context.getFullyQualifiedName().isPresent() && 
+                    context.getFullyQualifiedName().get().contains("extraction")) {
+                    debug = true;
+                }
+                
+                // If the type has a scope (e.g., com.example.TypedService), use it directly
+                if (classOrInterfaceType.getScope().isPresent()) {
+                    String scopedName = classOrInterfaceType.getScope().orElseThrow().asString() + "." + typeName;
+                    // Check if this FQN exists in AntikytheraRunTime
+                    if (AntikytheraRunTime.getTypeDeclaration(scopedName).isPresent()) {
+                        if (debug) {
+                            System.out.println("DEBUG: Found scoped name: " + scopedName);
+                        }
+                        return scopedName;
+                    }
+                }
             } else {
                 // For other types, use asString() and extract raw type name if parameterized
                 typeName = type.asString();
@@ -338,23 +378,117 @@ public class BeanDependencyGraph {
                 }
             }
             
-            // First try to find in the current compilation unit
-            String fqn = AbstractCompiler.findFullyQualifiedName(context.findCompilationUnit().orElse(null),
-                    typeName);
+            // Strategy 1: Direct AntikytheraRunTime lookup by pattern matching
+            // This is faster and more reliable for types already in the runtime
+            // Get package name from the compilation unit (prefer passed cu, fallback to finding it)
+            if (cu == null) {
+                cu = context.findCompilationUnit().orElse(null);
+                // If still null, try getting it from AntikytheraRunTime using the FQN
+                if (cu == null && context.getFullyQualifiedName().isPresent()) {
+                    cu = AntikytheraRunTime.getCompilationUnit(context.getFullyQualifiedName().get());
+                }
+            }
+            String packageName = "";
+            if (cu != null) {
+                packageName = cu.getPackageDeclaration()
+                        .map(pd -> pd.getNameAsString())
+                        .orElse("");
+            } else if (context.getFullyQualifiedName().isPresent()) {
+                // Fallback: extract package from FQN
+                String fqn = context.getFullyQualifiedName().get();
+                int lastDot = fqn.lastIndexOf('.');
+                if (lastDot > 0) {
+                    packageName = fqn.substring(0, lastDot);
+                }
+            }
             
-            // If not found, check if it's already in AntikytheraRunTime (might be in a different package)
+            if (debug) {
+                System.out.println("DEBUG resolveTypeFqn: typeName=" + typeName + ", packageName=" + packageName);
+            }
+            
+            // Try exact match first
+            if (AntikytheraRunTime.getTypeDeclaration(typeName).isPresent()) {
+                if (debug) {
+                    System.out.println("DEBUG: Found exact match: " + typeName);
+                }
+                return typeName;
+            }
+            
+            // Try package + typeName (same package)
+            if (!packageName.isEmpty()) {
+                String samePackageFqn = packageName + "." + typeName;
+                if (AntikytheraRunTime.getTypeDeclaration(samePackageFqn).isPresent()) {
+                    if (debug) {
+                        System.out.println("DEBUG: Found same-package match: " + samePackageFqn);
+                    }
+                    return samePackageFqn;
+                }
+            }
+            
+            // Search all resolved types for a match (ends with pattern)
+            for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
+                if (resolvedFqn.equals(typeName) || resolvedFqn.endsWith("." + typeName)) {
+                    if (debug) {
+                        System.out.println("DEBUG: Found pattern match: " + resolvedFqn);
+                    }
+                    return resolvedFqn;
+                }
+            }
+            
+            // Strategy 2: Use AbstractCompiler.findFullyQualifiedName (existing logic)
+            // This handles imports, java.lang types, etc.
+            // Only call if we have a compilation unit, otherwise it will return null immediately
+            String fqn = null;
+            if (cu != null) {
+                fqn = AbstractCompiler.findFullyQualifiedName(cu, typeName);
+            }
+            
+            if (debug && fqn != null) {
+                System.out.println("DEBUG: Found via findFullyQualifiedName: " + fqn);
+            }
+            
+            if (debug && cu == null) {
+                System.out.println("DEBUG: cu is null, skipping findFullyQualifiedName");
+            }
+            
+            // Strategy 3: Final fallback - search AntikytheraRunTime again (in case it was added)
             if (fqn == null) {
-                // Check all resolved types for a match
                 for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
                     if (resolvedFqn.endsWith("." + typeName) || resolvedFqn.equals(typeName)) {
                         fqn = resolvedFqn;
+                        if (debug) {
+                            System.out.println("DEBUG: Found in final fallback: " + fqn);
+                        }
                         break;
                     }
                 }
             }
             
+            if (debug && fqn == null) {
+                System.out.println("DEBUG: Failed to resolve typeName: " + typeName);
+            }
+            
             return fqn;
         } catch (Exception e) {
+            // On exception, try one more fallback search
+            try {
+                String typeName = type instanceof ClassOrInterfaceType 
+                    ? ((ClassOrInterfaceType) type).getNameAsString()
+                    : type.asString();
+                
+                // Extract raw type name if parameterized
+                if (typeName.contains("<")) {
+                    typeName = typeName.substring(0, typeName.indexOf('<')).trim();
+                }
+                
+                for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
+                    if (resolvedFqn.endsWith("." + typeName) || resolvedFqn.equals(typeName)) {
+                        return resolvedFqn;
+                    }
+                }
+            } catch (Exception e2) {
+                // Ignore
+            }
             return null;
         }
     }

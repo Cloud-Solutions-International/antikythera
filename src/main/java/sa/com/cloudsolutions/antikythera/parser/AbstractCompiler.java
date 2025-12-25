@@ -601,8 +601,33 @@ public class AbstractCompiler {
         if (p != null) {
             return new TypeWrapper(p);
         }
-        if (AntikytheraRunTime.getTypeDeclaration(className).isPresent()) {
-            return new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(className).orElseThrow());
+        
+        // Check AntikytheraRunTime for types matching the short name
+        // Priority 1: Same package types (most likely match)
+        String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
+        if (!packageName.isEmpty()) {
+            String samePackageFqn = packageName + "." + className;
+            Optional<TypeDeclaration<?>> samePackageType = AntikytheraRunTime.getTypeDeclaration(samePackageFqn);
+            if (samePackageType.isPresent()) {
+                return new TypeWrapper(samePackageType.orElseThrow());
+            }
+        }
+        
+        // Priority 2: Exact match (might be a fully qualified name passed as className)
+        Optional<TypeDeclaration<?>> exactMatch = AntikytheraRunTime.getTypeDeclaration(className);
+        if (exactMatch.isPresent()) {
+            return new TypeWrapper(exactMatch.orElseThrow());
+        }
+        
+        // Priority 3: Search all resolved types for matches (ends with pattern)
+        // This is a fallback for cross-package types
+        for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
+            if (resolvedFqn.endsWith("." + className)) {
+                Optional<TypeDeclaration<?>> typeDecl = AntikytheraRunTime.getTypeDeclaration(resolvedFqn);
+                if (typeDecl.isPresent()) {
+                    return new TypeWrapper(typeDecl.orElseThrow());
+                }
+            }
         }
 
         ImportWrapper imp = findImport(cu, className);
