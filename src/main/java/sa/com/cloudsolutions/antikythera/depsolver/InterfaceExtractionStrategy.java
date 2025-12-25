@@ -83,52 +83,25 @@ public class InterfaceExtractionStrategy {
             return false;
         }
 
-        String paramOrFieldName = edge.fieldName();
-        Set<String> calledMethodNames;
-        MethodDeclaration beanMethod = null;
-        Parameter beanParam = null;
-
-        // Handle @Bean method edges differently
+        // Only handle field/setter/constructor injection
+        // @Bean method cycles should use MethodExtractionStrategy instead
         if (edge.injectionType() == InjectionType.BEAN_METHOD) {
-            // For @Bean methods, the AST node IS the MethodDeclaration
-            if (!(astNode instanceof MethodDeclaration)) {
-                System.out.println("❌ Expected MethodDeclaration for @Bean edge: " + edge);
-                return false;
-            }
-            beanMethod = (MethodDeclaration) astNode;
-
-            // Find the specific parameter
-            beanParam = beanMethod.getParameters().stream()
-                    .filter(p -> p.getNameAsString().equals(paramOrFieldName))
-                    .findFirst()
-                    .orElse(null);
-
-            if (beanParam == null) {
-                System.out.println("❌ Cannot find parameter '" + paramOrFieldName + "' in @Bean method: " + edge);
-                return false;
-            }
-
-            // Find methods called on the parameter in the @Bean method body
-            calledMethodNames = findCalledMethodsInMethod(beanMethod, paramOrFieldName);
-
-            if (calledMethodNames.isEmpty()) {
-                // For @Bean methods, the parameter is often just passed to constructor
-                // In this case, we create an interface with all public methods
-                System.out.println(
-                        "ℹ️  Parameter '" + paramOrFieldName + "' passed to constructor, using all public methods");
-                calledMethodNames = getAllPublicMethodNames(targetClass);
-            }
-        } else {
-            // For field/setter/constructor edges, find methods called on the field
-            calledMethodNames = findCalledMethods(callerClass, paramOrFieldName);
-        }
-
-        if (calledMethodNames.isEmpty()) {
-            System.out.println("⚠️  No methods to extract for '" + paramOrFieldName + "'");
+            System.out
+                    .println("⚠️  Interface extraction not applicable to @Bean methods. Use MethodExtractionStrategy.");
             return false;
         }
 
-        System.out.println("📊 Methods for interface from " + paramOrFieldName + ": " + calledMethodNames);
+        String fieldName = edge.fieldName();
+
+        // Find methods called on the dependency field
+        Set<String> calledMethodNames = findCalledMethods(callerClass, fieldName);
+
+        if (calledMethodNames.isEmpty()) {
+            System.out.println("⚠️  No methods to extract for '" + fieldName + "'");
+            return false;
+        }
+
+        System.out.println("📊 Methods for interface from " + fieldName + ": " + calledMethodNames);
 
         // Step 2: Resolve method signatures from target class
         Set<MethodDeclaration> usedMethods = resolveMethodSignatures(targetClass, calledMethodNames);
@@ -147,18 +120,7 @@ public class InterfaceExtractionStrategy {
         addImplementsClause(targetClass, interfaceName);
 
         // Step 5: Modify caller to use interface type
-        if (edge.injectionType() == InjectionType.BEAN_METHOD && beanParam != null) {
-            // For @Bean method, change the parameter type
-            changeParameterType(beanParam, interfaceName);
-        } else {
-            // For field, change the field type
-            changeFieldType(callerClass, paramOrFieldName, interfaceName);
-        }
-
-        // Step 6: Find all classes that use targetBean as dependency and update their
-        // types
-        // This is crucial for @Bean cycles to truly break the compile-time dependency
-        updateDependencyUsages(edge.targetBean(), interfaceName);
+        changeFieldType(callerClass, fieldName, interfaceName);
 
         // Track modified CUs
         callerClass.findCompilationUnit().ifPresent(modifiedCUs::add);
@@ -166,91 +128,6 @@ public class InterfaceExtractionStrategy {
 
         System.out.println("✅ Extracted interface " + interfaceName + " for " + edge);
         return true;
-    }
-
-    /**
-     * Find all classes that have a dependency on the target bean and update their
-     * field/constructor types to use the interface instead of concrete class.
-     */
-    private void updateDependencyUsages(String targetBeanFqn, String interfaceName) {
-        String simpleClassName = getSimpleClassName(targetBeanFqn);
-
-        // Search all compilation units for usages
-        for (CompilationUnit cu : AntikytheraRunTime.getResolvedCompilationUnits().values()) {
-            for (ClassOrInterfaceDeclaration clazz : cu.findAll(ClassOrInterfaceDeclaration.class)) {
-                boolean modified = false;
-
-                // Update field types
-                for (FieldDeclaration field : clazz.getFields()) {
-                    for (VariableDeclarator var : field.getVariables()) {
-                        if (var.getTypeAsString().equals(simpleClassName)) {
-                            var.setType(new ClassOrInterfaceType(null, interfaceName));
-                            System.out.println("   Updated field type in " + clazz.getNameAsString() + "."
-                                    + var.getNameAsString());
-                            modified = true;
-                        }
-                    }
-                }
-
-                // Update constructor parameters
-                clazz.getConstructors().forEach(ctor -> {
-                    ctor.getParameters().forEach(param -> {
-                        if (param.getTypeAsString().equals(simpleClassName)) {
-                            param.setType(new ClassOrInterfaceType(null, interfaceName));
-                            System.out.println("   Updated constructor param in " + clazz.getNameAsString());
-                        }
-                    });
-                });
-
-                if (modified) {
-                    modifiedCUs.add(cu);
-                }
-            }
-        }
-    }
-
-    /**
-     * Find methods called on a parameter within a method body.
-     */
-    private Set<String> findCalledMethodsInMethod(MethodDeclaration method, String paramName) {
-        Set<String> calledMethods = new HashSet<>();
-
-        method.getBody().ifPresent(body -> {
-            body.accept(new VoidVisitorAdapter<Void>() {
-                @Override
-                public void visit(MethodCallExpr mce, Void arg) {
-                    super.visit(mce, arg);
-                    if (mce.getScope().isPresent()) {
-                        String scopeStr = mce.getScope().get().toString();
-                        if (scopeStr.equals(paramName)) {
-                            calledMethods.add(mce.getNameAsString());
-                        }
-                    }
-                }
-            }, null);
-        });
-
-        return calledMethods;
-    }
-
-    /**
-     * Get all public method names from a class.
-     */
-    private Set<String> getAllPublicMethodNames(ClassOrInterfaceDeclaration classDecl) {
-        return classDecl.getMethods().stream()
-                .filter(MethodDeclaration::isPublic)
-                .map(m -> m.getNameAsString())
-                .collect(java.util.stream.Collectors.toSet());
-    }
-
-    /**
-     * Change the type of a parameter (for @Bean method edges).
-     */
-    private void changeParameterType(Node paramNode, String interfaceName) {
-        if (paramNode instanceof Parameter param) {
-            param.setType(new ClassOrInterfaceType(null, interfaceName));
-            System.out.println("   Changed parameter type to " + interfaceName);
-        }
     }
 
     /**
