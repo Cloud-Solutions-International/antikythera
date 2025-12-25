@@ -261,7 +261,7 @@ public class GraphNode {
 
     /**
      * Adds the type arguments to the graph.
-     * We are dealing with parameterized types. things like Map<String, Integer> or List<String>
+     * We are dealing with parameterized types. things like {@code Map<String, Integer>} or {@code List<String>}
      * Will make recursive calls to the searchType method which will result in the imports
      * being eventually added.
      * @param typeArg an AST type argument which may or may not contain parameterized types

@@ -21,7 +21,7 @@ public enum InjectionType {
     SETTER,
 
     /**
-     * @Bean method in a @Configuration class.
+     * Bean method in a Configuration class (using {@code @Bean} and {@code @Configuration} annotations).
      */
     BEAN_METHOD
 }
