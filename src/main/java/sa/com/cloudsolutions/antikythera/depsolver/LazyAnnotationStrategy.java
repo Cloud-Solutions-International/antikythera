@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
@@ -45,12 +46,6 @@ public class LazyAnnotationStrategy {
      * @return true if @Lazy was successfully added
      */
     public boolean apply(BeanDependency edge) {
-        if (edge.injectionType() == InjectionType.CONSTRUCTOR) {
-            System.out.println("⚠️  Cannot add @Lazy to constructor injection: " + edge);
-            System.out.println("    Consider converting to setter injection or extracting interface.");
-            return false;
-        }
-
         if (edge.injectionType() == InjectionType.BEAN_METHOD) {
             System.out.println("⚠️  @Bean method cycles require manual review: " + edge);
             return false;
@@ -65,6 +60,7 @@ public class LazyAnnotationStrategy {
         boolean result = switch (edge.injectionType()) {
             case FIELD -> addLazyToField(astNode, edge);
             case SETTER -> addLazyToSetter(astNode, edge);
+            case CONSTRUCTOR -> addLazyToConstructorParameter(astNode, edge);
             default -> false;
         };
 
@@ -122,6 +118,45 @@ public class LazyAnnotationStrategy {
 
         // Ensure import exists
         method.findCompilationUnit().ifPresent(cu -> {
+            addLazyImport(cu);
+            modifiedCUs.add(cu);
+        });
+
+        return true;
+    }
+
+    /**
+     * Add @Lazy to a constructor parameter.
+     * Spring supports @Lazy on constructor parameters to break cycles.
+     */
+    private boolean addLazyToConstructorParameter(Node node, BeanDependency edge) {
+        if (!(node instanceof ConstructorDeclaration ctor)) {
+            System.out.println("❌ Expected ConstructorDeclaration but got: " + node.getClass().getSimpleName());
+            return false;
+        }
+
+        String paramName = edge.fieldName();
+        Parameter param = ctor.getParameters().stream()
+                .filter(p -> p.getNameAsString().equals(paramName))
+                .findFirst()
+                .orElse(null);
+
+        if (param == null) {
+            System.out.println("❌ Parameter not found: " + paramName);
+            return false;
+        }
+
+        // Check if already has @Lazy
+        if (param.getAnnotationByName(LAZY_ANNOTATION).isPresent()) {
+            System.out.println("ℹ️  Already has @Lazy: " + edge);
+            return true;
+        }
+
+        // Add @Lazy to the parameter
+        param.addAnnotation(new MarkerAnnotationExpr(new Name(LAZY_ANNOTATION)));
+
+        // Ensure import exists
+        ctor.findCompilationUnit().ifPresent(cu -> {
             addLazyImport(cu);
             modifiedCUs.add(cu);
         });

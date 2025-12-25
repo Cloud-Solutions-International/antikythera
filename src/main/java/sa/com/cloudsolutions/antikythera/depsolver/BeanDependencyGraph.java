@@ -10,6 +10,7 @@ import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
@@ -68,6 +69,10 @@ public class BeanDependencyGraph {
                 if (isConfiguration(cid)) {
                     analyzeBeanMethods(beanFqn, cid);
                 }
+                
+                // Ensure the bean is in the graph even if it has no outgoing dependencies
+                // (it might be a target of dependencies from other beans)
+                simpleGraph.putIfAbsent(beanFqn, new HashSet<>());
             }
         }
     }
@@ -84,6 +89,33 @@ public class BeanDependencyGraph {
      */
     public Map<String, Set<BeanDependency>> getDependencies() {
         return adjacencyList;
+    }
+
+    /**
+     * Check if a node (field, parameter, or method) has @Lazy annotation.
+     * Checks both simple name and fully qualified name.
+     */
+    private boolean hasLazyAnnotation(com.github.javaparser.ast.Node node) {
+        if (node instanceof FieldDeclaration field) {
+            return field.getAnnotationByName("Lazy").isPresent() ||
+                   field.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
+                   field.getAnnotations().stream().anyMatch(a -> 
+                       a.getNameAsString().equals("Lazy") || 
+                       a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+        } else if (node instanceof com.github.javaparser.ast.body.Parameter param) {
+            return param.getAnnotationByName("Lazy").isPresent() ||
+                   param.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
+                   param.getAnnotations().stream().anyMatch(a -> 
+                       a.getNameAsString().equals("Lazy") || 
+                       a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+        } else if (node instanceof MethodDeclaration method) {
+            return method.getAnnotationByName("Lazy").isPresent() ||
+                   method.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
+                   method.getAnnotations().stream().anyMatch(a -> 
+                       a.getNameAsString().equals("Lazy") || 
+                       a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+        }
+        return false;
     }
 
     /**
@@ -111,10 +143,16 @@ public class BeanDependencyGraph {
 
     /**
      * Analyze fields with @Autowired, @Inject, or @Resource.
+     * Skip fields with @Lazy annotation as they don't participate in cycles.
      */
     private void analyzeFieldInjection(String beanFqn, ClassOrInterfaceDeclaration cid) {
         for (FieldDeclaration field : cid.getFields()) {
             if (!isInjectedField(field)) {
+                continue;
+            }
+
+            // Skip @Lazy fields - they don't participate in instantiation cycles
+            if (hasLazyAnnotation(field)) {
                 continue;
             }
 
@@ -133,6 +171,7 @@ public class BeanDependencyGraph {
 
     /**
      * Analyze constructors for injection (single constructor or @Autowired marked).
+     * Skip parameters with @Lazy annotation as they don't participate in cycles.
      */
     private void analyzeConstructorInjection(String beanFqn, ClassOrInterfaceDeclaration cid) {
         List<ConstructorDeclaration> constructors = cid.getConstructors();
@@ -157,6 +196,11 @@ public class BeanDependencyGraph {
         }
 
         for (Parameter param : injectedConstructor.getParameters()) {
+            // Skip @Lazy parameters - they don't participate in instantiation cycles
+            if (hasLazyAnnotation(param)) {
+                continue;
+            }
+
             String paramName = param.getNameAsString();
             Type paramType = param.getType();
             String targetFqn = resolveTypeFqn(paramType, cid);
@@ -171,10 +215,16 @@ public class BeanDependencyGraph {
 
     /**
      * Analyze setter methods with @Autowired.
+     * Skip setters with @Lazy annotation as they don't participate in cycles.
      */
     private void analyzeSetterInjection(String beanFqn, ClassOrInterfaceDeclaration cid) {
         for (MethodDeclaration method : cid.getMethods()) {
             if (!method.getAnnotationByName("Autowired").isPresent()) {
+                continue;
+            }
+
+            // Skip @Lazy setters - they don't participate in instantiation cycles
+            if (hasLazyAnnotation(method)) {
                 continue;
             }
 
@@ -267,8 +317,43 @@ public class BeanDependencyGraph {
 
     private String resolveTypeFqn(Type type, ClassOrInterfaceDeclaration context) {
         try {
-            return AbstractCompiler.findFullyQualifiedName(context.findCompilationUnit().orElse(null),
-                    type.asString());
+            String typeName;
+            
+            // For ClassOrInterfaceType (including parameterized types), extract the raw type name
+            if (type instanceof ClassOrInterfaceType classOrInterfaceType) {
+                // Get the name without type parameters
+                typeName = classOrInterfaceType.getNameAsString();
+            } else {
+                // For other types, use asString() and extract raw type name if parameterized
+                typeName = type.asString();
+                
+                // If it's a parameterized type, extract just the raw type name
+                if (typeName.contains("<")) {
+                    typeName = typeName.substring(0, typeName.indexOf('<')).trim();
+                }
+                
+                // Also handle array types (e.g., "String[]" -> "String")
+                if (typeName.contains("[")) {
+                    typeName = typeName.substring(0, typeName.indexOf('[')).trim();
+                }
+            }
+            
+            // First try to find in the current compilation unit
+            String fqn = AbstractCompiler.findFullyQualifiedName(context.findCompilationUnit().orElse(null),
+                    typeName);
+            
+            // If not found, check if it's already in AntikytheraRunTime (might be in a different package)
+            if (fqn == null) {
+                // Check all resolved types for a match
+                for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
+                    if (resolvedFqn.endsWith("." + typeName) || resolvedFqn.equals(typeName)) {
+                        fqn = resolvedFqn;
+                        break;
+                    }
+                }
+            }
+            
+            return fqn;
         } catch (Exception e) {
             return null;
         }

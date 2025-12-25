@@ -6,10 +6,16 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
+import sa.com.cloudsolutions.antikythera.depsolver.Graph;
+import sa.com.cloudsolutions.antikythera.depsolver.GraphNode;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.Scope;
+import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 
 import java.io.IOException;
@@ -19,6 +25,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Strategy for breaking circular dependencies by extracting cycle-causing
@@ -150,30 +157,37 @@ public class MethodExtractionStrategy {
     }
 
     /**
-     * Check if a method uses a specific field.
+     * Check if a method uses a specific field using ScopeChain for accurate detection.
      */
     private boolean methodUsesField(MethodDeclaration method, String fieldName) {
-        boolean[] uses = { false };
-        method.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(NameExpr n, Void arg) {
-                if (n.getNameAsString().equals(fieldName)) {
-                    uses[0] = true;
-                }
-                super.visit(n, arg);
-            }
+        // Check for direct field access
+        boolean usesField = method.findAll(NameExpr.class).stream()
+                .anyMatch(n -> n.getNameAsString().equals(fieldName));
 
-            @Override
-            public void visit(MethodCallExpr n, Void arg) {
-                n.getScope().ifPresent(scope -> {
-                    if (scope.toString().equals(fieldName)) {
-                        uses[0] = true;
+        if (usesField) {
+            return true;
+        }
+
+        // Check for method calls on the field using ScopeChain
+        return method.findAll(MethodCallExpr.class).stream()
+                .anyMatch(mce -> {
+                    ScopeChain chain = ScopeChain.findScopeChain(mce);
+                    if (!chain.isEmpty()) {
+                        List<Scope> scopes = chain.getChain();
+                        if (!scopes.isEmpty()) {
+                            Scope firstScope = scopes.get(0);
+                            com.github.javaparser.ast.expr.Expression expr = firstScope.getExpression();
+                            
+                            if (expr.isNameExpr()) {
+                                return expr.asNameExpr().getNameAsString().equals(fieldName);
+                            } else if (expr.isFieldAccessExpr()) {
+                                FieldAccessExpr fae = expr.asFieldAccessExpr();
+                                return fae.getNameAsString().equals(fieldName);
+                            }
+                        }
                     }
+                    return false;
                 });
-                super.visit(n, arg);
-            }
-        }, null);
-        return uses[0];
     }
 
     /**
@@ -191,45 +205,55 @@ public class MethodExtractionStrategy {
     }
 
     /**
-     * Collect transitive dependencies (helper methods and non-cycle fields).
+     * Collect transitive dependencies using DepSolver for accurate dependency tracking.
+     * This leverages existing infrastructure instead of manual visitor pattern.
      */
     private void collectTransitiveDependencies(ClassOrInterfaceDeclaration clazz,
             Set<MethodDeclaration> methods, Set<FieldDeclaration> fields, List<String> cycle) {
 
-        Set<String> methodNames = new HashSet<>();
-        for (MethodDeclaration m : methods) {
-            methodNames.add(m.getNameAsString());
+        DepSolver solver = DepSolver.createSolver();
+        DepSolver.reset();
+        // Note: Graph doesn't have a reset method, but DepSolver.reset() clears the stack
+        // We'll work with the current graph state
+
+        // Build dependency graph for all methods using DepSolver
+        for (MethodDeclaration method : methods) {
+            GraphNode node = Graph.createGraphNode(method);
+            DepSolver.push(node);
         }
 
-        // Find helper methods called by cycle-causing methods
-        boolean changed = true;
-        while (changed) {
-            changed = false;
-            for (MethodDeclaration method : new HashSet<>(methods)) {
-                Set<String> calledMethods = findCalledMethods(method);
-                for (String called : calledMethods) {
-                    if (!methodNames.contains(called)) {
-                        clazz.getMethodsByName(called).stream()
-                                .filter(m -> !m.isStatic())
-                                .forEach(m -> {
-                                    methods.add(m);
-                                    methodNames.add(called);
-                                });
-                        changed = true;
+        // Run DFS to find all transitive dependencies
+        solver.dfs();
+
+        // Extract helper methods and fields from the dependency graph
+        Set<String> cycleTypes = cycle.stream()
+                .map(this::getSimpleName)
+                .collect(Collectors.toSet());
+
+        // Find methods that are dependencies (from Graph nodes)
+        Map<Integer, GraphNode> nodes = Graph.getNodes();
+        Set<String> methodNames = methods.stream()
+                .map(MethodDeclaration::getNameAsString)
+                .collect(Collectors.toSet());
+
+        for (GraphNode node : nodes.values()) {
+            if (node.getNode() instanceof MethodDeclaration md) {
+                String methodName = md.getNameAsString();
+                // Check if this method is in our class and not already added
+                if (!methodNames.contains(methodName)) {
+                    List<MethodDeclaration> classMethods = clazz.getMethodsByName(methodName);
+                    for (MethodDeclaration classMethod : classMethods) {
+                        // Match by signature (parameter count)
+                        if (classMethod.getParameters().size() == md.getParameters().size() 
+                                && !classMethod.isStatic()) {
+                            methods.add(classMethod);
+                            methodNames.add(methodName);
+                        }
                     }
                 }
-            }
-        }
-
-        // Collect fields used by methods (exclude cycle-causing fields)
-        Set<String> cycleTypes = new HashSet<>();
-        for (String c : cycle) {
-            cycleTypes.add(getSimpleName(c));
-        }
-
-        for (MethodDeclaration method : methods) {
-            Set<String> usedFields = findUsedFields(method);
-            for (String fieldName : usedFields) {
+            } else if (node.getNode() instanceof FieldDeclaration fd) {
+                // Check if this field is in our class
+                String fieldName = fd.getVariable(0).getNameAsString();
                 clazz.getFieldByName(fieldName).ifPresent(f -> {
                     String type = f.getVariables().get(0).getTypeAsString();
                     if (!cycleTypes.contains(type)) {
@@ -238,38 +262,19 @@ public class MethodExtractionStrategy {
                 });
             }
         }
-    }
 
-    /**
-     * Find methods called within a method body.
-     */
-    private Set<String> findCalledMethods(MethodDeclaration method) {
-        Set<String> result = new HashSet<>();
-        method.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(MethodCallExpr n, Void arg) {
-                if (n.getScope().isEmpty()) {
-                    result.add(n.getNameAsString());
-                }
-                super.visit(n, arg);
-            }
-        }, null);
-        return result;
-    }
-
-    /**
-     * Find fields used in a method.
-     */
-    private Set<String> findUsedFields(MethodDeclaration method) {
-        Set<String> result = new HashSet<>();
-        method.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(NameExpr n, Void arg) {
-                result.add(n.getNameAsString());
-                super.visit(n, arg);
-            }
-        }, null);
-        return result;
+        // Also check for fields used directly in method bodies
+        for (MethodDeclaration method : methods) {
+            method.findAll(NameExpr.class).forEach(ne -> {
+                String name = ne.getNameAsString();
+                clazz.getFieldByName(name).ifPresent(f -> {
+                    String type = f.getVariables().get(0).getTypeAsString();
+                    if (!cycleTypes.contains(type)) {
+                        fields.add(f);
+                    }
+                });
+            });
+        }
     }
 
     /**

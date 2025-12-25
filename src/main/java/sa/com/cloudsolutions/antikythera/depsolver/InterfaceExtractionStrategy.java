@@ -9,18 +9,22 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.TypeParameter;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.evaluator.Scope;
+import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -131,25 +135,40 @@ public class InterfaceExtractionStrategy {
     }
 
     /**
-     * Find all methods called on a field in the class.
+     * Find all methods called on a field in the class using ScopeChain.
+     * This leverages existing infrastructure for more accurate scope resolution.
      */
     private Set<String> findCalledMethods(ClassOrInterfaceDeclaration classDecl, String fieldName) {
         Set<String> calledMethods = new HashSet<>();
 
-        classDecl.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(MethodCallExpr mce, Void arg) {
-                super.visit(mce, arg);
-
-                // Check if call is on the field: fieldName.methodName()
-                if (mce.getScope().isPresent()) {
-                    String scopeStr = mce.getScope().get().toString();
-                    if (scopeStr.equals(fieldName)) {
-                        calledMethods.add(mce.getNameAsString());
+        for (MethodDeclaration method : classDecl.getMethods()) {
+            method.findAll(MethodCallExpr.class).forEach(mce -> {
+                ScopeChain chain = ScopeChain.findScopeChain(mce);
+                if (!chain.isEmpty()) {
+                    // Get the first scope element (the field name)
+                    List<Scope> scopes = chain.getChain();
+                    if (!scopes.isEmpty()) {
+                        Scope firstScope = scopes.get(0);
+                        com.github.javaparser.ast.expr.Expression expr = firstScope.getExpression();
+                        
+                        // Check if it's a NameExpr matching our field
+                        if (expr.isNameExpr()) {
+                            String name = expr.asNameExpr().getNameAsString();
+                            if (name.equals(fieldName)) {
+                                calledMethods.add(mce.getNameAsString());
+                            }
+                        }
+                        // Also handle FieldAccessExpr (this.fieldName)
+                        else if (expr.isFieldAccessExpr()) {
+                            FieldAccessExpr fae = expr.asFieldAccessExpr();
+                            if (fae.getNameAsString().equals(fieldName)) {
+                                calledMethods.add(mce.getNameAsString());
+                            }
+                        }
                     }
                 }
-            }
-        }, null);
+            });
+        }
 
         return calledMethods;
     }
