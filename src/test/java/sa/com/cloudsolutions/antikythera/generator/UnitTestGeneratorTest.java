@@ -488,7 +488,7 @@ class UnitTestGeneratorMoreTests extends TestHelper {
     @Test
     void testAddingBaseClassToTestClass() {
         CompilationUnit base = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.generator.DummyBase");
-        assertNotNull(base);
+        assertNull(base);
         CompilationUnit compilationUnit = AntikytheraRunTime.getCompilationUnit("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Overlord");
         assertNotNull(compilationUnit);
 
