@@ -640,9 +640,25 @@ public class AbstractCompiler {
         if (exactMatch.isPresent()) {
             return new TypeWrapper(exactMatch.orElseThrow());
         }
-        
-        // Priority 3: Search all resolved types for matches (ends with pattern)
-        // This is a fallback for cross-package types
+
+        TypeWrapper imp = getTypeWrapperFromImports(cu, className);
+        if (imp != null) return imp;
+
+        for (EnumDeclaration ed : cu.findAll(EnumDeclaration.class)) {
+            for (EnumConstantDeclaration constant : ed.getEntries()) {
+                if (constant.getNameAsString().equals(className)) {
+                    return new TypeWrapper(constant);
+                }
+            }
+        }
+
+        TypeWrapper typeDecl = searchClassName(className);
+        if (typeDecl != null) return typeDecl;
+
+        return detectTypeWithClassLoaders(cu, className);
+    }
+
+    private static TypeWrapper searchClassName(String className) {
         for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
             if (resolvedFqn.endsWith("." + className)) {
                 Optional<TypeDeclaration<?>> typeDecl = AntikytheraRunTime.getTypeDeclaration(resolvedFqn);
@@ -651,7 +667,10 @@ public class AbstractCompiler {
                 }
             }
         }
+        return null;
+    }
 
+    private static TypeWrapper getTypeWrapperFromImports(CompilationUnit cu, String className) {
         ImportWrapper imp = findImport(cu, className);
         if (imp != null) {
             if (imp.getType() != null) {
@@ -666,15 +685,7 @@ public class AbstractCompiler {
                 // ignorable
             }
         }
-        for (EnumDeclaration ed : cu.findAll(EnumDeclaration.class)) {
-            for (EnumConstantDeclaration constant : ed.getEntries()) {
-                if (constant.getNameAsString().equals(className)) {
-                    return new TypeWrapper(constant);
-                }
-            }
-        }
-
-        return detectTypeWithClassLoaders(cu, className);
+        return null;
     }
 
     private static TypeWrapper findTypeFromJavaLang(String className) {
