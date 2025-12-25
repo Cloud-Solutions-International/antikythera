@@ -243,6 +243,12 @@ public class AKBuddy {
         CompilationUnit cu = ((Evaluator) eval).getCompilationUnit();
         TypeDeclaration<?> dtoType = AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow();
         String className = eval.getClassName();
+        
+        // For inner classes (especially inside interfaces), use the TypeDeclaration's compilation unit
+        // if evaluator's CU is null, as the CU is stored under the outer type name
+        if (cu == null) {
+            cu = dtoType.findCompilationUnit().orElse(null);
+        }
 
         List<FieldDeclaration> fields = dtoType.getFields();
 
@@ -261,7 +267,7 @@ public class AKBuddy {
             }
         }
 
-        builder = addConstructors(dtoType, cu, builder); // Add this line
+        builder = addConstructors(dtoType, cu, builder);
         builder = addFields(fields, cu, builder);
         builder = addMethods(dtoType.getMethods(), cu, builder);
         builder = addLombokAccessors(dtoType, cu, builder);
@@ -321,6 +327,12 @@ public class AKBuddy {
      * @return the resolved Class for the parameter type, or Object.class on failure.
      */
     private static Class<?> getParameterType(CompilationUnit cu, Parameter p) {
+        // For inner classes (especially inside interfaces), cu may be null.
+        // Get it from the parameter's AST node if needed
+        if (cu == null) {
+            cu = p.findCompilationUnit().orElse(null);
+        }
+        
         try {
             if (p.getType().isArrayType()) {
                 // Get the element type without [] suffix
@@ -348,6 +360,10 @@ public class AKBuddy {
                 t = AbstractCompiler.findType(cu, ctype.getNameAsString());
             } else {
                 t = AbstractCompiler.findType(cu, p.getType().asString());
+            }
+            
+            if (t == null) {
+                return Object.class;
             }
             if (t.getClazz() != null) {
                 return t.getClazz();
@@ -378,11 +394,18 @@ public class AKBuddy {
             VariableDeclarator vd = field.getVariable(0);
             String fieldName = vd.getNameAsString();
 
+            // For inner classes (especially inside interfaces), cu may be null.
+            // Get it from the field's AST node if needed
+            CompilationUnit fieldCu = cu;
+            if (fieldCu == null) {
+                fieldCu = field.findCompilationUnit().orElse(null);
+            }
+
             Class<?> fieldType;
             if (vd.getType().isPrimitiveType()) {
                 fieldType = Reflect.getComponentClass(vd.getTypeAsString());
             } else {
-                TypeWrapper wrapper = AbstractCompiler.findType(cu, vd.getType());
+                TypeWrapper wrapper = AbstractCompiler.findType(fieldCu, vd.getType());
                 if (wrapper != null && wrapper.getClazz() != null) {
                     fieldType = wrapper.getClazz();
                 } else {
@@ -390,7 +413,7 @@ public class AKBuddy {
                 }
             }
 
-            builder = addFieldAnnotations(cu, builder, field, fieldName, fieldType);
+            builder = addFieldAnnotations(fieldCu, builder, field, fieldName, fieldType);
         }
         return builder;
     }
@@ -408,6 +431,12 @@ public class AKBuddy {
      * @return updated builder possibly with annotations applied.
      */
     private static DynamicType.Builder<?> addFieldAnnotations(CompilationUnit cu, DynamicType.Builder<?> builder, FieldDeclaration field, String fieldName, Class<?> fieldType) {
+        // For inner classes (especially inside interfaces), cu may be null.
+        // Get it from the field's AST node if needed
+        if (cu == null) {
+            cu = field.findCompilationUnit().orElse(null);
+        }
+        
         DynamicType.Builder.FieldDefinition.Optional.Valuable<?> fieldDef = builder.defineField(fieldName, fieldType, Visibility.PRIVATE);
         builder = fieldDef;
         // Add binary annotations except Lombok
@@ -505,12 +534,21 @@ public class AKBuddy {
      * @return resolved field type or Object.class when unavailable.
      */
     private static Class<?> getFieldType(CompilationUnit cu, VariableDeclarator vd) {
+        // For inner classes (especially inside interfaces), cu may be null.
+        // Get it from the field's AST node if needed
+        if (cu == null) {
+            cu = vd.findCompilationUnit().orElse(null);
+        }
+        
         try {
             if (vd.getType().isPrimitiveType()) {
                 return Reflect.getComponentClass(vd.getTypeAsString());
             }
             TypeWrapper wrapper = AbstractCompiler.findType(cu, vd.getType());
-            if (wrapper != null && wrapper.getClazz() != null) {
+            if (wrapper == null) {
+                return Object.class;
+            }
+            if (wrapper.getClazz() != null) {
                 return wrapper.getClazz();
             }
             return Object.class;
@@ -528,6 +566,12 @@ public class AKBuddy {
      * @return resolved return type class, void.class for void, or Object.class on failure.
      */
     private static Class<?> getReturnType(CompilationUnit cu, MethodDeclaration method) {
+        // For inner classes (especially inside interfaces), cu may be null.
+        // Get it from the method's AST node if needed
+        if (cu == null) {
+            cu = method.findCompilationUnit().orElse(null);
+        }
+        
         try {
             Type returnType = method.getType();
             if (returnType.isVoidType()) {
@@ -537,7 +581,10 @@ public class AKBuddy {
                 return Reflect.getComponentClass(returnType.asString());
             }
             TypeWrapper wrapper = AbstractCompiler.findType(cu, returnType);
-            if (wrapper != null && wrapper.getClazz() != null) {
+            if (wrapper == null) {
+                return Object.class;
+            }
+            if (wrapper.getClazz() != null) {
                 return wrapper.getClazz();
             }
             return Object.class;

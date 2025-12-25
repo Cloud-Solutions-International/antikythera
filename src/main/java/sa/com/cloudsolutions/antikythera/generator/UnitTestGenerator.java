@@ -88,7 +88,7 @@ public class UnitTestGenerator extends TestGenerator {
      * in the case of a variable created with mockito the value will be true. For non mockito
      * variables, it will be false.
      */
-    private Map<String, Boolean> variables = new HashMap<>();
+    private final Map<String, Boolean> variables = new HashMap<>();
 
     public UnitTestGenerator(CompilationUnit cu) {
         super(cu);
@@ -481,6 +481,12 @@ public class UnitTestGenerator extends TestGenerator {
             mockWhenInitializerIsPresent(param, v);
         }
         else {
+            // If initializer is empty but value is a Mockito mock, generate Mockito.mock()
+            if (isMockitoMock(v.getValue())) {
+                BlockStmt body = getBody(testMethod);
+                body.addStatement(buildMockDeclaration(param.getTypeAsString(), nameAsString));
+                return;
+            }
             if (mockWhenInitializerIsAbsent(param, v)) return;
         }
         mockParameterFields(v, nameAsString);
@@ -498,6 +504,14 @@ public class UnitTestGenerator extends TestGenerator {
                 body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer().getFirst() + ";");
                 mockParameterFields(v, nameAsString);
                 return true;
+            }
+            // Check if it's an interface - always use Mockito.mock() for interfaces
+            if (t.isClassOrInterfaceType()) {
+                TypeWrapper wrapper = AbstractCompiler.findType(cu, t);
+                if (wrapper != null && wrapper.isInterface()) {
+                    body.addStatement(buildMockDeclaration(param.getTypeAsString(), nameAsString));
+                    return false;
+                }
             }
             if (AbstractCompiler.isFinalClass(param.getType(), cu)) {
                 cantMockFinalClass(param, v, cu);
@@ -517,6 +531,25 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt body = getBody(testMethod);
         Type t = param.getType();
 
+        Expression firstInitializer = v.getInitializer().getFirst();
+        // If the initializer is already a Mockito.mock() call, use it directly
+        if (v.getInitializer().size() == 1 && firstInitializer.isMethodCallExpr()) {
+            MethodCallExpr mce = firstInitializer.asMethodCallExpr();
+            // Check if it's Mockito.mock() - name is "mock" and (scope is "Mockito" OR has ClassExpr argument)
+            if (mce.getNameAsString().equals("mock")) {
+                boolean hasMockitoScope = mce.getScope().isPresent() && 
+                    (mce.getScope().get().toString().equals("Mockito") || 
+                     mce.getScope().get().toString().contains("Mockito"));
+                boolean hasClassExprArg = mce.getArguments().size() == 1 && 
+                    mce.getArgument(0).isClassExpr();
+                if (hasMockitoScope || hasClassExprArg) {
+                    // Already a Mockito.mock() call, use it directly
+                    body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + firstInitializer + ";");
+                    return;
+                }
+            }
+        }
+        
         if (v.getInitializer().size() == 1 && v.getInitializer().getFirst().isObjectCreationExpr() &&
                     isMockitoMock(v.getValue())) {
             body.addStatement(buildMockDeclaration(t.asClassOrInterfaceType().getNameAsString(), nameAsString));

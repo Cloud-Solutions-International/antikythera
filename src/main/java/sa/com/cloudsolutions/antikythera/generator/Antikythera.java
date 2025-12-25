@@ -1,6 +1,10 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +31,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @SuppressWarnings("java:S6548")
 public class Antikythera {
@@ -50,6 +55,7 @@ public class Antikythera {
         if (instance == null) {
             try {
                 Settings.loadConfigMap();
+                configureStaticJavaParser();
                 instance = new Antikythera();
                 mavenHelper = new MavenHelper();
                 mavenHelper.readPomFile();
@@ -69,6 +75,12 @@ public class Antikythera {
             }
         }
         return instance;
+    }
+
+    private static void configureStaticJavaParser() {
+        ParserConfiguration parserConfig = new ParserConfiguration();
+        parserConfig.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
+        StaticJavaParser.setConfiguration(parserConfig);
     }
 
     public static void copyFolder(Path source, Path destination) throws IOException {
@@ -107,6 +119,10 @@ public class Antikythera {
         String testPath = PACKAGE_PATH.replace("main", "test");
         mavenHelper.copyPom();
         String name = mavenHelper.copyTemplate("TestHelper.txt", testPath, "base");
+        if (name == null) {
+            return;
+        }
+
         String java = name.replace(".txt", JAVA);
         File f = new File(name);
         if (f.renameTo(new File(java))) {
@@ -178,34 +194,58 @@ public class Antikythera {
             String[] parts = service.split("#");
             String path = parts[0];
 
-            // Check if it's a source file in compilation units
             if (AntikytheraRunTime.getCompilationUnit(path) != null) {
                 processService(path, parts);
             } else {
-                // Might be a package - check directory
-                Path packagePath = Paths.get(Settings.getBasePath(),
-                    path.replace('.', File.separatorChar));
-
-                if (Files.isDirectory(packagePath)) {
-                    try (var paths = Files.walk(packagePath)) {
-                        paths.filter(Files::isRegularFile)
-                             .filter(p -> p.toString().endsWith(JAVA))
-                             .forEach(p -> {
-                                 String relativePath = Paths.get(Settings.getBasePath())
-                                     .relativize(p).toString()
-                                     .replace(File.separatorChar, '.')
-                                     .replaceAll("\\.java$", "");
-                                 try {
-                                     processService(relativePath, parts);
-                                 } catch (IOException e) {
-                                     logger.error("Failed to process service {}", relativePath, e);
-                                 }
-                             });
-                    }
-                } else {
-                    logger.warn("Service path {} not found as file or package", path);
-                }
+                processPackage(path, parts);
             }
+        }
+    }
+
+    private void processPackage(String packagePath, String[] parts) throws IOException {
+        Path dirPath = Paths.get(Settings.getBasePath(), packagePath.replace('.', File.separatorChar));
+        
+        if (!Files.isDirectory(dirPath)) {
+            logger.warn("Service path {} not found as file or package", packagePath);
+            return;
+        }
+
+        try (var paths = Files.walk(dirPath)) {
+            paths.filter(Files::isRegularFile)
+                 .filter(p -> p.toString().endsWith(JAVA))
+                 .forEach(file -> processServiceFile(file, parts));
+        }
+    }
+
+    private void processServiceFile(Path file, String[] parts) {
+        try {
+            String className = getClassNameFromFile(file);
+            if (className != null) {
+                processService(className, parts);
+            }
+        } catch (IOException e) {
+            logger.error("Failed to process service file {}", file, e);
+        }
+    }
+
+    private String getClassNameFromFile(Path file) {
+        try {
+            CompilationUnit cu = StaticJavaParser.parse(file.toFile());
+            String fileName = file.getFileName().toString().replace(JAVA, "");
+            Optional<String> packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString);
+            
+            String className = packageName.map(pkg -> pkg + "." + fileName).orElse(fileName);
+            
+            if (AntikytheraRunTime.getCompilationUnit(className) == null) {
+                logger.debug("Skipping {} - class not found in compilation unit cache. File package ({}) may not match directory structure.", 
+                    className, packageName.orElse("default package"));
+                return null;
+            }
+            
+            return className;
+        } catch (Exception e) {
+            logger.debug("Could not parse file {} to determine class name", file, e);
+            return null;
         }
     }
 

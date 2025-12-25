@@ -134,4 +134,68 @@ class TestMockingRegistry extends TestHelper {
         assertNotNull(parser);
         assertTrue(Mockito.mockingDetails(parser).isMock());
     }
+
+    @Test
+    void testCreateMockitoMockInstanceSetsInitializer() {
+        // Test that createMockitoMockInstance sets an initializer for generated test code
+        Variable result = MockingRegistry.createMockitoMockInstance(Runnable.class);
+
+        assertNotNull(result);
+        assertTrue(Mockito.mockingDetails(result.getValue()).isMock());
+        assertFalse(result.getInitializer().isEmpty(), "Initializer should be set for Mockito mocks");
+        
+        // Verify the initializer is a Mockito.mock() call
+        Expression initializer = result.getInitializer().getFirst();
+        assertInstanceOf(MethodCallExpr.class, initializer);
+        MethodCallExpr mockCall = (MethodCallExpr) initializer;
+        assertEquals("mock", mockCall.getNameAsString());
+        assertTrue(mockCall.getScope().isPresent());
+        assertEquals("Mockito", mockCall.getScope().get().toString());
+    }
+
+    @Test
+    void testCreateMockitoMockInstanceForInterface() {
+        // Test mocking an interface
+        Variable result = MockingRegistry.createMockitoMockInstance(List.class);
+
+        assertNotNull(result);
+        assertTrue(Mockito.mockingDetails(result.getValue()).isMock());
+        assertFalse(result.getInitializer().isEmpty());
+        
+        // The generated code should be Mockito.mock(List.class)
+        String initializerCode = result.getInitializer().getFirst().toString();
+        assertTrue(initializerCode.contains("Mockito.mock"), 
+            "Initializer should contain Mockito.mock, got: " + initializerCode);
+    }
+
+    @Test
+    void testExpressionFactoryForInterface() {
+        // Test that expressionFactory generates Mockito.mock() for interfaces
+        Expression result = MockingRegistry.expressionFactory("java.lang.Runnable");
+        
+        assertInstanceOf(MethodCallExpr.class, result);
+        MethodCallExpr mockCall = (MethodCallExpr) result;
+        assertEquals("mock", mockCall.getNameAsString());
+    }
+
+    @Test
+    void testExpressionFactoryForClassWithoutNoArgConstructor() {
+        // java.io.FileInputStream has no no-arg constructor
+        Expression result = MockingRegistry.expressionFactory("java.io.FileInputStream");
+        
+        // Should generate Mockito.mock() since FileInputStream has no no-arg constructor
+        assertInstanceOf(MethodCallExpr.class, result);
+        MethodCallExpr mockCall = (MethodCallExpr) result;
+        assertEquals("mock", mockCall.getNameAsString());
+    }
+
+    @Test
+    void testExpressionFactoryForClassWithNoArgConstructor() {
+        // ArrayList has a no-arg constructor
+        Expression result = MockingRegistry.expressionFactory("java.util.ArrayList");
+        
+        // Should be handled by the specific case for ArrayList
+        assertNotNull(result);
+        assertTrue(result.toString().contains("ArrayList"));
+    }
 }

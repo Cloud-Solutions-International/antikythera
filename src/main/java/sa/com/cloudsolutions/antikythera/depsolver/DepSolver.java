@@ -182,7 +182,7 @@ public class DepSolver {
 
     private static void findParentMethods(GraphNode node, MethodDeclaration md)  {
         TypeDeclaration<?> td = node.getTypeDeclaration();
-        if (!td.isClassOrInterfaceDeclaration()) {
+        if (td == null || !td.isClassOrInterfaceDeclaration()) {
             return;
         }
 
@@ -214,9 +214,12 @@ public class DepSolver {
         String className = node.getEnclosingType().getNameAsString();
         node.getDestination().findFirst(TypeDeclaration.class,
                 t -> t.getNameAsString().equals(className)).ifPresent(c -> {
-                    node.getTypeDeclaration().addMember(cd);
-                    if (cd.isAbstract() && node.getEnclosingType().getFullyQualifiedName().isPresent()) {
-                        methodOverrides(cd, node.getEnclosingType().getFullyQualifiedName().get());
+                    TypeDeclaration<?> typeDecl = node.getTypeDeclaration();
+                    if (typeDecl != null) {
+                        typeDecl.addMember(cd);
+                        if (cd.isAbstract() && node.getEnclosingType().getFullyQualifiedName().isPresent()) {
+                            methodOverrides(cd, node.getEnclosingType().getFullyQualifiedName().get());
+                        }
                     }
                 });
 
