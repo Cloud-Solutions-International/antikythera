@@ -314,30 +314,52 @@ public class AbstractCompiler {
     }
 
     private void findContainedTypes(TypeDeclaration<?> declaration, CompilationUnit cu) {
-        for (TypeDeclaration<?> type : declaration.findAll(TypeDeclaration.class)) {
-            TypeWrapper typeWrapper = new TypeWrapper(type);
-            if (type.isAnnotationPresent("Service")
-                    || type.isAnnotationPresent("org.springframework.stereotype.Service")) {
-                typeWrapper.setService(true);
-            } else if (type.isAnnotationPresent("RestController")
-                    || type.isAnnotationPresent("Controller")) {
-                typeWrapper.setController(true);
-            } else if (type.isAnnotationPresent("Component")) {
-                typeWrapper.setComponent(true);
+        // Process the declaration itself first
+        processType(declaration, cu);
+        
+        // Then recursively process nested types
+        if (declaration.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = declaration.asClassOrInterfaceDeclaration();
+            for (var member : cdecl.getMembers()) {
+                if (member instanceof TypeDeclaration) {
+                    @SuppressWarnings("unchecked")
+                    TypeDeclaration<?> nestedType = (TypeDeclaration<?>) member;
+                    findContainedTypes(nestedType, cu);
+                }
             }
+        }
+    }
+    
+    private void processType(TypeDeclaration<?> type, CompilationUnit cu) {
+        TypeWrapper typeWrapper = new TypeWrapper(type);
+        if (type.isAnnotationPresent("Service")
+                || type.isAnnotationPresent("org.springframework.stereotype.Service")) {
+            typeWrapper.setService(true);
+        } else if (type.isAnnotationPresent("RestController")
+                || type.isAnnotationPresent("Controller")) {
+            typeWrapper.setController(true);
+        } else if (type.isAnnotationPresent("Component")) {
+            typeWrapper.setComponent(true);
+        }
 
-            if (type.isClassOrInterfaceDeclaration()) {
-                ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
-                typeWrapper.setInterface(cdecl.isInterface());
+        if (type.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
+            typeWrapper.setInterface(cdecl.isInterface());
+        }
+        Optional<String> fqnOpt = type.getFullyQualifiedName();
+        if (fqnOpt.isPresent()) {
+            String name = fqnOpt.get();
+            // Check if a compilation unit already exists for this FQN
+            CompilationUnit existingCu = AntikytheraRunTime.getCompilationUnit(name);
+            if (existingCu != null && existingCu != cu) {
+                throw new IllegalStateException(
+                    String.format("Duplicate class definition detected: Class '%s' is defined in multiple files. " +
+                        "This violates Java's one-class-per-file rule. " +
+                        "The class was already loaded from another compilation unit.",
+                        name));
             }
-            type.getFullyQualifiedName().ifPresent(name -> {
-                AntikytheraRunTime.addType(name, typeWrapper);
-                AntikytheraRunTime.addCompilationUnit(name, cu);
-
-            });
-            if (!type.equals(declaration)) {
-                findContainedTypes(type, cu);
-            }
+            AntikytheraRunTime.addType(name, typeWrapper);
+            AntikytheraRunTime.addCompilationUnit(name, cu);
         }
     }
 
