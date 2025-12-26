@@ -9,15 +9,14 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
-import sa.com.cloudsolutions.antikythera.depsolver.Graph;
-import sa.com.cloudsolutions.antikythera.depsolver.GraphNode;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Scope;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -223,33 +222,38 @@ public class MethodExtractionStrategy {
         // Collect all dependencies without filtering
         Set<GraphNode> deps = analyzer.collectDependencies(methods);
 
-        // Extract helper methods and fields from discovered dependencies
+        // Use DependencyQuery to extract methods and fields from discovered
+        // dependencies
+        Set<MethodDeclaration> discoveredMethods = DependencyQuery.getMethods(deps);
+        Set<FieldDeclaration> discoveredFields = DependencyQuery.getFields(deps);
+
         Set<String> methodNames = methods.stream()
                 .map(MethodDeclaration::getNameAsString)
                 .collect(Collectors.toSet());
 
-        for (GraphNode node : deps) {
-            if (node.getNode() instanceof MethodDeclaration md) {
-                String methodName = md.getNameAsString();
-                if (!methodNames.contains(methodName)) {
-                    clazz.getMethodsByName(methodName).stream()
-                            .filter(m -> m.getParameters().size() == md.getParameters().size())
-                            .filter(m -> !m.isStatic())
-                            .forEach(m -> {
-                                methods.add(m);
-                                methodNames.add(methodName);
-                            });
-                }
-            } else if (node.getNode() instanceof FieldDeclaration fd) {
-                String fieldName = fd.getVariable(0).getNameAsString();
-                clazz.getFieldByName(fieldName).ifPresent(f -> {
-                    String type = f.getVariables().get(0).getTypeAsString();
-                    // Only exclude fields of cycle types (to break the dependency)
-                    if (!cycleTypes.contains(type)) {
-                        fields.add(f);
-                    }
-                });
+        // Add discovered transitive methods
+        for (MethodDeclaration md : discoveredMethods) {
+            String methodName = md.getNameAsString();
+            if (!methodNames.contains(methodName)) {
+                clazz.getMethodsByName(methodName).stream()
+                        .filter(m -> m.getParameters().size() == md.getParameters().size())
+                        .filter(m -> !m.isStatic())
+                        .forEach(m -> {
+                            methods.add(m);
+                            methodNames.add(methodName);
+                        });
             }
+        }
+
+        // Add discovered transitive fields (excluding cycle types)
+        for (FieldDeclaration fd : discoveredFields) {
+            String fieldName = fd.getVariable(0).getNameAsString();
+            clazz.getFieldByName(fieldName).ifPresent(f -> {
+                String type = f.getVariables().get(0).getTypeAsString();
+                if (!cycleTypes.contains(type)) {
+                    fields.add(f);
+                }
+            });
         }
 
         // Create a copy to include newly added transitive methods
@@ -257,6 +261,14 @@ public class MethodExtractionStrategy {
 
         // Also check for fields used directly in method bodies
         for (MethodDeclaration method : allMethods) {
+            Set<FieldDeclaration> usedFields = DependencyQuery.getFieldsUsedBy(method, deps);
+            for (FieldDeclaration f : usedFields) {
+                String type = f.getVariables().get(0).getTypeAsString();
+                if (!cycleTypes.contains(type)) {
+                    fields.add(f);
+                }
+            }
+            // Also check fields by name in case not discovered by DependencyQuery
             method.findAll(NameExpr.class).forEach(ne -> {
                 String name = ne.getNameAsString();
                 clazz.getFieldByName(name).ifPresent(f -> {
@@ -341,7 +353,6 @@ public class MethodExtractionStrategy {
 
         String mediatorFieldName = Character.toLowerCase(mediatorName.charAt(0)) +
                 mediatorName.substring(1);
-        String mediatorFqn = mediatorPackage + "." + mediatorName;
 
         // For each class that had methods moved, add mediator field
         for (String beanFqn : cycle) {
@@ -471,11 +482,11 @@ public class MethodExtractionStrategy {
         // Write modified CUs
         for (CompilationUnit cu : modifiedCUs) {
             String pkg = cu.getPackageDeclaration()
-                    .map(pd -> pd.getNameAsString())
+                    .map(NodeWithName::getNameAsString)
                     .orElse("");
             String name = cu.getPrimaryTypeName().orElse("Unknown");
-            String relativePath = pkg.replace('.', '/') + "/" + name + ".java";
-            String absolutePath = basePath + "/" + relativePath;
+            String relativePath = pkg.replace('.', '/') + File.pathSeparator + name + ".java";
+            String absolutePath = basePath + File.pathSeparator + relativePath;
             CopyUtils.writeFileAbsolute(absolutePath, cu.toString());
         }
 
@@ -484,7 +495,7 @@ public class MethodExtractionStrategy {
             String fqn = entry.getKey();
             CompilationUnit cu = entry.getValue();
             String relativePath = fqn.replace('.', '/') + ".java";
-            String absolutePath = basePath + "/" + relativePath;
+            String absolutePath = basePath + File.pathSeparator + relativePath;
             CopyUtils.writeFileAbsolute(absolutePath, cu.toString());
         }
     }
