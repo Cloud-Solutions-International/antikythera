@@ -157,7 +157,8 @@ public class MethodExtractionStrategy {
     }
 
     /**
-     * Check if a method uses a specific field using ScopeChain for accurate detection.
+     * Check if a method uses a specific field using ScopeChain for accurate
+     * detection.
      */
     private boolean methodUsesField(MethodDeclaration method, String fieldName) {
         // Check for direct field access
@@ -177,7 +178,7 @@ public class MethodExtractionStrategy {
                         if (!scopes.isEmpty()) {
                             Scope firstScope = scopes.get(0);
                             com.github.javaparser.ast.expr.Expression expr = firstScope.getExpression();
-                            
+
                             if (expr.isNameExpr()) {
                                 return expr.asNameExpr().getNameAsString().equals(fieldName);
                             } else if (expr.isFieldAccessExpr()) {
@@ -205,57 +206,45 @@ public class MethodExtractionStrategy {
     }
 
     /**
-     * Collect transitive dependencies using DepSolver for accurate dependency tracking.
-     * This leverages existing infrastructure instead of manual visitor pattern.
+     * Collect transitive dependencies using DependencyAnalyzer for accurate
+     * dependency tracking.
+     * Uses the clean collectDependencies() API for analysis-only mode.
      */
     private void collectTransitiveDependencies(ClassOrInterfaceDeclaration clazz,
             Set<MethodDeclaration> methods, Set<FieldDeclaration> fields, List<String> cycle) {
 
-        DepSolver solver = DepSolver.createSolver();
-        DepSolver.reset();
-        // Note: Graph doesn't have a reset method, but DepSolver.reset() clears the stack
-        // We'll work with the current graph state
+        // Create analyzer for analysis-only mode (no code generation)
+        DependencyAnalyzer analyzer = new DependencyAnalyzer();
 
-        // Build dependency graph for all methods using DepSolver
-        for (MethodDeclaration method : methods) {
-            GraphNode node = Graph.createGraphNode(method);
-            DepSolver.push(node);
-        }
-
-        // Run DFS to find all transitive dependencies
-        solver.dfs();
-
-        // Extract helper methods and fields from the dependency graph
         Set<String> cycleTypes = cycle.stream()
                 .map(this::getSimpleName)
                 .collect(Collectors.toSet());
 
-        // Find methods that are dependencies (from Graph nodes)
-        Map<Integer, GraphNode> nodes = Graph.getNodes();
+        // Collect all dependencies without filtering
+        Set<GraphNode> deps = analyzer.collectDependencies(methods);
+
+        // Extract helper methods and fields from discovered dependencies
         Set<String> methodNames = methods.stream()
                 .map(MethodDeclaration::getNameAsString)
                 .collect(Collectors.toSet());
 
-        for (GraphNode node : nodes.values()) {
+        for (GraphNode node : deps) {
             if (node.getNode() instanceof MethodDeclaration md) {
                 String methodName = md.getNameAsString();
-                // Check if this method is in our class and not already added
                 if (!methodNames.contains(methodName)) {
-                    List<MethodDeclaration> classMethods = clazz.getMethodsByName(methodName);
-                    for (MethodDeclaration classMethod : classMethods) {
-                        // Match by signature (parameter count)
-                        if (classMethod.getParameters().size() == md.getParameters().size() 
-                                && !classMethod.isStatic()) {
-                            methods.add(classMethod);
-                            methodNames.add(methodName);
-                        }
-                    }
+                    clazz.getMethodsByName(methodName).stream()
+                            .filter(m -> m.getParameters().size() == md.getParameters().size())
+                            .filter(m -> !m.isStatic())
+                            .forEach(m -> {
+                                methods.add(m);
+                                methodNames.add(methodName);
+                            });
                 }
             } else if (node.getNode() instanceof FieldDeclaration fd) {
-                // Check if this field is in our class
                 String fieldName = fd.getVariable(0).getNameAsString();
                 clazz.getFieldByName(fieldName).ifPresent(f -> {
                     String type = f.getVariables().get(0).getTypeAsString();
+                    // Only exclude fields of cycle types (to break the dependency)
                     if (!cycleTypes.contains(type)) {
                         fields.add(f);
                     }
@@ -263,8 +252,11 @@ public class MethodExtractionStrategy {
             }
         }
 
+        // Create a copy to include newly added transitive methods
+        Set<MethodDeclaration> allMethods = new HashSet<>(methods);
+
         // Also check for fields used directly in method bodies
-        for (MethodDeclaration method : methods) {
+        for (MethodDeclaration method : allMethods) {
             method.findAll(NameExpr.class).forEach(ne -> {
                 String name = ne.getNameAsString();
                 clazz.getFieldByName(name).ifPresent(f -> {
@@ -326,11 +318,11 @@ public class MethodExtractionStrategy {
         for (FieldDeclaration field : clazz.getFields()) {
             String typeAsString = field.getVariables().get(0).getTypeAsString();
             String typeSimpleName = getSimpleName(typeAsString);
-            
+
             // Check if field type matches any cycle type (FQN or simple name)
-            if (cycleFqns.contains(typeAsString) || 
-                cycleSimpleNames.contains(typeAsString) ||
-                cycleSimpleNames.contains(typeSimpleName)) {
+            if (cycleFqns.contains(typeAsString) ||
+                    cycleSimpleNames.contains(typeAsString) ||
+                    cycleSimpleNames.contains(typeSimpleName)) {
                 toRemove.add(field);
             }
         }

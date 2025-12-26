@@ -169,10 +169,34 @@ RepositoryParser repoParser = new RepositoryParser("com.example.UserRepository")
 - `TestCaseWriter` - Test file writing
 
 ### DepSolver Module (`depsolver/`)
-**Core:** `DepSolver` - Dependency extraction
+**Core:** 
+- `DependencyAnalyzer` - Base class for dependency analysis (analysis-only, no code generation)
+- `DepSolver` extends `DependencyAnalyzer` - Full dependency extraction with code generation
+
+**Analysis API:**
+```java
+// Analysis-only mode (no code generation)
+DependencyAnalyzer analyzer = new DependencyAnalyzer();
+Set<GraphNode> deps = analyzer.collectDependencies(methods);
+Set<GraphNode> filtered = analyzer.collectDependencies(methods, node -> !isCycleType(node));
+
+// Code generation mode
+DepSolver solver = DepSolver.createSolver();
+solver.processMethod("com.example.Service#method");
+solver.dfs();
+```
+
+**Query API:**
+```java
+// Query discovered dependencies
+Set<MethodDeclaration> methods = DependencyQuery.getMethods(deps);
+Set<FieldDeclaration> fields = DependencyQuery.getFields(deps);
+Set<MethodDeclaration> refs = DependencyQuery.getMethodsReferencingType("FQN", deps);
+```
 
 **Support:**
 - `Graph` & `GraphNode` - Dependency graph
+- `DependencyQuery` - Query utilities for dependency results
 - `InterfaceSolver` - Find implementations
 - `Resolver` - Type resolution
 - `DTOHandler` - DTO/Entity handling
