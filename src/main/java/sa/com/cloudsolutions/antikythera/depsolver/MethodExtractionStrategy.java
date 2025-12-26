@@ -115,24 +115,20 @@ public class MethodExtractionStrategy {
         }
 
         // Step 4: Remove methods and fields from original classes
-        for (String beanFqn : allMethodsToMove.keySet()) {
-            ClassOrInterfaceDeclaration clazz = findClass(beanFqn);
-            if (clazz == null)
-                continue;
+        for (Map.Entry<String, Set<MethodDeclaration>> entry : allMethodsToMove.entrySet()) {
+            ClassOrInterfaceDeclaration clazz = findClass(entry.getKey());
 
-            // Remove moved methods
-            for (MethodDeclaration method : allMethodsToMove.get(beanFqn)) {
+            for (MethodDeclaration method : allMethodsToMove.get(entry.getKey())) {
                 method.remove();
             }
 
-            // Remove cycle-causing field
             removeCycleField(clazz, cycle);
 
             clazz.findCompilationUnit().ifPresent(modifiedCUs::add);
         }
 
         // Step 5: Redirect callers to use mediator (add mediator field + update calls)
-        redirectCallers(cycle, mediatorName, mediatorPackage, movedMethodNames);
+        redirectCallers(cycle, mediatorName, movedMethodNames);
 
         return true;
     }
@@ -195,9 +191,9 @@ public class MethodExtractionStrategy {
      */
     private String findFieldNameForType(ClassOrInterfaceDeclaration clazz, String typeName) {
         for (FieldDeclaration field : clazz.getFields()) {
-            for (VariableDeclarator var : field.getVariables()) {
-                if (var.getTypeAsString().equals(typeName)) {
-                    return var.getNameAsString();
+            for (VariableDeclarator variable : field.getVariables()) {
+                if (variable.getTypeAsString().equals(typeName)) {
+                    return variable.getNameAsString();
                 }
             }
         }
@@ -349,7 +345,7 @@ public class MethodExtractionStrategy {
      * For each class in the cycle, add a mediator field and update internal calls.
      */
     private void redirectCallers(List<String> cycle, String mediatorName,
-            String mediatorPackage, Set<String> movedMethodNames) {
+                                 Set<String> movedMethodNames) {
 
         String mediatorFieldName = Character.toLowerCase(mediatorName.charAt(0)) +
                 mediatorName.substring(1);
@@ -366,17 +362,14 @@ public class MethodExtractionStrategy {
                 for (String moved : movedMethodNames) {
                     if (methodCallsMethod(m, moved)) {
                         hasMovedMethods = true;
+                        addMediatorField(clazz, mediatorName, mediatorFieldName);
+                        updateMethodCalls(clazz, movedMethodNames, mediatorFieldName);
+                        clazz.findCompilationUnit().ifPresent(modifiedCUs::add);
                         break;
                     }
                 }
                 if (hasMovedMethods)
                     break;
-            }
-
-            if (hasMovedMethods) {
-                addMediatorField(clazz, mediatorName, mediatorFieldName);
-                updateMethodCalls(clazz, movedMethodNames, mediatorFieldName);
-                clazz.findCompilationUnit().ifPresent(modifiedCUs::add);
             }
         }
     }

@@ -35,10 +35,8 @@ public class DependencyQuery {
         Set<MethodDeclaration> result = new HashSet<>();
 
         for (GraphNode node : nodes) {
-            if (node.getNode() instanceof MethodDeclaration md) {
-                if (referencesType(md, typeFqn)) {
-                    result.add(md);
-                }
+            if (node.getNode() instanceof MethodDeclaration md && referencesType(md, typeFqn)) {
+                result.add(md);
             }
         }
 
@@ -121,10 +119,9 @@ public class DependencyQuery {
         for (GraphNode node : nodes) {
             TypeDeclaration<?> type = node.getEnclosingType();
             if (type != null && type.getFullyQualifiedName().isPresent()) {
-                if (type.getFullyQualifiedName().get().equals(classFqn)) {
-                    if (node.getNode() instanceof MethodDeclaration md) {
+                if (type.getFullyQualifiedName().get().equals(classFqn) &&
+                    node.getNode() instanceof MethodDeclaration md) {
                         result.add(md);
-                    }
                 }
             }
         }
