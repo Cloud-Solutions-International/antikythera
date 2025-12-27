@@ -212,9 +212,20 @@ public class DependencyAnalyzer {
      * 2. Check if the node is a method, process parameters and return type
      * 3. Do the same for constructors
      */
+    protected static final Set<String> visitedSignatures = new HashSet<>();
+
     public void dfs() {
         while (!stack.isEmpty()) {
             GraphNode node = stack.pollLast();
+
+            // Signature check to prevent infinite loops if Graph creates duplicate nodes
+            String sig = getNodeSignature(node);
+            if (sig != null) {
+                if (visitedSignatures.contains(sig)) {
+                    continue;
+                }
+                visitedSignatures.add(sig);
+            }
 
             if (!node.isVisited()) {
                 node.setVisited(true);
@@ -228,6 +239,16 @@ public class DependencyAnalyzer {
                 constructorSearch(node);
             }
         }
+    }
+
+    private String getNodeSignature(GraphNode node) {
+        if (node.getNode() instanceof CallableDeclaration<?> cd) {
+            String className = node.getEnclosingType() != null
+                    ? node.getEnclosingType().getFullyQualifiedName().orElse(node.getEnclosingType().getNameAsString())
+                    : "Unknown";
+            return className + "." + cd.getSignature();
+        }
+        return null;
     }
 
     /**
@@ -426,6 +447,7 @@ public class DependencyAnalyzer {
         discoveredNodes.clear();
         Graph.getDependencies().clear();
         Graph.getNodes().clear();
+        visitedSignatures.clear();
     }
 
     // ============ Inner Visitor Classes ============

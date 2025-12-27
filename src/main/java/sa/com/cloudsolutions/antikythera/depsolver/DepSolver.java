@@ -116,6 +116,7 @@ public class DepSolver extends DependencyAnalyzer {
         names.clear();
         Graph.getDependencies().clear();
         Graph.getNodes().clear();
+        visitedSignatures.clear();
     }
 
     // ============ Override Hook Methods for Code Generation ============

@@ -731,7 +731,7 @@ public class MethodExtractionStrategy {
             // Only write if this is a generated class (not an original class)
             // Check if it's in our generatedClasses map or if it's a mediator (contains
             // "Mediator" in name)
-            if (generatedClasses.containsKey(fqn) || fqn.contains("Mediator")) {
+            if (generatedClasses.containsKey(fqn) || fqn.contains("Mediator") || fqn.contains("Operations")) {
                 // Use forward slash for Java package paths (platform-independent)
                 String relativePath = fqn.replace('.', '/') + ".java";
                 String absolutePath = basePath + File.separator + relativePath;
