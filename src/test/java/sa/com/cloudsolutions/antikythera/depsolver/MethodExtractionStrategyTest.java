@@ -26,6 +26,7 @@ class MethodExtractionStrategyTest {
     @BeforeEach
     void setUp() {
         AntikytheraRunTime.reset();
+        DepSolver.reset(); // Clear Graph state to prevent test interference
     }
 
     @Test

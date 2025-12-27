@@ -150,7 +150,7 @@ public class InterfaceExtractionStrategy {
                     if (!scopes.isEmpty()) {
                         Scope firstScope = scopes.get(0);
                         com.github.javaparser.ast.expr.Expression expr = firstScope.getExpression();
-                        
+
                         // Check if it's a NameExpr matching our field
                         if (expr.isNameExpr()) {
                             String name = expr.asNameExpr().getNameAsString();
@@ -283,14 +283,24 @@ public class InterfaceExtractionStrategy {
 
     /**
      * Change the field type to the interface.
+     * Preserves generic type arguments if present.
      */
     private void changeFieldType(ClassOrInterfaceDeclaration callerClass, String fieldName,
             String interfaceName) {
         for (FieldDeclaration field : callerClass.getFields()) {
             for (VariableDeclarator var : field.getVariables()) {
                 if (var.getNameAsString().equals(fieldName)) {
-                    var.setType(new ClassOrInterfaceType(null, interfaceName));
-                    System.out.println("   Changed field type to " + interfaceName + " in " +
+                    Type originalType = var.getType();
+                    ClassOrInterfaceType newType = new ClassOrInterfaceType(null, interfaceName);
+
+                    // Preserve type arguments if the original type is generic
+                    if (originalType.isClassOrInterfaceType()) {
+                        originalType.asClassOrInterfaceType().getTypeArguments()
+                                .ifPresent(newType::setTypeArguments);
+                    }
+
+                    var.setType(newType);
+                    System.out.println("   Changed field type to " + newType + " in " +
                             callerClass.getNameAsString());
                     return;
                 }

@@ -17,239 +17,247 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class LazyAnnotationStrategyTest {
 
-    private LazyAnnotationStrategy strategy;
+        private LazyAnnotationStrategy strategy;
 
-    @BeforeEach
-    void setUp() {
-        strategy = new LazyAnnotationStrategy(true); // dry-run mode
-    }
+        @BeforeEach
+        void setUp() {
+                strategy = new LazyAnnotationStrategy(true); // dry-run mode
+        }
 
-    @Test
-    @DisplayName("Should add @Lazy to field injection")
-    void addLazyToFieldInjection() {
-        String code = """
-                package com.example;
-                import org.springframework.stereotype.Service;
-                import org.springframework.beans.factory.annotation.Autowired;
+        @Test
+        @DisplayName("Should add @Lazy to field injection")
+        void addLazyToFieldInjection() {
+                String code = """
+                                package com.example;
+                                import org.springframework.stereotype.Service;
+                                import org.springframework.beans.factory.annotation.Autowired;
 
-                @Service
-                public class OrderService {
-                    @Autowired
-                    private PaymentService paymentService;
-                }
-                """;
+                                @Service
+                                public class OrderService {
+                                    @Autowired
+                                    private PaymentService paymentService;
+                                }
+                                """;
 
-        CompilationUnit cu = StaticJavaParser.parse(code);
-        FieldDeclaration field = cu.findAll(FieldDeclaration.class).get(0);
+                CompilationUnit cu = StaticJavaParser.parse(code);
+                FieldDeclaration field = cu.findAll(FieldDeclaration.class).get(0);
 
-        BeanDependency edge = new BeanDependency(
-                "com.example.OrderService",
-                "com.example.PaymentService",
-                InjectionType.FIELD,
-                field,
-                "paymentService");
+                BeanDependency edge = new BeanDependency(
+                                "com.example.OrderService",
+                                "com.example.PaymentService",
+                                InjectionType.FIELD,
+                                field,
+                                "paymentService");
 
-        boolean result = strategy.apply(edge);
+                boolean result = strategy.apply(edge);
 
-        assertTrue(result, "Should successfully add @Lazy");
-        assertTrue(field.getAnnotationByName("Lazy").isPresent(),
-                "Field should have @Lazy annotation");
-        assertEquals(1, strategy.getModifiedCUs().size());
-    }
+                assertTrue(result, "Should successfully add @Lazy");
+                assertTrue(field.getAnnotationByName("Lazy").isPresent(),
+                                "Field should have @Lazy annotation");
+                assertEquals(1, strategy.getModifiedCUs().size());
+        }
 
-    @Test
-    @DisplayName("Should add @Lazy import when applying to field")
-    void addLazyImport() {
-        String code = """
-                package com.example;
-                import org.springframework.stereotype.Service;
+        @Test
+        @DisplayName("Should add @Lazy import when applying to field")
+        void addLazyImport() {
+                String code = """
+                                package com.example;
+                                import org.springframework.stereotype.Service;
 
-                @Service
-                public class OrderService {
-                    private PaymentService paymentService;
-                }
-                """;
+                                @Service
+                                public class OrderService {
+                                    private PaymentService paymentService;
+                                }
+                                """;
 
-        CompilationUnit cu = StaticJavaParser.parse(code);
-        FieldDeclaration field = cu.findAll(FieldDeclaration.class).get(0);
+                CompilationUnit cu = StaticJavaParser.parse(code);
+                FieldDeclaration field = cu.findAll(FieldDeclaration.class).get(0);
 
-        BeanDependency edge = new BeanDependency(
-                "com.example.OrderService",
-                "com.example.PaymentService",
-                InjectionType.FIELD,
-                field,
-                "paymentService");
+                BeanDependency edge = new BeanDependency(
+                                "com.example.OrderService",
+                                "com.example.PaymentService",
+                                InjectionType.FIELD,
+                                field,
+                                "paymentService");
 
-        strategy.apply(edge);
+                strategy.apply(edge);
 
-        boolean hasLazyImport = cu.getImports().stream()
-                .anyMatch(i -> i.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
-        assertTrue(hasLazyImport, "Should add Lazy import");
-    }
+                boolean hasLazyImport = cu.getImports().stream()
+                                .anyMatch(i -> i.getNameAsString()
+                                                .equals("org.springframework.context.annotation.Lazy"));
+                assertTrue(hasLazyImport, "Should add Lazy import");
+        }
 
-    @Test
-    @DisplayName("Should add @Lazy to setter method")
-    void addLazyToSetterMethod() {
-        String code = """
-                package com.example;
-                import org.springframework.stereotype.Service;
-                import org.springframework.beans.factory.annotation.Autowired;
+        @Test
+        @DisplayName("Should add @Lazy to setter method")
+        void addLazyToSetterMethod() {
+                String code = """
+                                package com.example;
+                                import org.springframework.stereotype.Service;
+                                import org.springframework.beans.factory.annotation.Autowired;
 
-                @Service
-                public class ReportService {
-                    private DataService dataService;
+                                @Service
+                                public class ReportService {
+                                    private DataService dataService;
 
-                    @Autowired
-                    public void setDataService(DataService dataService) {
-                        this.dataService = dataService;
-                    }
-                }
-                """;
+                                    @Autowired
+                                    public void setDataService(DataService dataService) {
+                                        this.dataService = dataService;
+                                    }
+                                }
+                                """;
 
-        CompilationUnit cu = StaticJavaParser.parse(code);
-        MethodDeclaration setter = cu.findAll(MethodDeclaration.class).get(0);
+                CompilationUnit cu = StaticJavaParser.parse(code);
+                MethodDeclaration setter = cu.findAll(MethodDeclaration.class).get(0);
 
-        BeanDependency edge = new BeanDependency(
-                "com.example.ReportService",
-                "com.example.DataService",
-                InjectionType.SETTER,
-                setter,
-                "dataService");
+                BeanDependency edge = new BeanDependency(
+                                "com.example.ReportService",
+                                "com.example.DataService",
+                                InjectionType.SETTER,
+                                setter,
+                                "dataService");
 
-        boolean result = strategy.apply(edge);
+                boolean result = strategy.apply(edge);
 
-        assertTrue(result, "Should successfully add @Lazy to setter");
-        assertTrue(setter.getAnnotationByName("Lazy").isPresent(),
-                "Setter should have @Lazy annotation");
-    }
+                assertTrue(result, "Should successfully add @Lazy to setter");
+                assertTrue(setter.getAnnotationByName("Lazy").isPresent(),
+                                "Setter should have @Lazy annotation");
+        }
 
-    @Test
-    @DisplayName("Should skip if @Lazy already present on field")
-    void skipIfAlreadyHasLazyOnField() {
-        String code = """
-                package com.example;
-                import org.springframework.context.annotation.Lazy;
+        @Test
+        @DisplayName("Should skip if @Lazy already present on field")
+        void skipIfAlreadyHasLazyOnField() {
+                String code = """
+                                package com.example;
+                                import org.springframework.context.annotation.Lazy;
 
-                public class OrderService {
-                    @Lazy
-                    private PaymentService paymentService;
-                }
-                """;
+                                public class OrderService {
+                                    @Lazy
+                                    private PaymentService paymentService;
+                                }
+                                """;
 
-        CompilationUnit cu = StaticJavaParser.parse(code);
-        FieldDeclaration field = cu.findAll(FieldDeclaration.class).get(0);
+                CompilationUnit cu = StaticJavaParser.parse(code);
+                FieldDeclaration field = cu.findAll(FieldDeclaration.class).get(0);
 
-        BeanDependency edge = new BeanDependency(
-                "com.example.OrderService",
-                "com.example.PaymentService",
-                InjectionType.FIELD,
-                field,
-                "paymentService");
+                BeanDependency edge = new BeanDependency(
+                                "com.example.OrderService",
+                                "com.example.PaymentService",
+                                InjectionType.FIELD,
+                                field,
+                                "paymentService");
 
-        boolean result = strategy.apply(edge);
+                boolean result = strategy.apply(edge);
 
-        assertTrue(result, "Should return true even if already has @Lazy");
-        // Should still only have one @Lazy
-        assertEquals(1, field.getAnnotations().stream()
-                .filter(a -> a.getNameAsString().equals("Lazy")).count());
-    }
+                assertTrue(result, "Should return true even if already has @Lazy");
+                // Should still only have one @Lazy
+                assertEquals(1, field.getAnnotations().stream()
+                                .filter(a -> a.getNameAsString().equals("Lazy")).count());
+        }
 
-    @Test
-    @DisplayName("Should reject constructor injection")
-    void rejectConstructorInjection() {
-        String code = """
-                package com.example;
-                public class UserService {
-                    public UserService(NotificationService ns) { }
-                }
-                """;
+        @Test
+        @DisplayName("Should reject constructor injection")
+        void rejectConstructorInjection() {
+                String code = """
+                                package com.example;
+                                public class UserService {
+                                    public UserService(NotificationService ns) { }
+                                }
+                                """;
 
-        CompilationUnit cu = StaticJavaParser.parse(code);
+                CompilationUnit cu = StaticJavaParser.parse(code);
 
-        BeanDependency edge = new BeanDependency(
-                "com.example.UserService",
-                "com.example.NotificationService",
-                InjectionType.CONSTRUCTOR,
-                cu, // Pass any node, won't be used
-                "notificationService");
+                BeanDependency edge = new BeanDependency(
+                                "com.example.UserService",
+                                "com.example.NotificationService",
+                                InjectionType.CONSTRUCTOR,
+                                cu, // Pass any node, won't be used
+                                "notificationService");
 
-        boolean result = strategy.apply(edge);
+                boolean result = strategy.apply(edge);
 
-        assertFalse(result, "Should reject constructor injection");
-        assertTrue(strategy.getModifiedCUs().isEmpty(),
-                "Should not modify any CUs for constructor injection");
-    }
+                assertFalse(result, "Should reject constructor injection");
+                assertTrue(strategy.getModifiedCUs().isEmpty(),
+                                "Should not modify any CUs for constructor injection");
+        }
 
-    @Test
-    @DisplayName("Should reject @Bean method injection")
-    void rejectBeanMethodInjection() {
-        String code = """
-                package com.example;
+        @Test
+        @DisplayName("Should add @Lazy to @Bean method parameter")
+        void addLazyToBeanMethodParameter() {
+                String code = """
+                                package com.example;
+                                import org.springframework.context.annotation.Bean;
+                                import org.springframework.context.annotation.Configuration;
 
-                @Configuration
-                public class AppConfig {
-                    @Bean
-                    public CacheManager cacheManager(ConnectionPool pool) {
-                        return new CacheManager(pool);
-                    }
-                }
-                """;
+                                @Configuration
+                                public class AppConfig {
+                                    @Bean
+                                    public CacheManager cacheManager(ConnectionPool pool) {
+                                        return new CacheManager(pool);
+                                    }
+                                }
+                                """;
 
-        CompilationUnit cu = StaticJavaParser.parse(code);
-        MethodDeclaration beanMethod = cu.findAll(MethodDeclaration.class).get(0);
+                CompilationUnit cu = StaticJavaParser.parse(code);
+                MethodDeclaration beanMethod = cu.findAll(MethodDeclaration.class).get(0);
 
-        BeanDependency edge = new BeanDependency(
-                "com.example.CacheManager",
-                "com.example.ConnectionPool",
-                InjectionType.BEAN_METHOD,
-                beanMethod,
-                "pool");
+                BeanDependency edge = new BeanDependency(
+                                "com.example.AppConfig#cacheManager",
+                                "com.example.ConnectionPool",
+                                InjectionType.BEAN_METHOD,
+                                beanMethod,
+                                "pool");
 
-        boolean result = strategy.apply(edge);
+                boolean result = strategy.apply(edge);
 
-        assertFalse(result, "Should reject @Bean method injection");
-    }
+                assertTrue(result, "Should successfully add @Lazy to @Bean method parameter");
 
-    @Test
-    @DisplayName("Should handle null AST node gracefully")
-    void handleNullAstNode() {
-        BeanDependency edge = new BeanDependency(
-                "com.example.OrderService",
-                "com.example.PaymentService",
-                InjectionType.FIELD,
-                null, // null AST node
-                "paymentService");
+                // Verify the parameter has @Lazy
+                var param = beanMethod.getParameterByName("pool").orElseThrow();
+                assertTrue(param.getAnnotationByName("Lazy").isPresent(),
+                                "Parameter should have @Lazy annotation");
+        }
 
-        boolean result = strategy.apply(edge);
+        @Test
+        @DisplayName("Should handle null AST node gracefully")
+        void handleNullAstNode() {
+                BeanDependency edge = new BeanDependency(
+                                "com.example.OrderService",
+                                "com.example.PaymentService",
+                                InjectionType.FIELD,
+                                null, // null AST node
+                                "paymentService");
 
-        assertFalse(result, "Should return false for null AST node");
-    }
+                boolean result = strategy.apply(edge);
 
-    @Test
-    @DisplayName("Dry-run mode should not write files")
-    void dryRunDoesNotWrite() {
-        assertTrue(strategy.isDryRun(), "Strategy should be in dry-run mode");
+                assertFalse(result, "Should return false for null AST node");
+        }
 
-        String code = """
-                package com.example;
-                public class Test {
-                    private Dependency dep;
-                }
-                """;
+        @Test
+        @DisplayName("Dry-run mode should not write files")
+        void dryRunDoesNotWrite() {
+                assertTrue(strategy.isDryRun(), "Strategy should be in dry-run mode");
 
-        CompilationUnit cu = StaticJavaParser.parse(code);
-        FieldDeclaration field = cu.findAll(FieldDeclaration.class).get(0);
+                String code = """
+                                package com.example;
+                                public class Test {
+                                    private Dependency dep;
+                                }
+                                """;
 
-        BeanDependency edge = new BeanDependency(
-                "com.example.Test",
-                "com.example.Dependency",
-                InjectionType.FIELD,
-                field,
-                "dep");
+                CompilationUnit cu = StaticJavaParser.parse(code);
+                FieldDeclaration field = cu.findAll(FieldDeclaration.class).get(0);
 
-        strategy.apply(edge);
+                BeanDependency edge = new BeanDependency(
+                                "com.example.Test",
+                                "com.example.Dependency",
+                                InjectionType.FIELD,
+                                field,
+                                "dep");
 
-        // writeChanges should not throw even with dry-run
-        assertDoesNotThrow(() -> strategy.writeChanges("/some/path"));
-    }
+                strategy.apply(edge);
+
+                // writeChanges should not throw even with dry-run
+                assertDoesNotThrow(() -> strategy.writeChanges("/some/path"));
+        }
 }

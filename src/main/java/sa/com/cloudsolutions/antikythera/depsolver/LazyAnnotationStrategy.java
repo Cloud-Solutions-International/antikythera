@@ -46,11 +46,6 @@ public class LazyAnnotationStrategy {
      * @return true if @Lazy was successfully added
      */
     public boolean apply(BeanDependency edge) {
-        if (edge.injectionType() == InjectionType.BEAN_METHOD) {
-            System.out.println("⚠️  @Bean method cycles require manual review: " + edge);
-            return false;
-        }
-
         Node astNode = edge.astNode();
         if (astNode == null) {
             System.out.println("❌ No AST node for edge: " + edge);
@@ -61,7 +56,7 @@ public class LazyAnnotationStrategy {
             case FIELD -> addLazyToField(astNode, edge);
             case SETTER -> addLazyToSetter(astNode, edge);
             case CONSTRUCTOR -> addLazyToConstructorParameter(astNode, edge);
-            default -> false;
+            case BEAN_METHOD -> addLazyToBeanMethodParameter(astNode, edge);
         };
 
         if (result) {
@@ -157,6 +152,51 @@ public class LazyAnnotationStrategy {
 
         // Ensure import exists
         ctor.findCompilationUnit().ifPresent(cu -> {
+            addLazyImport(cu);
+            modifiedCUs.add(cu);
+        });
+
+        return true;
+    }
+
+    /**
+     * Add @Lazy to a @Bean method parameter.
+     * Spring supports @Lazy on @Bean method parameters to break cycles.
+     */
+    private boolean addLazyToBeanMethodParameter(Node node, BeanDependency edge) {
+        if (!(node instanceof MethodDeclaration method)) {
+            System.out.println("❌ Expected MethodDeclaration but got: " + node.getClass().getSimpleName());
+            return false;
+        }
+
+        // Verify this is a @Bean method
+        if (method.getAnnotationByName("Bean").isEmpty()) {
+            System.out.println("❌ Method is not a @Bean method: " + method.getNameAsString());
+            return false;
+        }
+
+        String paramName = edge.fieldName();
+        Parameter param = method.getParameters().stream()
+                .filter(p -> p.getNameAsString().equals(paramName))
+                .findFirst()
+                .orElse(null);
+
+        if (param == null) {
+            System.out.println("❌ Parameter not found in @Bean method: " + paramName);
+            return false;
+        }
+
+        // Check if already has @Lazy
+        if (param.getAnnotationByName(LAZY_ANNOTATION).isPresent()) {
+            System.out.println("ℹ️  Already has @Lazy: " + edge);
+            return true;
+        }
+
+        // Add @Lazy to the parameter
+        param.addAnnotation(new MarkerAnnotationExpr(new Name(LAZY_ANNOTATION)));
+
+        // Ensure import exists
+        method.findCompilationUnit().ifPresent(cu -> {
             addLazyImport(cu);
             modifiedCUs.add(cu);
         });

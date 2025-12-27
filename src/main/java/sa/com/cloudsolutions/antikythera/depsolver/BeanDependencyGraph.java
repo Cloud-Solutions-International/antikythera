@@ -37,6 +37,20 @@ public class BeanDependencyGraph {
 
     private final Map<String, Set<BeanDependency>> adjacencyList = new HashMap<>();
     private final Map<String, Set<String>> simpleGraph = new HashMap<>();
+    private final List<PostConstructWarning> postConstructWarnings = new ArrayList<>();
+
+    /**
+     * Warning for @PostConstruct methods that use cycle-causing dependencies.
+     * These require method extraction, not @Lazy annotation.
+     */
+    public record PostConstructWarning(String beanFqn, String methodName, String usedField, String usedFieldType) {
+        @Override
+        public String toString() {
+            return String.format("%s.%s() uses %s (%s) - @Lazy won't work, needs method extraction",
+                    beanFqn.substring(beanFqn.lastIndexOf('.') + 1), methodName, usedField,
+                    usedFieldType.substring(usedFieldType.lastIndexOf('.') + 1));
+        }
+    }
 
     /**
      * Build the dependency graph from all parsed compilation units.
@@ -68,7 +82,7 @@ public class BeanDependencyGraph {
                     // Fallback to finding it from the type
                     cu = cid.findCompilationUnit().orElse(null);
                 }
-                
+
                 analyzeFieldInjection(beanFqn, cid, cu);
                 analyzeConstructorInjection(beanFqn, cid, cu);
                 analyzeSetterInjection(beanFqn, cid, cu);
@@ -77,7 +91,10 @@ public class BeanDependencyGraph {
                 if (isConfiguration(cid)) {
                     analyzeBeanMethods(beanFqn, cid, cu);
                 }
-                
+
+                // Analyze @PostConstruct methods for cycle warnings
+                analyzePostConstructMethods(beanFqn, cid, cu);
+
                 // Ensure the bean is in the graph even if it has no outgoing dependencies
                 // (it might be a target of dependencies from other beans)
                 simpleGraph.putIfAbsent(beanFqn, new HashSet<>());
@@ -100,28 +117,33 @@ public class BeanDependencyGraph {
     }
 
     /**
+     * Get warnings for @PostConstruct methods that use cycle dependencies.
+     * These require method extraction strategy, not @Lazy.
+     */
+    public List<PostConstructWarning> getPostConstructWarnings() {
+        return postConstructWarnings;
+    }
+
+    /**
      * Check if a node (field, parameter, or method) has @Lazy annotation.
      * Checks both simple name and fully qualified name.
      */
     private boolean hasLazyAnnotation(com.github.javaparser.ast.Node node) {
         if (node instanceof FieldDeclaration field) {
             return field.getAnnotationByName("Lazy").isPresent() ||
-                   field.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
-                   field.getAnnotations().stream().anyMatch(a -> 
-                       a.getNameAsString().equals("Lazy") || 
-                       a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+                    field.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
+                    field.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Lazy") ||
+                            a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
         } else if (node instanceof com.github.javaparser.ast.body.Parameter param) {
             return param.getAnnotationByName("Lazy").isPresent() ||
-                   param.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
-                   param.getAnnotations().stream().anyMatch(a -> 
-                       a.getNameAsString().equals("Lazy") || 
-                       a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+                    param.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
+                    param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Lazy") ||
+                            a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
         } else if (node instanceof MethodDeclaration method) {
             return method.getAnnotationByName("Lazy").isPresent() ||
-                   method.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
-                   method.getAnnotations().stream().anyMatch(a -> 
-                       a.getNameAsString().equals("Lazy") || 
-                       a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+                    method.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
+                    method.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Lazy") ||
+                            a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
         }
         return false;
     }
@@ -167,7 +189,7 @@ public class BeanDependencyGraph {
             field.getVariables().forEach(var -> {
                 String fieldName = var.getNameAsString();
                 Type fieldType = var.getType();
-                
+
                 String targetFqn = resolveTypeFqn(fieldType, cid, cu);
 
                 if (targetFqn != null && !targetFqn.equals(beanFqn)) {
@@ -280,6 +302,67 @@ public class BeanDependencyGraph {
         }
     }
 
+    /**
+     * Analyze @PostConstruct methods to find dependencies used during
+     * initialization.
+     * These require method extraction strategy since @Lazy won't help.
+     */
+    private void analyzePostConstructMethods(String beanFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
+        // Get all injected field names in this class
+        Set<String> injectedFieldNames = new HashSet<>();
+        Map<String, String> fieldTypeMap = new HashMap<>();
+
+        for (FieldDeclaration field : cid.getFields()) {
+            if (isInjectedField(field)) {
+                field.getVariables().forEach(var -> {
+                    String fieldName = var.getNameAsString();
+                    injectedFieldNames.add(fieldName);
+                    String typeFqn = resolveTypeFqn(var.getType(), cid, cu);
+                    if (typeFqn != null) {
+                        fieldTypeMap.put(fieldName, typeFqn);
+                    }
+                });
+            }
+        }
+
+        if (injectedFieldNames.isEmpty()) {
+            return;
+        }
+
+        // Find @PostConstruct methods
+        for (MethodDeclaration method : cid.getMethods()) {
+            boolean isPostConstruct = method.getAnnotationByName("PostConstruct").isPresent()
+                    || method.getAnnotationByName("javax.annotation.PostConstruct").isPresent()
+                    || method.getAnnotationByName("jakarta.annotation.PostConstruct").isPresent();
+
+            if (!isPostConstruct) {
+                continue;
+            }
+
+            // Check if this method uses any injected fields
+            method.findAll(com.github.javaparser.ast.expr.NameExpr.class).forEach(nameExpr -> {
+                String name = nameExpr.getNameAsString();
+                if (injectedFieldNames.contains(name)) {
+                    String fieldType = fieldTypeMap.getOrDefault(name, "unknown");
+                    postConstructWarnings.add(new PostConstructWarning(
+                            beanFqn, method.getNameAsString(), name, fieldType));
+                }
+            });
+
+            // Also check for this.fieldName patterns
+            method.findAll(com.github.javaparser.ast.expr.FieldAccessExpr.class).forEach(fieldAccess -> {
+                if (fieldAccess.getScope().isThisExpr()) {
+                    String name = fieldAccess.getNameAsString();
+                    if (injectedFieldNames.contains(name)) {
+                        String fieldType = fieldTypeMap.getOrDefault(name, "unknown");
+                        postConstructWarnings.add(new PostConstructWarning(
+                                beanFqn, method.getNameAsString(), name, fieldType));
+                    }
+                }
+            });
+        }
+    }
+
     private boolean isInjectedField(FieldDeclaration field) {
         return field.getAnnotationByName("Autowired").isPresent()
                 || field.getAnnotationByName("Inject").isPresent()
@@ -326,7 +409,8 @@ public class BeanDependencyGraph {
 
     /**
      * Resolve type FQN using AbstractCompiler utility.
-     * Delegates to AbstractCompiler.resolveTypeFqn() for consistent type resolution.
+     * Delegates to AbstractCompiler.resolveTypeFqn() for consistent type
+     * resolution.
      */
     private String resolveTypeFqn(Type type, ClassOrInterfaceDeclaration context, CompilationUnit cu) {
         return AbstractCompiler.resolveTypeFqn(type, context, cu);
