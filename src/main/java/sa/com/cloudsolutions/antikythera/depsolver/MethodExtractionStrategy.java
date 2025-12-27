@@ -314,21 +314,47 @@ public class MethodExtractionStrategy {
             }
         }
 
-        // Use batch method to get all fields used by methods
-        Set<FieldDeclaration> usedFields = DependencyQuery.getFieldsUsedByMethods(methods, deps);
-        
-        // Add discovered fields (excluding cycle types)
+        // Collect fields used by all methods (including discovered helper methods)
+        // Check ALL methods - both in methods set and discovered from deps
         final CompilationUnit finalCu = cu;
-        for (FieldDeclaration fd : usedFields) {
-            String fieldName = fd.getVariable(0).getNameAsString();
-            clazz.getFieldByName(fieldName).ifPresent(f -> {
-                Type fieldType = f.getVariables().get(0).getType();
-                String fieldTypeFqn = AbstractCompiler.resolveTypeFqn(fieldType, clazz, finalCu);
-                
-                // Only check FQN (no simple name fallback - more reliable)
-                if (fieldTypeFqn != null && !cycleFqns.contains(fieldTypeFqn)) {
-                    fields.add(f);
+        Set<String> collectedFieldNames = new HashSet<>();
+        Set<MethodDeclaration> allMethodsToCheck = new HashSet<>(methods);
+        
+        // Also include methods discovered from deps (in case they weren't added to methods set)
+        String clazzFqn = clazz.getFullyQualifiedName().orElse(null);
+        for (GraphNode node : deps) {
+            if (node.getNode() instanceof MethodDeclaration md) {
+                TypeDeclaration<?> enclosingType = md.findAncestor(TypeDeclaration.class).orElse(null);
+                if (enclosingType != null && enclosingType.getFullyQualifiedName().isPresent()) {
+                    String fqn = enclosingType.getFullyQualifiedName().get();
+                    if (fqn.equals(clazzFqn) && !cycleFqns.contains(fqn)) {
+                        allMethodsToCheck.add(md);
+                    }
                 }
+            }
+        }
+        
+        // Check all methods for field usage - use clazz directly for field lookup
+        for (MethodDeclaration md : allMethodsToCheck) {
+            // Find all NameExpr in method body - these could be field references
+            md.findAll(com.github.javaparser.ast.expr.NameExpr.class).forEach(ne -> {
+                String name = ne.getNameAsString();
+                // Check if this name refers to a field in the class
+                // Use clazz directly since all methods should be from this class
+                clazz.getFieldByName(name).ifPresent(f -> {
+                    // Avoid duplicates
+                    String fieldName = f.getVariable(0).getNameAsString();
+                    if (!collectedFieldNames.contains(fieldName)) {
+                        // Check if field type is not a cycle type
+                        // Include field even if type resolution fails (fieldTypeFqn == null)
+                        Type fieldType = f.getVariables().get(0).getType();
+                        String fieldTypeFqn = AbstractCompiler.resolveTypeFqn(fieldType, clazz, finalCu);
+                        if (fieldTypeFqn == null || !cycleFqns.contains(fieldTypeFqn)) {
+                            fields.add(f);
+                            collectedFieldNames.add(fieldName);
+                        }
+                    }
+                });
             });
         }
     }
@@ -420,17 +446,21 @@ public class MethodExtractionStrategy {
             mediatorNode.addField(cycleField);
         }
 
-        // Use Graph.createGraphNode() for each method - automatically discovers dependencies via DFS
-        // Create custom DepSolver to route methods to mediator
+        // Add methods directly to mediator, then use Graph infrastructure for dependency discovery
         MediatorDepSolver solver = new MediatorDepSolver(mediator, mediatorCU);
         for (Set<MethodDeclaration> methodSet : methods.values()) {
             for (MethodDeclaration method : methodSet) {
-                // Create graph node for method - this triggers DFS to discover dependencies
-                GraphNode methodNode = Graph.createGraphNode(method);
-                // Ensure method goes to mediator
+                // Add method directly to mediator (clone to avoid modifying original)
+                MethodDeclaration clone = method.clone();
+                clone.setModifiers(Modifier.Keyword.PUBLIC);
+                mediator.addMember(clone);
+                
+                // Now use Graph infrastructure to discover transitive dependencies
+                // Create graph node for the cloned method in mediator context
+                GraphNode methodNode = Graph.createGraphNode(clone);
                 methodNode.setDestination(mediatorCU);
                 methodNode.setTypeDeclaration(mediator);
-                // Run DFS to discover all transitive dependencies
+                // Run DFS to discover all transitive dependencies (calls onCallableDiscovered for dependencies)
                 solver.dfs();
             }
         }
