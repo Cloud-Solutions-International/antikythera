@@ -20,6 +20,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Scope;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
@@ -934,87 +935,37 @@ public class MethodExtractionStrategy {
      * Write changes to disk.
      */
     public void writeChanges(String basePath) throws IOException {
-        logger.info("=== writeChanges() called with basePath: {} ===", basePath);
-        logger.info("Modified CUs count: {}", modifiedCUs.size());
-        logger.info("Generated classes count: {}", generatedClasses.size());
         if (dryRun) {
             logger.info("Dry run mode - not writing files");
             return;
         }
 
-        // Write modified CUs
-        logger.info("Writing {} modified compilation units", modifiedCUs.size());
         for (CompilationUnit cu : modifiedCUs) {
             String pkg = cu.getPackageDeclaration()
                     .map(NodeWithName::getNameAsString)
                     .orElse("");
-            String name = cu.getPrimaryTypeName().orElse("Unknown");
-            String fqn = pkg.isEmpty() ? name : pkg + "." + name;
-            
+            String name = AbstractCompiler.getPublicType(cu).getNameAsString();
+
             // Use forward slash for Java package paths (platform-independent)
-            String relativePath = pkg.replace('.', '/') + "/" + name + ".java";
+            String relativePath = pkg.replace('.', '/') + File.separator + name + ".java";
             String absolutePath = basePath + File.separator + relativePath;
-            logger.info("Writing {} to: {}", fqn, absolutePath);
-            
-            // Verify CompilationUnit state before writing
-            ClassOrInterfaceDeclaration clazz = cu.findFirst(ClassOrInterfaceDeclaration.class).orElse(null);
-            if (clazz != null) {
-                logger.info("Before write - {}: {} methods, {} fields", fqn, 
-                    clazz.getMethods().size(), clazz.getFields().size());
-                
-                // Fetch from AntikytheraRunTime and compare
-                CompilationUnit runtimeCu = AntikytheraRunTime.getCompilationUnit(fqn);
-                if (runtimeCu != null) {
-                    ClassOrInterfaceDeclaration runtimeClazz = runtimeCu.findFirst(ClassOrInterfaceDeclaration.class).orElse(null);
-                    if (runtimeClazz != null) {
-                        logger.info("Runtime CU - {}: {} methods, {} fields", fqn,
-                            runtimeClazz.getMethods().size(), runtimeClazz.getFields().size());
-                        if (runtimeClazz.getMethods().size() != clazz.getMethods().size() ||
-                            runtimeClazz.getFields().size() != clazz.getFields().size()) {
-                            logger.warn("MISMATCH before write for {}: Local({}m,{}f) vs Runtime({}m,{}f)",
-                                fqn, clazz.getMethods().size(), clazz.getFields().size(),
-                                runtimeClazz.getMethods().size(), runtimeClazz.getFields().size());
-                        }
-                    }
-                }
-            }
-            
-            // Use toString() for structural changes (field/method removal)
-            // LexicalPreservingPrinter requires setup before modifications
+
             String content = cu.toString();
-            logger.info("Content length: {} chars", content.length());
             CopyUtils.writeFileAbsolute(absolutePath, content);
-            logger.info("✓ Written {}", absolutePath);
         }
 
-        // Write generated classes
-        logger.debug("Writing {} generated classes", generatedClasses.size());
         for (Map.Entry<String, CompilationUnit> entry : generatedClasses.entrySet()) {
             String fqn = entry.getKey();
             CompilationUnit cu = entry.getValue();
-            
-            // Verify mediator fields before writing
-            ClassOrInterfaceDeclaration mediator = cu.findFirst(ClassOrInterfaceDeclaration.class).orElse(null);
-            if (mediator != null) {
-                logger.info("Before write - {}: {} methods, {} fields", fqn,
-                    mediator.getMethods().size(), mediator.getFields().size());
-                logger.debug("Mediator fields: {}", 
-                    mediator.getFields().stream()
-                        .map(f -> f.getVariable(0).getNameAsString())
-                        .collect(Collectors.toList()));
-            }
-            
+
             // Use forward slash for Java package paths (platform-independent)
             String relativePath = fqn.replace('.', '/') + ".java";
             String absolutePath = basePath + File.separator + relativePath;
-            logger.debug("Writing generated class to: {}", absolutePath);
-            
+
             // Use toString() for generated classes
             String content = cu.toString();
-            logger.debug("Generated content length: {} chars", content.length());
             CopyUtils.writeFileAbsolute(absolutePath, content);
             
-            logger.debug("✓ Written generated class {}", absolutePath);
         }
     }
 }
