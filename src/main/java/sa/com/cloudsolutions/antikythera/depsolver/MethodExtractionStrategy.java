@@ -193,18 +193,11 @@ public class MethodExtractionStrategy {
             logger.info("findCompilationUnit() result: {}", cuOpt.isPresent() ? "present" : "empty");
             
             if (cuToAdd == null) {
-                // Fallback: get from AntikytheraRunTime
                 String fqn = entry.getKey();
-                logger.info("Trying AntikytheraRunTime.getCompilationUnit({})", fqn);
                 cuToAdd = AntikytheraRunTime.getCompilationUnit(fqn);
-                logger.info("AntikytheraRunTime result: {}", cuToAdd != null ? "found" : "null");
             }
             if (cuToAdd != null) {
                 modifiedCUs.add(cuToAdd);
-                logger.info("✓ Added CU to modifiedCUs: {} (CU primary type: {})", 
-                    entry.getKey(), cuToAdd.getPrimaryTypeName().orElse("Unknown"));
-            } else {
-                logger.error("✗ Could not get CompilationUnit for {} - file will NOT be written!", entry.getKey());
             }
         }
 
@@ -215,28 +208,16 @@ public class MethodExtractionStrategy {
             if (clazz == null) {
                 continue;
             }
-
             removeCycleField(clazz, cycle);
-            
-            // Get CompilationUnit - try multiple methods
-            logger.info("Attempting to get CU for field removal in {}", beanFqn);
+
             Optional<CompilationUnit> cuOpt = clazz.findCompilationUnit();
             CompilationUnit cuToAdd = cuOpt.orElse(null);
-            logger.info("findCompilationUnit() result: {}", cuOpt.isPresent() ? "present" : "empty");
-            
+
             if (cuToAdd == null) {
-                // Fallback: get from AntikytheraRunTime
-                String fqn = beanFqn;
-                logger.info("Trying AntikytheraRunTime.getCompilationUnit({})", fqn);
-                cuToAdd = AntikytheraRunTime.getCompilationUnit(fqn);
-                logger.info("AntikytheraRunTime result: {}", cuToAdd != null ? "found" : "null");
+                cuToAdd = AntikytheraRunTime.getCompilationUnit(beanFqn);
             }
             if (cuToAdd != null) {
                 modifiedCUs.add(cuToAdd);
-                logger.info("✓ Added CU to modifiedCUs after field removal: {} (CU primary type: {})", 
-                    beanFqn, cuToAdd.getPrimaryTypeName().orElse("Unknown"));
-            } else {
-                logger.error("✗ Could not get CompilationUnit for field removal in {} - file will NOT be written!", beanFqn);
             }
         }
 
@@ -617,9 +598,9 @@ public class MethodExtractionStrategy {
         // Collect field names first to avoid concurrent modification
         Set<String> fieldNamesToRemove = new HashSet<>();
         for (FieldDeclaration field : toRemove) {
-            VariableDeclarator var = field.getVariable(0);
-            if (var != null) {
-                fieldNamesToRemove.add(var.getNameAsString());
+            VariableDeclarator variable = field.getVariable(0);
+            if (variable != null) {
+                fieldNamesToRemove.add(variable.getNameAsString());
             }
         }
         
@@ -627,17 +608,14 @@ public class MethodExtractionStrategy {
         // Remove from parent's member list (more reliable than field.remove())
         List<FieldDeclaration> fieldsToRemove = new ArrayList<>();
         for (FieldDeclaration field : clazz.getFields()) {
-            VariableDeclarator var = field.getVariable(0);
-            if (var != null && fieldNamesToRemove.contains(var.getNameAsString())) {
+            VariableDeclarator variable = field.getVariable(0);
+            if (variable != null && fieldNamesToRemove.contains(variable.getNameAsString())) {
                 fieldsToRemove.add(field);
             }
         }
-        String className = clazz.getFullyQualifiedName().orElse("unknown");
-        logger.info("Removing {} fields from {}", fieldsToRemove.size(), className);
+
         for (FieldDeclaration field : fieldsToRemove) {
-            VariableDeclarator var = field.getVariable(0);
-            String fieldName = var != null ? var.getNameAsString() : "unknown";
-            logger.info("  Removing field: {}", fieldName);
+            VariableDeclarator variable = field.getVariable(0);
             clazz.remove(field);
         }
         
@@ -654,14 +632,12 @@ public class MethodExtractionStrategy {
             // Verify in AntikytheraRunTime
             String fqn = clazz.getFullyQualifiedName().orElse(null);
             if (fqn != null) {
-                logger.info("Checking AntikytheraRunTime for field removal in {}", fqn);
                 CompilationUnit runtimeCu = AntikytheraRunTime.getCompilationUnit(fqn);
                 if (runtimeCu != null) {
-                    logger.info("Found runtime CU for field removal in {}", fqn);
+
                     ClassOrInterfaceDeclaration runtimeClazz = runtimeCu.findFirst(ClassOrInterfaceDeclaration.class).orElse(null);
                     if (runtimeClazz != null) {
                         int runtimeFields = runtimeClazz.getFields().size();
-                        logger.info("AntikytheraRunTime has {} fields for {}", runtimeFields, fqn);
                         if (runtimeFields != remainingFields) {
                             logger.warn("MISMATCH: Local CU has {} fields, Runtime CU has {} fields for {}", 
                                 remainingFields, runtimeFields, fqn);
