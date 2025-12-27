@@ -132,7 +132,8 @@ public class MethodExtractionStrategy {
 
         // Step 4: Remove methods and fields from original classes
         // First, remove methods from classes that had methods moved
-        // IMPORTANT: Find methods in the actual AST by name, not use collected references
+        // IMPORTANT: Find methods in the actual AST by name, not use collected
+        // references
         // This ensures we're removing the actual AST nodes, not clones
         for (Map.Entry<String, Set<MethodDeclaration>> entry : allMethodsToMove.entrySet()) {
             ClassOrInterfaceDeclaration clazz = findClass(entry.getKey());
@@ -145,7 +146,7 @@ public class MethodExtractionStrategy {
             for (MethodDeclaration method : allMethodsToMove.get(entry.getKey())) {
                 methodNamesToRemove.add(method.getNameAsString());
             }
-            
+
             // Remove methods from the actual AST by removing from parent's member list
             List<MethodDeclaration> methodsToRemove = new ArrayList<>();
             for (MethodDeclaration method : clazz.getMethods()) {
@@ -157,10 +158,10 @@ public class MethodExtractionStrategy {
             for (MethodDeclaration method : methodsToRemove) {
                 clazz.remove(method);
             }
-            
+
             Optional<CompilationUnit> cuOpt = clazz.findCompilationUnit();
             CompilationUnit cuToAdd = cuOpt.orElse(null);
-            
+
             if (cuToAdd == null) {
                 String fqn = entry.getKey();
                 cuToAdd = AntikytheraRunTime.getCompilationUnit(fqn);
@@ -264,8 +265,10 @@ public class MethodExtractionStrategy {
     }
 
     /**
-     * Collect transitive dependencies using DependencyAnalyzer and new utility methods.
-     * Simplified implementation using collectDependenciesExcluding() and batch queries.
+     * Collect transitive dependencies using DependencyAnalyzer and new utility
+     * methods.
+     * Simplified implementation using collectDependenciesExcluding() and batch
+     * queries.
      */
     private void collectTransitiveDependencies(ClassOrInterfaceDeclaration clazz,
             Set<MethodDeclaration> methods, Set<FieldDeclaration> fields, List<String> cycle) {
@@ -280,6 +283,42 @@ public class MethodExtractionStrategy {
             cu = AntikytheraRunTime.getCompilationUnit(clazz.getFullyQualifiedName().get());
         }
 
+        // DIRECT APPROACH: Discover helper methods called from within the class
+        // This is a simple worklist algorithm that finds all same-class method calls
+        // without relying on DependencyAnalyzer which may miss these
+        Set<String> discoveredMethodNames = methods.stream()
+                .map(MethodDeclaration::getNameAsString)
+                .collect(Collectors.toCollection(HashSet::new));
+        Set<MethodDeclaration> workList = new HashSet<>(methods);
+        Set<MethodDeclaration> processed = new HashSet<>();
+
+        while (!workList.isEmpty()) {
+            MethodDeclaration current = workList.iterator().next();
+            workList.remove(current);
+            if (processed.contains(current)) {
+                continue;
+            }
+            processed.add(current);
+
+            // Find all method calls in this method that have no scope or "this" scope
+            // These are same-class method calls
+            current.findAll(MethodCallExpr.class).forEach(mce -> {
+                String calledName = mce.getNameAsString();
+                if ((mce.getScope().isEmpty() ||
+                        (mce.getScope().isPresent() && mce.getScope().get().toString().equals("this")))
+                        && !discoveredMethodNames.contains(calledName)) {
+                    // Find the method in the same class
+                    for (MethodDeclaration md : clazz.getMethodsByName(calledName)) {
+                        if (!processed.contains(md)) {
+                            workList.add(md);
+                            methods.add(md);
+                            discoveredMethodNames.add(calledName);
+                        }
+                    }
+                }
+            });
+        }
+
         // Collect all dependencies excluding cycle types using convenience method
         Set<GraphNode> deps = analyzer.collectDependenciesExcluding(methods, cycleFqns);
 
@@ -289,7 +328,8 @@ public class MethodExtractionStrategy {
                 .map(MethodDeclaration::getNameAsString)
                 .collect(Collectors.toSet());
 
-        // Add discovered transitive methods from the same class (excluding cycle classes)
+        // Add discovered transitive methods from the same class (excluding cycle
+        // classes)
         for (MethodDeclaration md : discoveredMethods) {
             TypeDeclaration<?> enclosingType = md.findAncestor(TypeDeclaration.class).orElse(null);
             if (enclosingType != null && enclosingType.getFullyQualifiedName().isPresent()) {
@@ -319,8 +359,9 @@ public class MethodExtractionStrategy {
         final CompilationUnit finalCu = cu;
         Set<String> collectedFieldNames = new HashSet<>();
         Set<MethodDeclaration> allMethodsToCheck = new HashSet<>(methods);
-        
-        // Also include methods discovered from deps (in case they weren't added to methods set)
+
+        // Also include methods discovered from deps (in case they weren't added to
+        // methods set)
         String clazzFqn = clazz.getFullyQualifiedName().orElse(null);
         for (GraphNode node : deps) {
             if (node.getNode() instanceof MethodDeclaration md) {
@@ -333,7 +374,7 @@ public class MethodExtractionStrategy {
                 }
             }
         }
-        
+
         // Check all methods for field usage - use clazz directly for field lookup
         for (MethodDeclaration md : allMethodsToCheck) {
             // Find all NameExpr in method body - these could be field references
@@ -361,17 +402,18 @@ public class MethodExtractionStrategy {
 
     /**
      * Custom DepSolver for mediator class generation.
-     * Routes discovered methods/fields to mediator's destination CU instead of original class.
+     * Routes discovered methods/fields to mediator's destination CU instead of
+     * original class.
      */
     private static class MediatorDepSolver extends DepSolver {
         private final ClassOrInterfaceDeclaration mediator;
         private final CompilationUnit mediatorCU;
-        
+
         public MediatorDepSolver(ClassOrInterfaceDeclaration mediator, CompilationUnit mediatorCU) {
             this.mediator = mediator;
             this.mediatorCU = mediatorCU;
         }
-        
+
         @Override
         protected void onCallableDiscovered(GraphNode node, CallableDeclaration<?> cd) {
             // Add method to mediator instead of original class
@@ -384,7 +426,7 @@ public class MethodExtractionStrategy {
                 }
             }
         }
-        
+
         @Override
         protected GraphNode createAnalysisNode(Node node) {
             GraphNode g = Graph.createGraphNode(node);
@@ -420,7 +462,8 @@ public class MethodExtractionStrategy {
         mediatorNode.setDestination(mediatorCU);
         mediatorNode.setTypeDeclaration(mediator);
 
-        // Use GraphNode.addField() for helper fields - automatically handles imports/type args
+        // Use GraphNode.addField() for helper fields - automatically handles
+        // imports/type args
         for (Set<FieldDeclaration> fieldSet : fields.values()) {
             for (FieldDeclaration field : fieldSet) {
                 mediatorNode.addField(field);
@@ -431,22 +474,23 @@ public class MethodExtractionStrategy {
         for (String cycleFqn : cycle) {
             String simpleName = getSimpleName(cycleFqn);
             String fieldName = Character.toLowerCase(simpleName.charAt(0)) + simpleName.substring(1);
-            
+
             // Create field declaration
-            com.github.javaparser.ast.type.ClassOrInterfaceType fieldType = 
-                new com.github.javaparser.ast.type.ClassOrInterfaceType(simpleName);
+            com.github.javaparser.ast.type.ClassOrInterfaceType fieldType = new com.github.javaparser.ast.type.ClassOrInterfaceType(
+                    simpleName);
             VariableDeclarator variable = new VariableDeclarator(fieldType, fieldName);
             FieldDeclaration cycleField = new FieldDeclaration();
             cycleField.setModifiers(Modifier.Keyword.PRIVATE);
             cycleField.addVariable(variable);
             cycleField.addAnnotation("org.springframework.beans.factory.annotation.Autowired");
             cycleField.addAnnotation("org.springframework.context.annotation.Lazy");
-            
+
             // Use GraphNode.addField() to handle imports automatically
             mediatorNode.addField(cycleField);
         }
 
-        // Add methods directly to mediator, then use Graph infrastructure for dependency discovery
+        // Add methods directly to mediator, then use Graph infrastructure for
+        // dependency discovery
         MediatorDepSolver solver = new MediatorDepSolver(mediator, mediatorCU);
         for (Set<MethodDeclaration> methodSet : methods.values()) {
             for (MethodDeclaration method : methodSet) {
@@ -454,13 +498,14 @@ public class MethodExtractionStrategy {
                 MethodDeclaration clone = method.clone();
                 clone.setModifiers(Modifier.Keyword.PUBLIC);
                 mediator.addMember(clone);
-                
+
                 // Now use Graph infrastructure to discover transitive dependencies
                 // Create graph node for the cloned method in mediator context
                 GraphNode methodNode = Graph.createGraphNode(clone);
                 methodNode.setDestination(mediatorCU);
                 methodNode.setTypeDeclaration(mediator);
-                // Run DFS to discover all transitive dependencies (calls onCallableDiscovered for dependencies)
+                // Run DFS to discover all transitive dependencies (calls onCallableDiscovered
+                // for dependencies)
                 solver.dfs();
             }
         }
@@ -477,10 +522,10 @@ public class MethodExtractionStrategy {
 
         // Get compilation unit for type resolution
         CompilationUnit cuForResolution = clazz.findCompilationUnit()
-            .orElseGet(() -> {
-                String fqn = clazz.getFullyQualifiedName().orElse(null);
-                return fqn != null ? AntikytheraRunTime.getCompilationUnit(fqn) : null;
-            });
+                .orElseGet(() -> {
+                    String fqn = clazz.getFullyQualifiedName().orElse(null);
+                    return fqn != null ? AntikytheraRunTime.getCompilationUnit(fqn) : null;
+                });
 
         // Collect and remove cycle fields
         List<FieldDeclaration> toRemove = new ArrayList<>();
@@ -492,7 +537,7 @@ public class MethodExtractionStrategy {
 
             Type fieldType = field.getVariables().get(0).getType();
             String fieldTypeFqn = resolveFieldTypeFqn(fieldType, clazz, cuForResolution);
-            
+
             // Check if field type matches any cycle type (FQN match only)
             if (fieldTypeFqn != null && cycleFqns.contains(fieldTypeFqn)) {
                 toRemove.add(field);
@@ -507,7 +552,8 @@ public class MethodExtractionStrategy {
 
     /**
      * Resolve field type FQN using AbstractCompiler utility.
-     * Delegates to AbstractCompiler.resolveTypeFqn() for consistent type resolution.
+     * Delegates to AbstractCompiler.resolveTypeFqn() for consistent type
+     * resolution.
      */
     private String resolveFieldTypeFqn(Type fieldType, ClassOrInterfaceDeclaration context, CompilationUnit cu) {
         return AbstractCompiler.resolveTypeFqn(fieldType, context, cu);
@@ -518,12 +564,12 @@ public class MethodExtractionStrategy {
      */
     private boolean isInjectedField(FieldDeclaration field) {
         return field.getAnnotationByName("Autowired").isPresent() ||
-               field.getAnnotationByName("Inject").isPresent() ||
-               field.getAnnotationByName("Resource").isPresent() ||
-               field.getAnnotationByName("javax.inject.Inject").isPresent() ||
-               field.getAnnotationByName("javax.annotation.Resource").isPresent() ||
-               field.getAnnotationByName("jakarta.inject.Inject").isPresent() ||
-               field.getAnnotationByName("jakarta.annotation.Resource").isPresent();
+                field.getAnnotationByName("Inject").isPresent() ||
+                field.getAnnotationByName("Resource").isPresent() ||
+                field.getAnnotationByName("javax.inject.Inject").isPresent() ||
+                field.getAnnotationByName("javax.annotation.Resource").isPresent() ||
+                field.getAnnotationByName("jakarta.inject.Inject").isPresent() ||
+                field.getAnnotationByName("jakarta.annotation.Resource").isPresent();
     }
 
     /**
@@ -531,7 +577,7 @@ public class MethodExtractionStrategy {
      * For each class in the cycle, add a mediator field and update internal calls.
      */
     private void redirectCallers(List<String> cycle, String mediatorName,
-                                 Set<String> movedMethodNames) {
+            Set<String> movedMethodNames) {
 
         String mediatorFieldName = Character.toLowerCase(mediatorName.charAt(0)) +
                 mediatorName.substring(1);
@@ -579,6 +625,7 @@ public class MethodExtractionStrategy {
 
     /**
      * Add mediator field with @Autowired and @Lazy annotations.
+     * 
      * @Lazy breaks the instantiation cycle by deferring mediator creation.
      */
     private void addMediatorField(ClassOrInterfaceDeclaration clazz,
@@ -682,7 +729,8 @@ public class MethodExtractionStrategy {
             CompilationUnit cu = entry.getValue();
 
             // Only write if this is a generated class (not an original class)
-            // Check if it's in our generatedClasses map or if it's a mediator (contains "Mediator" in name)
+            // Check if it's in our generatedClasses map or if it's a mediator (contains
+            // "Mediator" in name)
             if (generatedClasses.containsKey(fqn) || fqn.contains("Mediator")) {
                 // Use forward slash for Java package paths (platform-independent)
                 String relativePath = fqn.replace('.', '/') + ".java";

@@ -139,7 +139,7 @@ public class DependencyAnalyzer {
      * Collect dependencies excluding nodes from specified cycle classes.
      * Convenience method for cycle exclusion filtering.
      * 
-     * @param methods The methods to analyze
+     * @param methods   The methods to analyze
      * @param cycleFqns Set of fully qualified names of cycle classes to exclude
      * @return Set of GraphNodes representing dependencies, excluding cycle classes
      */
@@ -151,7 +151,6 @@ public class DependencyAnalyzer {
             return fqn.isEmpty() || !cycleFqns.contains(fqn.get());
         });
     }
-
 
     // ============ Hook Methods (override in DepSolver) ============
 
@@ -419,11 +418,14 @@ public class DependencyAnalyzer {
 
     /**
      * Reset analysis state.
+     * Clears all static state including Graph caches to ensure clean analysis.
      */
     protected void resetAnalysis() {
         stack.clear();
         names.clear();
         discoveredNodes.clear();
+        Graph.getDependencies().clear();
+        Graph.getNodes().clear();
     }
 
     // ============ Inner Visitor Classes ============
