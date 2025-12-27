@@ -32,22 +32,6 @@ public record BeanDependency(
         this(fromBean, targetBean, injectionType, astNode, fieldName, List.of());
     }
 
-    /**
-     * Returns true if this is a "hard" cycle that Spring cannot resolve at all.
-     * Constructor and @Bean cycles are always hard cycles.
-     */
-    public boolean isHardCycle() {
-        return injectionType == InjectionType.CONSTRUCTOR
-                || injectionType == InjectionType.BEAN_METHOD;
-    }
-
-    /**
-     * Returns true if this dependency has qualifier annotations.
-     */
-    public boolean hasQualifiers() {
-        return qualifiers != null && !qualifiers.isEmpty();
-    }
-
     @Override
     public String toString() {
         return String.format("%s -[%s]-> %s (%s)",

@@ -34,6 +34,11 @@ import java.util.Set;
  */
 public class BeanDependencyGraph {
 
+    public static final String LAZY_ANNOTATION = "org.springframework.context.annotation.Lazy";
+    public static final String LAZY = "Lazy";
+    public static final String QUALIFIER = "Qualifier";
+    public static final String RESOURCE = "Resource";
+    public static final String AUTOWIRED = "Autowired";
     private final Map<String, Set<BeanDependency>> adjacencyList = new HashMap<>();
     private final Map<String, Set<String>> simpleGraph = new HashMap<>();
     private final List<PostConstructWarning> postConstructWarnings = new ArrayList<>();
@@ -61,13 +66,7 @@ public class BeanDependencyGraph {
         for (Map.Entry<String, TypeWrapper> entry : resolvedTypes.entrySet()) {
             TypeWrapper wrapper = entry.getValue();
 
-            // Skip entities - they don't participate in DI cycles
-            if (wrapper.isEntity()) {
-                continue;
-            }
-
-            // Only process Spring beans
-            if (!isSpringBean(wrapper)) {
+            if (wrapper.isEntity() || !isSpringBean(wrapper)) {
                 continue;
             }
 
@@ -129,20 +128,20 @@ public class BeanDependencyGraph {
      */
     private boolean hasLazyAnnotation(com.github.javaparser.ast.Node node) {
         if (node instanceof FieldDeclaration field) {
-            return field.getAnnotationByName("Lazy").isPresent() ||
-                    field.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
-                    field.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Lazy") ||
-                            a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+            return field.getAnnotationByName(LAZY).isPresent() ||
+                    field.getAnnotationByName(LAZY_ANNOTATION).isPresent() ||
+                    field.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals(LAZY) ||
+                            a.getNameAsString().equals(LAZY_ANNOTATION));
         } else if (node instanceof com.github.javaparser.ast.body.Parameter param) {
-            return param.getAnnotationByName("Lazy").isPresent() ||
-                    param.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
-                    param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Lazy") ||
-                            a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+            return param.getAnnotationByName(LAZY).isPresent() ||
+                    param.getAnnotationByName(LAZY_ANNOTATION).isPresent() ||
+                    param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals(LAZY) ||
+                            a.getNameAsString().equals(LAZY_ANNOTATION));
         } else if (node instanceof MethodDeclaration method) {
-            return method.getAnnotationByName("Lazy").isPresent() ||
-                    method.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
-                    method.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals("Lazy") ||
-                            a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+            return method.getAnnotationByName(LAZY).isPresent() ||
+                    method.getAnnotationByName(LAZY_ANNOTATION).isPresent() ||
+                    method.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals(LAZY) ||
+                            a.getNameAsString().equals(LAZY_ANNOTATION));
         }
         return false;
     }
@@ -176,18 +175,13 @@ public class BeanDependencyGraph {
      */
     private void analyzeFieldInjection(String beanFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
         for (FieldDeclaration field : cid.getFields()) {
-            if (!isInjectedField(field)) {
+            if (hasLazyAnnotation(field) || !isInjectedField(field)) {
                 continue;
             }
 
-            // Skip @Lazy fields - they don't participate in instantiation cycles
-            if (hasLazyAnnotation(field)) {
-                continue;
-            }
-
-            field.getVariables().forEach(var -> {
-                String fieldName = var.getNameAsString();
-                Type fieldType = var.getType();
+            field.getVariables().forEach(variable -> {
+                String fieldName = variable.getNameAsString();
+                Type fieldType = variable.getType();
 
                 String targetFqn = resolveTypeFqn(fieldType, cid, cu);
 
@@ -214,7 +208,7 @@ public class BeanDependencyGraph {
         } else {
             // Multiple constructors - look for @Autowired
             for (ConstructorDeclaration ctor : constructors) {
-                if (ctor.getAnnotationByName("Autowired").isPresent()) {
+                if (ctor.getAnnotationByName(AUTOWIRED).isPresent()) {
                     injectedConstructor = ctor;
                     break;
                 }
@@ -249,17 +243,7 @@ public class BeanDependencyGraph {
      */
     private void analyzeSetterInjection(String beanFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
         for (MethodDeclaration method : cid.getMethods()) {
-            if (!method.getAnnotationByName("Autowired").isPresent()) {
-                continue;
-            }
-
-            // Skip @Lazy setters - they don't participate in instantiation cycles
-            if (hasLazyAnnotation(method)) {
-                continue;
-            }
-
-            // Setter typically has one parameter
-            if (method.getParameters().size() != 1) {
+            if (method.getAnnotationByName(AUTOWIRED).isEmpty() || hasLazyAnnotation(method) || method.getParameters().size() != 1) {
                 continue;
             }
 
@@ -280,7 +264,7 @@ public class BeanDependencyGraph {
      */
     private void analyzeBeanMethods(String configFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
         for (MethodDeclaration method : cid.getMethods()) {
-            if (!method.getAnnotationByName("Bean").isPresent()) {
+            if (method.getAnnotationByName("Bean").isEmpty()) {
                 continue;
             }
 
@@ -313,10 +297,10 @@ public class BeanDependencyGraph {
 
         for (FieldDeclaration field : cid.getFields()) {
             if (isInjectedField(field)) {
-                field.getVariables().forEach(var -> {
-                    String fieldName = var.getNameAsString();
+                field.getVariables().forEach(variable -> {
+                    String fieldName = variable.getNameAsString();
                     injectedFieldNames.add(fieldName);
-                    String typeFqn = resolveTypeFqn(var.getType(), cid, cu);
+                    String typeFqn = resolveTypeFqn(variable.getType(), cid, cu);
                     if (typeFqn != null) {
                         fieldTypeMap.put(fieldName, typeFqn);
                     }
@@ -363,28 +347,28 @@ public class BeanDependencyGraph {
     }
 
     private boolean isInjectedField(FieldDeclaration field) {
-        return field.getAnnotationByName("Autowired").isPresent()
+        return field.getAnnotationByName(AUTOWIRED).isPresent()
                 || field.getAnnotationByName("Inject").isPresent()
-                || field.getAnnotationByName("Resource").isPresent();
+                || field.getAnnotationByName(RESOURCE).isPresent();
     }
 
     private List<String> extractQualifiers(FieldDeclaration field) {
         List<String> qualifiers = new ArrayList<>();
-        extractQualifierValue(field.getAnnotationByName("Qualifier")).ifPresent(qualifiers::add);
-        extractQualifierValue(field.getAnnotationByName("Resource")).ifPresent(qualifiers::add);
+        extractQualifierValue(field.getAnnotationByName(QUALIFIER)).ifPresent(qualifiers::add);
+        extractQualifierValue(field.getAnnotationByName(RESOURCE)).ifPresent(qualifiers::add);
         return qualifiers;
     }
 
     private List<String> extractQualifiers(Parameter param) {
         List<String> qualifiers = new ArrayList<>();
-        extractQualifierValue(param.getAnnotationByName("Qualifier")).ifPresent(qualifiers::add);
-        extractQualifierValue(param.getAnnotationByName("Resource")).ifPresent(qualifiers::add);
+        extractQualifierValue(param.getAnnotationByName(QUALIFIER)).ifPresent(qualifiers::add);
+        extractQualifierValue(param.getAnnotationByName(RESOURCE)).ifPresent(qualifiers::add);
         return qualifiers;
     }
 
     private List<String> extractQualifiers(MethodDeclaration method) {
         List<String> qualifiers = new ArrayList<>();
-        extractQualifierValue(method.getAnnotationByName("Qualifier")).ifPresent(qualifiers::add);
+        extractQualifierValue(method.getAnnotationByName(QUALIFIER)).ifPresent(qualifiers::add);
         return qualifiers;
     }
 
