@@ -165,12 +165,16 @@ public class DependencyAnalyzer {
      * 
      * Subclasses (like DepSolver) can override if they need custom behavior.
      * 
+     * Note: The created node is NOT added to discoveredNodes here because it
+     * will be added during the DFS traversal in the dfs() method. All nodes
+     * created via Graph.createGraphNode() are automatically pushed to the stack
+     * and will be processed by dfs().
+     * 
      * @param node AST node to wrap
      * @return GraphNode for analysis
      */
     protected GraphNode createAnalysisNode(Node node) {
         GraphNode g = Graph.createGraphNode(node);
-        discoveredNodes.add(g);
         return g;
     }
 
