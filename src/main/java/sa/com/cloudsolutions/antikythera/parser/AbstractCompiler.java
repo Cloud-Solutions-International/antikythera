@@ -21,6 +21,7 @@ import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.type.ArrayType;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
@@ -586,6 +587,38 @@ public class AbstractCompiler {
             return cls.getName();
         }
         return null;
+    }
+
+    /**
+     * Resolve a Type to its fully qualified name with context.
+     * Handles CU resolution from context, array types, and delegates to existing findFullyQualifiedName.
+     * 
+     * <p>This method consolidates type resolution logic that was previously duplicated
+     * in MethodExtractionStrategy and BeanDependencyGraph.</p>
+     * 
+     * @param type The type to resolve
+     * @param context The class declaration where this type appears (for package context)
+     * @param cu Optional compilation unit (will be resolved from context if null)
+     * @return Fully qualified name, or null if not resolvable
+     */
+    public static String resolveTypeFqn(Type type, ClassOrInterfaceDeclaration context, CompilationUnit cu) {
+        // Get compilation unit from context if not provided
+        if (cu == null) {
+            cu = context.findCompilationUnit()
+                .orElseGet(() -> {
+                    String fqn = context.getFullyQualifiedName().orElse(null);
+                    return fqn != null ? AntikytheraRunTime.getCompilationUnit(fqn) : null;
+                });
+        }
+        
+        // Handle array types by extracting component type
+        if (type.isArrayType()) {
+            Type componentType = type.asArrayType().getComponentType();
+            return resolveTypeFqn(componentType, context, cu);
+        }
+        
+        // Reuse existing findFullyQualifiedName which handles Type parameter correctly
+        return findFullyQualifiedName(cu, type);
     }
 
     public static TypeWrapper findType(CompilationUnit cu, Type type) {

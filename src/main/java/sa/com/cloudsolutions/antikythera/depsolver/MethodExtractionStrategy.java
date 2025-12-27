@@ -3,6 +3,8 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -152,45 +154,12 @@ public class MethodExtractionStrategy {
                 }
             }
             // Remove from parent's member list (more reliable than method.remove())
-            logger.info("Removing {} methods from {}", methodsToRemove.size(), entry.getKey());
             for (MethodDeclaration method : methodsToRemove) {
-                logger.info("  Removing method: {}", method.getNameAsString());
                 clazz.remove(method);
             }
             
-            // Verify changes immediately after removal
-            CompilationUnit cu = clazz.findCompilationUnit().orElse(null);
-            if (cu != null) {
-                int remainingMethods = clazz.getMethods().size();
-                logger.info("After removal: {} methods remaining in {}", remainingMethods, entry.getKey());
-                logger.info("Methods still present: {}", 
-                    clazz.getMethods().stream().map(MethodDeclaration::getNameAsString).collect(Collectors.toList()));
-                
-                // Verify in AntikytheraRunTime
-                String fqn = entry.getKey();
-                logger.info("Checking AntikytheraRunTime for {}", fqn);
-                CompilationUnit runtimeCu = AntikytheraRunTime.getCompilationUnit(fqn);
-                if (runtimeCu != null) {
-                    logger.info("Found runtime CU for {}", fqn);
-                    ClassOrInterfaceDeclaration runtimeClazz = runtimeCu.findFirst(ClassOrInterfaceDeclaration.class).orElse(null);
-                    if (runtimeClazz != null) {
-                        int runtimeMethods = runtimeClazz.getMethods().size();
-                        logger.info("AntikytheraRunTime has {} methods for {}", runtimeMethods, fqn);
-                        if (runtimeMethods != remainingMethods) {
-                            logger.warn("MISMATCH: Local CU has {} methods, Runtime CU has {} methods for {}", 
-                                remainingMethods, runtimeMethods, fqn);
-                        } else {
-                            logger.info("✓ Methods match between Local CU and Runtime CU for {}", fqn);
-                        }
-                    }
-                }
-            }
-            
-            // Get CompilationUnit - try multiple methods
-            logger.info("Attempting to get CU for method removal in {}", entry.getKey());
             Optional<CompilationUnit> cuOpt = clazz.findCompilationUnit();
             CompilationUnit cuToAdd = cuOpt.orElse(null);
-            logger.info("findCompilationUnit() result: {}", cuOpt.isPresent() ? "present" : "empty");
             
             if (cuToAdd == null) {
                 String fqn = entry.getKey();
@@ -295,20 +264,15 @@ public class MethodExtractionStrategy {
     }
 
     /**
-     * Collect transitive dependencies using DependencyAnalyzer for accurate
-     * dependency tracking.
-     * Uses the clean collectDependencies() API for analysis-only mode.
+     * Collect transitive dependencies using DependencyAnalyzer and new utility methods.
+     * Simplified implementation using collectDependenciesExcluding() and batch queries.
      */
     private void collectTransitiveDependencies(ClassOrInterfaceDeclaration clazz,
             Set<MethodDeclaration> methods, Set<FieldDeclaration> fields, List<String> cycle) {
 
         // Create analyzer for analysis-only mode (no code generation)
         DependencyAnalyzer analyzer = new DependencyAnalyzer();
-
         Set<String> cycleFqns = new HashSet<>(cycle);
-        Set<String> cycleSimpleNames = cycle.stream()
-                .map(this::getSimpleName)
-                .collect(Collectors.toSet());
 
         // Get compilation unit for type resolution
         CompilationUnit cu = clazz.findCompilationUnit().orElse(null);
@@ -316,219 +280,162 @@ public class MethodExtractionStrategy {
             cu = AntikytheraRunTime.getCompilationUnit(clazz.getFullyQualifiedName().get());
         }
 
-        // Collect all dependencies with filtering to exclude cycle types
-        Set<GraphNode> deps = analyzer.collectDependencies(methods, node -> {
-            TypeDeclaration<?> type = node.getEnclosingType();
-            if (type == null) {
-                return true; // Include nodes without enclosing type
-            }
-            
-            // Check if this node's type is in the cycle
-            if (type.getFullyQualifiedName().isPresent()) {
-                String fqn = type.getFullyQualifiedName().get();
-                if (cycleFqns.contains(fqn)) {
-                    return false; // Exclude cycle types
-                }
-            }
-            
-            return true; // Include non-cycle types
-        });
+        // Collect all dependencies excluding cycle types using convenience method
+        Set<GraphNode> deps = analyzer.collectDependenciesExcluding(methods, cycleFqns);
 
-        // Use DependencyQuery to extract methods and fields from discovered
-        // dependencies
+        // Extract discovered methods and fields using DependencyQuery
         Set<MethodDeclaration> discoveredMethods = DependencyQuery.getMethods(deps);
-        Set<FieldDeclaration> discoveredFields = DependencyQuery.getFields(deps);
-
         Set<String> methodNames = methods.stream()
                 .map(MethodDeclaration::getNameAsString)
                 .collect(Collectors.toSet());
 
-        // Add discovered transitive methods (excluding methods from cycle classes)
+        // Add discovered transitive methods from the same class (excluding cycle classes)
         for (MethodDeclaration md : discoveredMethods) {
-            // Skip methods from cycle classes
-            if (md.findCompilationUnit().isPresent()) {
-                TypeDeclaration<?> enclosingType = md.findAncestor(TypeDeclaration.class).orElse(null);
-                if (enclosingType != null && enclosingType.getFullyQualifiedName().isPresent()) {
-                    String fqn = enclosingType.getFullyQualifiedName().get();
-                    if (cycleFqns.contains(fqn)) {
-                        continue; // Skip methods from cycle classes
+            TypeDeclaration<?> enclosingType = md.findAncestor(TypeDeclaration.class).orElse(null);
+            if (enclosingType != null && enclosingType.getFullyQualifiedName().isPresent()) {
+                String fqn = enclosingType.getFullyQualifiedName().get();
+                // Skip methods from cycle classes
+                if (cycleFqns.contains(fqn)) {
+                    continue;
+                }
+                // Only add methods from the same class
+                if (fqn.equals(clazz.getFullyQualifiedName().orElse(null))) {
+                    String methodName = md.getNameAsString();
+                    if (!methodNames.contains(methodName)) {
+                        clazz.getMethodsByName(methodName).stream()
+                                .filter(m -> m.getParameters().size() == md.getParameters().size())
+                                .filter(m -> !m.isStatic())
+                                .forEach(m -> {
+                                    methods.add(m);
+                                    methodNames.add(methodName);
+                                });
                     }
                 }
             }
-            
-            String methodName = md.getNameAsString();
-            if (!methodNames.contains(methodName)) {
-                clazz.getMethodsByName(methodName).stream()
-                        .filter(m -> m.getParameters().size() == md.getParameters().size())
-                        .filter(m -> !m.isStatic())
-                        .forEach(m -> {
-                            methods.add(m);
-                            methodNames.add(methodName);
-                        });
-            }
         }
 
-        // Add discovered transitive fields (excluding cycle types)
-        final ClassOrInterfaceDeclaration finalClazz = clazz;
+        // Use batch method to get all fields used by methods
+        Set<FieldDeclaration> usedFields = DependencyQuery.getFieldsUsedByMethods(methods, deps);
+        
+        // Add discovered fields (excluding cycle types)
         final CompilationUnit finalCu = cu;
-        for (FieldDeclaration fd : discoveredFields) {
+        for (FieldDeclaration fd : usedFields) {
             String fieldName = fd.getVariable(0).getNameAsString();
-            finalClazz.getFieldByName(fieldName).ifPresent(f -> {
+            clazz.getFieldByName(fieldName).ifPresent(f -> {
                 Type fieldType = f.getVariables().get(0).getType();
-                String fieldTypeFqn = resolveFieldTypeFqn(fieldType, finalClazz, finalCu);
+                String fieldTypeFqn = AbstractCompiler.resolveTypeFqn(fieldType, clazz, finalCu);
                 
-                // Check both FQN and simple name
-                boolean isCycleType = false;
-                if (fieldTypeFqn != null) {
-                    isCycleType = cycleFqns.contains(fieldTypeFqn) ||
-                                 cycleSimpleNames.contains(getSimpleName(fieldTypeFqn));
-                } else {
-                    // Fallback to simple name matching
-                    String typeAsString = f.getVariables().get(0).getTypeAsString();
-                    isCycleType = cycleSimpleNames.contains(typeAsString) ||
-                                 cycleSimpleNames.contains(getSimpleName(typeAsString));
-                }
-                
-                if (!isCycleType) {
+                // Only check FQN (no simple name fallback - more reliable)
+                if (fieldTypeFqn != null && !cycleFqns.contains(fieldTypeFqn)) {
                     fields.add(f);
                 }
-            });
-        }
-
-        // Create a copy to include newly added transitive methods
-        Set<MethodDeclaration> allMethods = new HashSet<>(methods);
-
-        // Also check for fields used directly in method bodies
-        for (MethodDeclaration method : allMethods) {
-            Set<FieldDeclaration> usedFields = DependencyQuery.getFieldsUsedBy(method, deps);
-            for (FieldDeclaration f : usedFields) {
-                Type fieldType = f.getVariables().get(0).getType();
-                String fieldTypeFqn = resolveFieldTypeFqn(fieldType, clazz, cu);
-                
-                boolean isCycleType = false;
-                if (fieldTypeFqn != null) {
-                    isCycleType = cycleFqns.contains(fieldTypeFqn) ||
-                                 cycleSimpleNames.contains(getSimpleName(fieldTypeFqn));
-                } else {
-                    String typeAsString = f.getVariables().get(0).getTypeAsString();
-                    isCycleType = cycleSimpleNames.contains(typeAsString) ||
-                                 cycleSimpleNames.contains(getSimpleName(typeAsString));
-                }
-                
-                if (!isCycleType) {
-                    fields.add(f);
-                }
-            }
-            // Also check fields by name in case not discovered by DependencyQuery
-            final ClassOrInterfaceDeclaration finalClazz2 = clazz;
-            final CompilationUnit finalCu2 = cu;
-            method.findAll(NameExpr.class).forEach(ne -> {
-                String name = ne.getNameAsString();
-                finalClazz2.getFieldByName(name).ifPresent(f -> {
-                    Type fieldType = f.getVariables().get(0).getType();
-                    String fieldTypeFqn = resolveFieldTypeFqn(fieldType, finalClazz2, finalCu2);
-                    
-                    boolean isCycleType = false;
-                    if (fieldTypeFqn != null) {
-                        isCycleType = cycleFqns.contains(fieldTypeFqn) ||
-                                     cycleSimpleNames.contains(getSimpleName(fieldTypeFqn));
-                    } else {
-                        String typeAsString = f.getVariables().get(0).getTypeAsString();
-                        isCycleType = cycleSimpleNames.contains(typeAsString) ||
-                                     cycleSimpleNames.contains(getSimpleName(typeAsString));
-                    }
-                    
-                    if (!isCycleType) {
-                        fields.add(f);
-                    }
-                });
             });
         }
     }
 
     /**
-     * Generate mediator class with moved methods and fields.
-     * The mediator needs cycle class fields (injected via constructor) so extracted methods can call them.
+     * Custom DepSolver for mediator class generation.
+     * Routes discovered methods/fields to mediator's destination CU instead of original class.
+     */
+    private static class MediatorDepSolver extends DepSolver {
+        private final ClassOrInterfaceDeclaration mediator;
+        private final CompilationUnit mediatorCU;
+        
+        public MediatorDepSolver(ClassOrInterfaceDeclaration mediator, CompilationUnit mediatorCU) {
+            this.mediator = mediator;
+            this.mediatorCU = mediatorCU;
+        }
+        
+        @Override
+        protected void onCallableDiscovered(GraphNode node, CallableDeclaration<?> cd) {
+            // Add method to mediator instead of original class
+            if (cd.isMethodDeclaration()) {
+                MethodDeclaration md = cd.asMethodDeclaration();
+                if (mediator.getMethodsByName(md.getNameAsString()).isEmpty()) {
+                    MethodDeclaration clone = md.clone();
+                    clone.setModifiers(Modifier.Keyword.PUBLIC);
+                    mediator.addMember(clone);
+                }
+            }
+        }
+        
+        @Override
+        protected GraphNode createAnalysisNode(Node node) {
+            GraphNode g = Graph.createGraphNode(node);
+            // For methods, ensure destination CU is mediator CU
+            if (node instanceof MethodDeclaration) {
+                g.setDestination(mediatorCU);
+                g.setTypeDeclaration(mediator);
+            }
+            return g;
+        }
+    }
+
+    /**
+     * Generate mediator class using Graph/GraphNode infrastructure.
+     * Leverages automatic dependency discovery and import management.
      */
     private CompilationUnit generateMediatorClass(String name, String pkg,
             Map<String, Set<MethodDeclaration>> methods, Map<String, Set<FieldDeclaration>> fields,
             List<String> cycle) {
 
-        CompilationUnit cu = new CompilationUnit();
-        cu.setPackageDeclaration(pkg);
-
-        ClassOrInterfaceDeclaration mediator = cu.addClass(name, Modifier.Keyword.PUBLIC);
+        // Create base mediator class
+        CompilationUnit mediatorCU = new CompilationUnit();
+        mediatorCU.setPackageDeclaration(pkg);
+        ClassOrInterfaceDeclaration mediator = mediatorCU.addClass(name, Modifier.Keyword.PUBLIC);
         mediator.addAnnotation("org.springframework.stereotype.Service");
 
-        // Add helper fields (excluding cycle types)
+        // Register mediator in Graph for dependency tracking
+        String mediatorFqn = pkg + "." + name;
+        Graph.getDependencies().put(mediatorFqn, mediatorCU);
+
+        // Create GraphNode for mediator to enable addField() usage
+        GraphNode mediatorNode = Graph.createGraphNode(mediator);
+        mediatorNode.setDestination(mediatorCU);
+        mediatorNode.setTypeDeclaration(mediator);
+
+        // Use GraphNode.addField() for helper fields - automatically handles imports/type args
         for (Set<FieldDeclaration> fieldSet : fields.values()) {
             for (FieldDeclaration field : fieldSet) {
-                FieldDeclaration clone = field.clone();
-                mediator.addMember(clone);
+                mediatorNode.addField(field);
             }
         }
 
-        // Add cycle class fields with @Autowired and @Lazy
-        // These are needed so extracted methods can call methods on cycle classes
-        // The mediator is a Spring bean, so it can inject cycle classes
-        // @Lazy is needed to break the cycle: Mediator → CycleClass → Mediator
-        logger.debug("Adding cycle class fields to mediator {}", name);
+        // Add cycle class fields with @Autowired @Lazy
         for (String cycleFqn : cycle) {
-            String cycleSimpleName = getSimpleName(cycleFqn);
-            String fieldName = Character.toLowerCase(cycleSimpleName.charAt(0)) + cycleSimpleName.substring(1);
+            String simpleName = getSimpleName(cycleFqn);
+            String fieldName = Character.toLowerCase(simpleName.charAt(0)) + simpleName.substring(1);
             
-            logger.debug("  Creating field: {} of type {}", fieldName, cycleSimpleName);
-            
-            // Manually create field declaration (addPrivateField may not work correctly)
+            // Create field declaration
             com.github.javaparser.ast.type.ClassOrInterfaceType fieldType = 
-                new com.github.javaparser.ast.type.ClassOrInterfaceType(cycleSimpleName);
+                new com.github.javaparser.ast.type.ClassOrInterfaceType(simpleName);
             VariableDeclarator variable = new VariableDeclarator(fieldType, fieldName);
             FieldDeclaration cycleField = new FieldDeclaration();
             cycleField.setModifiers(Modifier.Keyword.PRIVATE);
             cycleField.addVariable(variable);
             cycleField.addAnnotation("org.springframework.beans.factory.annotation.Autowired");
             cycleField.addAnnotation("org.springframework.context.annotation.Lazy");
-            // Explicitly add as member - insert after helper fields but before methods
-            int insertIndex = mediator.getFields().size();
-            mediator.getMembers().add(insertIndex, cycleField);
             
-            logger.debug("  Added field at index {}, mediator now has {} fields", insertIndex, mediator.getFields().size());
-            
-            // Verify field was added
-            if (mediator.getFieldByName(fieldName).isPresent()) {
-                logger.debug("  ✓ Field {} verified in mediator", fieldName);
-            } else {
-                logger.error("  ✗ Field {} NOT found in mediator after adding!", fieldName);
-            }
-            
-            // Add imports for the cycle class and @Lazy
-            cu.addImport(new ImportDeclaration(cycleFqn, false, false));
-        }
-        
-        // Final verification of all fields in mediator
-        logger.debug("Mediator {} final field count: {}", name, mediator.getFields().size());
-        logger.debug("Mediator fields: {}", 
-            mediator.getFields().stream()
-                .map(f -> f.getVariable(0).getNameAsString())
-                .collect(Collectors.toList()));
-        
-        // Add @Lazy import if not already present
-        boolean hasLazyImport = cu.getImports().stream()
-                .anyMatch(imp -> imp.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
-        if (!hasLazyImport) {
-            cu.addImport(new ImportDeclaration("org.springframework.context.annotation.Lazy", false, false));
+            // Use GraphNode.addField() to handle imports automatically
+            mediatorNode.addField(cycleField);
         }
 
-        // Add methods
+        // Use Graph.createGraphNode() for each method - automatically discovers dependencies via DFS
+        // Create custom DepSolver to route methods to mediator
+        MediatorDepSolver solver = new MediatorDepSolver(mediator, mediatorCU);
         for (Set<MethodDeclaration> methodSet : methods.values()) {
             for (MethodDeclaration method : methodSet) {
-                MethodDeclaration clone = method.clone();
-                clone.setModifiers(Modifier.Keyword.PUBLIC);
-                mediator.addMember(clone);
+                // Create graph node for method - this triggers DFS to discover dependencies
+                GraphNode methodNode = Graph.createGraphNode(method);
+                // Ensure method goes to mediator
+                methodNode.setDestination(mediatorCU);
+                methodNode.setTypeDeclaration(mediator);
+                // Run DFS to discover all transitive dependencies
+                solver.dfs();
             }
         }
 
-        return cu;
+        return mediatorCU;
     }
 
     /**
@@ -537,21 +444,15 @@ public class MethodExtractionStrategy {
      */
     private void removeCycleField(ClassOrInterfaceDeclaration clazz, List<String> cycle) {
         Set<String> cycleFqns = new HashSet<>(cycle);
-        Set<String> cycleSimpleNames = new HashSet<>();
-        for (String c : cycle) {
-            cycleSimpleNames.add(getSimpleName(c));
-        }
 
         // Get compilation unit for type resolution
-        CompilationUnit cuForResolution = clazz.findCompilationUnit().orElse(null);
-        if (cuForResolution == null) {
-            // Try to get from AntikytheraRunTime
-            if (clazz.getFullyQualifiedName().isPresent()) {
-                cuForResolution = AntikytheraRunTime.getCompilationUnit(clazz.getFullyQualifiedName().get());
-            }
-        }
+        CompilationUnit cuForResolution = clazz.findCompilationUnit()
+            .orElseGet(() -> {
+                String fqn = clazz.getFullyQualifiedName().orElse(null);
+                return fqn != null ? AntikytheraRunTime.getCompilationUnit(fqn) : null;
+            });
 
-        // Collect fields to remove (can't modify during iteration)
+        // Collect and remove cycle fields
         List<FieldDeclaration> toRemove = new ArrayList<>();
         for (FieldDeclaration field : clazz.getFields()) {
             // Only remove injected fields (fields that participate in DI cycles)
@@ -559,213 +460,27 @@ public class MethodExtractionStrategy {
                 continue;
             }
 
-            VariableDeclarator variable = field.getVariables().get(0);
-            Type fieldType = variable.getType();
-            
-            // Resolve field type to FQN using the same logic as BeanDependencyGraph
+            Type fieldType = field.getVariables().get(0).getType();
             String fieldTypeFqn = resolveFieldTypeFqn(fieldType, clazz, cuForResolution);
             
-            // Also check the typeAsString for simple name matching
-            String typeAsString = variable.getTypeAsString();
-            String typeSimpleName = getSimpleName(typeAsString);
-
-            // Check if field type matches any cycle type
-            // Compare FQN first (most reliable), then fall back to simple name matching
-            boolean matchesCycle = false;
-            if (fieldTypeFqn != null) {
-                // Direct FQN match
-                matchesCycle = cycleFqns.contains(fieldTypeFqn);
-                
-                // Also check if resolved FQN ends with any cycle simple name
-                if (!matchesCycle) {
-                    String resolvedSimpleName = getSimpleName(fieldTypeFqn);
-                    matchesCycle = cycleSimpleNames.contains(resolvedSimpleName);
-                }
-            }
-            
-            // Fallback: simple name matching (for cases where resolution fails)
-            if (!matchesCycle) {
-                matchesCycle = cycleSimpleNames.contains(typeAsString) ||
-                               cycleSimpleNames.contains(typeSimpleName);
-            }
-
-            if (matchesCycle) {
+            // Check if field type matches any cycle type (FQN match only)
+            if (fieldTypeFqn != null && cycleFqns.contains(fieldTypeFqn)) {
                 toRemove.add(field);
             }
         }
-        
-        // Remove collected fields - ensure we're removing from the actual AST
-        // Collect field names first to avoid concurrent modification
-        Set<String> fieldNamesToRemove = new HashSet<>();
+
+        // Remove fields from AST
         for (FieldDeclaration field : toRemove) {
-            VariableDeclarator variable = field.getVariable(0);
-            if (variable != null) {
-                fieldNamesToRemove.add(variable.getNameAsString());
-            }
-        }
-        
-        // Find and remove actual fields from AST by name
-        // Remove from parent's member list (more reliable than field.remove())
-        List<FieldDeclaration> fieldsToRemove = new ArrayList<>();
-        for (FieldDeclaration field : clazz.getFields()) {
-            VariableDeclarator variable = field.getVariable(0);
-            if (variable != null && fieldNamesToRemove.contains(variable.getNameAsString())) {
-                fieldsToRemove.add(field);
-            }
-        }
-
-        for (FieldDeclaration field : fieldsToRemove) {
-            VariableDeclarator variable = field.getVariable(0);
             clazz.remove(field);
-        }
-        
-        // Verify changes immediately after removal
-        CompilationUnit cuAfterRemoval = clazz.findCompilationUnit().orElse(null);
-        if (cuAfterRemoval != null) {
-            int remainingFields = clazz.getFields().size();
-            logger.info("After field removal: {} fields remaining", remainingFields);
-            logger.info("Fields still present: {}", 
-                clazz.getFields().stream()
-                    .map(f -> f.getVariable(0).getNameAsString())
-                    .collect(Collectors.toList()));
-            
-            // Verify in AntikytheraRunTime
-            String fqn = clazz.getFullyQualifiedName().orElse(null);
-            if (fqn != null) {
-                CompilationUnit runtimeCu = AntikytheraRunTime.getCompilationUnit(fqn);
-                if (runtimeCu != null) {
-
-                    ClassOrInterfaceDeclaration runtimeClazz = runtimeCu.findFirst(ClassOrInterfaceDeclaration.class).orElse(null);
-                    if (runtimeClazz != null) {
-                        int runtimeFields = runtimeClazz.getFields().size();
-                        if (runtimeFields != remainingFields) {
-                            logger.warn("MISMATCH: Local CU has {} fields, Runtime CU has {} fields for {}", 
-                                remainingFields, runtimeFields, fqn);
-                        }
-                    }
-                }
-            }
         }
     }
 
     /**
-     * Resolve a field type to its fully qualified name.
-     * Uses the same logic as BeanDependencyGraph.resolveTypeFqn() for consistency.
+     * Resolve field type FQN using AbstractCompiler utility.
+     * Delegates to AbstractCompiler.resolveTypeFqn() for consistent type resolution.
      */
     private String resolveFieldTypeFqn(Type fieldType, ClassOrInterfaceDeclaration context, CompilationUnit cu) {
-        try {
-            String typeName;
-            
-            // For ClassOrInterfaceType (including parameterized types), extract the raw type name
-            if (fieldType instanceof com.github.javaparser.ast.type.ClassOrInterfaceType classOrInterfaceType) {
-                // Get the name without type parameters
-                typeName = classOrInterfaceType.getNameAsString();
-                
-                // If the type has a scope (e.g., com.example.TypedService), use it directly
-                if (classOrInterfaceType.getScope().isPresent()) {
-                    String scopedName = classOrInterfaceType.getScope().orElseThrow().asString() + "." + typeName;
-                    // Check if this FQN exists in AntikytheraRunTime
-                    if (AntikytheraRunTime.getTypeDeclaration(scopedName).isPresent()) {
-                        return scopedName;
-                    }
-                }
-            } else {
-                // For other types, use asString() and extract raw type name if parameterized
-                typeName = fieldType.asString();
-                
-                // If it's a parameterized type, extract just the raw type name
-                if (typeName.contains("<")) {
-                    typeName = typeName.substring(0, typeName.indexOf('<')).trim();
-                }
-                
-                // Also handle array types (e.g., "String[]" -> "String")
-                if (typeName.contains("[")) {
-                    typeName = typeName.substring(0, typeName.indexOf('[')).trim();
-                }
-            }
-            
-            // Get package name from the compilation unit (prefer passed cu, fallback to finding it)
-            if (cu == null) {
-                cu = context.findCompilationUnit().orElse(null);
-                // If still null, try getting it from AntikytheraRunTime using the FQN
-                if (cu == null && context.getFullyQualifiedName().isPresent()) {
-                    cu = AntikytheraRunTime.getCompilationUnit(context.getFullyQualifiedName().get());
-                }
-            }
-            String packageName = "";
-            if (cu != null) {
-                packageName = cu.getPackageDeclaration()
-                        .map(pd -> pd.getNameAsString())
-                        .orElse("");
-            } else if (context.getFullyQualifiedName().isPresent()) {
-                // Fallback: extract package from FQN
-                String fqn = context.getFullyQualifiedName().get();
-                int lastDot = fqn.lastIndexOf('.');
-                if (lastDot > 0) {
-                    packageName = fqn.substring(0, lastDot);
-                }
-            }
-            
-            // Try exact match first
-            if (AntikytheraRunTime.getTypeDeclaration(typeName).isPresent()) {
-                return typeName;
-            }
-            
-            // Try package + typeName (same package)
-            if (!packageName.isEmpty()) {
-                String samePackageFqn = packageName + "." + typeName;
-                if (AntikytheraRunTime.getTypeDeclaration(samePackageFqn).isPresent()) {
-                    return samePackageFqn;
-                }
-            }
-            
-            // Search all resolved types for a match (ends with pattern)
-            for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
-                if (resolvedFqn.equals(typeName) || resolvedFqn.endsWith("." + typeName)) {
-                    return resolvedFqn;
-                }
-            }
-            
-            // Strategy 2: Use AbstractCompiler.findFullyQualifiedName (existing logic)
-            // This handles imports, java.lang types, etc.
-            String fqn = null;
-            if (cu != null) {
-                fqn = sa.com.cloudsolutions.antikythera.parser.AbstractCompiler.findFullyQualifiedName(cu, typeName);
-            }
-            
-            // Strategy 3: Final fallback - search AntikytheraRunTime again (in case it was added)
-            if (fqn == null) {
-                for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
-                    if (resolvedFqn.endsWith("." + typeName) || resolvedFqn.equals(typeName)) {
-                        fqn = resolvedFqn;
-                        break;
-                    }
-                }
-            }
-            
-            return fqn;
-        } catch (Exception e) {
-            // On exception, try one more fallback search
-            try {
-                String typeName = fieldType instanceof com.github.javaparser.ast.type.ClassOrInterfaceType 
-                    ? ((com.github.javaparser.ast.type.ClassOrInterfaceType) fieldType).getNameAsString()
-                    : fieldType.asString();
-                
-                // Extract raw type name if parameterized
-                if (typeName.contains("<")) {
-                    typeName = typeName.substring(0, typeName.indexOf('<')).trim();
-                }
-                
-                for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
-                    if (resolvedFqn.endsWith("." + typeName) || resolvedFqn.equals(typeName)) {
-                        return resolvedFqn;
-                    }
-                }
-            } catch (Exception e2) {
-                // Ignore
-            }
-            return null;
-        }
+        return AbstractCompiler.resolveTypeFqn(fieldType, context, cu);
     }
 
     /**
@@ -930,18 +645,23 @@ public class MethodExtractionStrategy {
             CopyUtils.writeFileAbsolute(absolutePath, content);
         }
 
-        for (Map.Entry<String, CompilationUnit> entry : generatedClasses.entrySet()) {
+        // Use Graph.getDependencies() as single source of truth for generated classes
+        // This includes mediator classes registered via Graph.createGraphNode()
+        for (Map.Entry<String, CompilationUnit> entry : Graph.getDependencies().entrySet()) {
             String fqn = entry.getKey();
             CompilationUnit cu = entry.getValue();
 
-            // Use forward slash for Java package paths (platform-independent)
-            String relativePath = fqn.replace('.', '/') + ".java";
-            String absolutePath = basePath + File.separator + relativePath;
+            // Only write if this is a generated class (not an original class)
+            // Check if it's in our generatedClasses map or if it's a mediator (contains "Mediator" in name)
+            if (generatedClasses.containsKey(fqn) || fqn.contains("Mediator")) {
+                // Use forward slash for Java package paths (platform-independent)
+                String relativePath = fqn.replace('.', '/') + ".java";
+                String absolutePath = basePath + File.separator + relativePath;
 
-            // Use toString() for generated classes
-            String content = cu.toString();
-            CopyUtils.writeFileAbsolute(absolutePath, content);
-            
+                // Use toString() for generated classes
+                String content = cu.toString();
+                CopyUtils.writeFileAbsolute(absolutePath, content);
+            }
         }
     }
 }

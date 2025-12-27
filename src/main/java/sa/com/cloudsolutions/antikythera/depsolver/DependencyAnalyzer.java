@@ -135,6 +135,24 @@ public class DependencyAnalyzer {
         return new HashSet<>(discoveredNodes);
     }
 
+    /**
+     * Collect dependencies excluding nodes from specified cycle classes.
+     * Convenience method for cycle exclusion filtering.
+     * 
+     * @param methods The methods to analyze
+     * @param cycleFqns Set of fully qualified names of cycle classes to exclude
+     * @return Set of GraphNodes representing dependencies, excluding cycle classes
+     */
+    public Set<GraphNode> collectDependenciesExcluding(
+            Collection<MethodDeclaration> methods,
+            Set<String> cycleFqns) {
+        return collectDependencies(methods, node -> {
+            Optional<String> fqn = node.getEnclosingType().getFullyQualifiedName();
+            return fqn.isEmpty() || !cycleFqns.contains(fqn.get());
+        });
+    }
+
+
     // ============ Hook Methods (override in DepSolver) ============
 
     /**

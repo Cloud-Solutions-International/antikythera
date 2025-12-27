@@ -324,123 +324,12 @@ public class BeanDependencyGraph {
         return Optional.empty();
     }
 
+    /**
+     * Resolve type FQN using AbstractCompiler utility.
+     * Delegates to AbstractCompiler.resolveTypeFqn() for consistent type resolution.
+     */
     private String resolveTypeFqn(Type type, ClassOrInterfaceDeclaration context, CompilationUnit cu) {
-        try {
-            String typeName;
-            
-            // For ClassOrInterfaceType (including parameterized types), extract the raw type name
-            if (type instanceof ClassOrInterfaceType classOrInterfaceType) {
-                // Get the name without type parameters
-                typeName = classOrInterfaceType.getNameAsString();
-                
-                // If the type has a scope (e.g., com.example.TypedService), use it directly
-                if (classOrInterfaceType.getScope().isPresent()) {
-                    String scopedName = classOrInterfaceType.getScope().orElseThrow().asString() + "." + typeName;
-                    // Check if this FQN exists in AntikytheraRunTime
-                    if (AntikytheraRunTime.getTypeDeclaration(scopedName).isPresent()) {
-                        return scopedName;
-                    }
-                }
-            } else {
-                // For other types, use asString() and extract raw type name if parameterized
-                typeName = type.asString();
-                
-                // If it's a parameterized type, extract just the raw type name
-                if (typeName.contains("<")) {
-                    typeName = typeName.substring(0, typeName.indexOf('<')).trim();
-                }
-                
-                // Also handle array types (e.g., "String[]" -> "String")
-                if (typeName.contains("[")) {
-                    typeName = typeName.substring(0, typeName.indexOf('[')).trim();
-                }
-            }
-            
-            // Strategy 1: Direct AntikytheraRunTime lookup by pattern matching
-            // This is faster and more reliable for types already in the runtime
-            // Get package name from the compilation unit (prefer passed cu, fallback to finding it)
-            if (cu == null) {
-                cu = context.findCompilationUnit().orElse(null);
-                // If still null, try getting it from AntikytheraRunTime using the FQN
-                if (cu == null && context.getFullyQualifiedName().isPresent()) {
-                    cu = AntikytheraRunTime.getCompilationUnit(context.getFullyQualifiedName().get());
-                }
-            }
-            String packageName = "";
-            if (cu != null) {
-                packageName = cu.getPackageDeclaration()
-                        .map(pd -> pd.getNameAsString())
-                        .orElse("");
-            } else if (context.getFullyQualifiedName().isPresent()) {
-                // Fallback: extract package from FQN
-                String fqn = context.getFullyQualifiedName().get();
-                int lastDot = fqn.lastIndexOf('.');
-                if (lastDot > 0) {
-                    packageName = fqn.substring(0, lastDot);
-                }
-            }
-            
-            // Try exact match first
-            if (AntikytheraRunTime.getTypeDeclaration(typeName).isPresent()) {
-                return typeName;
-            }
-            
-            // Try package + typeName (same package)
-            if (!packageName.isEmpty()) {
-                String samePackageFqn = packageName + "." + typeName;
-                if (AntikytheraRunTime.getTypeDeclaration(samePackageFqn).isPresent()) {
-                    return samePackageFqn;
-                }
-            }
-            
-            // Search all resolved types for a match (ends with pattern)
-            for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
-                if (resolvedFqn.equals(typeName) || resolvedFqn.endsWith("." + typeName)) {
-                    return resolvedFqn;
-                }
-            }
-            
-            // Strategy 2: Use AbstractCompiler.findFullyQualifiedName (existing logic)
-            // This handles imports, java.lang types, etc.
-            // Only call if we have a compilation unit, otherwise it will return null immediately
-            String fqn = null;
-            if (cu != null) {
-                fqn = AbstractCompiler.findFullyQualifiedName(cu, typeName);
-            }
-            
-            // Strategy 3: Final fallback - search AntikytheraRunTime again (in case it was added)
-            if (fqn == null) {
-                for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
-                    if (resolvedFqn.endsWith("." + typeName) || resolvedFqn.equals(typeName)) {
-                        fqn = resolvedFqn;
-                        break;
-                    }
-                }
-            }
-            
-            return fqn;
-        } catch (Exception e) {
-            // On exception, try one more fallback search
-            try {
-                String typeName = type instanceof ClassOrInterfaceType 
-                    ? ((ClassOrInterfaceType) type).getNameAsString()
-                    : type.asString();
-                
-                // Extract raw type name if parameterized
-                if (typeName.contains("<")) {
-                    typeName = typeName.substring(0, typeName.indexOf('<')).trim();
-                }
-                
-                for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
-                    if (resolvedFqn.endsWith("." + typeName) || resolvedFqn.equals(typeName)) {
-                        return resolvedFqn;
-                    }
-                }
-            } catch (Exception e2) {
-                // Ignore
-            }
-            return null;
-        }
+        return AbstractCompiler.resolveTypeFqn(type, context, cu);
     }
 
     private void addDependency(String from, String to, InjectionType type,

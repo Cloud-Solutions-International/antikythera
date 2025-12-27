@@ -166,6 +166,27 @@ public class DependencyQuery {
     }
 
     /**
+     * Get all fields used by a collection of methods (batch operation).
+     * More efficient than calling getFieldsUsedBy() in a loop.
+     * 
+     * @param methods Collection of methods to analyze
+     * @param nodes   Set of graph nodes to search
+     * @return Set of fields used by any of the methods
+     */
+    public static Set<FieldDeclaration> getFieldsUsedByMethods(
+            Set<MethodDeclaration> methods,
+            Set<GraphNode> nodes) {
+        Set<FieldDeclaration> result = new HashSet<>();
+        
+        for (MethodDeclaration method : methods) {
+            result.addAll(getFieldsUsedBy(method, nodes));
+        }
+        
+        return result;
+    }
+
+
+    /**
      * Check if a method references a specific type.
      */
     private static boolean referencesType(MethodDeclaration method, String typeFqn) {
