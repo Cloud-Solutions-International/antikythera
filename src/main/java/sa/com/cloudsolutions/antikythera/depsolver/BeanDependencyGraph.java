@@ -291,15 +291,29 @@ public class BeanDependencyGraph {
      * These require method extraction strategy since @Lazy won't help.
      */
     private void analyzePostConstructMethods(String beanFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
-        // Get all injected field names in this class
-        Set<String> injectedFieldNames = new HashSet<>();
+        Map<String, String> injectedFieldTypeMap = collectInjectedFields(cid, cu);
+
+        if (injectedFieldTypeMap.isEmpty()) {
+            return;
+        }
+
+        cid.getMethods().stream()
+                .filter(this::isPostConstructMethod)
+                .forEach(method -> detectFieldUsageInPostConstruct(beanFqn, method, injectedFieldTypeMap));
+    }
+
+    /**
+     * Collect all injected fields and their types in the given class.
+     *
+     * @return Map of field name to fully qualified type name
+     */
+    private Map<String, String> collectInjectedFields(ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
         Map<String, String> fieldTypeMap = new HashMap<>();
 
         for (FieldDeclaration field : cid.getFields()) {
             if (isInjectedField(field)) {
                 field.getVariables().forEach(variable -> {
                     String fieldName = variable.getNameAsString();
-                    injectedFieldNames.add(fieldName);
                     String typeFqn = resolveTypeFqn(variable.getType(), cid, cu);
                     if (typeFqn != null) {
                         fieldTypeMap.put(fieldName, typeFqn);
@@ -308,42 +322,49 @@ public class BeanDependencyGraph {
             }
         }
 
-        if (injectedFieldNames.isEmpty()) {
-            return;
-        }
+        return fieldTypeMap;
+    }
 
-        // Find @PostConstruct methods
-        for (MethodDeclaration method : cid.getMethods()) {
-            boolean isPostConstruct = method.getAnnotationByName("PostConstruct").isPresent()
-                    || method.getAnnotationByName("javax.annotation.PostConstruct").isPresent()
-                    || method.getAnnotationByName("jakarta.annotation.PostConstruct").isPresent();
+    /**
+     * Check if a method is annotated with @PostConstruct (any variant).
+     */
+    private boolean isPostConstructMethod(MethodDeclaration method) {
+        return method.getAnnotationByName("PostConstruct").isPresent()
+                || method.getAnnotationByName("javax.annotation.PostConstruct").isPresent()
+                || method.getAnnotationByName("jakarta.annotation.PostConstruct").isPresent();
+    }
 
-            if (!isPostConstruct) {
-                continue;
+    /**
+     * Detect usage of injected fields within a @PostConstruct method and record warnings.
+     */
+    private void detectFieldUsageInPostConstruct(String beanFqn, MethodDeclaration method,
+                                                  Map<String, String> injectedFieldTypeMap) {
+        String methodName = method.getNameAsString();
+
+        // Check direct field references (e.g., fieldName)
+        method.findAll(com.github.javaparser.ast.expr.NameExpr.class).forEach(nameExpr -> {
+            String fieldName = nameExpr.getNameAsString();
+            if (injectedFieldTypeMap.containsKey(fieldName)) {
+                addPostConstructWarning(beanFqn, methodName, fieldName, injectedFieldTypeMap.get(fieldName));
             }
+        });
 
-            // Check if this method uses any injected fields
-            method.findAll(com.github.javaparser.ast.expr.NameExpr.class).forEach(nameExpr -> {
-                String name = nameExpr.getNameAsString();
-                if (injectedFieldNames.contains(name)) {
-                    String fieldType = fieldTypeMap.getOrDefault(name, "unknown");
-                    postConstructWarnings.add(new PostConstructWarning(
-                            beanFqn, method.getNameAsString(), name, fieldType));
+        // Check qualified field references (e.g., this.fieldName)
+        method.findAll(com.github.javaparser.ast.expr.FieldAccessExpr.class).forEach(fieldAccess -> {
+            if (fieldAccess.getScope().isThisExpr()) {
+                String fieldName = fieldAccess.getNameAsString();
+                if (injectedFieldTypeMap.containsKey(fieldName)) {
+                    addPostConstructWarning(beanFqn, methodName, fieldName, injectedFieldTypeMap.get(fieldName));
                 }
-            });
+            }
+        });
+    }
 
-            // Also check for this.fieldName patterns
-            method.findAll(com.github.javaparser.ast.expr.FieldAccessExpr.class).forEach(fieldAccess -> {
-                if (fieldAccess.getScope().isThisExpr()) {
-                    String name = fieldAccess.getNameAsString();
-                    if (injectedFieldNames.contains(name)) {
-                        String fieldType = fieldTypeMap.getOrDefault(name, "unknown");
-                        postConstructWarnings.add(new PostConstructWarning(
-                                beanFqn, method.getNameAsString(), name, fieldType));
-                    }
-                }
-            });
-        }
+    /**
+     * Add a warning for @PostConstruct method using an injected field.
+     */
+    private void addPostConstructWarning(String beanFqn, String methodName, String fieldName, String fieldType) {
+        postConstructWarnings.add(new PostConstructWarning(beanFqn, methodName, fieldName, fieldType));
     }
 
     private boolean isInjectedField(FieldDeclaration field) {

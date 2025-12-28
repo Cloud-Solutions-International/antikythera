@@ -13,7 +13,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.Scope;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashSet;
@@ -30,11 +29,11 @@ public abstract class AbstractExtractionStrategy {
     protected final Set<CompilationUnit> modifiedCUs = new HashSet<>();
     protected boolean dryRun = false;
 
-    public AbstractExtractionStrategy() {
+    protected AbstractExtractionStrategy() {
         this(true);
     }
 
-    public AbstractExtractionStrategy(boolean dryRun) {
+    protected AbstractExtractionStrategy(boolean dryRun) {
         this.dryRun = dryRun;
     }
 
