@@ -69,38 +69,7 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         }
 
         logger.info("Attempting to break cycle by extracting methods. Cycle: {}", cycle);
-        List<ExtractionCandidate> candidates = new ArrayList<>();
-
-        // Find candidates in all pairs
-        for (String beanName : cycle) {
-            ClassOrInterfaceDeclaration beanClass = findClassDeclaration(beanName);
-            if (beanClass == null) {
-                logger.warn("Could not find class declaration for bean: {}", beanName);
-                continue;
-            }
-
-            for (String otherBean : cycle) {
-                if (beanName.equals(otherBean))
-                    continue;
-
-                Optional<FieldDeclaration> depField = findDependencyField(beanClass, otherBean);
-                if (depField.isPresent()) {
-                    String fieldName = depField.get().getVariable(0).getNameAsString();
-                    Set<MethodDeclaration> methods = findMethodsUsing(beanClass, fieldName);
-
-                    if (!methods.isEmpty()) {
-                        collectTransitiveDependencies(beanClass, methods);
-
-                        ExtractionCandidate candidate = new ExtractionCandidate();
-                        candidate.sourceClass = beanClass;
-                        candidate.methods = methods;
-                        candidate.dependencyBeanName = otherBean;
-                        candidate.dependencyFieldName = fieldName;
-                        candidates.add(candidate);
-                    }
-                }
-            }
-        }
+        List<ExtractionCandidate> candidates = findCandidates(cycle);
 
         if (candidates.isEmpty()) {
             logger.info("No methods found to extract in cycle {}", cycle);
@@ -135,12 +104,45 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         for (Map.Entry<ClassOrInterfaceDeclaration, Set<MethodDeclaration>> entry : methodsByClass.entrySet()) {
             refactorOriginalClass(entry.getKey(), entry.getValue(), mediatorName,
                     fieldsToRemove.get(entry.getKey()));
-            if (entry.getKey().findCompilationUnit().isPresent()) {
-                modifiedCUs.add(entry.getKey().findCompilationUnit().get());
-            }
+            entry.getKey().findCompilationUnit()
+                    .ifPresent(modifiedCUs::add);
         }
 
         return true;
+    }
+
+    private List<ExtractionCandidate> findCandidates(List<String> cycle) {
+        List<ExtractionCandidate> candidates = new ArrayList<>();
+        for (String beanName : cycle) {
+            ClassOrInterfaceDeclaration beanClass = findClassDeclaration(beanName);
+            if (beanClass == null) {
+                logger.warn("Could not find class declaration for bean: {}", beanName);
+                continue;
+            }
+
+            for (String otherBean : cycle) {
+                if (beanName.equals(otherBean))
+                    continue;
+
+                Optional<FieldDeclaration> depField = findDependencyField(beanClass, otherBean);
+                if (depField.isPresent()) {
+                    String fieldName = depField.get().getVariable(0).getNameAsString();
+                    Set<MethodDeclaration> methods = findMethodsUsing(beanClass, fieldName);
+
+                    if (!methods.isEmpty()) {
+                        collectTransitiveDependencies(beanClass, methods);
+
+                        ExtractionCandidate candidate = new ExtractionCandidate();
+                        candidate.sourceClass = beanClass;
+                        candidate.methods = methods;
+                        candidate.dependencyBeanName = otherBean;
+                        candidate.dependencyFieldName = fieldName;
+                        candidates.add(candidate);
+                    }
+                }
+            }
+        }
+        return candidates;
     }
 
     private String generateMediatorName(List<String> cycle) {

@@ -131,7 +131,6 @@ public class DependencyQuery {
         return result;
     }
 
-
     /**
      * Check if a method references a specific type.
      */
