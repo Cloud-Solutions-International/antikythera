@@ -71,83 +71,76 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         logger.info("Attempting to break cycle by extracting methods. Cycle: {}", cycle);
         List<ExtractionCandidate> candidates = new ArrayList<>();
 
-        try {
-            // Find candidates in all pairs
-            // Find candidates in all pairs
-            for (String beanName : cycle) {
-                ClassOrInterfaceDeclaration beanClass = findClassDeclaration(beanName);
-                if (beanClass == null) {
-                    logger.warn("Could not find class declaration for bean: {}", beanName);
+        // Find candidates in all pairs
+        for (String beanName : cycle) {
+            ClassOrInterfaceDeclaration beanClass = findClassDeclaration(beanName);
+            if (beanClass == null) {
+                logger.warn("Could not find class declaration for bean: {}", beanName);
+                continue;
+            }
+
+            for (String otherBean : cycle) {
+                if (beanName.equals(otherBean))
                     continue;
-                }
 
-                for (String otherBean : cycle) {
-                    if (beanName.equals(otherBean))
-                        continue;
+                Optional<FieldDeclaration> depField = findDependencyField(beanClass, otherBean);
+                if (depField.isPresent()) {
+                    String fieldName = depField.get().getVariable(0).getNameAsString();
+                    Set<MethodDeclaration> methods = findMethodsUsing(beanClass, fieldName);
 
-                    Optional<FieldDeclaration> depField = findDependencyField(beanClass, otherBean);
-                    if (depField.isPresent()) {
-                        String fieldName = depField.get().getVariable(0).getNameAsString();
-                        Set<MethodDeclaration> methods = findMethodsUsing(beanClass, fieldName);
+                    if (!methods.isEmpty()) {
+                        collectTransitiveDependencies(beanClass, methods);
 
-                        if (!methods.isEmpty()) {
-                            collectTransitiveDependencies(beanClass, methods);
-
-                            ExtractionCandidate candidate = new ExtractionCandidate();
-                            candidate.sourceClass = beanClass;
-                            candidate.methods = methods;
-                            candidate.dependencyBeanName = otherBean;
-                            candidate.dependencyFieldName = fieldName;
-                            candidates.add(candidate);
-                        }
+                        ExtractionCandidate candidate = new ExtractionCandidate();
+                        candidate.sourceClass = beanClass;
+                        candidate.methods = methods;
+                        candidate.dependencyBeanName = otherBean;
+                        candidate.dependencyFieldName = fieldName;
+                        candidates.add(candidate);
                     }
                 }
             }
+        }
 
-            if (candidates.isEmpty()) {
-                logger.info("No methods found to extract in cycle {}", cycle);
-                return false;
-            }
-
-            // Create ONE Mediator for the cycle
-            // Name: Concatenate all bean simple names + "Operations"? Or just the first two
-            // (OrderServicePaymentServiceOperations match test)?
-            // The test matches "OrderServicePaymentServiceOperations".
-            // Since candidates might be in any order, we should probably stick to the order
-            // in processing or cycle list.
-            // Let's use the first candidate and its dependency to name it, or if multiple,
-            // concatenate unique names.
-
-            String mediatorName = generateMediatorName(cycle);
-            String packageName = candidates.getFirst().sourceClass.findCompilationUnit()
-                    .flatMap(CompilationUnit::getPackageDeclaration)
-                    .map(NodeWithName::getNameAsString).orElse("");
-
-            createMediatorClass(packageName, mediatorName, candidates);
-
-            // Refactor source classes
-            Map<ClassOrInterfaceDeclaration, Set<MethodDeclaration>> methodsByClass = new HashMap<>();
-            Map<ClassOrInterfaceDeclaration, Set<String>> fieldsToRemove = new HashMap<>();
-
-            for (ExtractionCandidate cand : candidates) {
-                methodsByClass.computeIfAbsent(cand.sourceClass, k -> new HashSet<>()).addAll(cand.methods);
-                fieldsToRemove.computeIfAbsent(cand.sourceClass, k -> new HashSet<>()).add(cand.dependencyFieldName);
-            }
-
-            for (Map.Entry<ClassOrInterfaceDeclaration, Set<MethodDeclaration>> entry : methodsByClass.entrySet()) {
-                refactorOriginalClass(entry.getKey(), entry.getValue(), mediatorName,
-                        fieldsToRemove.get(entry.getKey()));
-                if (entry.getKey().findCompilationUnit().isPresent()) {
-                    modifiedCUs.add(entry.getKey().findCompilationUnit().get());
-                }
-            }
-
-            return true;
-
-        } catch (Exception e) {
-            logger.error("Error executing MethodExtractionStrategy", e);
+        if (candidates.isEmpty()) {
+            logger.info("No methods found to extract in cycle {}", cycle);
             return false;
         }
+
+        // Create ONE Mediator for the cycle
+        // Name: Concatenate all bean simple names + "Operations"? Or just the first two
+        // (OrderServicePaymentServiceOperations match test)?
+        // The test matches "OrderServicePaymentServiceOperations".
+        // Since candidates might be in any order, we should probably stick to the order
+        // in processing or cycle list.
+        // Let's use the first candidate and its dependency to name it, or if multiple,
+        // concatenate unique names.
+
+        String mediatorName = generateMediatorName(cycle);
+        String packageName = candidates.getFirst().sourceClass.findCompilationUnit()
+                .flatMap(CompilationUnit::getPackageDeclaration)
+                .map(NodeWithName::getNameAsString).orElse("");
+
+        createMediatorClass(packageName, mediatorName, candidates);
+
+        // Refactor source classes
+        Map<ClassOrInterfaceDeclaration, Set<MethodDeclaration>> methodsByClass = new HashMap<>();
+        Map<ClassOrInterfaceDeclaration, Set<String>> fieldsToRemove = new HashMap<>();
+
+        for (ExtractionCandidate cand : candidates) {
+            methodsByClass.computeIfAbsent(cand.sourceClass, k -> new HashSet<>()).addAll(cand.methods);
+            fieldsToRemove.computeIfAbsent(cand.sourceClass, k -> new HashSet<>()).add(cand.dependencyFieldName);
+        }
+
+        for (Map.Entry<ClassOrInterfaceDeclaration, Set<MethodDeclaration>> entry : methodsByClass.entrySet()) {
+            refactorOriginalClass(entry.getKey(), entry.getValue(), mediatorName,
+                    fieldsToRemove.get(entry.getKey()));
+            if (entry.getKey().findCompilationUnit().isPresent()) {
+                modifiedCUs.add(entry.getKey().findCompilationUnit().get());
+            }
+        }
+
+        return true;
     }
 
     private String generateMediatorName(List<String> cycle) {

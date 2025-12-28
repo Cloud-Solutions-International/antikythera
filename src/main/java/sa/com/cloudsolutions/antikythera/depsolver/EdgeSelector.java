@@ -88,10 +88,7 @@ public class EdgeSelector {
      * Compute weight for an edge. Lower weight = prefer to cut.
      */
     public double computeWeight(BeanDependency edge) {
-        double weight = 0.0;
-
-        // 1. Injection type penalty (higher = harder to modify)
-        weight += switch (edge.injectionType()) {
+        double weight = switch (edge.injectionType()) {
             case FIELD -> 1.0;
             case SETTER -> 2.0;
             case CONSTRUCTOR -> 3.0;
@@ -100,9 +97,7 @@ public class EdgeSelector {
 
         // 2. In-degree: don't cut edges to hub beans (many dependents)
         int targetInDegree = inDegree.getOrDefault(edge.targetBean(), 0);
-        weight += targetInDegree * 0.5;
-
-        return weight;
+        return weight + targetInDegree * 0.5;
     }
 
     /**
