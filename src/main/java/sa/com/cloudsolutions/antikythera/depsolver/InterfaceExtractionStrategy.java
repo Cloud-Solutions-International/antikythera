@@ -9,21 +9,17 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.TypeParameter;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
-import sa.com.cloudsolutions.antikythera.evaluator.Scope;
-import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -43,19 +39,18 @@ import java.util.Set;
  * Best for: @Bean method cycles and complex tight coupling.
  * </p>
  */
-public class InterfaceExtractionStrategy {
+public class InterfaceExtractionStrategy extends AbstractExtractionStrategy {
 
     private static final String INTERFACE_PREFIX = "I";
 
-    private final Set<CompilationUnit> modifiedCUs = new HashSet<>();
     private final Map<String, CompilationUnit> generatedInterfaces = new HashMap<>();
-    private boolean dryRun = false;
 
     public InterfaceExtractionStrategy() {
+        super();
     }
 
     public InterfaceExtractionStrategy(boolean dryRun) {
-        this.dryRun = dryRun;
+        super(dryRun);
     }
 
     /**
@@ -78,7 +73,7 @@ public class InterfaceExtractionStrategy {
         ClassOrInterfaceDeclaration callerClass = callerOpt.get();
 
         // Get the target class
-        ClassOrInterfaceDeclaration targetClass = findTargetClass(edge.targetBean());
+        ClassOrInterfaceDeclaration targetClass = findClassDeclaration(edge.targetBean());
         if (targetClass == null) {
             return false;
         }
@@ -132,45 +127,13 @@ public class InterfaceExtractionStrategy {
 
         for (MethodDeclaration method : classDecl.getMethods()) {
             method.findAll(MethodCallExpr.class).forEach(mce -> {
-                ScopeChain chain = ScopeChain.findScopeChain(mce);
-                if (!chain.isEmpty()) {
-                    // Get the first scope element (the field name)
-                    List<Scope> scopes = chain.getChain();
-                    if (!scopes.isEmpty()) {
-                        Scope firstScope = scopes.get(0);
-                        com.github.javaparser.ast.expr.Expression expr = firstScope.getExpression();
-
-                        // Check if it's a NameExpr matching our field
-                        if (expr.isNameExpr()) {
-                            String name = expr.asNameExpr().getNameAsString();
-                            if (name.equals(fieldName)) {
-                                calledMethods.add(mce.getNameAsString());
-                            }
-                        }
-                        // Also handle FieldAccessExpr (this.fieldName)
-                        else if (expr.isFieldAccessExpr()) {
-                            FieldAccessExpr fae = expr.asFieldAccessExpr();
-                            if (fae.getNameAsString().equals(fieldName)) {
-                                calledMethods.add(mce.getNameAsString());
-                            }
-                        }
-                    }
+                if (isMethodCallOnField(mce, fieldName)) {
+                    calledMethods.add(mce.getNameAsString());
                 }
             });
         }
 
         return calledMethods;
-    }
-
-    /**
-     * Find the target class by fully qualified name.
-     */
-    private ClassOrInterfaceDeclaration findTargetClass(String fqn) {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn);
-        if (cu != null) {
-            return cu.findFirst(ClassOrInterfaceDeclaration.class).orElse(null);
-        }
-        return null;
     }
 
     /**
@@ -309,28 +272,12 @@ public class InterfaceExtractionStrategy {
         return lastDot >= 0 ? fqn.substring(0, lastDot) : "";
     }
 
-    /**
-     * Write all modified files to disk.
-     */
+    @Override
     public void writeChanges(String basePath) throws IOException {
+        super.writeChanges(basePath);
+
         if (dryRun) {
             return;
-        }
-
-        for (CompilationUnit cu : modifiedCUs) {
-            if (cu.getStorage().isPresent()) {
-                Path filePath = cu.getStorage().get().getPath();
-                CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-            } else {
-                String packageName = cu.getPackageDeclaration()
-                        .map(pd -> pd.getNameAsString().replace('.', '/'))
-                        .orElse("");
-                String className = cu.findFirst(ClassOrInterfaceDeclaration.class)
-                        .map(c -> c.getNameAsString())
-                        .orElse("Unknown");
-                Path filePath = Path.of(basePath, packageName, className + ".java");
-                CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-            }
         }
 
         for (Map.Entry<String, CompilationUnit> entry : generatedInterfaces.entrySet()) {
@@ -346,19 +293,7 @@ public class InterfaceExtractionStrategy {
         }
     }
 
-    public Set<CompilationUnit> getModifiedCUs() {
-        return modifiedCUs;
-    }
-
     public Map<String, CompilationUnit> getGeneratedInterfaces() {
         return generatedInterfaces;
-    }
-
-    public boolean isDryRun() {
-        return dryRun;
-    }
-
-    public void setDryRun(boolean dryRun) {
-        this.dryRun = dryRun;
     }
 }

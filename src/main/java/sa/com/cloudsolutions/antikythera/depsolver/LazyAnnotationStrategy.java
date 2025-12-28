@@ -8,13 +8,8 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.Name;
-import com.github.javaparser.ast.ImportDeclaration;
-import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
-
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Strategy for breaking circular dependencies by adding @Lazy annotation.
@@ -24,19 +19,18 @@ import java.util.Set;
  * use SetterInjectionStrategy or InterfaceExtractionStrategy instead.
  * </p>
  */
-public class LazyAnnotationStrategy {
+public class LazyAnnotationStrategy extends AbstractExtractionStrategy {
 
+    private static final Logger logger = LoggerFactory.getLogger(LazyAnnotationStrategy.class);
     private static final String LAZY_ANNOTATION = "Lazy";
     private static final String LAZY_IMPORT = "org.springframework.context.annotation.Lazy";
 
-    private final Set<CompilationUnit> modifiedCUs = new HashSet<>();
-    private boolean dryRun = false;
-
     public LazyAnnotationStrategy() {
+        super();
     }
 
     public LazyAnnotationStrategy(boolean dryRun) {
-        this.dryRun = dryRun;
+        super(dryRun);
     }
 
     /**
@@ -48,7 +42,6 @@ public class LazyAnnotationStrategy {
     public boolean apply(BeanDependency edge) {
         Node astNode = edge.astNode();
         if (astNode == null) {
-            System.out.println("❌ No AST node for edge: " + edge);
             return false;
         }
 
@@ -60,7 +53,7 @@ public class LazyAnnotationStrategy {
         };
 
         if (result) {
-            System.out.println("✅ Added @Lazy to " + edge);
+            logger.info("Added @Lazy to {}", edge);
         }
 
         return result;
@@ -71,13 +64,13 @@ public class LazyAnnotationStrategy {
      */
     private boolean addLazyToField(Node node, BeanDependency edge) {
         if (!(node instanceof FieldDeclaration field)) {
-            System.out.println("❌ Expected FieldDeclaration but got: " + node.getClass().getSimpleName());
+            logger.error("Expected FieldDeclaration but got: {}", node.getClass().getSimpleName());
             return false;
         }
 
         // Check if already has @Lazy
         if (field.getAnnotationByName(LAZY_ANNOTATION).isPresent()) {
-            System.out.println("ℹ️  Already has @Lazy: " + edge);
+            logger.info("Already has @Lazy: {}", edge);
             return true;
         }
 
@@ -98,13 +91,13 @@ public class LazyAnnotationStrategy {
      */
     private boolean addLazyToSetter(Node node, BeanDependency edge) {
         if (!(node instanceof MethodDeclaration method)) {
-            System.out.println("❌ Expected MethodDeclaration but got: " + node.getClass().getSimpleName());
+            logger.error("Expected MethodDeclaration but got: {}", node.getClass().getSimpleName());
             return false;
         }
 
         // Check if already has @Lazy on method
         if (method.getAnnotationByName(LAZY_ANNOTATION).isPresent()) {
-            System.out.println("ℹ️  Already has @Lazy: " + edge);
+            logger.info("Already has @Lazy: {}", edge);
             return true;
         }
 
@@ -126,7 +119,7 @@ public class LazyAnnotationStrategy {
      */
     private boolean addLazyToConstructorParameter(Node node, BeanDependency edge) {
         if (!(node instanceof ConstructorDeclaration ctor)) {
-            System.out.println("❌ Expected ConstructorDeclaration but got: " + node.getClass().getSimpleName());
+            logger.error("Expected ConstructorDeclaration but got: {}", node.getClass().getSimpleName());
             return false;
         }
 
@@ -137,13 +130,13 @@ public class LazyAnnotationStrategy {
                 .orElse(null);
 
         if (param == null) {
-            System.out.println("❌ Parameter not found: " + paramName);
+            logger.error("Parameter not found: {}", paramName);
             return false;
         }
 
         // Check if already has @Lazy
         if (param.getAnnotationByName(LAZY_ANNOTATION).isPresent()) {
-            System.out.println("ℹ️  Already has @Lazy: " + edge);
+            logger.info("Already has @Lazy: {}", edge);
             return true;
         }
 
@@ -165,13 +158,13 @@ public class LazyAnnotationStrategy {
      */
     private boolean addLazyToBeanMethodParameter(Node node, BeanDependency edge) {
         if (!(node instanceof MethodDeclaration method)) {
-            System.out.println("❌ Expected MethodDeclaration but got: " + node.getClass().getSimpleName());
+            logger.error("Expected MethodDeclaration but got: {}", node.getClass().getSimpleName());
             return false;
         }
 
         // Verify this is a @Bean method
         if (method.getAnnotationByName("Bean").isEmpty()) {
-            System.out.println("❌ Method is not a @Bean method: " + method.getNameAsString());
+            logger.error("Method is not a @Bean method: {}", method.getNameAsString());
             return false;
         }
 
@@ -182,13 +175,13 @@ public class LazyAnnotationStrategy {
                 .orElse(null);
 
         if (param == null) {
-            System.out.println("❌ Parameter not found in @Bean method: " + paramName);
+            logger.error("Parameter not found in @Bean method: {}", paramName);
             return false;
         }
 
         // Check if already has @Lazy
         if (param.getAnnotationByName(LAZY_ANNOTATION).isPresent()) {
-            System.out.println("ℹ️  Already has @Lazy: " + edge);
+            logger.info("Already has @Lazy: {}", edge);
             return true;
         }
 
@@ -208,65 +201,6 @@ public class LazyAnnotationStrategy {
      * Add the @Lazy import if not already present.
      */
     private void addLazyImport(CompilationUnit cu) {
-        boolean hasImport = cu.getImports().stream()
-                .anyMatch(imp -> imp.getNameAsString().equals(LAZY_IMPORT));
-
-        if (!hasImport) {
-            cu.addImport(new ImportDeclaration(LAZY_IMPORT, false, false));
-        }
-    }
-
-    /**
-     * Write all modified compilation units to disk.
-     * 
-     * @param basePath The base path for the source files
-     * @throws IOException if writing fails
-     */
-    public void writeChanges(String basePath) throws IOException {
-        if (dryRun) {
-            System.out.println("\n🔍 Dry run - " + modifiedCUs.size() + " file(s) would be modified");
-            return;
-        }
-
-        System.out.println("\n📝 Writing " + modifiedCUs.size() + " modified file(s)...");
-
-        for (CompilationUnit cu : modifiedCUs) {
-            // Get the original file path from JavaParser's storage
-            if (cu.getStorage().isPresent()) {
-                Path filePath = cu.getStorage().get().getPath();
-                CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-                System.out.println("   ✓ " + filePath);
-            } else {
-                // Fallback: compute path from basePath + package + class
-                String packageName = cu.getPackageDeclaration()
-                        .map(pd -> pd.getNameAsString().replace('.', '/'))
-                        .orElse("");
-                // Use findFirst to get the class name since getPrimaryTypeName may be empty
-                String className = cu.findFirst(com.github.javaparser.ast.body.ClassOrInterfaceDeclaration.class)
-                        .map(c -> c.getNameAsString())
-                        .orElse(cu.getPrimaryTypeName().orElse("Unknown"));
-                Path filePath = Path.of(basePath, packageName, className + ".java");
-                CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-                System.out.println("   ✓ " + filePath);
-            }
-        }
-    }
-
-    /**
-     * Get the set of modified compilation units.
-     */
-    public Set<CompilationUnit> getModifiedCUs() {
-        return modifiedCUs;
-    }
-
-    /**
-     * Check if running in dry-run mode.
-     */
-    public boolean isDryRun() {
-        return dryRun;
-    }
-
-    public void setDryRun(boolean dryRun) {
-        this.dryRun = dryRun;
+        addImport(cu, LAZY_IMPORT);
     }
 }

@@ -7,8 +7,6 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.Parameter;
-import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
@@ -19,14 +17,10 @@ import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.VoidType;
-import com.github.javaparser.ast.ImportDeclaration;
-import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.HashSet;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Strategy for converting constructor injection to setter injection with @Lazy.
@@ -40,19 +34,18 @@ import java.util.Set;
  * <li>Adding a setter method with @Autowired @Lazy</li>
  * </ol>
  */
-public class SetterInjectionStrategy {
+public class SetterInjectionStrategy extends AbstractExtractionStrategy {
 
+    private static final Logger logger = LoggerFactory.getLogger(SetterInjectionStrategy.class);
     private static final String AUTOWIRED_IMPORT = "org.springframework.beans.factory.annotation.Autowired";
     private static final String LAZY_IMPORT = "org.springframework.context.annotation.Lazy";
 
-    private final Set<CompilationUnit> modifiedCUs = new HashSet<>();
-    private boolean dryRun = false;
-
     public SetterInjectionStrategy() {
+        super();
     }
 
     public SetterInjectionStrategy(boolean dryRun) {
-        this.dryRun = dryRun;
+        super(dryRun);
     }
 
     /**
@@ -63,20 +56,20 @@ public class SetterInjectionStrategy {
      */
     public boolean apply(BeanDependency edge) {
         if (edge.injectionType() != InjectionType.CONSTRUCTOR) {
-            System.out.println("⚠️  Not a constructor injection: " + edge);
+            logger.warn("Not a constructor injection: {}", edge);
             return false;
         }
 
         Node astNode = edge.astNode();
         if (astNode == null) {
-            System.out.println("❌ No AST node for edge: " + edge);
+            logger.error("No AST node for edge: {}", edge);
             return false;
         }
 
         // Find the containing class
         Optional<ClassOrInterfaceDeclaration> classOpt = astNode.findAncestor(ClassOrInterfaceDeclaration.class);
         if (classOpt.isEmpty()) {
-            System.out.println("❌ Cannot find class for: " + edge);
+            logger.error("Cannot find class for: {}", edge);
             return false;
         }
 
@@ -86,7 +79,7 @@ public class SetterInjectionStrategy {
         // Step 1: Find the field and remove 'final' modifier
         Optional<FieldDeclaration> fieldOpt = findField(classDecl, fieldName);
         if (fieldOpt.isEmpty()) {
-            System.out.println("❌ Cannot find field: " + fieldName);
+            logger.error("Cannot find field: {}", fieldName);
             return false;
         }
         FieldDeclaration field = fieldOpt.get();
@@ -107,7 +100,7 @@ public class SetterInjectionStrategy {
             modifiedCUs.add(cu);
         });
 
-        System.out.println("✅ Converted to setter injection: " + edge);
+        logger.info("Converted to setter injection: {}", edge);
         return true;
     }
 
@@ -198,67 +191,5 @@ public class SetterInjectionStrategy {
         setter.setBody(body);
 
         classDecl.addMember(setter);
-    }
-
-    /**
-     * Add an import if not already present.
-     */
-    private void addImport(CompilationUnit cu, String importName) {
-        boolean hasImport = cu.getImports().stream()
-                .anyMatch(imp -> imp.getNameAsString().equals(importName));
-        if (!hasImport) {
-            cu.addImport(new ImportDeclaration(importName, false, false));
-        }
-    }
-
-    /**
-     * Write all modified compilation units to disk.
-     */
-    public void writeChanges(String basePath) throws IOException {
-        if (dryRun) {
-            System.out.println("\n🔍 Dry run - " + modifiedCUs.size() + " file(s) would be modified");
-            return;
-        }
-
-        System.out.println("\n📝 Writing " + modifiedCUs.size() + " modified file(s)...");
-
-        for (CompilationUnit cu : modifiedCUs) {
-            // Get the original file path from JavaParser's storage
-            if (cu.getStorage().isPresent()) {
-                Path filePath = cu.getStorage().get().getPath();
-                CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-                System.out.println("   ✓ " + filePath);
-            } else {
-                // Fallback: compute path from basePath + package + class
-                String packageName = cu.getPackageDeclaration()
-                        .map(pd -> pd.getNameAsString().replace('.', '/'))
-                        .orElse("");
-                // Use findFirst to get the class name since getPrimaryTypeName may be empty
-                String className = cu.findFirst(ClassOrInterfaceDeclaration.class)
-                        .map(c -> c.getNameAsString())
-                        .orElse(cu.getPrimaryTypeName().orElse("Unknown"));
-                Path filePath = Path.of(basePath, packageName, className + ".java");
-                CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-                System.out.println("   ✓ " + filePath);
-            }
-        }
-    }
-
-    /**
-     * Get the set of modified compilation units.
-     */
-    public Set<CompilationUnit> getModifiedCUs() {
-        return modifiedCUs;
-    }
-
-    /**
-     * Check if running in dry-run mode.
-     */
-    public boolean isDryRun() {
-        return dryRun;
-    }
-
-    public void setDryRun(boolean dryRun) {
-        this.dryRun = dryRun;
     }
 }
