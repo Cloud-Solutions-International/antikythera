@@ -46,21 +46,11 @@ public class MavenHelper {
             }
         }
 
-        return paths.toArray(new String[]{});
+        return paths.toArray(new String[] {});
     }
 
-    public void writePomModel(Model model) throws IOException {
-        writePomModel(pomPath.toFile(), model);
-    }
-
-    public void writePomModel(File pomFile, Model model) throws IOException {
-        MavenXpp3Writer writer = new MavenXpp3Writer();
-        try (FileWriter fileWriter = new FileWriter(pomFile)) {
-            writer.write(fileWriter, model);
-        }
-    }
-
-    private static void addDependency(String m2, String groupIdPath, String artifactId, String version) throws IOException, XmlPullParserException {
+    private static void addDependency(String m2, String groupIdPath, String artifactId, String version)
+            throws IOException, XmlPullParserException {
         Path p = Paths.get(m2, groupIdPath, artifactId, version,
                 artifactId + "-" + version + ".jar");
         if (Files.exists(p)) {
@@ -111,30 +101,30 @@ public class MavenHelper {
     private void readPomFile(Path p) throws IOException, XmlPullParserException {
         pomPath = p.toAbsolutePath();
         MavenXpp3Reader reader = new MavenXpp3Reader();
-        
+
         // Read file content as bytes to handle BOM and encoding issues
         // Some POM files have UTF-8 BOM but declare ISO-8859-1 encoding, which causes parser errors
         byte[] fileBytes = Files.readAllBytes(p);
-        
+
         // Check for UTF-8 BOM (EF BB BF) and remove it if present
         int startOffset = 0;
-        if (fileBytes.length >= 3 && 
-            fileBytes[0] == (byte)0xEF && 
-            fileBytes[1] == (byte)0xBB && 
+        if (fileBytes.length >= 3 &&
+            fileBytes[0] == (byte)0xEF &&
+            fileBytes[1] == (byte)0xBB &&
             fileBytes[2] == (byte)0xBF) {
             startOffset = 3; // Skip BOM
         }
-        
+
         // Read content as UTF-8 string (ignoring any incorrect encoding declaration)
         String content = new String(fileBytes, startOffset, fileBytes.length - startOffset, StandardCharsets.UTF_8);
-        
+
         // Fix encoding declaration if it's incorrect (e.g., ISO-8859-1 with UTF-8 BOM)
         // Replace any encoding declaration with UTF-8 to match the actual file encoding
         content = content.replaceFirst(
             "(<\\?xml[^>]*encoding\\s*=\\s*[\"'])[^\"']+([\"'])",
             "$1UTF-8$2"
         );
-        
+
         // Parse the corrected content
         try (StringReader sr = new StringReader(content)) {
             pomModel = reader.read(sr);
