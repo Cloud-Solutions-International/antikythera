@@ -93,8 +93,6 @@ public class DependencyAnalyzer {
         /* no action required here. Child classes can add functionality */
     }
 
-    // ============ Public API (Gap 2) ============
-
     /**
      * Collect dependencies for a set of methods.
      * This is the primary entry point for analysis-only use cases.
@@ -152,8 +150,6 @@ public class DependencyAnalyzer {
         });
     }
 
-    // ============ Hook Methods (override in DepSolver) ============
-
     /**
      * Create a graph node for analysis.
      * 
@@ -173,8 +169,7 @@ public class DependencyAnalyzer {
      * @return GraphNode for analysis
      */
     protected GraphNode createAnalysisNode(Node node) {
-        GraphNode g = Graph.createGraphNode(node);
-        return g;
+        return Graph.createGraphNode(node);
     }
 
     /**
@@ -201,8 +196,6 @@ public class DependencyAnalyzer {
     protected void onImportDiscovered(GraphNode node, ImportWrapper imp) {
         // Override in subclasses to add imports to destination CU
     }
-
-    // ============ DFS Logic ============
 
     /**
      * Iterative Depth first search.
@@ -449,9 +442,6 @@ public class DependencyAnalyzer {
         Graph.getNodes().clear();
         visitedSignatures.clear();
     }
-
-    // ============ Inner Visitor Classes ============
-
     /**
      * Processes variable declarations.
      * This visitor identifies variables so that resolving method call scopes
@@ -491,19 +481,23 @@ public class DependencyAnalyzer {
         public void visit(ExplicitConstructorInvocationStmt n, GraphNode node) {
             if (node.getNode() instanceof ConstructorDeclaration cd
                     && node.getEnclosingType().isClassOrInterfaceDeclaration()) {
-                for (ClassOrInterfaceType cdecl : node.getEnclosingType()
-                        .asClassOrInterfaceDeclaration().getExtendedTypes()) {
-                    String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(
-                            node.getCompilationUnit(), cdecl.getNameAsString());
-                    if (fullyQualifiedName != null) {
-                        AntikytheraRunTime.getTypeDeclaration(fullyQualifiedName).ifPresent(cid -> {
-                            for (ConstructorDeclaration constructorDeclaration : cid.getConstructors()) {
-                                if (constructorDeclaration.getParameters().size() == cd.getParameters().size()) {
-                                    createAnalysisNode(constructorDeclaration);
-                                }
+                visitConstructor(node, cd);
+            }
+        }
+
+        private void visitConstructor(GraphNode node, ConstructorDeclaration cd) {
+            for (ClassOrInterfaceType cdecl : node.getEnclosingType()
+                    .asClassOrInterfaceDeclaration().getExtendedTypes()) {
+                String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(
+                        node.getCompilationUnit(), cdecl.getNameAsString());
+                if (fullyQualifiedName != null) {
+                    AntikytheraRunTime.getTypeDeclaration(fullyQualifiedName).ifPresent(cid -> {
+                        for (ConstructorDeclaration constructorDeclaration : cid.getConstructors()) {
+                            if (constructorDeclaration.getParameters().size() == cd.getParameters().size()) {
+                                createAnalysisNode(constructorDeclaration);
                             }
-                        });
-                    }
+                        }
+                    });
                 }
             }
         }
@@ -535,7 +529,7 @@ public class DependencyAnalyzer {
                     SimpleName nmae = fae.getName();
                     arg.getEnclosingType().findFirst(FieldDeclaration.class,
                             f -> f.getVariable(0).getNameAsString().equals(nmae.asString()))
-                            .ifPresent(field -> createAnalysisNode(field));
+                            .ifPresent(DependencyAnalyzer.this::createAnalysisNode);
                     ImportUtils.addImport(arg, fae);
                 }
             }
@@ -585,4 +579,5 @@ public class DependencyAnalyzer {
             super.visit(oce, node);
         }
     }
+
 }

@@ -11,7 +11,6 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.TypeParameter;
@@ -68,14 +67,12 @@ public class InterfaceExtractionStrategy {
     public boolean apply(BeanDependency edge) {
         Node astNode = edge.astNode();
         if (astNode == null) {
-            System.out.println("❌ No AST node for edge: " + edge);
             return false;
         }
 
         // Get the caller class
         Optional<ClassOrInterfaceDeclaration> callerOpt = astNode.findAncestor(ClassOrInterfaceDeclaration.class);
         if (callerOpt.isEmpty()) {
-            System.out.println("❌ Cannot find caller class for edge: " + edge);
             return false;
         }
         ClassOrInterfaceDeclaration callerClass = callerOpt.get();
@@ -83,15 +80,12 @@ public class InterfaceExtractionStrategy {
         // Get the target class
         ClassOrInterfaceDeclaration targetClass = findTargetClass(edge.targetBean());
         if (targetClass == null) {
-            System.out.println("❌ Cannot find target class: " + edge.targetBean());
             return false;
         }
 
         // Only handle field/setter/constructor injection
         // @Bean method cycles should use MethodExtractionStrategy instead
         if (edge.injectionType() == InjectionType.BEAN_METHOD) {
-            System.out
-                    .println("⚠️  Interface extraction not applicable to @Bean methods. Use MethodExtractionStrategy.");
             return false;
         }
 
@@ -101,16 +95,12 @@ public class InterfaceExtractionStrategy {
         Set<String> calledMethodNames = findCalledMethods(callerClass, fieldName);
 
         if (calledMethodNames.isEmpty()) {
-            System.out.println("⚠️  No methods to extract for '" + fieldName + "'");
             return false;
         }
-
-        System.out.println("📊 Methods for interface from " + fieldName + ": " + calledMethodNames);
 
         // Step 2: Resolve method signatures from target class
         Set<MethodDeclaration> usedMethods = resolveMethodSignatures(targetClass, calledMethodNames);
         if (usedMethods.isEmpty()) {
-            System.out.println("❌ Could not resolve any method signatures");
             return false;
         }
 
@@ -130,7 +120,6 @@ public class InterfaceExtractionStrategy {
         callerClass.findCompilationUnit().ifPresent(modifiedCUs::add);
         targetClass.findCompilationUnit().ifPresent(modifiedCUs::add);
 
-        System.out.println("✅ Extracted interface " + interfaceName + " for " + edge);
         return true;
     }
 
@@ -193,7 +182,7 @@ public class InterfaceExtractionStrategy {
 
         for (String methodName : methodNames) {
             targetClass.getMethodsByName(methodName).stream()
-                    .filter(m -> m.isPublic())
+                    .filter(MethodDeclaration::isPublic)
                     .findFirst()
                     .ifPresent(methods::add);
         }
@@ -252,7 +241,6 @@ public class InterfaceExtractionStrategy {
             iface.addMember(sig);
         }
 
-        System.out.println("📝 Generated interface " + interfaceName + " with " + methods.size() + " method(s)");
         return cu;
     }
 
@@ -277,7 +265,6 @@ public class InterfaceExtractionStrategy {
             } else {
                 targetClass.addImplementedType(interfaceName);
             }
-            System.out.println("   Added 'implements " + interfaceName + "' to " + targetClass.getNameAsString());
         }
     }
 
@@ -288,9 +275,9 @@ public class InterfaceExtractionStrategy {
     private void changeFieldType(ClassOrInterfaceDeclaration callerClass, String fieldName,
             String interfaceName) {
         for (FieldDeclaration field : callerClass.getFields()) {
-            for (VariableDeclarator var : field.getVariables()) {
-                if (var.getNameAsString().equals(fieldName)) {
-                    Type originalType = var.getType();
+            for (VariableDeclarator variable : field.getVariables()) {
+                if (variable.getNameAsString().equals(fieldName)) {
+                    Type originalType = variable.getType();
                     ClassOrInterfaceType newType = new ClassOrInterfaceType(null, interfaceName);
 
                     // Preserve type arguments if the original type is generic
@@ -299,9 +286,7 @@ public class InterfaceExtractionStrategy {
                                 .ifPresent(newType::setTypeArguments);
                     }
 
-                    var.setType(newType);
-                    System.out.println("   Changed field type to " + newType + " in " +
-                            callerClass.getNameAsString());
+                    variable.setType(newType);
                     return;
                 }
             }
@@ -329,17 +314,13 @@ public class InterfaceExtractionStrategy {
      */
     public void writeChanges(String basePath) throws IOException {
         if (dryRun) {
-            System.out.println("\n🔍 Dry run - " + modifiedCUs.size() + " file(s) would be modified, " +
-                    generatedInterfaces.size() + " interface(s) would be generated");
             return;
         }
 
-        System.out.println("\n📝 Writing " + modifiedCUs.size() + " modified file(s)...");
         for (CompilationUnit cu : modifiedCUs) {
             if (cu.getStorage().isPresent()) {
                 Path filePath = cu.getStorage().get().getPath();
                 CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-                System.out.println("   ✓ " + filePath);
             } else {
                 String packageName = cu.getPackageDeclaration()
                         .map(pd -> pd.getNameAsString().replace('.', '/'))
@@ -349,11 +330,9 @@ public class InterfaceExtractionStrategy {
                         .orElse("Unknown");
                 Path filePath = Path.of(basePath, packageName, className + ".java");
                 CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-                System.out.println("   ✓ " + filePath);
             }
         }
 
-        System.out.println("\n📝 Writing " + generatedInterfaces.size() + " generated interface(s)...");
         for (Map.Entry<String, CompilationUnit> entry : generatedInterfaces.entrySet()) {
             CompilationUnit cu = entry.getValue();
             String packageName = cu.getPackageDeclaration()
@@ -364,7 +343,6 @@ public class InterfaceExtractionStrategy {
                     .orElse("Unknown");
             Path filePath = Path.of(basePath, packageName, interfaceName + ".java");
             CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-            System.out.println("   ✓ " + filePath + " (NEW)");
         }
     }
 

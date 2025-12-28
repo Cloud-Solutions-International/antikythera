@@ -2,7 +2,6 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.type.Type;
 
 import java.util.HashSet;
@@ -72,59 +71,6 @@ public class DependencyQuery {
                     .getFieldByName(name)
                     .ifPresent(result::add);
         });
-
-        return result;
-    }
-
-    /**
-     * Get all types that a method depends on (from parameters and return type).
-     * 
-     * @param method Method to analyze
-     * @return Set of type names that the method depends on
-     */
-    public static Set<String> getTypesDependendOn(MethodDeclaration method) {
-        Set<String> result = new HashSet<>();
-
-        // Parameter types
-        method.getParameters().forEach(param -> {
-            String typeName = extractTypeName(param.getType());
-            if (typeName != null && !typeName.isEmpty()) {
-                result.add(typeName);
-            }
-        });
-
-        // Return type
-        if (!method.getTypeAsString().equals("void")) {
-            String typeName = extractTypeName(method.getType());
-            if (typeName != null && !typeName.isEmpty()) {
-                result.add(typeName);
-            }
-        }
-
-        return result;
-    }
-
-    /**
-     * Get all methods in a specific class from the discovered nodes.
-     * 
-     * @param classFqn Fully qualified class name
-     * @param nodes    Set of graph nodes to search
-     * @return Set of methods in the class
-     */
-    public static Set<MethodDeclaration> getMethodsInClass(
-            String classFqn,
-            Set<GraphNode> nodes) {
-        Set<MethodDeclaration> result = new HashSet<>();
-
-        for (GraphNode node : nodes) {
-            TypeDeclaration<?> type = node.getEnclosingType();
-            if (type != null && type.getFullyQualifiedName().isPresent()) {
-                if (type.getFullyQualifiedName().get().equals(classFqn) &&
-                    node.getNode() instanceof MethodDeclaration md) {
-                        result.add(md);
-                }
-            }
-        }
 
         return result;
     }
