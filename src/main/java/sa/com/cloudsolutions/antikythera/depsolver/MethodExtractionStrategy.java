@@ -1,36 +1,20 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
-import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.Parameter;
-import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.AssignExpr;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
-import com.github.javaparser.ast.expr.SimpleName;
 import com.github.javaparser.ast.expr.ThisExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.nodeTypes.NodeWithName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.depsolver.Graph;
-import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 
-import java.io.IOException;
-import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -86,7 +70,6 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
 
         logger.info("Attempting to break cycle by extracting methods. Cycle: {}", cycle);
         List<ExtractionCandidate> candidates = new ArrayList<>();
-        Set<String> cycleSet = new HashSet<>(cycle);
 
         try {
             // Find candidates in all pairs
@@ -108,7 +91,7 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
                         Set<MethodDeclaration> methods = findMethodsUsing(beanClass, fieldName);
 
                         if (!methods.isEmpty()) {
-                            collectTransitiveDependencies(beanClass, methods, new HashSet<>(), cycle);
+                            collectTransitiveDependencies(beanClass, methods);
 
                             ExtractionCandidate candidate = new ExtractionCandidate();
                             candidate.sourceClass = beanClass;
@@ -135,10 +118,10 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
             // Let's use the first candidate and its dependency to name it, or if multiple,
             // concatenate unique names.
 
-            String mediatorName = generateMediatorName(candidates, cycle);
-            String packageName = candidates.get(0).sourceClass.findCompilationUnit()
+            String mediatorName = generateMediatorName(cycle);
+            String packageName = candidates.getFirst().sourceClass.findCompilationUnit()
                     .flatMap(CompilationUnit::getPackageDeclaration)
-                    .map(pd -> pd.getNameAsString()).orElse("");
+                    .map(NodeWithName::getNameAsString).orElse("");
 
             createMediatorClass(packageName, mediatorName, candidates);
 
@@ -152,7 +135,7 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
             }
 
             for (Map.Entry<ClassOrInterfaceDeclaration, Set<MethodDeclaration>> entry : methodsByClass.entrySet()) {
-                refactorOriginalClass(entry.getKey(), entry.getValue(), mediatorName, packageName,
+                refactorOriginalClass(entry.getKey(), entry.getValue(), mediatorName,
                         fieldsToRemove.get(entry.getKey()));
                 if (entry.getKey().findCompilationUnit().isPresent()) {
                     modifiedCUs.add(entry.getKey().findCompilationUnit().get());
@@ -167,7 +150,7 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         }
     }
 
-    private String generateMediatorName(List<ExtractionCandidate> candidates, List<String> cycle) {
+    private String generateMediatorName(List<String> cycle) {
         // Try to match test expectation: OrderServicePaymentServiceOperations
         // Cycle is OrderService, PaymentService.
         // Candidates will be (OrderService->PaymentService) and
@@ -182,7 +165,7 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
     }
 
     private void collectTransitiveDependencies(ClassOrInterfaceDeclaration clazz,
-            Set<MethodDeclaration> methods, Set<FieldDeclaration> fields, List<String> cycle) {
+                                               Set<MethodDeclaration> methods) {
 
         Set<MethodDeclaration> workingSet = new HashSet<>(methods);
         Set<MethodDeclaration> processed = new HashSet<>();
@@ -262,9 +245,9 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
 
         for (ExtractionCandidate cand : candidates) {
             // Add imports from source
-            cand.sourceClass.findCompilationUnit().ifPresent(sourceCu -> {
-                sourceCu.getImports().forEach(cu::addImport);
-            });
+            cand.sourceClass.findCompilationUnit().ifPresent(sourceCu ->
+                sourceCu.getImports().forEach(cu::addImport)
+            );
 
             // Add dependency field if not exists
             String depStruct = getSimpleClassName(cand.dependencyBeanName); // Type
@@ -303,7 +286,7 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
     }
 
     private void refactorOriginalClass(ClassOrInterfaceDeclaration clazz, Set<MethodDeclaration> extractedMethods,
-            String mediatorName, String packageName, Set<String> fieldsToRemove) {
+                                       String mediatorName, Set<String> fieldsToRemove) {
 
         for (MethodDeclaration m : extractedMethods) {
             m.remove();
@@ -334,10 +317,5 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
     private String getSimpleClassName(String fqn) {
         int lastDot = fqn.lastIndexOf('.');
         return lastDot >= 0 ? fqn.substring(lastDot + 1) : fqn;
-    }
-
-    @Override
-    public void writeChanges(String basePath) throws IOException {
-        super.writeChanges(basePath);
     }
 }

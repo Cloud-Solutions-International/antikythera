@@ -8,6 +8,7 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.Name;
+import com.github.javaparser.ast.nodeTypes.NodeWithAnnotations;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,23 +68,7 @@ public class LazyAnnotationStrategy extends AbstractExtractionStrategy {
             logger.error("Expected FieldDeclaration but got: {}", node.getClass().getSimpleName());
             return false;
         }
-
-        // Check if already has @Lazy
-        if (field.getAnnotationByName(LAZY_ANNOTATION).isPresent()) {
-            logger.info("Already has @Lazy: {}", edge);
-            return true;
-        }
-
-        // Add @Lazy annotation
-        field.addAnnotation(new MarkerAnnotationExpr(new Name(LAZY_ANNOTATION)));
-
-        // Ensure import exists
-        field.findCompilationUnit().ifPresent(cu -> {
-            addLazyImport(cu);
-            modifiedCUs.add(cu);
-        });
-
-        return true;
+        return addLazyAnnotation(field, edge);
     }
 
     /**
@@ -91,26 +76,15 @@ public class LazyAnnotationStrategy extends AbstractExtractionStrategy {
      */
     private boolean addLazyToSetter(Node node, BeanDependency edge) {
         if (!(node instanceof MethodDeclaration method)) {
-            logger.error("Expected MethodDeclaration but got: {}", node.getClass().getSimpleName());
             return false;
         }
 
-        // Check if already has @Lazy on method
-        if (method.getAnnotationByName(LAZY_ANNOTATION).isPresent()) {
-            logger.info("Already has @Lazy: {}", edge);
-            return true;
-        }
-
         // Add @Lazy to the setter method (not the parameter)
-        method.addAnnotation(new MarkerAnnotationExpr(new Name(LAZY_ANNOTATION)));
-
-        // Ensure import exists
-        method.findCompilationUnit().ifPresent(cu -> {
-            addLazyImport(cu);
-            modifiedCUs.add(cu);
-        });
-
-        return true;
+        // Setters are a special case where we annotate the method, not the parameter
+        // for @Autowired(required=false) + @Lazy
+        // But for cycle breaking, Spring supports @Lazy on the method.
+        // The original code was annotating the method, so we continue to do so.
+        return addLazyAnnotation(method, edge);
     }
 
     /**
@@ -134,22 +108,7 @@ public class LazyAnnotationStrategy extends AbstractExtractionStrategy {
             return false;
         }
 
-        // Check if already has @Lazy
-        if (param.getAnnotationByName(LAZY_ANNOTATION).isPresent()) {
-            logger.info("Already has @Lazy: {}", edge);
-            return true;
-        }
-
-        // Add @Lazy to the parameter
-        param.addAnnotation(new MarkerAnnotationExpr(new Name(LAZY_ANNOTATION)));
-
-        // Ensure import exists
-        ctor.findCompilationUnit().ifPresent(cu -> {
-            addLazyImport(cu);
-            modifiedCUs.add(cu);
-        });
-
-        return true;
+        return addLazyAnnotation(param, edge);
     }
 
     /**
@@ -179,28 +138,26 @@ public class LazyAnnotationStrategy extends AbstractExtractionStrategy {
             return false;
         }
 
-        // Check if already has @Lazy
-        if (param.getAnnotationByName(LAZY_ANNOTATION).isPresent()) {
-            logger.info("Already has @Lazy: {}", edge);
-            return true;
-        }
-
-        // Add @Lazy to the parameter
-        param.addAnnotation(new MarkerAnnotationExpr(new Name(LAZY_ANNOTATION)));
-
-        // Ensure import exists
-        method.findCompilationUnit().ifPresent(cu -> {
-            addLazyImport(cu);
-            modifiedCUs.add(cu);
-        });
-
-        return true;
+        return addLazyAnnotation(param, edge);
     }
 
     /**
-     * Add the @Lazy import if not already present.
+     * Common method to add @Lazy annotation to a node.
      */
-    private void addLazyImport(CompilationUnit cu) {
-        addImport(cu, LAZY_IMPORT);
+    private boolean addLazyAnnotation(NodeWithAnnotations<?> node, BeanDependency edge) {
+        // Check if already has @Lazy
+        if (node.getAnnotationByName(LAZY_ANNOTATION).isPresent()) {
+            logger.info("Already has @Lazy: {}", edge);
+            return true;
+        }
+        if (node instanceof Node n) {
+            node.addAnnotation(new MarkerAnnotationExpr(new Name(LAZY_ANNOTATION)));
+            n.findCompilationUnit().ifPresent(cu -> {
+                addImport(cu, LAZY_IMPORT);
+                modifiedCUs.add(cu);
+            });
+            return true;
+        }
+        return false;
     }
 }

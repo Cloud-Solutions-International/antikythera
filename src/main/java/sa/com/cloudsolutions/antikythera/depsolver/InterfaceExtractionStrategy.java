@@ -10,10 +10,10 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.TypeParameter;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 
 import java.io.IOException;
@@ -286,7 +286,7 @@ public class InterfaceExtractionStrategy extends AbstractExtractionStrategy {
                     .map(pd -> pd.getNameAsString().replace('.', '/'))
                     .orElse("");
             String interfaceName = cu.findFirst(ClassOrInterfaceDeclaration.class)
-                    .map(c -> c.getNameAsString())
+                    .map(NodeWithSimpleName::getNameAsString)
                     .orElse("Unknown");
             Path filePath = Path.of(basePath, packageName, interfaceName + ".java");
             CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());

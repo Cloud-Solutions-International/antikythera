@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.depsolver;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -131,14 +130,12 @@ public class SetterInjectionStrategy extends AbstractExtractionStrategy {
 
             // Remove the assignment statement: this.fieldName = fieldName
             constructor.getBody().getStatements().removeIf(stmt -> {
-                if (stmt instanceof ExpressionStmt exprStmt) {
-                    if (exprStmt.getExpression() instanceof AssignExpr assignExpr) {
-                        if (assignExpr.getTarget() instanceof FieldAccessExpr fieldAccess) {
-                            return fieldAccess.getNameAsString().equals(fieldName);
-                        }
-                        if (assignExpr.getTarget() instanceof NameExpr nameExpr) {
-                            return nameExpr.getNameAsString().equals(fieldName);
-                        }
+                if (stmt instanceof ExpressionStmt exprStmt && exprStmt.getExpression() instanceof AssignExpr assignExpr) {
+                    if (assignExpr.getTarget() instanceof FieldAccessExpr fieldAccess) {
+                        return fieldAccess.getNameAsString().equals(fieldName);
+                    }
+                    if (assignExpr.getTarget() instanceof NameExpr nameExpr) {
+                        return nameExpr.getNameAsString().equals(fieldName);
                     }
                 }
                 return false;
