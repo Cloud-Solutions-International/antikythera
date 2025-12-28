@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>sa.com.cloudsolutions</groupId>
     <artifactId>antikythera</artifactId>
-    <version>0.1.2.5</version>
+    <version>0.1.2.5                                                                                                                                                                                    </version>
 
     <name>Antikythera</name>
     <description>Automated Test Generator for Java projects. Generates unit tests and API tests for Spring applications.</description>
