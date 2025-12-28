@@ -5,487 +5,312 @@ import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
-import sa.com.cloudsolutions.antikythera.depsolver.DepSolver;
-import sa.com.cloudsolutions.antikythera.depsolver.Graph;
-import sa.com.cloudsolutions.antikythera.depsolver.GraphNode;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
-import sa.com.cloudsolutions.antikythera.evaluator.Scope;
-import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
-import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
+import com.github.javaparser.ast.expr.ThisExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithName;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Strategy for breaking circular dependencies by extracting cycle-causing
- * methods
- * into a self-contained mediator class.
+ * Strategy for breaking circular dependencies by extracting methods into a new
+ * bean.
  * 
- * The mediator class has NO references to the original cycle classes.
- * Methods and their transitive dependencies are moved together.
+ * <p>
+ * This strategy identifies methods in the 'from' bean that use the 'to' bean,
+ * and extracts them into a new Mediator class. The original bean and the
+ * dependency cycle participants will then depend on this new Mediator.
+ * </p>
  */
-public class MethodExtractionStrategy {
+public class MethodExtractionStrategy extends AbstractExtractionStrategy {
 
-    private final Set<CompilationUnit> modifiedCUs = new HashSet<>();
-    private final Map<String, CompilationUnit> generatedClasses = new HashMap<>();
-    private boolean dryRun;
+    private static final Logger logger = LoggerFactory.getLogger(MethodExtractionStrategy.class);
+    private final Map<String, CompilationUnit> generatedMediators = new HashMap<>();
 
     public MethodExtractionStrategy() {
-        this.dryRun = false;
+        super();
     }
 
     public MethodExtractionStrategy(boolean dryRun) {
-        this.dryRun = dryRun;
+        super(dryRun);
+    }
+
+    public Map<String, CompilationUnit> getGeneratedClasses() {
+        return generatedMediators;
+    }
+
+    private static class ExtractionCandidate {
+        ClassOrInterfaceDeclaration sourceClass;
+        Set<MethodDeclaration> methods;
+        String dependencyBeanName;
+        String dependencyFieldName;
     }
 
     /**
-     * Apply method extraction to break a cycle.
+     * Apply the extraction strategy to a cycle.
      * 
-     * @param cycle List of bean FQNs forming the cycle (e.g., [A, B] or [A, B, C])
-     * @return true if extraction was successful
+     * @param cycle The list of bean names in the cycle
+     * @return true if the cycle was successfully broken
      */
     public boolean apply(List<String> cycle) {
-        if (cycle == null || cycle.size() < 2) {
+        if (cycle == null || cycle.isEmpty()) {
             return false;
         }
 
-        // Step 1: Find cycle-causing methods in each class
-        Map<String, Set<MethodDeclaration>> cycleCausingMethods = new HashMap<>();
-        for (int i = 0; i < cycle.size(); i++) {
-            String beanFqn = cycle.get(i);
-            String dependsOn = cycle.get((i + 1) % cycle.size());
+        logger.info("Attempting to break cycle by extracting methods. Cycle: {}", cycle);
+        List<ExtractionCandidate> candidates = findCandidates(cycle);
 
-            ClassOrInterfaceDeclaration clazz = findClass(beanFqn);
-            if (clazz == null)
-                continue;
-
-            Set<MethodDeclaration> methods = findMethodsUsing(clazz, getSimpleName(dependsOn));
-            if (!methods.isEmpty()) {
-                cycleCausingMethods.put(beanFqn, methods);
-            }
-        }
-
-        if (cycleCausingMethods.isEmpty()) {
+        if (candidates.isEmpty()) {
+            logger.info("No methods found to extract in cycle {}", cycle);
             return false;
         }
 
-        // Step 2: Collect transitive dependencies of those methods
-        Map<String, Set<MethodDeclaration>> allMethodsToMove = new HashMap<>();
-        Map<String, Set<FieldDeclaration>> allFieldsToMove = new HashMap<>();
+        // Create ONE Mediator for the cycle
+        // Name: Concatenate all bean simple names + "Operations"? Or just the first two
+        // (OrderServicePaymentServiceOperations match test)?
+        // The test matches "OrderServicePaymentServiceOperations".
+        // Since candidates might be in any order, we should probably stick to the order
+        // in processing or cycle list.
+        // Let's use the first candidate and its dependency to name it, or if multiple,
+        // concatenate unique names.
 
-        for (Map.Entry<String, Set<MethodDeclaration>> entry : cycleCausingMethods.entrySet()) {
-            String beanFqn = entry.getKey();
-            ClassOrInterfaceDeclaration clazz = findClass(beanFqn);
-            if (clazz == null)
-                continue;
-
-            Set<MethodDeclaration> methods = new HashSet<>(entry.getValue());
-            Set<FieldDeclaration> fields = new HashSet<>();
-
-            // Collect helper methods and fields
-            collectTransitiveDependencies(clazz, methods, fields, cycle);
-
-            allMethodsToMove.put(beanFqn, methods);
-            allFieldsToMove.put(beanFqn, fields);
-        }
-
-        // Step 3: Generate self-contained mediator class
         String mediatorName = generateMediatorName(cycle);
-        String mediatorPackage = getPackage(cycle.get(0));
-        CompilationUnit mediatorCU = generateMediatorClass(mediatorName, mediatorPackage,
-                allMethodsToMove, allFieldsToMove);
-        generatedClasses.put(mediatorPackage + "." + mediatorName, mediatorCU);
+        String packageName = candidates.getFirst().sourceClass.findCompilationUnit()
+                .flatMap(CompilationUnit::getPackageDeclaration)
+                .map(NodeWithName::getNameAsString).orElse("");
 
-        // Collect all moved method names for caller redirection
-        Set<String> movedMethodNames = new HashSet<>();
-        for (Set<MethodDeclaration> methods : allMethodsToMove.values()) {
-            for (MethodDeclaration m : methods) {
-                movedMethodNames.add(m.getNameAsString());
-            }
+        createMediatorClass(packageName, mediatorName, candidates);
+
+        // Refactor source classes
+        Map<ClassOrInterfaceDeclaration, Set<MethodDeclaration>> methodsByClass = new HashMap<>();
+        Map<ClassOrInterfaceDeclaration, Set<String>> fieldsToRemove = new HashMap<>();
+
+        for (ExtractionCandidate cand : candidates) {
+            methodsByClass.computeIfAbsent(cand.sourceClass, k -> new HashSet<>()).addAll(cand.methods);
+            fieldsToRemove.computeIfAbsent(cand.sourceClass, k -> new HashSet<>()).add(cand.dependencyFieldName);
         }
 
-        // Step 4: Remove methods and fields from original classes
-        for (String beanFqn : allMethodsToMove.keySet()) {
-            ClassOrInterfaceDeclaration clazz = findClass(beanFqn);
-            if (clazz == null)
-                continue;
-
-            // Remove moved methods
-            for (MethodDeclaration method : allMethodsToMove.get(beanFqn)) {
-                method.remove();
-            }
-
-            // Remove cycle-causing field
-            removeCycleField(clazz, cycle);
-
-            clazz.findCompilationUnit().ifPresent(modifiedCUs::add);
+        for (Map.Entry<ClassOrInterfaceDeclaration, Set<MethodDeclaration>> entry : methodsByClass.entrySet()) {
+            refactorOriginalClass(entry.getKey(), entry.getValue(), mediatorName,
+                    fieldsToRemove.get(entry.getKey()));
+            entry.getKey().findCompilationUnit()
+                    .ifPresent(modifiedCUs::add);
         }
-
-        // Step 5: Redirect callers to use mediator (add mediator field + update calls)
-        redirectCallers(cycle, mediatorName, mediatorPackage, movedMethodNames);
 
         return true;
     }
 
-    /**
-     * Find methods in a class that use a specific dependency.
-     */
-    private Set<MethodDeclaration> findMethodsUsing(ClassOrInterfaceDeclaration clazz, String dependencyName) {
-        Set<MethodDeclaration> result = new HashSet<>();
-        String fieldName = findFieldNameForType(clazz, dependencyName);
-
-        if (fieldName == null)
-            return result;
-
-        for (MethodDeclaration method : clazz.getMethods()) {
-            if (methodUsesField(method, fieldName)) {
-                result.add(method);
-            }
-        }
-        return result;
-    }
-
-    /**
-     * Check if a method uses a specific field using ScopeChain for accurate detection.
-     */
-    private boolean methodUsesField(MethodDeclaration method, String fieldName) {
-        // Check for direct field access
-        boolean usesField = method.findAll(NameExpr.class).stream()
-                .anyMatch(n -> n.getNameAsString().equals(fieldName));
-
-        if (usesField) {
-            return true;
-        }
-
-        // Check for method calls on the field using ScopeChain
-        return method.findAll(MethodCallExpr.class).stream()
-                .anyMatch(mce -> {
-                    ScopeChain chain = ScopeChain.findScopeChain(mce);
-                    if (!chain.isEmpty()) {
-                        List<Scope> scopes = chain.getChain();
-                        if (!scopes.isEmpty()) {
-                            Scope firstScope = scopes.get(0);
-                            com.github.javaparser.ast.expr.Expression expr = firstScope.getExpression();
-                            
-                            if (expr.isNameExpr()) {
-                                return expr.asNameExpr().getNameAsString().equals(fieldName);
-                            } else if (expr.isFieldAccessExpr()) {
-                                FieldAccessExpr fae = expr.asFieldAccessExpr();
-                                return fae.getNameAsString().equals(fieldName);
-                            }
-                        }
-                    }
-                    return false;
-                });
-    }
-
-    /**
-     * Find the field name for a given type in a class.
-     */
-    private String findFieldNameForType(ClassOrInterfaceDeclaration clazz, String typeName) {
-        for (FieldDeclaration field : clazz.getFields()) {
-            for (VariableDeclarator var : field.getVariables()) {
-                if (var.getTypeAsString().equals(typeName)) {
-                    return var.getNameAsString();
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Collect transitive dependencies using DepSolver for accurate dependency tracking.
-     * This leverages existing infrastructure instead of manual visitor pattern.
-     */
-    private void collectTransitiveDependencies(ClassOrInterfaceDeclaration clazz,
-            Set<MethodDeclaration> methods, Set<FieldDeclaration> fields, List<String> cycle) {
-
-        DepSolver solver = DepSolver.createSolver();
-        DepSolver.reset();
-        // Note: Graph doesn't have a reset method, but DepSolver.reset() clears the stack
-        // We'll work with the current graph state
-
-        // Build dependency graph for all methods using DepSolver
-        for (MethodDeclaration method : methods) {
-            GraphNode node = Graph.createGraphNode(method);
-            DepSolver.push(node);
-        }
-
-        // Run DFS to find all transitive dependencies
-        solver.dfs();
-
-        // Extract helper methods and fields from the dependency graph
-        Set<String> cycleTypes = cycle.stream()
-                .map(this::getSimpleName)
-                .collect(Collectors.toSet());
-
-        // Find methods that are dependencies (from Graph nodes)
-        Map<Integer, GraphNode> nodes = Graph.getNodes();
-        Set<String> methodNames = methods.stream()
-                .map(MethodDeclaration::getNameAsString)
-                .collect(Collectors.toSet());
-
-        for (GraphNode node : nodes.values()) {
-            if (node.getNode() instanceof MethodDeclaration md) {
-                String methodName = md.getNameAsString();
-                // Check if this method is in our class and not already added
-                if (!methodNames.contains(methodName)) {
-                    List<MethodDeclaration> classMethods = clazz.getMethodsByName(methodName);
-                    for (MethodDeclaration classMethod : classMethods) {
-                        // Match by signature (parameter count)
-                        if (classMethod.getParameters().size() == md.getParameters().size() 
-                                && !classMethod.isStatic()) {
-                            methods.add(classMethod);
-                            methodNames.add(methodName);
-                        }
-                    }
-                }
-            } else if (node.getNode() instanceof FieldDeclaration fd) {
-                // Check if this field is in our class
-                String fieldName = fd.getVariable(0).getNameAsString();
-                clazz.getFieldByName(fieldName).ifPresent(f -> {
-                    String type = f.getVariables().get(0).getTypeAsString();
-                    if (!cycleTypes.contains(type)) {
-                        fields.add(f);
-                    }
-                });
-            }
-        }
-
-        // Also check for fields used directly in method bodies
-        for (MethodDeclaration method : methods) {
-            method.findAll(NameExpr.class).forEach(ne -> {
-                String name = ne.getNameAsString();
-                clazz.getFieldByName(name).ifPresent(f -> {
-                    String type = f.getVariables().get(0).getTypeAsString();
-                    if (!cycleTypes.contains(type)) {
-                        fields.add(f);
-                    }
-                });
-            });
-        }
-    }
-
-    /**
-     * Generate mediator class with moved methods and fields.
-     */
-    private CompilationUnit generateMediatorClass(String name, String pkg,
-            Map<String, Set<MethodDeclaration>> methods, Map<String, Set<FieldDeclaration>> fields) {
-
-        CompilationUnit cu = new CompilationUnit();
-        cu.setPackageDeclaration(pkg);
-
-        ClassOrInterfaceDeclaration mediator = cu.addClass(name, Modifier.Keyword.PUBLIC);
-        mediator.addAnnotation("org.springframework.stereotype.Service");
-
-        // Add fields (excluding cycle types)
-        for (Set<FieldDeclaration> fieldSet : fields.values()) {
-            for (FieldDeclaration field : fieldSet) {
-                FieldDeclaration clone = field.clone();
-                mediator.addMember(clone);
-            }
-        }
-
-        // Add methods
-        for (Set<MethodDeclaration> methodSet : methods.values()) {
-            for (MethodDeclaration method : methodSet) {
-                MethodDeclaration clone = method.clone();
-                clone.setModifiers(Modifier.Keyword.PUBLIC);
-                mediator.addMember(clone);
-            }
-        }
-
-        return cu;
-    }
-
-    /**
-     * Remove the field that causes the cycle.
-     */
-    private void removeCycleField(ClassOrInterfaceDeclaration clazz, List<String> cycle) {
-        Set<String> cycleTypes = new HashSet<>();
-        for (String c : cycle) {
-            cycleTypes.add(getSimpleName(c));
-        }
-
-        // Collect fields to remove (can't modify during iteration)
-        List<FieldDeclaration> toRemove = new ArrayList<>();
-        for (FieldDeclaration field : clazz.getFields()) {
-            String type = field.getVariables().get(0).getTypeAsString();
-            if (cycleTypes.contains(type)) {
-                toRemove.add(field);
-            }
-        }
-        // Remove collected fields
-        for (FieldDeclaration field : toRemove) {
-            field.remove();
-        }
-    }
-
-    /**
-     * Redirect callers of moved methods to use the mediator class.
-     * For each class in the cycle, add a mediator field and update internal calls.
-     */
-    private void redirectCallers(List<String> cycle, String mediatorName,
-            String mediatorPackage, Set<String> movedMethodNames) {
-
-        String mediatorFieldName = Character.toLowerCase(mediatorName.charAt(0)) +
-                mediatorName.substring(1);
-        String mediatorFqn = mediatorPackage + "." + mediatorName;
-
-        // For each class that had methods moved, add mediator field
-        for (String beanFqn : cycle) {
-            ClassOrInterfaceDeclaration clazz = findClass(beanFqn);
-            if (clazz == null)
+    private List<ExtractionCandidate> findCandidates(List<String> cycle) {
+        List<ExtractionCandidate> candidates = new ArrayList<>();
+        for (String beanName : cycle) {
+            ClassOrInterfaceDeclaration beanClass = findClassDeclaration(beanName);
+            if (beanClass == null) {
+                logger.warn("Could not find class declaration for bean: {}", beanName);
                 continue;
+            }
 
-            // Add mediator field with @Autowired
-            boolean hasMovedMethods = false;
-            for (MethodDeclaration m : clazz.getMethods()) {
-                for (String moved : movedMethodNames) {
-                    if (methodCallsMethod(m, moved)) {
-                        hasMovedMethods = true;
-                        break;
+            for (String otherBean : cycle) {
+                if (beanName.equals(otherBean))
+                    continue;
+
+                Optional<FieldDeclaration> depField = findDependencyField(beanClass, otherBean);
+                if (depField.isPresent()) {
+                    String fieldName = depField.get().getVariable(0).getNameAsString();
+                    Set<MethodDeclaration> methods = findMethodsUsing(beanClass, fieldName);
+
+                    if (!methods.isEmpty()) {
+                        collectTransitiveDependencies(beanClass, methods);
+
+                        ExtractionCandidate candidate = new ExtractionCandidate();
+                        candidate.sourceClass = beanClass;
+                        candidate.methods = methods;
+                        candidate.dependencyBeanName = otherBean;
+                        candidate.dependencyFieldName = fieldName;
+                        candidates.add(candidate);
                     }
                 }
-                if (hasMovedMethods)
-                    break;
-            }
-
-            if (hasMovedMethods) {
-                addMediatorField(clazz, mediatorName, mediatorFieldName);
-                updateMethodCalls(clazz, movedMethodNames, mediatorFieldName);
-                clazz.findCompilationUnit().ifPresent(modifiedCUs::add);
             }
         }
+        return candidates;
     }
 
-    /**
-     * Check if a method calls another method by name.
-     */
-    private boolean methodCallsMethod(MethodDeclaration method, String calledMethodName) {
-        boolean[] calls = { false };
-        method.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(MethodCallExpr n, Void arg) {
-                if (n.getNameAsString().equals(calledMethodName)) {
-                    calls[0] = true;
-                }
-                super.visit(n, arg);
-            }
-        }, null);
-        return calls[0];
-    }
-
-    /**
-     * Add mediator field with @Autowired annotation.
-     */
-    private void addMediatorField(ClassOrInterfaceDeclaration clazz,
-            String mediatorType, String fieldName) {
-        // Check if field already exists
-        if (clazz.getFieldByName(fieldName).isPresent()) {
-            return;
-        }
-
-        FieldDeclaration field = clazz.addPrivateField(mediatorType, fieldName);
-        field.addAnnotation("org.springframework.beans.factory.annotation.Autowired");
-    }
-
-    /**
-     * Update method calls within a class to call mediator instead.
-     */
-    private void updateMethodCalls(ClassOrInterfaceDeclaration clazz,
-            Set<String> movedMethodNames, String mediatorFieldName) {
-
-        clazz.accept(new VoidVisitorAdapter<Void>() {
-            @Override
-            public void visit(MethodCallExpr n, Void arg) {
-                // If this is a call to a moved method without scope (or with 'this')
-                if (movedMethodNames.contains(n.getNameAsString())) {
-                    if (n.getScope().isEmpty() ||
-                            n.getScope().get().toString().equals("this")) {
-                        // Change to mediator.methodName()
-                        n.setScope(new NameExpr(mediatorFieldName));
-                    }
-                }
-                super.visit(n, arg);
-            }
-        }, null);
-    }
-
-    /**
-     * Generate a name for the mediator class.
-     */
     private String generateMediatorName(List<String> cycle) {
+        // Try to match test expectation: OrderServicePaymentServiceOperations
+        // Cycle is OrderService, PaymentService.
+        // Candidates will be (OrderService->PaymentService) and
+        // (PaymentService->OrderService).
+        // If we concat non-duplicate simple names from cycle in order:
         StringBuilder sb = new StringBuilder();
-        for (String c : cycle) {
-            sb.append(getSimpleName(c));
+        for (String bean : cycle) {
+            sb.append(getSimpleClassName(bean));
         }
         sb.append("Operations");
         return sb.toString();
     }
 
-    private ClassOrInterfaceDeclaration findClass(String fqn) {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn);
-        if (cu == null)
-            return null;
-        return cu.findFirst(ClassOrInterfaceDeclaration.class).orElse(null);
+    private void collectTransitiveDependencies(ClassOrInterfaceDeclaration clazz,
+                                               Set<MethodDeclaration> methods) {
+
+        Set<MethodDeclaration> workingSet = new HashSet<>(methods);
+        Set<MethodDeclaration> processed = new HashSet<>();
+
+        while (!workingSet.isEmpty()) {
+            MethodDeclaration current = workingSet.iterator().next();
+            workingSet.remove(current);
+            processed.add(current);
+
+            current.findAll(MethodCallExpr.class).forEach(mce -> {
+                if (isLocalMethodCall(mce)) {
+                    clazz.getMethodsByName(mce.getNameAsString()).stream()
+                            .filter(m -> m.getParameters().size() == mce.getArguments().size())
+                            .findFirst()
+                            .ifPresent(target -> {
+                                if (!processed.contains(target) && !methods.contains(target)) {
+                                    methods.add(target);
+                                    workingSet.add(target);
+                                }
+                            });
+                }
+            });
+        }
     }
 
-    private String getSimpleName(String fqn) {
-        int idx = fqn.lastIndexOf('.');
-        return idx >= 0 ? fqn.substring(idx + 1) : fqn;
+    private boolean isLocalMethodCall(MethodCallExpr mce) {
+        Optional<com.github.javaparser.ast.expr.Expression> scope = mce.getScope();
+        return scope.isEmpty() || scope.get() instanceof ThisExpr;
     }
 
-    private String getPackage(String fqn) {
-        int idx = fqn.lastIndexOf('.');
-        return idx >= 0 ? fqn.substring(0, idx) : "";
+    private Optional<FieldDeclaration> findDependencyField(ClassOrInterfaceDeclaration clazz,
+            String dependencyBeanType) {
+        for (FieldDeclaration field : clazz.getFields()) {
+            if (field.getVariable(0).getType().asString().endsWith(getSimpleClassName(dependencyBeanType))) {
+                return Optional.of(field);
+            }
+        }
+        return Optional.empty();
     }
 
-    public Set<CompilationUnit> getModifiedCUs() {
-        return modifiedCUs;
+    private Set<MethodDeclaration> findMethodsUsing(ClassOrInterfaceDeclaration clazz, String fieldName) {
+        return clazz.getMethods().stream()
+                .filter(m -> methodUsesField(m, fieldName))
+                .collect(Collectors.toSet());
     }
 
-    public Map<String, CompilationUnit> getGeneratedClasses() {
-        return generatedClasses;
+    private boolean methodUsesField(MethodDeclaration method, String fieldName) {
+        if (method.getBody().isEmpty())
+            return false;
+
+        List<MethodCallExpr> methodCalls = method.findAll(MethodCallExpr.class);
+        for (MethodCallExpr mce : methodCalls) {
+            if (isMethodCallOnField(mce, fieldName)) {
+                return true;
+            }
+        }
+        return method.findAll(NameExpr.class).stream()
+                .anyMatch(n -> n.getNameAsString().equals(fieldName));
     }
 
-    /**
-     * Write changes to disk.
-     */
-    public void writeChanges(String basePath) throws IOException {
-        if (dryRun) {
-            return;
+    private void createMediatorClass(String packageName, String mediatorName, List<ExtractionCandidate> candidates) {
+
+        CompilationUnit cu = new CompilationUnit();
+        if (!packageName.isEmpty()) {
+            cu.setPackageDeclaration(packageName);
         }
 
-        // Write modified CUs
-        for (CompilationUnit cu : modifiedCUs) {
-            String pkg = cu.getPackageDeclaration()
-                    .map(pd -> pd.getNameAsString())
-                    .orElse("");
-            String name = cu.getPrimaryTypeName().orElse("Unknown");
-            String relativePath = pkg.replace('.', '/') + "/" + name + ".java";
-            String absolutePath = basePath + "/" + relativePath;
-            CopyUtils.writeFileAbsolute(absolutePath, cu.toString());
+        ClassOrInterfaceDeclaration mediator = cu.addClass(mediatorName);
+        mediator.addModifier(Modifier.Keyword.PUBLIC);
+        mediator.addAnnotation(new MarkerAnnotationExpr(new Name("Service")));
+        cu.addImport("org.springframework.stereotype.Service");
+        cu.addImport("org.springframework.beans.factory.annotation.Autowired");
+
+        cu.addImport("org.springframework.context.annotation.Lazy");
+
+        Set<String> addedFields = new HashSet<>();
+
+        for (ExtractionCandidate cand : candidates) {
+            // Add imports from source
+            cand.sourceClass.findCompilationUnit().ifPresent(sourceCu ->
+                sourceCu.getImports().forEach(cu::addImport)
+            );
+
+            // Add dependency field if not exists
+            String depStruct = getSimpleClassName(cand.dependencyBeanName); // Type
+
+            // We need to add fields for dependencies needed by extracted methods.
+            // But also, we need to add fields for the source classes themselves?
+            // If Method M from A uses B. M is moved to Mediator. Mediator needs B.
+            // We add field B to Mediator.
+
+            if (!addedFields.contains(cand.dependencyFieldName)) {
+                FieldDeclaration fd = mediator.addField(depStruct, cand.dependencyFieldName, Modifier.Keyword.PRIVATE);
+                fd.addAnnotation("Autowired");
+                fd.addAnnotation("Lazy");
+                addedFields.add(cand.dependencyFieldName);
+            }
+
+            // Move methods
+            for (MethodDeclaration method : cand.methods) {
+                // Avoid duplicates (if two classes have same method name? Unlikely or
+                // overloading)
+                // Just add them.
+                MethodDeclaration newMethod = method.clone();
+                mediator.addMember(newMethod);
+
+                if (newMethod.isPrivate()) {
+                    newMethod.setPrivate(false);
+                    newMethod.setPublic(true);
+                }
+            }
         }
 
-        // Write generated classes
-        for (Map.Entry<String, CompilationUnit> entry : generatedClasses.entrySet()) {
-            String fqn = entry.getKey();
-            CompilationUnit cu = entry.getValue();
-            String relativePath = fqn.replace('.', '/') + ".java";
-            String absolutePath = basePath + "/" + relativePath;
-            CopyUtils.writeFileAbsolute(absolutePath, cu.toString());
+        String fqn = packageName.isEmpty() ? mediatorName : packageName + "." + mediatorName;
+        generatedMediators.put(fqn, cu);
+        modifiedCUs.add(cu);
+        Graph.getDependencies().put(fqn, cu);
+    }
+
+    private void refactorOriginalClass(ClassOrInterfaceDeclaration clazz, Set<MethodDeclaration> extractedMethods,
+                                       String mediatorName, Set<String> fieldsToRemove) {
+
+        for (MethodDeclaration m : extractedMethods) {
+            m.remove();
         }
+
+        if (fieldsToRemove != null) {
+            for (String fieldName : fieldsToRemove) {
+                clazz.getFieldByName(fieldName).ifPresent(FieldDeclaration::remove);
+            }
+        }
+
+        String fieldName = Character.toLowerCase(mediatorName.charAt(0)) + mediatorName.substring(1);
+        FieldDeclaration fd = clazz.addField(mediatorName, fieldName, Modifier.Keyword.PRIVATE);
+        fd.addAnnotation("Autowired");
+
+        for (MethodDeclaration method : clazz.getMethods()) {
+            method.findAll(MethodCallExpr.class).forEach(mce -> {
+                String calledName = mce.getNameAsString();
+                boolean isExtracted = extractedMethods.stream().anyMatch(em -> em.getNameAsString().equals(calledName));
+
+                if (isExtracted && isLocalMethodCall(mce)) {
+                    mce.setScope(new NameExpr(fieldName));
+                }
+            });
+        }
+    }
+
+    private String getSimpleClassName(String fqn) {
+        int lastDot = fqn.lastIndexOf('.');
+        return lastDot >= 0 ? fqn.substring(lastDot + 1) : fqn;
     }
 }

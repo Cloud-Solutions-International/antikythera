@@ -75,33 +75,6 @@ public class JohnsonCycleFinder {
         return new ArrayList<>(cycles);
     }
 
-    /**
-     * Find cycles starting from a specific node within an SCC.
-     *
-     * @param scc The strongly connected component containing potential cycles
-     * @return List of cycles found within the SCC
-     */
-    public List<List<String>> findCyclesInSCC(Set<String> scc) {
-        cycles.clear();
-        Map<String, Set<String>> subgraph = buildSubgraph(scc);
-
-        List<String> nodes = new ArrayList<>(scc);
-        for (int i = 0; i < nodes.size(); i++) {
-            startNode = nodes.get(i);
-            blocked.clear();
-            blockedMap.clear();
-
-            findCyclesFrom(startNode, subgraph);
-
-            subgraph.remove(startNode);
-            for (Set<String> neighbors : subgraph.values()) {
-                neighbors.remove(startNode);
-            }
-        }
-
-        return new ArrayList<>(cycles);
-    }
-
     private boolean findCyclesFrom(String node, Map<String, Set<String>> graph) {
         boolean foundCycle = false;
         stack.push(node);

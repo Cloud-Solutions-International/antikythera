@@ -11,7 +11,6 @@ import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
 import com.github.javaparser.ast.expr.NormalAnnotationExpr;
 import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
@@ -35,8 +34,27 @@ import java.util.Set;
  */
 public class BeanDependencyGraph {
 
+    public static final String LAZY_ANNOTATION = "org.springframework.context.annotation.Lazy";
+    public static final String LAZY = "Lazy";
+    public static final String QUALIFIER = "Qualifier";
+    public static final String RESOURCE = "Resource";
+    public static final String AUTOWIRED = "Autowired";
     private final Map<String, Set<BeanDependency>> adjacencyList = new HashMap<>();
     private final Map<String, Set<String>> simpleGraph = new HashMap<>();
+    private final List<PostConstructWarning> postConstructWarnings = new ArrayList<>();
+
+    /**
+     * Warning for @PostConstruct methods that use cycle-causing dependencies.
+     * These require method extraction, not @Lazy annotation.
+     */
+    public record PostConstructWarning(String beanFqn, String methodName, String usedField, String usedFieldType) {
+        @Override
+        public String toString() {
+            return String.format("%s.%s() uses %s (%s) - @Lazy won't work, needs method extraction",
+                    beanFqn.substring(beanFqn.lastIndexOf('.') + 1), methodName, usedField,
+                    usedFieldType.substring(usedFieldType.lastIndexOf('.') + 1));
+        }
+    }
 
     /**
      * Build the dependency graph from all parsed compilation units.
@@ -48,13 +66,7 @@ public class BeanDependencyGraph {
         for (Map.Entry<String, TypeWrapper> entry : resolvedTypes.entrySet()) {
             TypeWrapper wrapper = entry.getValue();
 
-            // Skip entities - they don't participate in DI cycles
-            if (wrapper.isEntity()) {
-                continue;
-            }
-
-            // Only process Spring beans
-            if (!isSpringBean(wrapper)) {
+            if (wrapper.isEntity() || !isSpringBean(wrapper)) {
                 continue;
             }
 
@@ -68,7 +80,7 @@ public class BeanDependencyGraph {
                     // Fallback to finding it from the type
                     cu = cid.findCompilationUnit().orElse(null);
                 }
-                
+
                 analyzeFieldInjection(beanFqn, cid, cu);
                 analyzeConstructorInjection(beanFqn, cid, cu);
                 analyzeSetterInjection(beanFqn, cid, cu);
@@ -77,7 +89,10 @@ public class BeanDependencyGraph {
                 if (isConfiguration(cid)) {
                     analyzeBeanMethods(beanFqn, cid, cu);
                 }
-                
+
+                // Analyze @PostConstruct methods for cycle warnings
+                analyzePostConstructMethods(beanFqn, cid, cu);
+
                 // Ensure the bean is in the graph even if it has no outgoing dependencies
                 // (it might be a target of dependencies from other beans)
                 simpleGraph.putIfAbsent(beanFqn, new HashSet<>());
@@ -100,28 +115,33 @@ public class BeanDependencyGraph {
     }
 
     /**
+     * Get warnings for @PostConstruct methods that use cycle dependencies.
+     * These require method extraction strategy, not @Lazy.
+     */
+    public List<PostConstructWarning> getPostConstructWarnings() {
+        return postConstructWarnings;
+    }
+
+    /**
      * Check if a node (field, parameter, or method) has @Lazy annotation.
      * Checks both simple name and fully qualified name.
      */
     private boolean hasLazyAnnotation(com.github.javaparser.ast.Node node) {
         if (node instanceof FieldDeclaration field) {
-            return field.getAnnotationByName("Lazy").isPresent() ||
-                   field.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
-                   field.getAnnotations().stream().anyMatch(a -> 
-                       a.getNameAsString().equals("Lazy") || 
-                       a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+            return field.getAnnotationByName(LAZY).isPresent() ||
+                    field.getAnnotationByName(LAZY_ANNOTATION).isPresent() ||
+                    field.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals(LAZY) ||
+                            a.getNameAsString().equals(LAZY_ANNOTATION));
         } else if (node instanceof com.github.javaparser.ast.body.Parameter param) {
-            return param.getAnnotationByName("Lazy").isPresent() ||
-                   param.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
-                   param.getAnnotations().stream().anyMatch(a -> 
-                       a.getNameAsString().equals("Lazy") || 
-                       a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+            return param.getAnnotationByName(LAZY).isPresent() ||
+                    param.getAnnotationByName(LAZY_ANNOTATION).isPresent() ||
+                    param.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals(LAZY) ||
+                            a.getNameAsString().equals(LAZY_ANNOTATION));
         } else if (node instanceof MethodDeclaration method) {
-            return method.getAnnotationByName("Lazy").isPresent() ||
-                   method.getAnnotationByName("org.springframework.context.annotation.Lazy").isPresent() ||
-                   method.getAnnotations().stream().anyMatch(a -> 
-                       a.getNameAsString().equals("Lazy") || 
-                       a.getNameAsString().equals("org.springframework.context.annotation.Lazy"));
+            return method.getAnnotationByName(LAZY).isPresent() ||
+                    method.getAnnotationByName(LAZY_ANNOTATION).isPresent() ||
+                    method.getAnnotations().stream().anyMatch(a -> a.getNameAsString().equals(LAZY) ||
+                            a.getNameAsString().equals(LAZY_ANNOTATION));
         }
         return false;
     }
@@ -155,19 +175,14 @@ public class BeanDependencyGraph {
      */
     private void analyzeFieldInjection(String beanFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
         for (FieldDeclaration field : cid.getFields()) {
-            if (!isInjectedField(field)) {
+            if (hasLazyAnnotation(field) || !isInjectedField(field)) {
                 continue;
             }
 
-            // Skip @Lazy fields - they don't participate in instantiation cycles
-            if (hasLazyAnnotation(field)) {
-                continue;
-            }
+            field.getVariables().forEach(variable -> {
+                String fieldName = variable.getNameAsString();
+                Type fieldType = variable.getType();
 
-            field.getVariables().forEach(var -> {
-                String fieldName = var.getNameAsString();
-                Type fieldType = var.getType();
-                
                 String targetFqn = resolveTypeFqn(fieldType, cid, cu);
 
                 if (targetFqn != null && !targetFqn.equals(beanFqn)) {
@@ -193,7 +208,7 @@ public class BeanDependencyGraph {
         } else {
             // Multiple constructors - look for @Autowired
             for (ConstructorDeclaration ctor : constructors) {
-                if (ctor.getAnnotationByName("Autowired").isPresent()) {
+                if (ctor.getAnnotationByName(AUTOWIRED).isPresent()) {
                     injectedConstructor = ctor;
                     break;
                 }
@@ -228,17 +243,7 @@ public class BeanDependencyGraph {
      */
     private void analyzeSetterInjection(String beanFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
         for (MethodDeclaration method : cid.getMethods()) {
-            if (!method.getAnnotationByName("Autowired").isPresent()) {
-                continue;
-            }
-
-            // Skip @Lazy setters - they don't participate in instantiation cycles
-            if (hasLazyAnnotation(method)) {
-                continue;
-            }
-
-            // Setter typically has one parameter
-            if (method.getParameters().size() != 1) {
+            if (method.getAnnotationByName(AUTOWIRED).isEmpty() || hasLazyAnnotation(method) || method.getParameters().size() != 1) {
                 continue;
             }
 
@@ -259,7 +264,7 @@ public class BeanDependencyGraph {
      */
     private void analyzeBeanMethods(String configFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
         for (MethodDeclaration method : cid.getMethods()) {
-            if (!method.getAnnotationByName("Bean").isPresent()) {
+            if (method.getAnnotationByName("Bean").isEmpty()) {
                 continue;
             }
 
@@ -280,29 +285,111 @@ public class BeanDependencyGraph {
         }
     }
 
+    /**
+     * Analyze @PostConstruct methods to find dependencies used during
+     * initialization.
+     * These require method extraction strategy since @Lazy won't help.
+     */
+    private void analyzePostConstructMethods(String beanFqn, ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
+        Map<String, String> injectedFieldTypeMap = collectInjectedFields(cid, cu);
+
+        if (injectedFieldTypeMap.isEmpty()) {
+            return;
+        }
+
+        cid.getMethods().stream()
+                .filter(this::isPostConstructMethod)
+                .forEach(method -> detectFieldUsageInPostConstruct(beanFqn, method, injectedFieldTypeMap));
+    }
+
+    /**
+     * Collect all injected fields and their types in the given class.
+     *
+     * @return Map of field name to fully qualified type name
+     */
+    private Map<String, String> collectInjectedFields(ClassOrInterfaceDeclaration cid, CompilationUnit cu) {
+        Map<String, String> fieldTypeMap = new HashMap<>();
+
+        for (FieldDeclaration field : cid.getFields()) {
+            if (isInjectedField(field)) {
+                field.getVariables().forEach(variable -> {
+                    String fieldName = variable.getNameAsString();
+                    String typeFqn = resolveTypeFqn(variable.getType(), cid, cu);
+                    if (typeFqn != null) {
+                        fieldTypeMap.put(fieldName, typeFqn);
+                    }
+                });
+            }
+        }
+
+        return fieldTypeMap;
+    }
+
+    /**
+     * Check if a method is annotated with @PostConstruct (any variant).
+     */
+    private boolean isPostConstructMethod(MethodDeclaration method) {
+        return method.getAnnotationByName("PostConstruct").isPresent()
+                || method.getAnnotationByName("javax.annotation.PostConstruct").isPresent()
+                || method.getAnnotationByName("jakarta.annotation.PostConstruct").isPresent();
+    }
+
+    /**
+     * Detect usage of injected fields within a @PostConstruct method and record warnings.
+     */
+    private void detectFieldUsageInPostConstruct(String beanFqn, MethodDeclaration method,
+                                                  Map<String, String> injectedFieldTypeMap) {
+        String methodName = method.getNameAsString();
+
+        // Check direct field references (e.g., fieldName)
+        method.findAll(com.github.javaparser.ast.expr.NameExpr.class).forEach(nameExpr -> {
+            String fieldName = nameExpr.getNameAsString();
+            if (injectedFieldTypeMap.containsKey(fieldName)) {
+                addPostConstructWarning(beanFqn, methodName, fieldName, injectedFieldTypeMap.get(fieldName));
+            }
+        });
+
+        // Check qualified field references (e.g., this.fieldName)
+        method.findAll(com.github.javaparser.ast.expr.FieldAccessExpr.class).forEach(fieldAccess -> {
+            if (fieldAccess.getScope().isThisExpr()) {
+                String fieldName = fieldAccess.getNameAsString();
+                if (injectedFieldTypeMap.containsKey(fieldName)) {
+                    addPostConstructWarning(beanFqn, methodName, fieldName, injectedFieldTypeMap.get(fieldName));
+                }
+            }
+        });
+    }
+
+    /**
+     * Add a warning for @PostConstruct method using an injected field.
+     */
+    private void addPostConstructWarning(String beanFqn, String methodName, String fieldName, String fieldType) {
+        postConstructWarnings.add(new PostConstructWarning(beanFqn, methodName, fieldName, fieldType));
+    }
+
     private boolean isInjectedField(FieldDeclaration field) {
-        return field.getAnnotationByName("Autowired").isPresent()
+        return field.getAnnotationByName(AUTOWIRED).isPresent()
                 || field.getAnnotationByName("Inject").isPresent()
-                || field.getAnnotationByName("Resource").isPresent();
+                || field.getAnnotationByName(RESOURCE).isPresent();
     }
 
     private List<String> extractQualifiers(FieldDeclaration field) {
         List<String> qualifiers = new ArrayList<>();
-        extractQualifierValue(field.getAnnotationByName("Qualifier")).ifPresent(qualifiers::add);
-        extractQualifierValue(field.getAnnotationByName("Resource")).ifPresent(qualifiers::add);
+        extractQualifierValue(field.getAnnotationByName(QUALIFIER)).ifPresent(qualifiers::add);
+        extractQualifierValue(field.getAnnotationByName(RESOURCE)).ifPresent(qualifiers::add);
         return qualifiers;
     }
 
     private List<String> extractQualifiers(Parameter param) {
         List<String> qualifiers = new ArrayList<>();
-        extractQualifierValue(param.getAnnotationByName("Qualifier")).ifPresent(qualifiers::add);
-        extractQualifierValue(param.getAnnotationByName("Resource")).ifPresent(qualifiers::add);
+        extractQualifierValue(param.getAnnotationByName(QUALIFIER)).ifPresent(qualifiers::add);
+        extractQualifierValue(param.getAnnotationByName(RESOURCE)).ifPresent(qualifiers::add);
         return qualifiers;
     }
 
     private List<String> extractQualifiers(MethodDeclaration method) {
         List<String> qualifiers = new ArrayList<>();
-        extractQualifierValue(method.getAnnotationByName("Qualifier")).ifPresent(qualifiers::add);
+        extractQualifierValue(method.getAnnotationByName(QUALIFIER)).ifPresent(qualifiers::add);
         return qualifiers;
     }
 
@@ -324,123 +411,13 @@ public class BeanDependencyGraph {
         return Optional.empty();
     }
 
+    /**
+     * Resolve type FQN using AbstractCompiler utility.
+     * Delegates to AbstractCompiler.resolveTypeFqn() for consistent type
+     * resolution.
+     */
     private String resolveTypeFqn(Type type, ClassOrInterfaceDeclaration context, CompilationUnit cu) {
-        try {
-            String typeName;
-            
-            // For ClassOrInterfaceType (including parameterized types), extract the raw type name
-            if (type instanceof ClassOrInterfaceType classOrInterfaceType) {
-                // Get the name without type parameters
-                typeName = classOrInterfaceType.getNameAsString();
-                
-                // If the type has a scope (e.g., com.example.TypedService), use it directly
-                if (classOrInterfaceType.getScope().isPresent()) {
-                    String scopedName = classOrInterfaceType.getScope().orElseThrow().asString() + "." + typeName;
-                    // Check if this FQN exists in AntikytheraRunTime
-                    if (AntikytheraRunTime.getTypeDeclaration(scopedName).isPresent()) {
-                        return scopedName;
-                    }
-                }
-            } else {
-                // For other types, use asString() and extract raw type name if parameterized
-                typeName = type.asString();
-                
-                // If it's a parameterized type, extract just the raw type name
-                if (typeName.contains("<")) {
-                    typeName = typeName.substring(0, typeName.indexOf('<')).trim();
-                }
-                
-                // Also handle array types (e.g., "String[]" -> "String")
-                if (typeName.contains("[")) {
-                    typeName = typeName.substring(0, typeName.indexOf('[')).trim();
-                }
-            }
-            
-            // Strategy 1: Direct AntikytheraRunTime lookup by pattern matching
-            // This is faster and more reliable for types already in the runtime
-            // Get package name from the compilation unit (prefer passed cu, fallback to finding it)
-            if (cu == null) {
-                cu = context.findCompilationUnit().orElse(null);
-                // If still null, try getting it from AntikytheraRunTime using the FQN
-                if (cu == null && context.getFullyQualifiedName().isPresent()) {
-                    cu = AntikytheraRunTime.getCompilationUnit(context.getFullyQualifiedName().get());
-                }
-            }
-            String packageName = "";
-            if (cu != null) {
-                packageName = cu.getPackageDeclaration()
-                        .map(pd -> pd.getNameAsString())
-                        .orElse("");
-            } else if (context.getFullyQualifiedName().isPresent()) {
-                // Fallback: extract package from FQN
-                String fqn = context.getFullyQualifiedName().get();
-                int lastDot = fqn.lastIndexOf('.');
-                if (lastDot > 0) {
-                    packageName = fqn.substring(0, lastDot);
-                }
-            }
-            
-            // Try exact match first
-            if (AntikytheraRunTime.getTypeDeclaration(typeName).isPresent()) {
-                return typeName;
-            }
-            
-            // Try package + typeName (same package)
-            if (!packageName.isEmpty()) {
-                String samePackageFqn = packageName + "." + typeName;
-                if (AntikytheraRunTime.getTypeDeclaration(samePackageFqn).isPresent()) {
-                    return samePackageFqn;
-                }
-            }
-            
-            // Search all resolved types for a match (ends with pattern)
-            for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
-                if (resolvedFqn.equals(typeName) || resolvedFqn.endsWith("." + typeName)) {
-                    return resolvedFqn;
-                }
-            }
-            
-            // Strategy 2: Use AbstractCompiler.findFullyQualifiedName (existing logic)
-            // This handles imports, java.lang types, etc.
-            // Only call if we have a compilation unit, otherwise it will return null immediately
-            String fqn = null;
-            if (cu != null) {
-                fqn = AbstractCompiler.findFullyQualifiedName(cu, typeName);
-            }
-            
-            // Strategy 3: Final fallback - search AntikytheraRunTime again (in case it was added)
-            if (fqn == null) {
-                for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
-                    if (resolvedFqn.endsWith("." + typeName) || resolvedFqn.equals(typeName)) {
-                        fqn = resolvedFqn;
-                        break;
-                    }
-                }
-            }
-            
-            return fqn;
-        } catch (Exception e) {
-            // On exception, try one more fallback search
-            try {
-                String typeName = type instanceof ClassOrInterfaceType 
-                    ? ((ClassOrInterfaceType) type).getNameAsString()
-                    : type.asString();
-                
-                // Extract raw type name if parameterized
-                if (typeName.contains("<")) {
-                    typeName = typeName.substring(0, typeName.indexOf('<')).trim();
-                }
-                
-                for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
-                    if (resolvedFqn.endsWith("." + typeName) || resolvedFqn.equals(typeName)) {
-                        return resolvedFqn;
-                    }
-                }
-            } catch (Exception e2) {
-                // Ignore
-            }
-            return null;
-        }
+        return AbstractCompiler.resolveTypeFqn(type, context, cu);
     }
 
     private void addDependency(String from, String to, InjectionType type,

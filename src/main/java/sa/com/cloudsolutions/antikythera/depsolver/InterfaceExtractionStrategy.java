@@ -9,22 +9,17 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.TypeParameter;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
-import sa.com.cloudsolutions.antikythera.evaluator.Scope;
-import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -44,19 +39,18 @@ import java.util.Set;
  * Best for: @Bean method cycles and complex tight coupling.
  * </p>
  */
-public class InterfaceExtractionStrategy {
+public class InterfaceExtractionStrategy extends AbstractExtractionStrategy {
 
     private static final String INTERFACE_PREFIX = "I";
 
-    private final Set<CompilationUnit> modifiedCUs = new HashSet<>();
     private final Map<String, CompilationUnit> generatedInterfaces = new HashMap<>();
-    private boolean dryRun = false;
 
     public InterfaceExtractionStrategy() {
+        super();
     }
 
     public InterfaceExtractionStrategy(boolean dryRun) {
-        this.dryRun = dryRun;
+        super(dryRun);
     }
 
     /**
@@ -68,30 +62,25 @@ public class InterfaceExtractionStrategy {
     public boolean apply(BeanDependency edge) {
         Node astNode = edge.astNode();
         if (astNode == null) {
-            System.out.println("❌ No AST node for edge: " + edge);
             return false;
         }
 
         // Get the caller class
         Optional<ClassOrInterfaceDeclaration> callerOpt = astNode.findAncestor(ClassOrInterfaceDeclaration.class);
         if (callerOpt.isEmpty()) {
-            System.out.println("❌ Cannot find caller class for edge: " + edge);
             return false;
         }
         ClassOrInterfaceDeclaration callerClass = callerOpt.get();
 
         // Get the target class
-        ClassOrInterfaceDeclaration targetClass = findTargetClass(edge.targetBean());
+        ClassOrInterfaceDeclaration targetClass = findClassDeclaration(edge.targetBean());
         if (targetClass == null) {
-            System.out.println("❌ Cannot find target class: " + edge.targetBean());
             return false;
         }
 
         // Only handle field/setter/constructor injection
         // @Bean method cycles should use MethodExtractionStrategy instead
         if (edge.injectionType() == InjectionType.BEAN_METHOD) {
-            System.out
-                    .println("⚠️  Interface extraction not applicable to @Bean methods. Use MethodExtractionStrategy.");
             return false;
         }
 
@@ -101,16 +90,12 @@ public class InterfaceExtractionStrategy {
         Set<String> calledMethodNames = findCalledMethods(callerClass, fieldName);
 
         if (calledMethodNames.isEmpty()) {
-            System.out.println("⚠️  No methods to extract for '" + fieldName + "'");
             return false;
         }
-
-        System.out.println("📊 Methods for interface from " + fieldName + ": " + calledMethodNames);
 
         // Step 2: Resolve method signatures from target class
         Set<MethodDeclaration> usedMethods = resolveMethodSignatures(targetClass, calledMethodNames);
         if (usedMethods.isEmpty()) {
-            System.out.println("❌ Could not resolve any method signatures");
             return false;
         }
 
@@ -130,7 +115,6 @@ public class InterfaceExtractionStrategy {
         callerClass.findCompilationUnit().ifPresent(modifiedCUs::add);
         targetClass.findCompilationUnit().ifPresent(modifiedCUs::add);
 
-        System.out.println("✅ Extracted interface " + interfaceName + " for " + edge);
         return true;
     }
 
@@ -143,45 +127,13 @@ public class InterfaceExtractionStrategy {
 
         for (MethodDeclaration method : classDecl.getMethods()) {
             method.findAll(MethodCallExpr.class).forEach(mce -> {
-                ScopeChain chain = ScopeChain.findScopeChain(mce);
-                if (!chain.isEmpty()) {
-                    // Get the first scope element (the field name)
-                    List<Scope> scopes = chain.getChain();
-                    if (!scopes.isEmpty()) {
-                        Scope firstScope = scopes.get(0);
-                        com.github.javaparser.ast.expr.Expression expr = firstScope.getExpression();
-                        
-                        // Check if it's a NameExpr matching our field
-                        if (expr.isNameExpr()) {
-                            String name = expr.asNameExpr().getNameAsString();
-                            if (name.equals(fieldName)) {
-                                calledMethods.add(mce.getNameAsString());
-                            }
-                        }
-                        // Also handle FieldAccessExpr (this.fieldName)
-                        else if (expr.isFieldAccessExpr()) {
-                            FieldAccessExpr fae = expr.asFieldAccessExpr();
-                            if (fae.getNameAsString().equals(fieldName)) {
-                                calledMethods.add(mce.getNameAsString());
-                            }
-                        }
-                    }
+                if (isMethodCallOnField(mce, fieldName)) {
+                    calledMethods.add(mce.getNameAsString());
                 }
             });
         }
 
         return calledMethods;
-    }
-
-    /**
-     * Find the target class by fully qualified name.
-     */
-    private ClassOrInterfaceDeclaration findTargetClass(String fqn) {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn);
-        if (cu != null) {
-            return cu.findFirst(ClassOrInterfaceDeclaration.class).orElse(null);
-        }
-        return null;
     }
 
     /**
@@ -193,7 +145,7 @@ public class InterfaceExtractionStrategy {
 
         for (String methodName : methodNames) {
             targetClass.getMethodsByName(methodName).stream()
-                    .filter(m -> m.isPublic())
+                    .filter(MethodDeclaration::isPublic)
                     .findFirst()
                     .ifPresent(methods::add);
         }
@@ -252,7 +204,6 @@ public class InterfaceExtractionStrategy {
             iface.addMember(sig);
         }
 
-        System.out.println("📝 Generated interface " + interfaceName + " with " + methods.size() + " method(s)");
         return cu;
     }
 
@@ -277,21 +228,28 @@ public class InterfaceExtractionStrategy {
             } else {
                 targetClass.addImplementedType(interfaceName);
             }
-            System.out.println("   Added 'implements " + interfaceName + "' to " + targetClass.getNameAsString());
         }
     }
 
     /**
      * Change the field type to the interface.
+     * Preserves generic type arguments if present.
      */
     private void changeFieldType(ClassOrInterfaceDeclaration callerClass, String fieldName,
             String interfaceName) {
         for (FieldDeclaration field : callerClass.getFields()) {
-            for (VariableDeclarator var : field.getVariables()) {
-                if (var.getNameAsString().equals(fieldName)) {
-                    var.setType(new ClassOrInterfaceType(null, interfaceName));
-                    System.out.println("   Changed field type to " + interfaceName + " in " +
-                            callerClass.getNameAsString());
+            for (VariableDeclarator variable : field.getVariables()) {
+                if (variable.getNameAsString().equals(fieldName)) {
+                    Type originalType = variable.getType();
+                    ClassOrInterfaceType newType = new ClassOrInterfaceType(null, interfaceName);
+
+                    // Preserve type arguments if the original type is generic
+                    if (originalType.isClassOrInterfaceType()) {
+                        originalType.asClassOrInterfaceType().getTypeArguments()
+                                .ifPresent(newType::setTypeArguments);
+                    }
+
+                    variable.setType(newType);
                     return;
                 }
             }
@@ -314,63 +272,28 @@ public class InterfaceExtractionStrategy {
         return lastDot >= 0 ? fqn.substring(0, lastDot) : "";
     }
 
-    /**
-     * Write all modified files to disk.
-     */
+    @Override
     public void writeChanges(String basePath) throws IOException {
+        super.writeChanges(basePath);
+
         if (dryRun) {
-            System.out.println("\n🔍 Dry run - " + modifiedCUs.size() + " file(s) would be modified, " +
-                    generatedInterfaces.size() + " interface(s) would be generated");
             return;
         }
 
-        System.out.println("\n📝 Writing " + modifiedCUs.size() + " modified file(s)...");
-        for (CompilationUnit cu : modifiedCUs) {
-            if (cu.getStorage().isPresent()) {
-                Path filePath = cu.getStorage().get().getPath();
-                CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-                System.out.println("   ✓ " + filePath);
-            } else {
-                String packageName = cu.getPackageDeclaration()
-                        .map(pd -> pd.getNameAsString().replace('.', '/'))
-                        .orElse("");
-                String className = cu.findFirst(ClassOrInterfaceDeclaration.class)
-                        .map(c -> c.getNameAsString())
-                        .orElse("Unknown");
-                Path filePath = Path.of(basePath, packageName, className + ".java");
-                CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-                System.out.println("   ✓ " + filePath);
-            }
-        }
-
-        System.out.println("\n📝 Writing " + generatedInterfaces.size() + " generated interface(s)...");
         for (Map.Entry<String, CompilationUnit> entry : generatedInterfaces.entrySet()) {
             CompilationUnit cu = entry.getValue();
             String packageName = cu.getPackageDeclaration()
                     .map(pd -> pd.getNameAsString().replace('.', '/'))
                     .orElse("");
             String interfaceName = cu.findFirst(ClassOrInterfaceDeclaration.class)
-                    .map(c -> c.getNameAsString())
+                    .map(NodeWithSimpleName::getNameAsString)
                     .orElse("Unknown");
             Path filePath = Path.of(basePath, packageName, interfaceName + ".java");
             CopyUtils.writeFileAbsolute(filePath.toString(), cu.toString());
-            System.out.println("   ✓ " + filePath + " (NEW)");
         }
-    }
-
-    public Set<CompilationUnit> getModifiedCUs() {
-        return modifiedCUs;
     }
 
     public Map<String, CompilationUnit> getGeneratedInterfaces() {
         return generatedInterfaces;
-    }
-
-    public boolean isDryRun() {
-        return dryRun;
-    }
-
-    public void setDryRun(boolean dryRun) {
-        this.dryRun = dryRun;
     }
 }

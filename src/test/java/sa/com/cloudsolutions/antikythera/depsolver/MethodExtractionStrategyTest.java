@@ -2,19 +2,31 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class MethodExtractionStrategyTest {
 
+    @BeforeAll
+    static void setupClass() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AbstractCompiler.preProcess();
+    }
+
     @BeforeEach
     void setUp() {
         AntikytheraRunTime.reset();
+        DepSolver.reset(); // Clear Graph state to prevent test interference
     }
 
     @Test
