@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -111,7 +110,7 @@ class CycleDetectorTest {
         graph.put("A", Set.of("A"));
 
         CycleDetector detector = new CycleDetector(graph);
-        List<Set<String>> allSccs = detector.findSCCs();
+        detector.findSCCs();
 
         // Self-loop creates SCC of size 1, but findCycles() filters these out
         // since we consider cycles as >1 node

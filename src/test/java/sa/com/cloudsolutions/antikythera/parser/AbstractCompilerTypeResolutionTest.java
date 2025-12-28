@@ -6,7 +6,6 @@ import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.Type;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -210,14 +209,32 @@ class AbstractCompilerTypeResolutionTest {
         CompilationUnit cu = new CompilationUnit();
         cu.setPackageDeclaration(createPackageDeclaration("test.package"));
         
+        // Create a type in com.example package
+        ClassOrInterfaceDeclaration exampleClass = new ClassOrInterfaceDeclaration();
+        exampleClass.setName("Type");
+        CompilationUnit exampleCu = new CompilationUnit();
+        exampleCu.setPackageDeclaration(createPackageDeclaration("com.example"));
+        exampleCu.addType(exampleClass);
+
+        String fqn = "com.example.Type";
+        TypeWrapper wrapper = new TypeWrapper(exampleClass);
+        AntikytheraRunTime.addType(fqn, wrapper);
+        AntikytheraRunTime.addCompilationUnit(fqn, exampleCu);
+
         // Create a scoped type: com.example.Type
         ClassOrInterfaceType scopedType = StaticJavaParser.parseType("com.example.Type").asClassOrInterfaceType();
         
-        // This should try to resolve "com.example.Type"
+        // Verify the scoped type has a scope
+        assertTrue(scopedType.getScope().isPresent(), "Scoped type should have a scope");
+        assertEquals("com.example", scopedType.getScope().get().asString(), "Scope should be 'com.example'");
+        assertEquals("Type", scopedType.getNameAsString(), "Name should be 'Type'");
+
+        // findType should resolve the scoped type by combining scope + name
         TypeWrapper found = AbstractCompiler.findType(cu, scopedType);
-        // Result depends on whether the type exists, but should not throw
-        // For non-existent types, it may return null, which is acceptable
-        // The important thing is it doesn't throw
+        assertNotNull(found, "Should find scoped type com.example.Type");
+        assertEquals("Type", found.getType().getNameAsString(), "Found type should be 'Type'");
+        assertEquals(fqn, found.getType().getFullyQualifiedName().orElse(null),
+                "Found type should have fully qualified name 'com.example.Type'");
     }
 
     @Test

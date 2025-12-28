@@ -88,10 +88,8 @@ public class JohnsonCycleFinder {
                 Collections.reverse(cycle);
                 cycles.add(cycle);
                 foundCycle = true;
-            } else if (!blocked.contains(neighbor)) {
-                if (findCyclesFrom(neighbor, graph)) {
-                    foundCycle = true;
-                }
+            } else if (!blocked.contains(neighbor) && findCyclesFrom(neighbor, graph)) {
+                foundCycle = true;
             }
         }
 

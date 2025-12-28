@@ -2,9 +2,7 @@ package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.PackageDeclaration;
-import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,7 +66,7 @@ class ImportUtilsTest {
         
         ClassOrInterfaceType listType = StaticJavaParser.parseType("List").asClassOrInterfaceType();
         GraphNode result = ImportUtils.addImport(node, listType);
-        
+        assertNull(result);
         // addImport can return null if the type is already imported or not found
         // The important thing is that it doesn't throw an exception
         // Check that the import was added to the destination compilation unit
@@ -93,6 +91,8 @@ class ImportUtilsTest {
         // The node should have a destination compilation unit set by Graph.createGraphNode
         
         GraphNode result = ImportUtils.addImport(node, "List");
+        assertNull(result);
+
         // addImport can return null if the type is already imported or not found
         // The important thing is that it doesn't throw an exception
         // Check that the import was added to the destination compilation unit if destination exists

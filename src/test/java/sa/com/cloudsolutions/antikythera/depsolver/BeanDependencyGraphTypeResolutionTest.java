@@ -4,8 +4,6 @@ import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.expr.Name;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -228,7 +226,7 @@ class BeanDependencyGraphTypeResolutionTest {
         
         // Test with null - should handle gracefully
         try {
-            String fqn = (String) resolveMethod.invoke(graph, (com.github.javaparser.ast.type.Type) null, clazz, cu);
+            resolveMethod.invoke(graph, null, clazz, cu);
             // May return null or throw - either is acceptable
         } catch (Exception e) {
             // Exception is acceptable for null input
