@@ -160,7 +160,6 @@
                 <version>3.2.5</version>
                 <configuration>
                     <parallel>none</parallel>
-                    <runOrder>alphabetical</runOrder>
                     <argLine>@{argLine} -javaagent:${antikythera.agent.path} -XX:+EnableDynamicAgentLoading
                         --add-opens java.base/java.nio.charset=ALL-UNNAMED
                         --add-opens java.base/java.lang=ALL-UNNAMED
