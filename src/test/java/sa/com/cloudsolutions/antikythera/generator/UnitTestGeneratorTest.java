@@ -66,6 +66,7 @@ class UnitTestGeneratorTest {
     @BeforeAll
     static void beforeClass() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator.yml"));
+        AntikytheraRunTime.resetAll();
         AbstractCompiler.reset();
         AbstractCompiler.preProcess();
     }
@@ -297,12 +298,12 @@ class UnitTestGeneratorMoreTests extends TestHelper {
     @BeforeAll
     static void beforeClass() throws IOException {
         Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
-        AbstractCompiler.reset();
-        AbstractCompiler.preProcess();
-        AntikytheraRunTime.reset();
+        AntikytheraRunTime.resetAll();
         Branching.clear();
         MockingRegistry.reset();
         TestGenerator.whenThen.clear();
+        AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
     }
 
     private MethodDeclaration setupMethod(String className, String name) {
