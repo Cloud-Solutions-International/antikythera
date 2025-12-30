@@ -134,8 +134,43 @@ public class MavenHelper {
     public Path getPomPath() {
         return pomPath;
     }
+
     /**
-     * Copy the pom.xml file to the specified path, injecting the dependencies as needed.
+     * Write POM model to the tracked path.
+     *
+     * @param model the Maven model to write
+     * @throws IOException if writing fails
+     */
+    public void writePomModel(Model model) throws IOException {
+        if (pomPath == null) {
+            throw new IllegalStateException("POM path not set. Call getPomModel() or setPomPath() first.");
+        }
+        MavenXpp3Writer writer = new MavenXpp3Writer();
+        try (FileWriter fileWriter = new FileWriter(pomPath.toFile())) {
+            writer.write(fileWriter, model);
+        }
+        this.pomModel = model;
+    }
+
+    /**
+     * Write POM model to a specific path.
+     *
+     * @param path  the path to write to
+     * @param model the Maven model to write
+     * @throws IOException if writing fails
+     */
+    public void writePomModel(Path path, Model model) throws IOException {
+        MavenXpp3Writer writer = new MavenXpp3Writer();
+        try (FileWriter fileWriter = new FileWriter(path.toFile())) {
+            writer.write(fileWriter, model);
+        }
+        this.pomPath = path;
+        this.pomModel = model;
+    }
+
+    /**
+     * Copy the pom.xml file to the specified path, injecting the dependencies as
+     * needed.
      * <p>
      * The configuration file needs to have a dependencies section that provides the list of
      * `artifactids` that need to be included in the output pom file. If these dependencies
