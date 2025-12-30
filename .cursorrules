@@ -1,0 +1,36 @@
+# Cursor Rules for Antikythera
+
+## Project Context
+This is the Antikythera automated test generator framework. See `WARP.md` for comprehensive documentation.
+
+## Key Entry Points
+- `Antikythera.getInstance()` - Main entry point for test generation
+- `AbstractCompiler` - Base parser class
+- `Evaluator` - Expression evaluation engine
+- `Settings` - Configuration management
+
+## Common Tasks
+1. **Generate Tests:** Use `Antikythera.getInstance().preProcess().generateApiTests().generateUnitTests()`
+2. **Parse Classes:** Use `AbstractCompiler.compile(path)` or check `AntikytheraRunTime` cache
+3. **Resolve Types:** Use `AbstractCompiler.findType(cu, "TypeName")`
+4. **Convert HQL:** Use `HQLParserAdapter.convertToNativeSQL()`
+5. **Evaluate Code:** Use `Evaluator.evaluateExpression()` or `EvaluatorFactory.create()`
+
+## Important Constraints
+- Requires Java 21 with `--add-opens java.base/java.util.stream=ALL-UNNAMED`
+- Test dependencies: `antikythera-sample-project` and `antikythera-test-helper` must be cloned
+- Configuration in `generator.yml` - always use `Settings` class to access
+- Type resolution follows: current CU → imports → same package → java.lang → classpath → extra_exports
+
+## Code Patterns
+- Parsers extend `AbstractCompiler`
+- Evaluators extend `Evaluator`
+- Generators extend `TestGenerator`
+- Always use `AntikytheraRunTime` for caching
+- Use `TypeWrapper` for unified type representation
+
+## Documentation
+- Primary: `WARP.md` - Complete technical guide
+- Quick ref: `AGENT.md` - Entry points and key classes
+- README: `README.md` - Project overview
+

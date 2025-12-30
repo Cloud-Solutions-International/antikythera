@@ -1,51 +1,138 @@
-Automated Test Generation and Code Refactoring
--
+Antikythera
+===========
 
-Test Generation
---
-At the moment, this project can generate simple unit tests for most methods and it can also generate API tests using RESTAssured for simple end points. 
-The end goal is to be able to generate unit tests for full coverage and API tests for all end points in a restfull web application.
+**Automated Test Generation, Code Refactoring, and Intelligent Analysis for Java Applications**
 
-currently only maven projects are supported, but gradle projects will be added soon.
+Antikythera is a powerful framework that automatically generates tests, analyzes dependencies, and enables large-scale refactoring of Java codebases.
+Whether you're working on legacy code modernization, microservice extraction, or simply need comprehensive test coverage,
+Antikythera accelerates your development workflow.
 
-The expression evaluation engine is used in the test generation project, and it relies heavily on reflection. 
-So don't forget to add the following VM argument
-     `--add-opens java.base/java.util.stream=ALL-UNNAMED`
+---
 
-Code Refactoring
---
-Once the parse tree for all classes have been built and the relationships between classes have been established through 
-antikythera, it's possible to use that information to carry out varous refactoring tasks. Antikythera not only parses java
-code but also HQL and SQL. A current use case is anlysis of JPA queries to check performance issues (and making changes as needed)
+## What Antikythera Can Do
 
-Overview of the project
---
-The code is divided into several modules:
+### 🧪 Automated Test Generation
+Generate comprehensive unit tests and API tests with minimal effort:
 
-    1. Parser: This module is responsible for parsing the source code and extracting the necessary information to generate tests.
-          does so by leveraging the JavaParser library. The heart of this module is the AbstractCompiler class. Both refactoring
-          and test generation make use of this infrastructure.
+- **Unit Tests**: Automatically generate JUnit tests for your service classes with proper assertions, mocks, and preconditions
+- **API Tests**: Create RESTAssured tests for your REST controllers and endpoints
+- **Smart Assertions**: Generate meaningful assertions based on return values, side effects, and logging statements
+- **Branch Coverage**: Automatically explore all code paths and generate tests for each branch
+- **Full Precondition Setup**: Tests include all necessary mocks, fixtures, and setup code
 
-    2. Expression evaluation engine: Evaluates each statement in the code keeping an eye out for branching and return statements.
-            This feature is mostly used by the test generator (see below). 
-            Whenever a branching statement is encountered, it will set up preconditions so that in the next evaluation run the 
-            alternative branch will be executed. When a return statement is encountered, it will pass onto the test generation module.
+Currently supports Maven projects with Gradle support coming soon.
 
-    3. Test Generator: The test generation modules is centered around the TestGenerator class. Tests will be generated based on the
-            return values encountered in the expression evaluation engine. When the return is not void, assertions will be generated
-            based on the return value. For void methods, assertions will be based on logging statements and side effects. 
+### 🔍 Intelligent Dependency Analysis
+Extract exactly what you need from complex codebases:
 
-    4. Examples and Tools: The antikythera-examples module contains practical tools and utilities built on the core framework,
-            including query optimization tools, code analysis utilities, and consolidated infrastructure components.
+- **Isolated Code Migration**: Identify and extract all dependencies for a specific class or method
+- **Microservice Extraction**: Pull out minimal, compilable codebases perfect for microservice architectures
+- **Inheritance & Interface Tracking**: Automatically follow inheritance hierarchies, interface implementations, and method overrides
+- **Clean Output**: Generate properly organized code with sorted members and optimized imports
 
-The test generator will also ensure that the proper preconditions are setup before the test is actually run.
+Perfect for breaking apart monoliths or migrating functionality between projects.
 
-Running the tests
---
-Antikythera itself is tested by around 620 unit and integration tests. In order to be  execute them you need to clone the two repos at
+### 📊 Advanced Query Parsing & Analysis
+Deep understanding of your data access layer:
 
-- https://github.com/Cloud-Solutions-International/antikythera-sample-project
-- https://github.com/Cloud-Solutions-International/antikythera-test-helper
+- **Multi-Language Query Support**: Parse and analyze SQL, HQL/JPQL, and Spring Expression Language (SpEL)
+- **JPA Repository Intelligence**: Extract queries from @Query annotations and derive queries from method names
+- **Query Optimization**: Identify performance issues and optimization opportunities in your queries
+- **Dialect-Aware**: Supports multiple database dialects (PostgreSQL, Oracle, and more)
 
-If you maintain the folder structutre described in the antikythera-test-helper; chances are that you will not need to edit the yaml files in the src/test/resources
-folder of this project. Running the tests will also require the --add-opens VM argument
+### 🔧 Large-Scale Refactoring
+Transform your codebase with confidence:
+
+- **Complete Code Analysis**: Build comprehensive parse trees and relationship graphs for entire codebases
+- **Safe Transformations**: Understand all impacts before making changes
+- **Framework Migrations**: Tools for Spring Boot upgrades, JUnit 4→5 migrations, and more
+- **Pattern Detection**: Identify code duplication, usage patterns, and refactoring opportunities
+
+---
+
+## How It Works
+
+Antikythera uses a sophisticated three-phase approach:
+
+1. **Parse**: Leverages JavaParser to build complete ASTs of your codebase, including Java code, SQL/HQL queries, and SpEL expressions
+2. **Analyze**: Evaluates expressions, builds dependency graphs, and tracks code paths using depth-first search algorithms
+3. **Generate**: Creates tests, extracts dependencies, or performs refactoring based on the analysis
+
+The expression evaluation engine uses reflection to execute code paths and discover all branches, ensuring comprehensive coverage.
+
+---
+
+## Real-World Applications
+
+**Legacy Modernization**: Generate tests for untested code before refactoring
+
+**Microservice Migration**: Extract specific functionality with all dependencies into new services
+
+**Framework Upgrades**: Use built-in tools for Spring Boot migrations, JUnit upgrades, and more
+
+**Query Optimization**: Analyze your entire data access layer for performance improvements
+
+**Code Quality**: Identify duplication, unused code, and refactoring opportunities
+
+---
+
+## Getting Started
+
+### Requirements
+- Java 11 or higher
+- Maven (Gradle support coming soon)
+- VM argument: `--add-opens java.base/java.util.stream=ALL-UNNAMED`
+
+### Quick Example
+```java
+// Generate tests for a service class
+Antikythera antk = Antikythera.getInstance();
+antk.preProcess();
+antk.generateUnitTests();
+
+// Or extract dependencies for a specific method
+DepSolver solver = DepSolver.createSolver();
+solver.processMethod("com.example.UserService#createUser");
+solver.dfs();
+```
+
+See the [documentation](WARP.md) for detailed usage and configuration.
+
+---
+
+## Tools & Examples
+
+The **antikythera-examples** module includes ready-to-use tools for:
+- Query performance analysis and optimization
+- Code duplication detection
+- Framework migration utilities (Spring Boot 2.x → 3.x, JUnit 4 → 5)
+- Usage pattern analysis
+- And more...
+
+---
+
+## Development & Testing
+
+Antikythera itself is thoroughly tested with 660+ unit and integration tests. To run the test suite:
+
+1. Clone the required test repositories:
+   - https://github.com/Cloud-Solutions-International/antikythera-sample-project
+   - https://github.com/Cloud-Solutions-International/antikythera-test-helper
+
+2. Follow the folder structure described in antikythera-test-helper
+
+3. Run with the required VM argument: `--add-opens java.base/java.util.stream=ALL-UNNAMED`
+
+---
+
+## Documentation
+
+- **[WARP.md](WARP.md)** - Complete API documentation and AI agent guide
+- **[AGENT.md](AGENT.md)** - Quick reference for common patterns
+- **[docs/](docs/)** - Additional guides and specifications
+
+---
+
+## License
+
+See [LICENSE.txt](LICENSE.txt) for details.
