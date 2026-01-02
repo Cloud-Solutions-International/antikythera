@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>sa.com.cloudsolutions</groupId>
     <artifactId>antikythera</artifactId>
-    <version>0.1.2.5</version>
+    <version>0.1.2.6</version>
 
     <name>Antikythera</name>
     <description>Automated Test Generator for Java projects. Generates unit tests and API tests for Spring applications.</description>
@@ -12,7 +12,7 @@
     <licenses>
         <license>
             <name>The Apache License, Version 2.0</name>
-            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
         </license>
     </licenses>
 
