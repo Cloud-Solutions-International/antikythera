@@ -49,6 +49,29 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
     @SuppressWarnings("unchecked")
     private Variable mockNonPrimitiveParameter(Parameter param) throws ReflectiveOperationException {
         final Variable vx = mockNonPrimitiveParameterHelper(param);
+        if (vx == null) {
+            // If helper returns null, try to create a mock using Mockito
+            Type t = param.getType();
+            if (t.isClassOrInterfaceType()) {
+                String typeName = t.asClassOrInterfaceType().getNameAsString();
+                try {
+                    // Try to load the class and create a mock
+                    if (param.findCompilationUnit().isPresent()) {
+                        TypeWrapper wrapper = AbstractCompiler.findType(param.findCompilationUnit().orElseThrow(), t);
+                        if (wrapper != null && wrapper.getClazz() != null) {
+                            return MockingRegistry.createMockitoMockInstance(wrapper.getClazz());
+                        }
+                    }
+                } catch (Exception e) {
+                    // If we can't create a mock, return a Variable with null
+                    Variable nullVar = new Variable(null);
+                    nullVar.setInitializer(List.of(new com.github.javaparser.ast.expr.NullLiteralExpr()));
+                    return nullVar;
+                }
+            }
+            // Return null variable - will be handled by caller
+            return null;
+        }
         if (vx.getValue() instanceof Evaluator eval) {
             param.findAncestor(MethodDeclaration.class).ifPresent(md -> {
                 Set<Expression> expressions = new HashSet<>();
@@ -92,21 +115,36 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         if (t.asClassOrInterfaceType().isBoxedType()) {
             return mockParameter(param);
         }
-        if (wrapper.getClazz() != null) {
-            List<Expression> customized = MockingRegistry.getCustomMockExpressions(fullClassName);
-            if (customized.isEmpty()) {
-                return mockNonPrimitiveParameterHelper(param, wrapper);
-            }
+        
+        // Check for custom mock expressions first (works for JDK classes too)
+        List<Expression> customized = MockingRegistry.getCustomMockExpressions(fullClassName);
+        if (!customized.isEmpty()) {
             for (Expression expr : customized) {
                 if (expr instanceof ObjectCreationExpr oce) {
-                    ReflectionArguments args = Reflect.buildArguments(oce,
-                            EvaluatorFactory.createLazily("", Evaluator.class), null);
-                    Constructor<?> constructor = Reflect.findConstructor(wrapper.getClazz(), args.getArgumentTypes(), args.getArguments());
-                    v = new Variable(constructor.newInstance(args.getArguments()));
-                    v.setInitializer(customized);
+                    if (wrapper.getClazz() != null) {
+                        ReflectionArguments args = Reflect.buildArguments(oce,
+                                EvaluatorFactory.createLazily("", Evaluator.class), null);
+                        Constructor<?> constructor = Reflect.findConstructor(wrapper.getClazz(), args.getArgumentTypes(), args.getArguments());
+                        v = new Variable(constructor.newInstance(args.getArguments()));
+                        v.setInitializer(customized);
+                        return v;
+                    } else {
+                        // For JDK classes, just create a Variable with the expression as initializer
+                        v = new Variable(null);
+                        v.setInitializer(customized);
+                        return v;
+                    }
+                } else {
+                    // For non-ObjectCreationExpr expressions (like method calls), create Variable with expression
+                    v = new Variable(null);
+                    v.setInitializer(List.of(expr));
                     return v;
                 }
             }
+        }
+        
+        if (wrapper.getClazz() != null) {
+            return mockNonPrimitiveParameterHelper(param, wrapper);
         }
 
         Optional<TypeDeclaration<?>> opt = AntikytheraRunTime.getTypeDeclaration(fullClassName);
