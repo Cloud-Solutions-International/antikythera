@@ -35,6 +35,7 @@ public class MavenHelper {
     private static final Logger logger = LoggerFactory.getLogger(MavenHelper.class);
     private static final Map<String, Artifact> artifacts = new HashMap<>();
     private Model pomModel;
+    private Path pomPath;
 
     public static String[] getJarPaths() {
         List<String> paths = new ArrayList<>();
@@ -45,6 +46,17 @@ public class MavenHelper {
         }
 
         return paths.toArray(new String[]{});
+    }
+
+    public void writePomModel(Model model) throws IOException {
+        writePomModel(pomPath.toFile(), model);
+    }
+
+    public void writePomModel(File pomFile, Model model) throws IOException {
+        MavenXpp3Writer writer = new MavenXpp3Writer();
+        try (FileWriter fileWriter = new FileWriter(pomFile)) {
+            writer.write(fileWriter, model);
+        }
     }
 
     private static void addDependency(String m2, String groupIdPath, String artifactId, String version) throws IOException, XmlPullParserException {
@@ -71,7 +83,7 @@ public class MavenHelper {
         }
     }
 
-    public void readPomFile() throws IOException, XmlPullParserException {
+    public Model readPomFile() throws IOException, XmlPullParserException {
         String basePath = Settings.getBasePath();
         Path p = null;
         if (basePath.contains("src/main/java")) {
@@ -81,14 +93,29 @@ public class MavenHelper {
         } else {
             p = Paths.get(basePath, POM_XML);
         }
+
+        // Parent fallback logic from PomUtils
+        if (!p.toFile().exists()) {
+            Path parent = p.getParent();
+            if (parent != null) {
+                p = parent.getParent().resolve(POM_XML);
+            }
+        }
+
+        pomPath = p;
         readPomFile(p);
+        return pomModel;
     }
 
     private void readPomFile(Path p) throws IOException, XmlPullParserException {
+        pomPath = p.toAbsolutePath();
         MavenXpp3Reader reader = new MavenXpp3Reader();
         pomModel = reader.read(new FileReader(p.toFile()));
     }
 
+    public Path getPomPath() {
+        return pomPath;
+    }
     /**
      * Copy the pom.xml file to the specified path, injecting the dependencies as needed.
      * <p>
@@ -218,13 +245,13 @@ public class MavenHelper {
                 }
             }
 
-            return versions.stream().max(this::compareVersions).orElse(null);
+            return versions.stream().max(MavenHelper::compareVersions).orElse(null);
         } catch (IOException e) {
             return null;
         }
     }
 
-    private int compareVersions(String v1, String v2) {
+    public static int compareVersions(String v1, String v2) {
         try {
             String[] parts1 = v1.split("\\.");
             String[] parts2 = v2.split("\\.");
@@ -263,6 +290,13 @@ public class MavenHelper {
         if (version != null) {
             addDependency(m2, groupIdPath, artifactId, version);
         }
+    }
+
+    public Model getPomModel() throws XmlPullParserException, IOException {
+        if (pomModel == null) {
+            return readPomFile();
+        }
+        return pomModel;
     }
 
     static class Artifact {
