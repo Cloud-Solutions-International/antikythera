@@ -314,30 +314,52 @@ public class AbstractCompiler {
     }
 
     private void findContainedTypes(TypeDeclaration<?> declaration, CompilationUnit cu) {
-        for (TypeDeclaration<?> type : declaration.findAll(TypeDeclaration.class)) {
-            TypeWrapper typeWrapper = new TypeWrapper(type);
-            if (type.isAnnotationPresent("Service")
-                    || type.isAnnotationPresent("org.springframework.stereotype.Service")) {
-                typeWrapper.setService(true);
-            } else if (type.isAnnotationPresent("RestController")
-                    || type.isAnnotationPresent("Controller")) {
-                typeWrapper.setController(true);
-            } else if (type.isAnnotationPresent("Component")) {
-                typeWrapper.setComponent(true);
+        // Process the declaration itself first
+        processType(declaration, cu);
+        
+        // Then recursively process nested types
+        if (declaration.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = declaration.asClassOrInterfaceDeclaration();
+            for (var member : cdecl.getMembers()) {
+                if (member instanceof TypeDeclaration) {
+                    @SuppressWarnings("unchecked")
+                    TypeDeclaration<?> nestedType = (TypeDeclaration<?>) member;
+                    findContainedTypes(nestedType, cu);
+                }
             }
+        }
+    }
+    
+    private void processType(TypeDeclaration<?> type, CompilationUnit cu) {
+        TypeWrapper typeWrapper = new TypeWrapper(type);
+        if (type.isAnnotationPresent("Service")
+                || type.isAnnotationPresent("org.springframework.stereotype.Service")) {
+            typeWrapper.setService(true);
+        } else if (type.isAnnotationPresent("RestController")
+                || type.isAnnotationPresent("Controller")) {
+            typeWrapper.setController(true);
+        } else if (type.isAnnotationPresent("Component")) {
+            typeWrapper.setComponent(true);
+        }
 
-            if (type.isClassOrInterfaceDeclaration()) {
-                ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
-                typeWrapper.setInterface(cdecl.isInterface());
+        if (type.isClassOrInterfaceDeclaration()) {
+            ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
+            typeWrapper.setInterface(cdecl.isInterface());
+        }
+        Optional<String> fqnOpt = type.getFullyQualifiedName();
+        if (fqnOpt.isPresent()) {
+            String name = fqnOpt.get();
+            // Check if a compilation unit already exists for this FQN
+            CompilationUnit existingCu = AntikytheraRunTime.getCompilationUnit(name);
+            if (existingCu != null && existingCu != cu) {
+                throw new IllegalStateException(
+                    String.format("Duplicate class definition detected: Class '%s' is defined in multiple files. " +
+                        "This violates Java's one-class-per-file rule. " +
+                        "The class was already loaded from another compilation unit.",
+                        name));
             }
-            type.getFullyQualifiedName().ifPresent(name -> {
-                AntikytheraRunTime.addType(name, typeWrapper);
-                AntikytheraRunTime.addCompilationUnit(name, cu);
-
-            });
-            if (!type.equals(declaration)) {
-                findContainedTypes(type, cu);
-            }
+            AntikytheraRunTime.addType(name, typeWrapper);
+            AntikytheraRunTime.addCompilationUnit(name, cu);
         }
     }
 
@@ -566,6 +588,38 @@ public class AbstractCompiler {
         return null;
     }
 
+    /**
+     * Resolve a Type to its fully qualified name with context.
+     * Handles CU resolution from context, array types, and delegates to existing findFullyQualifiedName.
+     * 
+     * <p>This method consolidates type resolution logic that was previously duplicated
+     * in MethodExtractionStrategy and BeanDependencyGraph.</p>
+     * 
+     * @param type The type to resolve
+     * @param context The class declaration where this type appears (for package context)
+     * @param cu Optional compilation unit (will be resolved from context if null)
+     * @return Fully qualified name, or null if not resolvable
+     */
+    public static String resolveTypeFqn(Type type, ClassOrInterfaceDeclaration context, CompilationUnit cu) {
+        // Get compilation unit from context if not provided
+        if (cu == null) {
+            cu = context.findCompilationUnit()
+                .orElseGet(() -> {
+                    String fqn = context.getFullyQualifiedName().orElse(null);
+                    return fqn != null ? AntikytheraRunTime.getCompilationUnit(fqn) : null;
+                });
+        }
+        
+        // Handle array types by extracting component type
+        if (type.isArrayType()) {
+            Type componentType = type.asArrayType().getComponentType();
+            return resolveTypeFqn(componentType, context, cu);
+        }
+        
+        // Reuse existing findFullyQualifiedName which handles Type parameter correctly
+        return findFullyQualifiedName(cu, type);
+    }
+
     public static TypeWrapper findType(CompilationUnit cu, Type type) {
         if (type instanceof ClassOrInterfaceType ctype) {
             TypeWrapper wrapper = findType(cu, ctype.getNameAsString());
@@ -601,10 +655,54 @@ public class AbstractCompiler {
         if (p != null) {
             return new TypeWrapper(p);
         }
-        if (AntikytheraRunTime.getTypeDeclaration(className).isPresent()) {
-            return new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(className).orElseThrow());
+        
+        // Check AntikytheraRunTime for types matching the short name
+        // Priority 1: Same package types (most likely match)
+        String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
+        if (!packageName.isEmpty()) {
+            String samePackageFqn = packageName + "." + className;
+            Optional<TypeDeclaration<?>> samePackageType = AntikytheraRunTime.getTypeDeclaration(samePackageFqn);
+            if (samePackageType.isPresent()) {
+                return new TypeWrapper(samePackageType.orElseThrow());
+            }
+        }
+        
+        // Priority 2: Exact match (might be a fully qualified name passed as className)
+        Optional<TypeDeclaration<?>> exactMatch = AntikytheraRunTime.getTypeDeclaration(className);
+        if (exactMatch.isPresent()) {
+            return new TypeWrapper(exactMatch.orElseThrow());
         }
 
+        TypeWrapper imp = getTypeWrapperFromImports(cu, className);
+        if (imp != null) return imp;
+
+        for (EnumDeclaration ed : cu.findAll(EnumDeclaration.class)) {
+            for (EnumConstantDeclaration constant : ed.getEntries()) {
+                if (constant.getNameAsString().equals(className)) {
+                    return new TypeWrapper(constant);
+                }
+            }
+        }
+
+        TypeWrapper typeDecl = searchClassName(className);
+        if (typeDecl != null) return typeDecl;
+
+        return detectTypeWithClassLoaders(cu, className);
+    }
+
+    private static TypeWrapper searchClassName(String className) {
+        for (String resolvedFqn : AntikytheraRunTime.getResolvedTypes().keySet()) {
+            if (resolvedFqn.endsWith("." + className)) {
+                Optional<TypeDeclaration<?>> typeDecl = AntikytheraRunTime.getTypeDeclaration(resolvedFqn);
+                if (typeDecl.isPresent()) {
+                    return new TypeWrapper(typeDecl.orElseThrow());
+                }
+            }
+        }
+        return null;
+    }
+
+    private static TypeWrapper getTypeWrapperFromImports(CompilationUnit cu, String className) {
         ImportWrapper imp = findImport(cu, className);
         if (imp != null) {
             if (imp.getType() != null) {
@@ -619,15 +717,7 @@ public class AbstractCompiler {
                 // ignorable
             }
         }
-        for (EnumDeclaration ed : cu.findAll(EnumDeclaration.class)) {
-            for (EnumConstantDeclaration constant : ed.getEntries()) {
-                if (constant.getNameAsString().equals(className)) {
-                    return new TypeWrapper(constant);
-                }
-            }
-        }
-
-        return detectTypeWithClassLoaders(cu, className);
+        return null;
     }
 
     private static TypeWrapper findTypeFromJavaLang(String className) {

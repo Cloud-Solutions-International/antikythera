@@ -29,6 +29,26 @@ import java.util.Optional;
 
 /**
  * Primary purpose to encapsulate the AST node.
+ * <p>
+ * The {@link GraphNode} class represents an AST node together with its enclosing type and destination copy,
+ * ensuring that declarations, annotations, and companion members are migrated into the target
+ * {@link CompilationUnit}. Rather than handling detached metadata, the class works with the concrete
+ * {@link Node} instances that make up a type.
+ * <p>
+ * Lifecycle of a {@link GraphNode} instance:
+ * <ol>
+ *     <li>Creation: A new instance is created for an AST node via {@link #graphNodeFactory(Node)} and linked to
+ *     its enclosing {@link TypeDeclaration}.</li>
+ *     <li>Building: {@link #buildNode()} clones the enclosing declaration into {@link #destination}, wiring
+ *     inheritance, imports, and annotations.</li>
+ *     <li>Processing: Fields, constructors, enum constants, and nested references are added by invoking helper
+ *     methods such as {@link #copyFields()}, {@link #copyConstructors()}, and {@link #processTypeArgument(Type)}.</li>
+ *     <li>Completion: {@link #getDestination()} returns the populated compilation unit ready for downstream
+ *     generators once copying is complete.</li>
+ * </ol>
+ * <p>
+ * The class also guards against cyclic dependencies, keeps track of visited nodes, and resolves abstract
+ * members, providing a resilient bridge between parsed source and generated artifacts.
  */
 public class GraphNode {
     private static final Logger logger = LoggerFactory.getLogger(GraphNode.class);
@@ -50,7 +70,7 @@ public class GraphNode {
     private TypeDeclaration<?> typeDeclaration;
 
     /**
-     * This is the Abstract Syntax Tree node for the method, class or field
+     * This is the Abstract Syntax Tree node for the method, class, or field
      */
     Node node;
     /**
@@ -99,9 +119,10 @@ public class GraphNode {
     }
 
     /**
-     * Create s new GraphNode from the AST node or returns the previously created one.
-     * @param node AST node
-     * @return a GraphNode
+     * Creates or retrieves a {@link GraphNode} for the supplied AST {@link Node}.
+     * Ensures a single instance per node by consulting {@link Graph#getNodes()}.
+     * @param node AST node that should be wrapped
+     * @return cached or newly created {@link GraphNode}
      */
     public static GraphNode graphNodeFactory(Node node) {
         GraphNode tmp = new GraphNode(node);
@@ -114,8 +135,8 @@ public class GraphNode {
     }
 
     /**
-     * Builds the graph node from the information available in enclosing type
-     *
+     * Builds the destination type by cloning the structure from the enclosing declaration.
+     * Copies packages, annotations, constructors, and fields while respecting cycle guards.
      */
     public void buildNode()  {
         if(enclosingType == null || preProcessed) {
@@ -261,7 +282,7 @@ public class GraphNode {
 
     /**
      * Adds the type arguments to the graph.
-     * We are dealing with parameterized types. things like Map<String, Integer> or List<String>
+     * We are dealing with parameterized types. things like {@code Map<String, Integer>} or {@code List<String>}
      * Will make recursive calls to the searchType method which will result in the imports
      * being eventually added.
      * @param typeArg an AST type argument which may or may not contain parameterized types
@@ -282,30 +303,59 @@ public class GraphNode {
         return ImportUtils.addImport(this, typeArg);
     }
 
+    /**
+     * Indicates whether the corresponding {@link #typeDeclaration} already contains this {@link #node}.
+     * @return true if the node has been incorporated into the destination declaration
+     */
     public boolean isVisited() {
         return typeDeclaration != null && typeDeclaration.findFirst(node.getClass(), n -> n.equals(node)).isPresent();
     }
 
+    /**
+     * Marks this node as visited during graph traversal.
+     * @param visited new visited flag value
+     */
     public void setVisited(boolean visited) {
         this.visited = visited;
     }
 
+    /**
+     * Exposes the destination {@link CompilationUnit} receiving cloned members.
+     * @return populated compilation unit, or {@code null} if build not complete
+     */
     public CompilationUnit getDestination() {
         return destination;
     }
 
+    /**
+     * Returns the wrapped AST {@link Node} instance.
+     * @return current node reference
+     */
     public Node getNode() {
         return node;
     }
 
+    /**
+     * Updates the wrapped AST node reference.
+     * @param node new node to manage
+     */
     public void setNode(Node node) {
         this.node = node;
     }
 
+    /**
+     * Provides the {@link CompilationUnit} that originally contained the node.
+     * @return source compilation unit
+     */
     public CompilationUnit getCompilationUnit() {
         return compilationUnit;
     }
 
+    /**
+     * Returns the enclosing {@link TypeDeclaration} from which members are copied.
+     * @return enclosing type, or {@code null} when not available
+     */
+    @SuppressWarnings("java:S1452")
     public TypeDeclaration<?> getEnclosingType() {
         return enclosingType;
     }
@@ -319,6 +369,11 @@ public class GraphNode {
         return toString().hashCode();
     }
 
+    /**
+     * Compares two {@link GraphNode} instances by their wrapped {@link Node}.
+     * @param obj candidate object
+     * @return true when both nodes reference the same AST element
+     */
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof GraphNode other) {
@@ -328,18 +383,34 @@ public class GraphNode {
         }
     }
 
+    /**
+     * Provides the destination {@link TypeDeclaration} receiving cloned members.
+     * @return destination type declaration
+     */
     public TypeDeclaration<?> getTypeDeclaration() {
         return typeDeclaration;
     }
 
+    /**
+     * Sets the destination compilation unit to populate.
+     * @param destination compilation unit clone that will host generated members
+     */
     public void setDestination(CompilationUnit destination) {
         this.destination = destination;
     }
 
+    /**
+     * Sets the destination type declaration that will receive copied members.
+     * @param typeDeclaration target type declaration
+     */
     public void setTypeDeclaration(TypeDeclaration<?> typeDeclaration) {
         this.typeDeclaration = typeDeclaration;
     }
 
+    /**
+     * Builds a stable identifier composed of package, type, and member signature.
+     * @return human-readable identifier for logging/debugging
+     */
     @Override
     public String toString() {
         final StringBuilder b = new StringBuilder();
@@ -366,6 +437,11 @@ public class GraphNode {
         return b.toString();
     }
 
+    /**
+     * Adds a new enum constant to the destination enum declaration if it is missing.
+     * Also wires constructor arguments by seeding dependent graph nodes.
+     * @param enumConstant enum constant to copy
+     */
     public void addEnumConstant(EnumConstantDeclaration enumConstant) {
         if (!typeDeclaration.isEnumDeclaration()) {
             return;
@@ -407,6 +483,10 @@ public class GraphNode {
         enclosingType.getConstructorByParameterTypes(paramTypes).ifPresent(Graph::createGraphNode);
     }
 
+    /**
+     * Adds a cloned field declaration to the destination type and ensures imports are present.
+     * @param fieldDeclaration field declaration sourced from the enclosing type
+     */
     public void addField(FieldDeclaration fieldDeclaration)  {
         fieldDeclaration.accept(new AnnotationVisitor(), this);
         VariableDeclarator variable = fieldDeclaration.getVariable(0);

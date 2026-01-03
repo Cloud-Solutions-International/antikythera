@@ -74,11 +74,12 @@ public class QueryMethodParameter {
      * The name of the jdbc named parameter.
      * These can typically be identified in the JPARepository function by the @Param annotation.
      * If they are used alongside custom queries, the query will have a place holder that starts
-     * with the : character and matches the name of the parameter.
-     * example:
+     * with the : character and matches the name of the parameter* <p>Example:
+     * <pre>
      *     select u from User u where u.firstname = :firstname or u.lastname = :lastname
-     *     User findByLastnameOrFirstname(@Param("lastname") String lastname,
-     *                                  @Param("firstname") String firstname);
+     *     User findByLastnameOrFirstname({@code @Param("lastname")} String lastname,
+     *                                  {@code @Param("firstname")} String firstname);
+     * </pre>
      */
     public String getPlaceHolderName() {
         return placeHolderName;
