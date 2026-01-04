@@ -179,6 +179,8 @@ public class UnitTestGenerator extends TestGenerator {
      * Provided that an entry called base_test_class exists in the settings file and the source for
      * that class can be found, it will be loaded. If such an entry does not exist and the test suite
      * had previously been generated, we will check the extended types of the test class.
+     * example setting
+     *    base_test_class: com.raditha.test.TestHelper
      *
      * @param testClass the declaration of the test suite being built
      */
@@ -537,9 +539,9 @@ public class UnitTestGenerator extends TestGenerator {
             MethodCallExpr mce = firstInitializer.asMethodCallExpr();
             // Check if it's Mockito.mock() - name is "mock" and (scope is "Mockito" OR has ClassExpr argument)
             if (mce.getNameAsString().equals("mock")) {
-                boolean hasMockitoScope = mce.getScope().isPresent() && 
-                    (mce.getScope().get().toString().equals("Mockito") || 
-                     mce.getScope().get().toString().contains("Mockito"));
+                Optional<Expression> scope = mce.getScope();
+                boolean hasMockitoScope = scope.isPresent() &&
+                    (scope.get().toString().equals("Mockito") || scope.get().toString().contains("Mockito"));
                 boolean hasClassExprArg = mce.getArguments().size() == 1 && 
                     mce.getArgument(0).isClassExpr();
                 if (hasMockitoScope || hasClassExprArg) {
