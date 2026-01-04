@@ -87,3 +87,4 @@ ConversionResult result = adapter.convertToNativeSQL(hqlQuery);
 ## Documentation
 See `WARP.md` for complete API documentation and `AGENT.md` for quick reference.
 
+
