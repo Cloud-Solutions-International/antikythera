@@ -48,6 +48,21 @@ import java.util.Optional;
  */
 public class Resolver {
 
+    public static record ScopedResolution(Type type, ImportWrapper importWrapper, TypeDeclaration<?> resolvedTypeDecl) {
+
+        public boolean hasType() {
+            return type != null;
+        }
+
+        public boolean hasImportWrapper() {
+            return importWrapper != null;
+        }
+
+        public boolean hasResolvedTypeDecl() {
+            return resolvedTypeDecl != null;
+        }
+    }
+
     /**
      * Private constructor to prevent instantiation of this utility class.
      */
@@ -240,7 +255,7 @@ public class Resolver {
      * @throws AntikytheraException if resolution fails in a critical way
      */
     public static Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae,
-                                                             GraphNode node, final Map<String, Type> names) throws AntikytheraException {
+            GraphNode node, final Map<String, Type> names) throws AntikytheraException {
 
         Optional<ScopedResolution> resolution = SymbolResolver.resolveScopedName(scope, node.getCompilationUnit(),
                 names);
@@ -280,7 +295,7 @@ public class Resolver {
      * @param imp the import wrapper containing information about the external
      *            import
      * @return an Optional containing the resolved ClassOrInterfaceType if
-     * successful, otherwise empty
+     *         successful, otherwise empty
      */
 
     static Optional<Type> getExternalType(NodeWithSimpleName<?> fae, ImportWrapper imp) {
@@ -338,7 +353,7 @@ public class Resolver {
      * @return the resolved GraphNode or null
      */
     private static GraphNode handleNameExprScope(GraphNode node, FieldAccessExpr fae, Expression scope,
-                                                 NodeList<Type> types) {
+            NodeList<Type> types) {
         Optional<Type> resolvedType = resolveScopedNameExpression(scope, fae, node, DepSolver.getNames());
         if (resolvedType.isPresent()) {
             Type t = resolvedType.get();
@@ -367,7 +382,7 @@ public class Resolver {
      * @return the resolved GraphNode or null
      */
     private static GraphNode handleFieldAccessExprScope(GraphNode node, FieldAccessExpr fae, Expression scope,
-                                                        NodeList<Type> types) {
+            NodeList<Type> types) {
         GraphNode scopeNode = resolveFieldAccess(node, scope, types);
         if (scopeNode != null) {
             FieldDeclaration scopeField = ((FieldDeclaration) scopeNode.getNode()).asFieldDeclaration();
@@ -484,7 +499,7 @@ public class Resolver {
      * @param expr the field access expression
      * @param gn   the current graph node context from the chain
      * @return the resolved graph node for the field access, or the original node if
-     * not resolved/relevant
+     *         not resolved/relevant
      */
     private static GraphNode evaluateFIeldAccess(Expression expr, GraphNode gn) {
         FieldAccessExpr fieldAccessExpr = expr.asFieldAccessExpr();
@@ -503,7 +518,7 @@ public class Resolver {
      * @param nameExpr the name expression to evaluate
      * @param gn       the current graph node context
      * @return the resolved graph node or the original one if side effects (imports)
-     * were processed
+     *         were processed
      * @throws AntikytheraException if resolution fails
      */
     static GraphNode evaluateNameExpr(NameExpr nameExpr, GraphNode gn) throws AntikytheraException {
@@ -552,11 +567,11 @@ public class Resolver {
      * @param node a graph node representing the current context
      * @param mce  method call expression or object creation expression
      * @return a Method Call Wrapper instance that contains the original method call
-     * as well as
-     * resolved argument types.
-     * If the arguments cannot be resolved correctly, the corresponding
-     * field
-     * in the MCEWrapper will be null.
+     *         as well as
+     *         resolved argument types.
+     *         If the arguments cannot be resolved correctly, the corresponding
+     *         field
+     *         in the MCEWrapper will be null.
      */
     public static MCEWrapper resolveArgumentTypes(GraphNode node, NodeWithArguments<?> mce) {
         MCEWrapper mw = new MCEWrapper(mce);
@@ -710,7 +725,7 @@ public class Resolver {
      * @param gn             the graph node from the chain resolution
      */
     private static void wrappCallableUsingClassDeclaration(GraphNode node, NodeWithArguments<?> callExpression,
-                                                           NodeList<Type> types, ClassOrInterfaceDeclaration cid, MCEWrapper wrap, GraphNode gn) {
+            NodeList<Type> types, ClassOrInterfaceDeclaration cid, MCEWrapper wrap, GraphNode gn) {
         Optional<Callable> omd = AbstractCompiler.findCallableDeclaration(wrap, cid);
         if (omd.isPresent()) {
             Callable cd = omd.get();
@@ -763,7 +778,6 @@ public class Resolver {
      * @param node       the current graph node context
      * @return a GraphNode representing the resolved method or null
      */
-    @SuppressWarnings("unchecked")
     static GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) {
         TypeDeclaration<?> cdecl = node.getEnclosingType();
         if (cdecl == null) {
@@ -793,7 +807,8 @@ public class Resolver {
         return null;
     }
 
-    private static GraphNode copyMethodDeclaration(MCEWrapper mceWrapper, GraphNode node, MethodDeclaration method, TypeDeclaration<?> cdecl) {
+    private static GraphNode copyMethodDeclaration(MCEWrapper mceWrapper, GraphNode node, MethodDeclaration method,
+            TypeDeclaration<?> cdecl) {
         for (Type ex : method.getThrownExceptions()) {
             ImportUtils.addImport(node, ex);
         }

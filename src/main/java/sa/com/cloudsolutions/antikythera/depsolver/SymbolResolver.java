@@ -86,12 +86,12 @@ public class SymbolResolver {
      * @param names map of known names to types
      * @return an Optional containing the ScopedResolution result
      */
-    public static Optional<ScopedResolution> resolveScopedName(Expression scope, CompilationUnit cu,
+    public static Optional<Resolver.ScopedResolution> resolveScopedName(Expression scope, CompilationUnit cu,
             Map<String, Type> names) {
         if (names != null) {
             Type t = names.get(scope.asNameExpr().getNameAsString());
             if (t != null) {
-                return Optional.of(new ScopedResolution(t, null, null));
+                return Optional.of(new Resolver.ScopedResolution(t, null, null));
             }
         }
 
@@ -103,27 +103,24 @@ public class SymbolResolver {
         return Optional.empty();
     }
 
-    static Optional<ScopedResolution> resolveScopedNameThroughImport(ImportWrapper imp) {
+    static Optional<Resolver.ScopedResolution> resolveScopedNameThroughImport(ImportWrapper imp) {
         if (imp.isExternal()) {
-            return Optional.of(new ScopedResolution(null, imp, null));
+            return Optional.of(new Resolver.ScopedResolution(null, imp, null));
         }
 
         if (imp.getField() == null) {
             if (imp.getImport().isAsterisk()) {
-                return Optional.of(new ScopedResolution(null, imp, imp.getType()));
+                return Optional.of(new Resolver.ScopedResolution(null, imp, imp.getType()));
             } else {
                 CompilationUnit externalCu = AntikytheraRunTime
                         .getCompilationUnit(imp.getImport().getNameAsString());
                 if (externalCu != null) {
                     TypeDeclaration<?> td = AbstractCompiler.getPublicType(externalCu);
-                    return Optional.of(new ScopedResolution(null, imp, td));
+                    return Optional.of(new Resolver.ScopedResolution(null, imp, td));
                 }
             }
-            // Return just the import if no type declaration could be resolved but it's not
-            // a field
-            return Optional.of(new ScopedResolution(null, imp, null));
         }
-        // Return just the import if it refers to a field (handled by caller typically)
-        return Optional.of(new ScopedResolution(null, imp, null));
+
+        return Optional.of(new Resolver.ScopedResolution(null, imp, null));
     }
 }
