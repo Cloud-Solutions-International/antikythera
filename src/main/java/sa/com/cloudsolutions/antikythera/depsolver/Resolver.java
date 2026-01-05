@@ -43,14 +43,26 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * The Resolver class is responsible for resolving various JavaParser AST
+ * expressions
+ * into meaningful graph nodes or types within the dependency graph.
+ * It handles field accesses, method calls, variable names, and type lookups,
+ * often delegating to AbstractCompiler for cross-compilation unit resolution.
+ */
 public class Resolver {
     private static final Logger logger = LoggerFactory.getLogger(Resolver.class);
 
-    private Resolver() {}
+    /**
+     * Private constructor to prevent instantiation of this utility class.
+     */
+    private Resolver() {
+    }
 
     /**
      * Resolve a field that is accessed through the <code>this.</code> prefix
-     * @param node a graph node representing the current context
+     * 
+     * @param node  a graph node representing the current context
      * @param value the field access expression
      * @return a graph node representing the resolved field
      */
@@ -66,8 +78,7 @@ public class Resolver {
                     break;
                 }
             }
-        }
-        else {
+        } else {
             FieldDeclaration f = decl.getFieldByName(value.getNameAsString()).orElse(null);
             if (f != null) {
                 node.addField(f);
@@ -84,22 +95,23 @@ public class Resolver {
 
     /**
      * Resolve a field access expression
-     * If the expression has a <code>this.</code> prefix, then the field is resolved within the
+     * If the expression has a <code>this.</code> prefix, then the field is resolved
+     * within the
      * current class with help from the resolveThisField method
-     * @param node represents a type
+     * 
+     * @param node  represents a type
      * @param value a field access expression
      * @return a graph node representing the resolved field
      */
     public static GraphNode resolveField(GraphNode node, FieldAccessExpr value) {
         Expression scope = value.asFieldAccessExpr().getScope();
         if (scope.isThisExpr()) {
-            return  Resolver.resolveThisFieldAccess(node, value);
+            return Resolver.resolveThisFieldAccess(node, value);
         }
 
         if (scope.isNameExpr()) {
             ImportWrapper imp2 = AbstractCompiler.findImport(node.getCompilationUnit(),
-                    scope.asNameExpr().getNameAsString()
-            );
+                    scope.asNameExpr().getNameAsString());
             if (imp2 != null) {
                 node.getDestination().addImport(imp2.getImport());
 
@@ -120,51 +132,70 @@ public class Resolver {
         return Resolver.resolveThisFieldAccess(node, value);
     }
 
+    /**
+     * Resolves expressions within an array initializer.
+     * Iterates through values in the array initializer and delegates resolution
+     * based on whether the value is an annotation or a field access.
+     *
+     * @param node  the graph node representing the current context
+     * @param value the array initializer expression
+     */
     static void resolveArrayExpr(GraphNode node, Expression value) {
         ArrayInitializerExpr aie = value.asArrayInitializerExpr();
         for (Expression expr : aie.getValues()) {
             if (expr.isAnnotationExpr()) {
                 AnnotationExpr anne = expr.asAnnotationExpr();
-                String fqName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), anne.getName().toString());
+                String fqName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(),
+                        anne.getName().toString());
                 if (fqName != null) {
                     node.getDestination().addImport(fqName);
                 }
                 if (anne.isNormalAnnotationExpr()) {
                     resolveNormalAnnotationExpr(node, anne.asNormalAnnotationExpr());
                 }
-            }
-            else if(expr.isFieldAccessExpr()) {
+            } else if (expr.isFieldAccessExpr()) {
                 Resolver.resolveField(node, expr.asFieldAccessExpr());
             }
         }
     }
 
+    /**
+     * Resolves a normal annotation expression.
+     * Checks for imports related to the annotation and resolves its member value
+     * pairs
+     * recursively processing field accesses, binary expressions, names, etc.
+     *
+     * @param node the graph node representing the current context
+     * @param n    the normal annotation expression to resolve
+     */
     static void resolveNormalAnnotationExpr(GraphNode node, NormalAnnotationExpr n) {
         ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), n.getNameAsString());
         if (imp != null) {
             node.getDestination().addImport(imp.getImport());
         }
-        for(MemberValuePair pair : n.getPairs()) {
+        for (MemberValuePair pair : n.getPairs()) {
             Expression value = pair.getValue();
             if (value.isFieldAccessExpr()) {
                 Resolver.resolveField(node, value.asFieldAccessExpr());
-            }
-            else if (value.isBinaryExpr()) {
+            } else if (value.isBinaryExpr()) {
                 resolveBinaryExpr(node, value);
-            }
-            else if (value.isNameExpr()) {
+            } else if (value.isNameExpr()) {
                 resolveNameExpression(node, value);
-            }
-            else if (value.isArrayInitializerExpr()) {
+            } else if (value.isArrayInitializerExpr()) {
                 Resolver.resolveArrayExpr(node, value);
-            }
-            else if (value.isClassExpr()) {
+            } else if (value.isClassExpr()) {
                 ClassOrInterfaceType ct = value.asClassExpr().getType().asClassOrInterfaceType();
                 ImportUtils.addImport(node, ct.getName().toString());
             }
         }
     }
 
+    /**
+     * Resolves a binary expression by processing both the left and right sides.
+     *
+     * @param node  the graph node representing the current context
+     * @param value the binary expression to resolve
+     */
     static void resolveBinaryExpr(GraphNode node, Expression value) {
         Expression left = value.asBinaryExpr().getLeft();
         Expression right = value.asBinaryExpr().getRight();
@@ -173,26 +204,49 @@ public class Resolver {
         resolveBinaryExpressionSide(node, right);
     }
 
+    /**
+     * Helper method to resolve one side of a binary expression.
+     *
+     * @param node the graph node representing the current context
+     * @param expr the expression side to resolve
+     */
     private static void resolveBinaryExpressionSide(GraphNode node, Expression expr) {
         processExpression(node, expr, new NodeList<>());
         if (expr.isFieldAccessExpr()) {
             Resolver.resolveField(node, expr.asFieldAccessExpr());
-        }
-        else if (expr.isNameExpr()) {
+        } else if (expr.isNameExpr()) {
             resolveNameExpression(node, expr);
-        }
-        else if (expr.isBinaryExpr()) {
+        } else if (expr.isBinaryExpr()) {
             resolveBinaryExpr(node, expr);
         }
     }
 
-    private static void resolveNameExpression(GraphNode node, Expression value)  {
-         resolveNameExpr(node, value.asNameExpr(), new NodeList<>());
+    /**
+     * Resolves a name expression by delegating to the main resolveNameExpr method.
+     *
+     * @param node  the graph node representing the current context
+     * @param value the expression containing the name to resolve
+     */
+    private static void resolveNameExpression(GraphNode node, Expression value) {
+        resolveNameExpr(node, value.asNameExpr(), new NodeList<>());
     }
 
+    /**
+     * Resolves a scoped name expression, such as a static field access or class
+     * reference.
+     * Tries to find the type from the provided map of names or by looking up local
+     * imports.
+     *
+     * @param scope the scope expression (e.g., the class name in `ClassName.field`)
+     * @param fae   the field access expression or simple name being accessed
+     * @param node  the graph node representing the current context
+     * @param names a map of known names to types for resolution
+     * @return an Optional containing the resolved Type if found, otherwise empty
+     * @throws AntikytheraException if resolution fails in a critical way
+     */
     public static Optional<Type> resolveScopedNameExpression(Expression scope, NodeWithSimpleName<?> fae,
-                                                       GraphNode node, final Map<String, Type> names) throws AntikytheraException {
-        if (names != null ) {
+            GraphNode node, final Map<String, Type> names) throws AntikytheraException {
+        if (names != null) {
             Type t = names.get(scope.asNameExpr().getNameAsString());
 
             if (t != null) {
@@ -200,18 +254,18 @@ public class Resolver {
             }
         }
 
-        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(), scope.asNameExpr().getNameAsString());
+        ImportWrapper imp = AbstractCompiler.findImport(node.getCompilationUnit(),
+                scope.asNameExpr().getNameAsString());
         if (imp != null) {
             node.getDestination().addImport(imp.getImport());
             if (imp.isExternal()) {
                 return getExternalType(fae, imp);
             }
-            if (imp.getField() == null ) {
+            if (imp.getField() == null) {
                 if (imp.getImport().isAsterisk()) {
                     TypeDeclaration<?> td = imp.getType();
                     createFieldNode(fae, td);
-                }
-                else {
+                } else {
                     CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
                     if (cu != null) {
                         TypeDeclaration<?> td = AbstractCompiler.getPublicType(cu);
@@ -223,7 +277,15 @@ public class Resolver {
         return Optional.empty();
     }
 
-
+    /**
+     * Attempts to resolve a type from an external library using reflection.
+     *
+     * @param fae the node containing the simple name of the field to resolve
+     * @param imp the import wrapper containing information about the external
+     *            import
+     * @return an Optional containing the resolved ClassOrInterfaceType if
+     *         successful, otherwise empty
+     */
     static Optional<Type> getExternalType(NodeWithSimpleName<?> fae, ImportWrapper imp) {
         try {
             Class<?> c = Class.forName(imp.getNameAsString());
@@ -237,12 +299,27 @@ public class Resolver {
         return Optional.empty();
     }
 
-    static void createFieldNode(NodeWithSimpleName<?> fae, TypeDeclaration<?> td)  {
+    /**
+     * Creates a graph node for a field found within a TypeDeclaration.
+     *
+     * @param fae the node containing the name of the field
+     * @param td  the TypeDeclaration where the field is expected to exist
+     */
+    static void createFieldNode(NodeWithSimpleName<?> fae, TypeDeclaration<?> td) {
         if (td != null) {
             td.getFieldByName(fae.getNameAsString()).ifPresent(Graph::createGraphNode);
         }
     }
 
+    /**
+     * Resolves a field access expression and populates a list of resolved types.
+     * Handles different scopes like NameExpr or another FieldAccessExpr.
+     *
+     * @param node  the graph node representing the current context
+     * @param expr  the expression to resolve (expected to be a FieldAccessExpr)
+     * @param types a list to collect resolved types
+     * @return a GraphNode representing the resolved field or null if not resolved
+     */
     public static GraphNode resolveFieldAccess(GraphNode node, Expression expr, NodeList<Type> types) {
         final FieldAccessExpr fae = expr.asFieldAccessExpr();
         Expression scope = fae.getScope();
@@ -263,14 +340,25 @@ public class Resolver {
         }
     }
 
-    private static GraphNode handleNameExprScope(GraphNode node, FieldAccessExpr fae, Expression scope, NodeList<Type> types) {
+    /**
+     * Handles field access resolution when the scope is a NameExpr.
+     *
+     * @param node  the graph node representing the current context
+     * @param fae   the field access expression
+     * @param scope the scope expression (as a NameExpr)
+     * @param types a list to collect resolved types
+     * @return the resolved GraphNode or null
+     */
+    private static GraphNode handleNameExprScope(GraphNode node, FieldAccessExpr fae, Expression scope,
+            NodeList<Type> types) {
         Optional<Type> resolvedType = resolveScopedNameExpression(scope, fae, node, DepSolver.getNames());
         if (resolvedType.isPresent()) {
             Type t = resolvedType.get();
             ImportWrapper wrapper = AbstractCompiler.findImport(node.getCompilationUnit(), t.asString());
             if (wrapper != null && wrapper.getType() != null) {
                 SimpleName name = fae.getName();
-                Optional<FieldDeclaration> field = wrapper.getType().findFirst(FieldDeclaration.class, f -> f.getVariable(0).getNameAsString().equals(name.asString()));
+                Optional<FieldDeclaration> field = wrapper.getType().findFirst(FieldDeclaration.class,
+                        f -> f.getVariable(0).getNameAsString().equals(name.asString()));
                 if (field.isPresent()) {
                     return Graph.createGraphNode(field.get());
                 }
@@ -280,16 +368,29 @@ public class Resolver {
         return null;
     }
 
-    private static GraphNode handleFieldAccessExprScope(GraphNode node, FieldAccessExpr fae, Expression scope, NodeList<Type> types) {
+    /**
+     * Handles field access resolution when the scope is itself a FieldAccessExpr
+     * (chained access).
+     *
+     * @param node  the graph node representing the current context
+     * @param fae   the field access expression
+     * @param scope the scope expression (as a FieldAccessExpr)
+     * @param types a list to collect resolved types
+     * @return the resolved GraphNode or null
+     */
+    private static GraphNode handleFieldAccessExprScope(GraphNode node, FieldAccessExpr fae, Expression scope,
+            NodeList<Type> types) {
         GraphNode scopeNode = resolveFieldAccess(node, scope, types);
         if (scopeNode != null) {
             FieldDeclaration scopeField = ((FieldDeclaration) scopeNode.getNode()).asFieldDeclaration();
             ClassOrInterfaceType resolvedType = scopeField.getElementType().asClassOrInterfaceType();
             if (resolvedType != null) {
-                String fqn = AbstractCompiler.findFullyQualifiedName(scopeNode.getCompilationUnit(), resolvedType.getName().asString());
+                String fqn = AbstractCompiler.findFullyQualifiedName(scopeNode.getCompilationUnit(),
+                        resolvedType.getName().asString());
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fqn);
                 if (cu != null) {
-                    Optional<TypeDeclaration<?>> resolvedClass = AbstractCompiler.getMatchingType(cu, resolvedType.getName().asString());
+                    Optional<TypeDeclaration<?>> resolvedClass = AbstractCompiler.getMatchingType(cu,
+                            resolvedType.getName().asString());
                     if (resolvedClass.isPresent()) {
                         Optional<FieldDeclaration> field = resolvedClass.get().getFieldByName(fae.getNameAsString());
                         if (field.isPresent()) {
@@ -302,6 +403,16 @@ public class Resolver {
         return null;
     }
 
+    /**
+     * Resolves a chained method call or object creation within a method call
+     * wrapper.
+     * Evaluates the scope chain to find the target of the call or creation.
+     *
+     * @param node       the graph node representing the current context
+     * @param mceWrapper the wrapper containing the method call or object creation
+     * @return a GraphNode representing the result of the call or null
+     * @throws AntikytheraException if resolution errors occur
+     */
     static GraphNode chainedMethodCall(GraphNode node, MCEWrapper mceWrapper) throws AntikytheraException {
         if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce) {
             ScopeChain chain = ScopeChain.findScopeChain(mce);
@@ -316,13 +427,21 @@ public class Resolver {
                     return createNodeForReturnType(node, result, gn);
                 }
             }
-        }
-        else if (mceWrapper.getMethodCallExpr() instanceof ObjectCreationExpr oce) {
+        } else if (mceWrapper.getMethodCallExpr() instanceof ObjectCreationExpr oce) {
             return ImportUtils.addImport(node, oce.getType());
         }
         return null;
     }
 
+    /**
+     * Helper to determine which node to return based on the method's return type.
+     * If the method returns a non-void type, imports it and returns that.
+     *
+     * @param node   the original context node
+     * @param result the result of the method copy/resolution
+     * @param gn     the graph node from the evaluated scope
+     * @return the appropriate GraphNode
+     */
     private static GraphNode createNodeForReturnType(GraphNode node, GraphNode result, GraphNode gn) {
         if (result != null && result.getNode() instanceof MethodDeclaration md) {
             Type t = md.getType();
@@ -333,6 +452,16 @@ public class Resolver {
         return gn;
     }
 
+    /**
+     * Evaluates a chain of scopes (e.g., `obj.method().field`) to resolve the final
+     * target.
+     * Iterates through the chain and resolves each part sequentially.
+     *
+     * @param node  the starting graph node context
+     * @param chain the chain of scopes to evaluate
+     * @return the resolved GraphNode at the end of the chain or null
+     * @throws AntikytheraException if resolution fails
+     */
     static GraphNode evaluateScopeChain(GraphNode node, ScopeChain chain) throws AntikytheraException {
         GraphNode gn = node;
         Iterator<Scope> iterator = chain.getChain().reversed().iterator();
@@ -340,11 +469,9 @@ public class Resolver {
             Expression expr = iterator.next().getExpression();
             if (expr.isFieldAccessExpr()) {
                 gn = evaluateFIeldAccess(expr, gn);
-            }
-            else if (expr.isMethodCallExpr()) {
+            } else if (expr.isMethodCallExpr()) {
                 gn = copyMethod(resolveArgumentTypes(gn, expr.asMethodCallExpr()), gn);
-            }
-            else if (expr.isNameExpr()) {
+            } else if (expr.isNameExpr()) {
                 gn = evaluateNameExpr(expr.asNameExpr(), gn);
             } else if (expr.isObjectCreationExpr()) {
                 ObjectCreationExpr oce = expr.asObjectCreationExpr();
@@ -363,6 +490,14 @@ public class Resolver {
         return gn;
     }
 
+    /**
+     * Evaluates a field access expression within a scope chain.
+     *
+     * @param expr the field access expression
+     * @param gn   the current graph node context from the chain
+     * @return the resolved graph node for the field access, or the original node if
+     *         not resolved/relevant
+     */
     private static GraphNode evaluateFIeldAccess(Expression expr, GraphNode gn) {
         FieldAccessExpr fieldAccessExpr = expr.asFieldAccessExpr();
         GraphNode tmp = Resolver.resolveField(gn, fieldAccessExpr);
@@ -372,6 +507,17 @@ public class Resolver {
         return gn;
     }
 
+    /**
+     * Evaluates a name expression to find its corresponding type or field.
+     * Checks if the name refers to a known type, a field in the current class, or
+     * needs to be imported.
+     *
+     * @param nameExpr the name expression to evaluate
+     * @param gn       the current graph node context
+     * @return the resolved graph node or the original one if side effects (imports)
+     *         were processed
+     * @throws AntikytheraException if resolution fails
+     */
     static GraphNode evaluateNameExpr(NameExpr nameExpr, GraphNode gn) throws AntikytheraException {
         TypeDeclaration<?> cdecl = gn.getEnclosingType();
         Type t = DepSolver.getNames().get(nameExpr.toString());
@@ -383,13 +529,21 @@ public class Resolver {
             }
 
             gn = ImportUtils.addImport(gn, nameExpr);
-        }
-        else {
+        } else {
             return gn.processTypeArgument(t);
         }
         return gn;
     }
 
+    /**
+     * Helper method to process a found field declaration.
+     * Adds the field to the graph node and processes its type arguments and
+     * annotations.
+     *
+     * @param gn the current graph node
+     * @param fd the field declaration found
+     * @return the processed graph node
+     */
     private static GraphNode findFieldNode(GraphNode gn, FieldDeclaration fd) {
         Type field = fd.getElementType();
         gn.addField(fd);
@@ -404,21 +558,25 @@ public class Resolver {
     }
 
     /**
-     * Given a method call expression or new object creation expression, resolve the types of the arguments.
+     * Given a method call expression or new object creation expression, resolve the
+     * types of the arguments.
+     * 
      * @param node a graph node representing the current context
-     * @param mce method call expression or object creation expression
-     * @return a Method Call Wrapper instance that contains the original method call as well as
-     *              resolved argument types.
-     *              If the arguments cannot be resolved correctly, the corresponding field
-     *              in the MCEWrapper will be null.
+     * @param mce  method call expression or object creation expression
+     * @return a Method Call Wrapper instance that contains the original method call
+     *         as well as
+     *         resolved argument types.
+     *         If the arguments cannot be resolved correctly, the corresponding
+     *         field
+     *         in the MCEWrapper will be null.
      */
-    public static MCEWrapper resolveArgumentTypes(GraphNode node, NodeWithArguments<?> mce)  {
+    public static MCEWrapper resolveArgumentTypes(GraphNode node, NodeWithArguments<?> mce) {
         MCEWrapper mw = new MCEWrapper(mce);
         NodeList<Type> types = new NodeList<>();
 
         NodeList<Expression> arguments = mce.getArguments();
 
-        for(Expression arg : arguments) {
+        for (Expression arg : arguments) {
             processExpression(node, arg, types);
         }
         if (types.size() == arguments.size()) {
@@ -428,26 +586,28 @@ public class Resolver {
         return mw;
     }
 
-    static void processExpression(GraphNode node, Expression expr, NodeList<Type> types)  {
+    /**
+     * Processes a generic expression to resolve types or update the graph node.
+     * Dispatches to specific resolution methods based on the expression type.
+     *
+     * @param node  the graph node representing the current context
+     * @param expr  the expression to process
+     * @param types a list to collect resolved types
+     */
+    static void processExpression(GraphNode node, Expression expr, NodeList<Type> types) {
         if (expr.isNameExpr()) {
             resolveNameExpr(node, expr.asNameExpr(), types);
-        }
-        else if (expr.isLiteralExpr()) {
+        } else if (expr.isLiteralExpr()) {
             types.add(AbstractCompiler.convertLiteralToType(expr.asLiteralExpr()));
-        }
-        else if (expr.isFieldAccessExpr()) {
+        } else if (expr.isFieldAccessExpr()) {
             Resolver.resolveFieldAccess(node, expr, types);
-        }
-        else if (expr.isMethodCallExpr()) {
+        } else if (expr.isMethodCallExpr()) {
             wrapCallable(node, expr.asMethodCallExpr(), types);
-        }
-        else if (expr.isObjectCreationExpr()) {
+        } else if (expr.isObjectCreationExpr()) {
             wrapCallable(node, expr.asObjectCreationExpr(), types);
-        }
-        else if (expr.isMethodReferenceExpr()) {
+        } else if (expr.isMethodReferenceExpr()) {
             resolveMethodReference(node, expr);
-        }
-        else if (expr.isConditionalExpr()) {
+        } else if (expr.isConditionalExpr()) {
             ConditionalExpr ce = expr.asConditionalExpr();
             if (ce.getThenExpr().isNameExpr()) {
                 resolveNameExpr(node, ce.getThenExpr().asNameExpr(), types);
@@ -455,8 +615,7 @@ public class Resolver {
             if (ce.getElseExpr().isNameExpr()) {
                 resolveNameExpr(node, ce.getElseExpr().asNameExpr(), types);
             }
-        }
-        else if (expr.isArrayAccessExpr()) {
+        } else if (expr.isArrayAccessExpr()) {
             resolveArrayAccessExpr(node, expr, types);
         } else if (expr.isClassExpr()) {
             ClassExpr ce = expr.asClassExpr();
@@ -464,6 +623,15 @@ public class Resolver {
         }
     }
 
+    /**
+     * Resolves an array access expression.
+     * If the array is accessed via a name, resolves the name and extracts the
+     * component type.
+     *
+     * @param node  the graph node context
+     * @param expr  the array access expression
+     * @param types list to collect resolved types
+     */
     static void resolveArrayAccessExpr(GraphNode node, Expression expr, NodeList<Type> types) {
         ArrayAccessExpr aae = expr.asArrayAccessExpr();
         if (aae.getName().isNameExpr()) {
@@ -477,22 +645,27 @@ public class Resolver {
         }
     }
 
+    /**
+     * Resolves a method reference expression (e.g., `Class::method`).
+     * Handles static references, instance references, and constructor references.
+     *
+     * @param node the graph node context
+     * @param arg  the expression (expected to be a MethodReferenceExpr)
+     */
     static void resolveMethodReference(GraphNode node, Expression arg) {
 
         MethodReferenceExpr mre = arg.asMethodReferenceExpr();
         Expression scope = mre.getScope();
         if (scope.isNameExpr()) {
             ImportUtils.addImport(node, scope.asNameExpr());
-        }
-        else if (scope.isThisExpr()) {
+        } else if (scope.isThisExpr()) {
             for (MethodDeclaration m : node.getEnclosingType().getMethodsByName(mre.getIdentifier())) {
                 Graph.createGraphNode(m);
             }
-        }
-        else if (scope.isTypeExpr()) {
+        } else if (scope.isTypeExpr()) {
             // Resolve the type expression to its corresponding class
             String typeName = scope.asTypeExpr().getType().asString();
-            String fullQulifiedName=AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), typeName);
+            String fullQulifiedName = AbstractCompiler.findFullyQualifiedName(node.getCompilationUnit(), typeName);
             CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(fullQulifiedName);
             if (cu != null) {
                 TypeDeclaration<?> typeDecl = AbstractCompiler.getPublicType(cu);
@@ -507,6 +680,16 @@ public class Resolver {
         }
     }
 
+    /**
+     * Wraps and resolves a callable expression (MethodCallExpr or
+     * ObjectCreationExpr).
+     * Resolves argument types and handles the method invocation chain.
+     *
+     * @param node           the graph node context
+     * @param callExpression the callable expression
+     * @param types          list to collect resolved types representing the return
+     *                       type or result
+     */
     static void wrapCallable(GraphNode node, NodeWithArguments<?> callExpression, NodeList<Type> types) {
 
         MCEWrapper wrap = resolveArgumentTypes(node, callExpression);
@@ -525,7 +708,21 @@ public class Resolver {
     }
 
     @SuppressWarnings("unchecked")
-    private static void wrappCallableUsingClassDeclaration(GraphNode node, NodeWithArguments<?> callExpression, NodeList<Type> types, ClassOrInterfaceDeclaration cid, MCEWrapper wrap, GraphNode gn) {
+    /**
+     * Helper to wrap a callable when a ClassOrInterfaceDeclaration is involved
+     * (e.g. inner methods).
+     * Tries to find the method declaration within the class or handles
+     * Lombok-generated methods.
+     *
+     * @param node           the graph node context
+     * @param callExpression the callable expression
+     * @param types          list to collect resolved types
+     * @param cid            the class or interface declaration context
+     * @param wrap           the MCE wrapper with resolved arguments
+     * @param gn             the graph node from the chain resolution
+     */
+    private static void wrappCallableUsingClassDeclaration(GraphNode node, NodeWithArguments<?> callExpression,
+            NodeList<Type> types, ClassOrInterfaceDeclaration cid, MCEWrapper wrap, GraphNode gn) {
         Optional<Callable> omd = AbstractCompiler.findCallableDeclaration(wrap, cid);
         if (omd.isPresent()) {
             Callable cd = omd.get();
@@ -535,9 +732,8 @@ public class Resolver {
                     types.add(t);
                     ImportUtils.addImport(node, t);
                 }
-                cd.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c ->
-                    ImportUtils.addImport(node, c.getNameAsString())
-                );
+                cd.getCallableDeclaration().findAncestor(ClassOrInterfaceDeclaration.class)
+                        .ifPresent(c -> ImportUtils.addImport(node, c.getNameAsString()));
             }
             return;
         }
@@ -549,10 +745,20 @@ public class Resolver {
         }
     }
 
+    /**
+     * Attempts to resolve methods generated by Lombok annotations (Getter, Setter,
+     * Data).
+     * Infers the field type based on the accessor/mutator name.
+     *
+     * @param argMethodCall the method call expression (e.g., `getFoo()`)
+     * @param cid           the class declaration to check for Lombok annotations
+     *                      and fields
+     * @param gn            the graph node context
+     * @return the resolved Type of the field if successful, otherwise null
+     */
     static Type lombokSolver(MethodCallExpr argMethodCall, ClassOrInterfaceDeclaration cid, GraphNode gn) {
-        if ( (argMethodCall.getNameAsString().startsWith("get") || argMethodCall.getNameAsString().startsWith("set") &&
-                (cid.getAnnotationByName("Data").isPresent() || cid.getAnnotationByName("Getter").isPresent()))
-        ) {
+        if ((argMethodCall.getNameAsString().startsWith("get") || argMethodCall.getNameAsString().startsWith("set") &&
+                (cid.getAnnotationByName("Data").isPresent() || cid.getAnnotationByName("Getter").isPresent()))) {
             String field = argMethodCall.getNameAsString().substring(3);
             if (!field.isEmpty()) {
                 Optional<FieldDeclaration> fd = cid.getFieldByName(AbstractCompiler.classToInstanceName(field));
@@ -568,6 +774,16 @@ public class Resolver {
     }
 
     @SuppressWarnings("unchecked")
+    /**
+     * 'Copies' a method by resolving it to a graph node in the dependency graph.
+     * Finds the matching method declaration, handles overrides, thrown exceptions,
+     * and Lombok-generated methods.
+     *
+     * @param mceWrapper the wrapper containing the method call and resolved
+     *                   arguments
+     * @param node       the current graph node context
+     * @return a GraphNode representing the resolved method or null
+     */
     static GraphNode copyMethod(MCEWrapper mceWrapper, GraphNode node) {
         TypeDeclaration<?> cdecl = node.getEnclosingType();
         if (cdecl == null) {
@@ -575,8 +791,7 @@ public class Resolver {
         }
 
         Optional<Callable> md = AbstractCompiler.findCallableDeclaration(
-                mceWrapper, cdecl
-        );
+                mceWrapper, cdecl);
 
         if (md.isPresent() && md.get().isMethodDeclaration()) {
             MethodDeclaration method = md.get().asMethodDeclaration();
@@ -593,7 +808,8 @@ public class Resolver {
                 }
             }
             return Graph.createGraphNode(method);
-        } else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce && cdecl instanceof ClassOrInterfaceDeclaration decl) {
+        } else if (mceWrapper.getMethodCallExpr() instanceof MethodCallExpr mce
+                && cdecl instanceof ClassOrInterfaceDeclaration decl) {
             Type t = lombokSolver(mce, decl, node);
             if (t != null && t.isClassOrInterfaceType()) {
                 return ImportUtils.addImport(node, t);
@@ -612,16 +828,16 @@ public class Resolver {
     /**
      * Resolves the given name expression.
      * Operates via side effects.
-     * @param node the node within which the expression is being resolved
+     * 
+     * @param node           the node within which the expression is being resolved
      * @param nameExpression the name expression to resolve
-     * @param types the resolved type will be added to this list.
+     * @param types          the resolved type will be added to this list.
      */
     static void resolveNameExpr(GraphNode node, NameExpr nameExpression, NodeList<Type> types) {
         Type t = DepSolver.getNames().get(nameExpression.getNameAsString());
         if (t != null) {
             types.add(t);
-        }
-        else {
+        } else {
 
             Optional<FieldDeclaration> fd = node.getEnclosingType().getFieldByName(nameExpression.getNameAsString());
             if (fd.isPresent()) {
@@ -635,8 +851,7 @@ public class Resolver {
                         ImportUtils.addImport(node, ann.getNameAsString());
                     }
                 }
-            }
-            else {
+            } else {
                 ImportUtils.addImport(node, nameExpression.getNameAsString());
             }
         }
