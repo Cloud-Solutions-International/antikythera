@@ -38,7 +38,8 @@ public class Settings {
      */
     public static final String MOCK_WITH = "mock_with";
     /**
-     * While evaluating expressions, any mocking will be done through this framework.
+     * While evaluating expressions, any mocking will be done through this
+     * framework.
      */
     public static final String MOCK_WITH_INTERNAL = "mock_with_internal";
     public static final String BASE_TEST_CLASS = "base_test_class";
@@ -60,17 +61,24 @@ public class Settings {
     /**
      * Private constructor to prevent the class being initialized.
      */
-    private Settings() {}
+    private Settings() {
+    }
 
     /**
      * Load the configuration from the default generator.yml file.
+     * 
      * @throws IOException if the file could not be read.
      */
     public static void loadConfigMap() throws IOException {
         if (props == null) {
             props = new HashMap<>();
-            File yamlFile = new File(Settings.class.getClassLoader().getResource("generator.yml").getFile());
-            loadYamlConfig(yamlFile);
+            try (java.io.InputStream inputStream = Settings.class.getClassLoader()
+                    .getResourceAsStream("generator.yml")) {
+                if (inputStream == null) {
+                    throw new IOException("generator.yml not found in classpath");
+                }
+                loadYamlConfig(inputStream);
+            }
         }
     }
 
@@ -78,20 +86,38 @@ public class Settings {
         props = new HashMap<>();
         loadYamlConfig(f);
     }
+
     /**
      * Load configuration from a yaml file
      *
-     * Using yaml gives us the advantage of being able to have nested properties and also properties
-     * that can have multiple entries without getting into ugly comma separated values.
+     * Using yaml gives us the advantage of being able to have nested properties and
+     * also properties
+     * that can have multiple entries without getting into ugly comma separated
+     * values.
+     * 
      * @param yamlFile the location of the file containing the configuration data
      * @throws IOException if the file could not be read
      */
     private static void loadYamlConfig(File yamlFile) throws IOException {
-        ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+        loadYamlConfig(new ObjectMapper(new YAMLFactory()), yamlFile);
+    }
+
+    private static void loadYamlConfig(java.io.InputStream inputStream) throws IOException {
+        loadYamlConfig(new ObjectMapper(new YAMLFactory()), inputStream);
+    }
+
+    private static void loadYamlConfig(ObjectMapper mapper, Object source) throws IOException {
         mapper.registerModule(new com.fasterxml.jackson.databind.module.SimpleModule()
                 .addDeserializer(Map.class, new LinkedHashMapDeserializer()));
 
-        Map<String, Object> yamlProps = mapper.readValue(yamlFile, new TypeReference<Map<String, Object>>() {});
+        Map<String, Object> yamlProps;
+        if (source instanceof File) {
+            yamlProps = mapper.readValue((File) source, new TypeReference<Map<String, Object>>() {
+            });
+        } else {
+            yamlProps = mapper.readValue((java.io.InputStream) source, new TypeReference<Map<String, Object>>() {
+            });
+        }
 
         Map<String, Object> variables = (Map<String, Object>) yamlProps.getOrDefault(VARIABLES, new HashMap<>());
         props.put(VARIABLES, variables);
@@ -106,25 +132,24 @@ public class Settings {
     }
 
     private static void hostInfo(Map<String, Object> yamlProps) throws IOException {
-        if(yamlProps.get(APPLICATION_HOST) != null || yamlProps.get("application.version") != null) {
+        if (yamlProps.get(APPLICATION_HOST) != null || yamlProps.get("application.version") != null) {
             Path path = Paths.get("src", "test", "resources", "testdata", "qa").resolve("Url.properties");
             File urlFile = path.toFile();
-            if(urlFile.exists()) {
+            if (urlFile.exists()) {
                 StringBuilder sb = new StringBuilder();
                 Scanner sc = new Scanner(urlFile);
                 while (sc.hasNextLine()) {
                     String line = sc.nextLine().strip();
-                    if(line.startsWith(APPLICATION_HOST)) {
+                    if (line.startsWith(APPLICATION_HOST)) {
                         sb.append(APPLICATION_HOST).append("=")
-                          .append(yamlProps.get(APPLICATION_HOST) == null ? "" : yamlProps.get(APPLICATION_HOST))
-                          .append("\n");
-                    }
-                    else if(line.startsWith("application.version")) {
-                        sb.append("application.version=")
-                                .append(yamlProps.get("application.version") == null ? "" : yamlProps.get(APPLICATION_HOST))
+                                .append(yamlProps.get(APPLICATION_HOST) == null ? "" : yamlProps.get(APPLICATION_HOST))
                                 .append("\n");
-                    }
-                    else {
+                    } else if (line.startsWith("application.version")) {
+                        sb.append("application.version=")
+                                .append(yamlProps.get("application.version") == null ? ""
+                                        : yamlProps.get(APPLICATION_HOST))
+                                .append("\n");
+                    } else {
                         sb.append(line).append("\n");
                     }
                 }
@@ -158,7 +183,7 @@ public class Settings {
                 target.put(key, nestedMap);
             } else if (value instanceof List) {
                 List<String> result = new ArrayList<>();
-                for(String s : (List<String>) value) {
+                for (String s : (List<String>) value) {
                     if (s != null) {
                         s = s.replace("${USERDIR}", userDir);
                         s = replaceYamlVariables(s);
@@ -166,13 +191,11 @@ public class Settings {
                     }
                 }
                 target.put(key, result);
-            }
-            else if (value instanceof String v) {
+            } else if (value instanceof String v) {
                 v = v.replace("${USERDIR}", userDir);
                 v = replaceYamlVariables(v);
                 target.put(key, replaceEnvVariables(v));
-            }
-            else {
+            } else {
                 target.put(key, value);
             }
         }
@@ -180,6 +203,7 @@ public class Settings {
 
     /**
      * Replace variables in the given property.
+     * 
      * @param value the replacement
      * @return the updated value
      */
@@ -236,7 +260,8 @@ public class Settings {
 
     /**
      * Get the property value for the given key.
-     * The cls parameter is used to cast the result to the given class so that the callers
+     * The cls parameter is used to cast the result to the given class so that the
+     * callers
      * need not clutter their call with casts
      *
      * @param key the key to search for
@@ -245,7 +270,7 @@ public class Settings {
      */
     public static <T> Optional<T> getProperty(String key, Class<T> cls) {
         Object property = getProperty(key);
-        if(property != null) {
+        if (property != null) {
             return Optional.of(cls.cast(property));
         }
 
@@ -256,12 +281,11 @@ public class Settings {
         Object property = getProperty(key);
         Collection<T> result = new ArrayList<>();
 
-        if(property instanceof Collection<?> c) {
-            for(Object o : c) {
+        if (property instanceof Collection<?> c) {
+            for (Object o : c) {
                 result.add(cls.cast(o));
             }
-        }
-        else if (property != null) {
+        } else if (property != null) {
             result.add(cls.cast(property));
         }
         return result;
@@ -270,19 +294,18 @@ public class Settings {
     public static Object getProperty(String key) {
 
         Object property = props.get(key);
-        if(property != null) {
+        if (property != null) {
             return property;
         }
         String[] parts = key.split("\\.");
-        if(parts.length > 1) {
+        if (parts.length > 1) {
             Object result = props.get(parts[0]);
-            if (result instanceof Map<?,?> map) {
+            if (result instanceof Map<?, ?> map) {
                 return map.get(parts[1]);
             }
         }
         return null;
     }
-
 
     /**
      * The base package for the AUT.
@@ -292,7 +315,6 @@ public class Settings {
     public static String getBasePackage() {
         return (String) props.get(Settings.BASE_PACKAGE);
     }
-
 
     /**
      * the top level folder for the AUT source code.
@@ -317,11 +339,11 @@ public class Settings {
         }
         Map<String, Object> dependencies = (Map<String, Object>) deps;
         if (dependencies == null) {
-            return new String[]{ };
+            return new String[] {};
         }
 
         Object artifacts = dependencies.get(artifactIds);
-        if(artifacts == null) {
+        if (artifacts == null) {
             return new String[] {};
         }
         return ((List<String>) artifacts).toArray(new String[0]);
@@ -342,7 +364,8 @@ public class Settings {
     /**
      * Use with caution - this will overwrite the existing value.
      * only intended for use in tests.
-     * @param key the key to replace or create
+     * 
+     * @param key   the key to replace or create
      * @param value the new value to assign.
      */
     public static void setProperty(String key, Object value) {
