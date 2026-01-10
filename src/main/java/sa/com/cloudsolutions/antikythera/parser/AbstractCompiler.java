@@ -93,7 +93,6 @@ public class AbstractCompiler {
     protected static ClassLoader loader;
     protected CompilationUnit cu;
     protected String className;
-    protected static Map<String, TypeWrapper> typeCache = new HashMap<>();
 
     // Tracks visited interface FQNs to avoid infinite recursion in cyclic/interface
     // hierarchies.
@@ -322,9 +321,7 @@ public class AbstractCompiler {
         if (declaration.isClassOrInterfaceDeclaration()) {
             ClassOrInterfaceDeclaration cdecl = declaration.asClassOrInterfaceDeclaration();
             for (var member : cdecl.getMembers()) {
-                if (member instanceof TypeDeclaration) {
-                    @SuppressWarnings("unchecked")
-                    TypeDeclaration<?> nestedType = (TypeDeclaration<?>) member;
+                if (member instanceof TypeDeclaration<?> nestedType) {
                     findContainedTypes(nestedType, cu);
                 }
             }
@@ -1439,5 +1436,4 @@ public class AbstractCompiler {
 
         return result.toString();
     }
-
 }

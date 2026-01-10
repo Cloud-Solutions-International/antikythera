@@ -55,8 +55,7 @@ public class TypeWrapper {
             if (type != null) {
                 return type.getFullyQualifiedName().orElseThrow();
             }
-        }
-        else {
+        } else {
             return clazz.getName();
         }
         return null;
@@ -65,12 +64,15 @@ public class TypeWrapper {
     public boolean isController() {
         return isController;
     }
+
     public void setController(boolean isController) {
         this.isController = isController;
     }
+
     public boolean isService() {
         return isService;
     }
+
     public void setService(boolean isService) {
         this.isService = isService;
     }
@@ -175,5 +177,62 @@ public class TypeWrapper {
             return type.getNameAsString();
         }
         return null;
+    }
+
+    /**
+     * Check if this type can be assigned from the other type.
+     * Handles both reflection-based and AST-based types.
+     * 
+     * @param other the type wrapper to check compatibility with
+     * @return true if compatible
+     */
+    public boolean isAssignableFrom(TypeWrapper other) {
+        if (other == null)
+            return false;
+
+        // 1. If both are reflection-based, use standard reflection
+        if (this.clazz != null && other.clazz != null) {
+            return this.clazz.isAssignableFrom(other.clazz);
+        }
+
+        // 2. If both are AST-based or Mixed - Check FQN equality first
+        String fqn1 = this.getFullyQualifiedName();
+        String fqn2 = other.getFullyQualifiedName();
+
+        if (fqn1 != null && fqn1.equals(fqn2)) {
+            return true;
+        }
+
+        // 3. AST Inheritance Check
+        // If the OTHER type is an AST type, we can check its ancestors to see if THIS
+        // (ancestor) is one of them.
+        if (other.type != null && other.type.isClassOrInterfaceDeclaration()) {
+            var typeDecl = other.type.asClassOrInterfaceDeclaration();
+
+            // Check extended types (superclasses)
+            if (typeDecl.getExtendedTypes() != null) {
+                for (var extended : typeDecl.getExtendedTypes()) {
+                    String extendedFQN = sa.com.cloudsolutions.antikythera.parser.AbstractCompiler
+                            .findFullyQualifiedName(
+                                    other.type.findCompilationUnit().orElse(null), extended);
+                    if (extendedFQN != null && extendedFQN.equals(fqn1)) {
+                        return true;
+                    }
+                }
+            }
+
+            // Check implemented interfaces
+            if (typeDecl.getImplementedTypes() != null) {
+                for (var implemented : typeDecl.getImplementedTypes()) {
+                    String implFQN = sa.com.cloudsolutions.antikythera.parser.AbstractCompiler.findFullyQualifiedName(
+                            other.type.findCompilationUnit().orElse(null), implemented);
+                    if (implFQN != null && implFQN.equals(fqn1)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 }
