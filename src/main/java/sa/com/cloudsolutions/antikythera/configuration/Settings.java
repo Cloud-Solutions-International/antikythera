@@ -111,12 +111,10 @@ public class Settings {
                 .addDeserializer(Map.class, new LinkedHashMapDeserializer()));
 
         Map<String, Object> yamlProps;
-        if (source instanceof File) {
-            yamlProps = mapper.readValue((File) source, new TypeReference<Map<String, Object>>() {
-            });
+        if (source instanceof File file) {
+            yamlProps = mapper.readValue(file, new TypeReference<>() {});
         } else {
-            yamlProps = mapper.readValue((java.io.InputStream) source, new TypeReference<Map<String, Object>>() {
-            });
+            yamlProps = mapper.readValue((java.io.InputStream) source, new TypeReference<>() {});
         }
 
         Map<String, Object> variables = (Map<String, Object>) yamlProps.getOrDefault(VARIABLES, new HashMap<>());
