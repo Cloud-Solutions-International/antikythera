@@ -49,27 +49,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
     private Variable mockNonPrimitiveParameter(Parameter param) throws ReflectiveOperationException {
         final Variable vx = mockNonPrimitiveParameterHelper(param);
         if (vx == null) {
-            // If helper returns null, try to create a mock using Mockito
-            Type t = param.getType();
-            if (t.isClassOrInterfaceType()) {
-                String typeName = t.asClassOrInterfaceType().getNameAsString();
-                try {
-                    // Try to load the class and create a mock
-                    if (param.findCompilationUnit().isPresent()) {
-                        TypeWrapper wrapper = AbstractCompiler.findType(param.findCompilationUnit().orElseThrow(), t);
-                        if (wrapper != null && wrapper.getClazz() != null) {
-                            return MockingRegistry.createMockitoMockInstance(wrapper.getClazz());
-                        }
-                    }
-                } catch (Exception e) {
-                    // If we can't create a mock, return a Variable with null
-                    Variable nullVar = new Variable(null);
-                    nullVar.setInitializer(List.of(new com.github.javaparser.ast.expr.NullLiteralExpr()));
-                    return nullVar;
-                }
-            }
-            // Return null variable - will be handled by caller
-            return null;
+            return mockNonPrimitiveUsingMockito(param);
         }
         if (vx.getValue() instanceof Evaluator eval) {
             param.findAncestor(MethodDeclaration.class).ifPresent(md -> {
@@ -82,6 +62,29 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
             });
         }
         return vx;
+    }
+
+    private static Variable mockNonPrimitiveUsingMockito(Parameter param) {
+        // If helper returns null, try to create a mock using Mockito
+        Type t = param.getType();
+        if (t.isClassOrInterfaceType()) {
+            try {
+                // Try to load the class and create a mock
+                if (param.findCompilationUnit().isPresent()) {
+                    TypeWrapper wrapper = AbstractCompiler.findType(param.findCompilationUnit().orElseThrow(), t);
+                    if (wrapper != null && wrapper.getClazz() != null) {
+                        return MockingRegistry.createMockitoMockInstance(wrapper.getClazz());
+                    }
+                }
+            } catch (Exception e) {
+                // If we can't create a mock, return a Variable with null
+                Variable nullVar = new Variable(null);
+                nullVar.setInitializer(List.of(new com.github.javaparser.ast.expr.NullLiteralExpr()));
+                return nullVar;
+            }
+        }
+        // Return null variable - will be handled by caller
+        return null;
     }
 
     private static void mockField(Evaluator eval, Expression expr) {
@@ -101,6 +104,45 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         }
     }
 
+    /**
+     * Handle custom mock expressions for a given type. Assumes the list is ordered such that
+     * the first viable ObjectCreationExpr represents the creation, and the rest are initialization steps.
+     * If no ObjectCreationExpr is found, returns a Variable with all expressions as initializers.
+     */
+    private Variable handleCustomizedExpressions(TypeWrapper wrapper, List<Expression> customized) {
+        for (int i = 0; i < customized.size(); i++) {
+            Expression expr = customized.get(i);
+            if (expr instanceof ObjectCreationExpr oce) {
+                // If we can load the class, try to instantiate; else keep as initializer-only
+                if (wrapper != null && wrapper.getClazz() != null) {
+                    try {
+                        ReflectionArguments args = Reflect.buildArguments(
+                                oce, EvaluatorFactory.createLazily("", Evaluator.class), null);
+                        Constructor<?> constructor = Reflect.findConstructor(wrapper.getClazz(), args.getArgumentTypes(), args.getArguments());
+                        if (constructor != null) {
+                            Variable v = new Variable(constructor.newInstance(args.getArguments()));
+                            // Initializer should include creation + subsequent initialization steps
+                            java.util.List<Expression> inits = new java.util.ArrayList<>(customized.subList(i, customized.size()));
+                            v.setInitializer(inits);
+                            return v;
+                        }
+                    } catch (Exception ignored) {
+                        // Fall through to initializer-only behavior below
+                    }
+                }
+                // Could not instantiate (JDK/unavailable or ctor mismatch). Keep initializer-only from this point onwards
+                Variable v = new Variable(null);
+                java.util.List<Expression> inits = new java.util.ArrayList<>(customized.subList(i, customized.size()));
+                v.setInitializer(inits);
+                return v;
+            }
+        }
+        // No creation expression found; use all as initializers
+        Variable v = new Variable(null);
+        v.setInitializer(customized);
+        return v;
+    }
+
     private Variable mockNonPrimitiveParameterHelper(Parameter param) throws ReflectiveOperationException {
         Variable v = null;
         Type t = param.getType();
@@ -118,30 +160,9 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         // Check for custom mock expressions first (works for JDK classes too)
         List<Expression> customized = MockingRegistry.getCustomMockExpressions(fullClassName);
         if (!customized.isEmpty()) {
-            for (Expression expr : customized) {
-                if (expr instanceof ObjectCreationExpr oce) {
-                    if (wrapper.getClazz() != null) {
-                        ReflectionArguments args = Reflect.buildArguments(oce,
-                                EvaluatorFactory.createLazily("", Evaluator.class), null);
-                        Constructor<?> constructor = Reflect.findConstructor(wrapper.getClazz(), args.getArgumentTypes(), args.getArguments());
-                        v = new Variable(constructor.newInstance(args.getArguments()));
-                        v.setInitializer(customized);
-                        return v;
-                    } else {
-                        // For JDK classes, just create a Variable with the expression as initializer
-                        v = new Variable(null);
-                        v.setInitializer(customized);
-                        return v;
-                    }
-                } else {
-                    // For non-ObjectCreationExpr expressions (like method calls), create Variable with expression
-                    v = new Variable(null);
-                    v.setInitializer(List.of(expr));
-                    return v;
-                }
-            }
+            return handleCustomizedExpressions(wrapper, customized);
         }
-        
+
         if (wrapper.getClazz() != null) {
             return mockNonPrimitiveParameterHelper(param, wrapper);
         }
@@ -235,6 +256,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         return v;
     }
 
+    @SuppressWarnings("java:S1462")
     public static Constructor<?> findSimplestConstructor(Class<?> clazz) {
         Constructor<?>[] constructors = clazz.getDeclaredConstructors();
         Constructor<?> simplest = null;
