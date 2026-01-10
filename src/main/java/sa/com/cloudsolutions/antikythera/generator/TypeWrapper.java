@@ -207,32 +207,37 @@ public class TypeWrapper {
         // If the OTHER type is an AST type, we can check its ancestors to see if THIS
         // (ancestor) is one of them.
         if (other.type != null && other.type.isClassOrInterfaceDeclaration()) {
-            var typeDecl = other.type.asClassOrInterfaceDeclaration();
+            return isAssignableFrom(other, fqn1);
+        }
 
-            // Check extended types (superclasses)
-            if (typeDecl.getExtendedTypes() != null) {
-                for (var extended : typeDecl.getExtendedTypes()) {
-                    String extendedFQN = sa.com.cloudsolutions.antikythera.parser.AbstractCompiler
-                            .findFullyQualifiedName(
-                                    other.type.findCompilationUnit().orElse(null), extended);
-                    if (extendedFQN != null && extendedFQN.equals(fqn1)) {
-                        return true;
-                    }
-                }
-            }
+        return false;
+    }
 
-            // Check implemented interfaces
-            if (typeDecl.getImplementedTypes() != null) {
-                for (var implemented : typeDecl.getImplementedTypes()) {
-                    String implFQN = sa.com.cloudsolutions.antikythera.parser.AbstractCompiler.findFullyQualifiedName(
-                            other.type.findCompilationUnit().orElse(null), implemented);
-                    if (implFQN != null && implFQN.equals(fqn1)) {
-                        return true;
-                    }
+    private static boolean isAssignableFrom(TypeWrapper other, String fqn1) {
+        var typeDecl = other.type.asClassOrInterfaceDeclaration();
+
+        // Check extended types (superclasses)
+        if (typeDecl.getExtendedTypes() != null) {
+            for (var extended : typeDecl.getExtendedTypes()) {
+                String extendedFQN = sa.com.cloudsolutions.antikythera.parser.AbstractCompiler
+                        .findFullyQualifiedName(
+                                other.type.findCompilationUnit().orElse(null), extended);
+                if (extendedFQN != null && extendedFQN.equals(fqn1)) {
+                    return true;
                 }
             }
         }
 
+        // Check implemented interfaces
+        if (typeDecl.getImplementedTypes() != null) {
+            for (var implemented : typeDecl.getImplementedTypes()) {
+                String implFQN = sa.com.cloudsolutions.antikythera.parser.AbstractCompiler.findFullyQualifiedName(
+                        other.type.findCompilationUnit().orElse(null), implemented);
+                if (implFQN != null && implFQN.equals(fqn1)) {
+                    return true;
+                }
+            }
+        }
         return false;
     }
 }
