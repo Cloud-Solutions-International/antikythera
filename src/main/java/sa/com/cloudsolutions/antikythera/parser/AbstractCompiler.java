@@ -39,7 +39,7 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeS
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
 import java.io.File;
-import java.io.FileInputStream;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -93,7 +93,6 @@ public class AbstractCompiler {
     protected static ClassLoader loader;
     protected CompilationUnit cu;
     protected String className;
-    protected static Map<String, TypeWrapper> typeCache = new HashMap<>();
 
     // Tracks visited interface FQNs to avoid infinite recursion in cyclic/interface
     // hierarchies.
@@ -158,8 +157,8 @@ public class AbstractCompiler {
 
         symbolResolver = new JavaSymbolSolver(combinedTypeSolver);
         ParserConfiguration parserConfiguration = new ParserConfiguration()
-            .setSymbolResolver(symbolResolver)
-            .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
+                .setSymbolResolver(symbolResolver)
+                .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
         javaParser = new JavaParser(parserConfiguration);
     }
 
@@ -283,7 +282,6 @@ public class AbstractCompiler {
      */
     public boolean compile(String relativePath) throws FileNotFoundException {
         this.className = pathToClass(relativePath);
-
         cu = AntikytheraRunTime.getCompilationUnit(className);
         if (cu != null) {
             // this has already been compiled
@@ -292,11 +290,13 @@ public class AbstractCompiler {
 
         Path sourcePath = Paths.get(Settings.getBasePath(), relativePath);
 
-        File file = sourcePath.toFile();
-
         // Proceed with parsing the controller file
-        FileInputStream in = new FileInputStream(file);
-        cu = javaParser.parse(in).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+        // Proceed with parsing the controller file
+        try {
+            cu = javaParser.parse(sourcePath).getResult().orElseThrow(() -> new IllegalStateException("Parse error"));
+        } catch (IOException e) {
+            throw new FileNotFoundException("File not found: " + sourcePath);
+        }
 
         // Enable LexicalPreservingPrinter if requested for whitespace preservation
         if (enableLexicalPreservation) {
@@ -316,20 +316,18 @@ public class AbstractCompiler {
     private void findContainedTypes(TypeDeclaration<?> declaration, CompilationUnit cu) {
         // Process the declaration itself first
         processType(declaration, cu);
-        
+
         // Then recursively process nested types
         if (declaration.isClassOrInterfaceDeclaration()) {
             ClassOrInterfaceDeclaration cdecl = declaration.asClassOrInterfaceDeclaration();
             for (var member : cdecl.getMembers()) {
-                if (member instanceof TypeDeclaration) {
-                    @SuppressWarnings("unchecked")
-                    TypeDeclaration<?> nestedType = (TypeDeclaration<?>) member;
+                if (member instanceof TypeDeclaration<?> nestedType) {
                     findContainedTypes(nestedType, cu);
                 }
             }
         }
     }
-    
+
     private void processType(TypeDeclaration<?> type, CompilationUnit cu) {
         TypeWrapper typeWrapper = new TypeWrapper(type);
         if (type.isAnnotationPresent("Service")
@@ -353,10 +351,10 @@ public class AbstractCompiler {
             CompilationUnit existingCu = AntikytheraRunTime.getCompilationUnit(name);
             if (existingCu != null && existingCu != cu) {
                 throw new IllegalStateException(
-                    String.format("Duplicate class definition detected: Class '%s' is defined in multiple files. " +
-                        "This violates Java's one-class-per-file rule. " +
-                        "The class was already loaded from another compilation unit.",
-                        name));
+                        String.format("Duplicate class definition detected: Class '%s' is defined in multiple files. " +
+                                "This violates Java's one-class-per-file rule. " +
+                                "The class was already loaded from another compilation unit.",
+                                name));
             }
             AntikytheraRunTime.addType(name, typeWrapper);
             AntikytheraRunTime.addCompilationUnit(name, cu);
@@ -590,32 +588,37 @@ public class AbstractCompiler {
 
     /**
      * Resolve a Type to its fully qualified name with context.
-     * Handles CU resolution from context, array types, and delegates to existing findFullyQualifiedName.
+     * Handles CU resolution from context, array types, and delegates to existing
+     * findFullyQualifiedName.
      * 
-     * <p>This method consolidates type resolution logic that was previously duplicated
-     * in MethodExtractionStrategy and BeanDependencyGraph.</p>
+     * <p>
+     * This method consolidates type resolution logic that was previously duplicated
+     * in MethodExtractionStrategy and BeanDependencyGraph.
+     * </p>
      * 
-     * @param type The type to resolve
-     * @param context The class declaration where this type appears (for package context)
-     * @param cu Optional compilation unit (will be resolved from context if null)
+     * @param type    The type to resolve
+     * @param context The class declaration where this type appears (for package
+     *                context)
+     * @param cu      Optional compilation unit (will be resolved from context if
+     *                null)
      * @return Fully qualified name, or null if not resolvable
      */
     public static String resolveTypeFqn(Type type, ClassOrInterfaceDeclaration context, CompilationUnit cu) {
         // Get compilation unit from context if not provided
         if (cu == null) {
             cu = context.findCompilationUnit()
-                .orElseGet(() -> {
-                    String fqn = context.getFullyQualifiedName().orElse(null);
-                    return fqn != null ? AntikytheraRunTime.getCompilationUnit(fqn) : null;
-                });
+                    .orElseGet(() -> {
+                        String fqn = context.getFullyQualifiedName().orElse(null);
+                        return fqn != null ? AntikytheraRunTime.getCompilationUnit(fqn) : null;
+                    });
         }
-        
+
         // Handle array types by extracting component type
         if (type.isArrayType()) {
             Type componentType = type.asArrayType().getComponentType();
             return resolveTypeFqn(componentType, context, cu);
         }
-        
+
         // Reuse existing findFullyQualifiedName which handles Type parameter correctly
         return findFullyQualifiedName(cu, type);
     }
@@ -655,7 +658,7 @@ public class AbstractCompiler {
         if (p != null) {
             return new TypeWrapper(p);
         }
-        
+
         // Check AntikytheraRunTime for types matching the short name
         // Priority 1: Same package types (most likely match)
         String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
@@ -666,7 +669,7 @@ public class AbstractCompiler {
                 return new TypeWrapper(samePackageType.orElseThrow());
             }
         }
-        
+
         // Priority 2: Exact match (might be a fully qualified name passed as className)
         Optional<TypeDeclaration<?>> exactMatch = AntikytheraRunTime.getTypeDeclaration(className);
         if (exactMatch.isPresent()) {
@@ -674,7 +677,8 @@ public class AbstractCompiler {
         }
 
         TypeWrapper imp = getTypeWrapperFromImports(cu, className);
-        if (imp != null) return imp;
+        if (imp != null)
+            return imp;
 
         for (EnumDeclaration ed : cu.findAll(EnumDeclaration.class)) {
             for (EnumConstantDeclaration constant : ed.getEntries()) {
@@ -685,7 +689,8 @@ public class AbstractCompiler {
         }
 
         TypeWrapper typeDecl = searchClassName(className);
-        if (typeDecl != null) return typeDecl;
+        if (typeDecl != null)
+            return typeDecl;
 
         return detectTypeWithClassLoaders(cu, className);
     }
@@ -1211,7 +1216,7 @@ public class AbstractCompiler {
         }
     }
 
-    private void solveInterfaces(ClassOrInterfaceDeclaration cdecl,CompilationUnit interfaceCu) {
+    private void solveInterfaces(ClassOrInterfaceDeclaration cdecl, CompilationUnit interfaceCu) {
         for (TypeDeclaration<?> ifaceType : interfaceCu.getTypes()) {
             if (ifaceType.isClassOrInterfaceDeclaration()) {
                 ClassOrInterfaceDeclaration ifaceDecl = ifaceType.asClassOrInterfaceDeclaration();
@@ -1431,5 +1436,4 @@ public class AbstractCompiler {
 
         return result.toString();
     }
-
 }

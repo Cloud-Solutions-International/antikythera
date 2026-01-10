@@ -59,8 +59,6 @@ public class DepSolver extends DependencyAnalyzer {
         super();
     }
 
-    // ============ Static Factory and Facade (backward compatibility) ============
-
     /**
      * Create a DepSolver instance (backward compatibility).
      * Returns a singleton instance, reusing the same instance across calls.
@@ -119,8 +117,6 @@ public class DepSolver extends DependencyAnalyzer {
         visitedSignatures.clear();
     }
 
-    // ============ Override Hook Methods for Code Generation ============
-
     /**
      * Create a graph node for code generation.
      * Uses Graph.createGraphNode() which includes buildNode() and destination CU
@@ -157,8 +153,6 @@ public class DepSolver extends DependencyAnalyzer {
     protected void onImportDiscovered(GraphNode node, ImportWrapper imp) {
         node.getDestination().addImport(imp.getImport());
     }
-
-    // ============ DepSolver-specific Methods ============
 
     /**
      * Main entry point for the dependency solver.
