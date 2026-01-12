@@ -98,7 +98,14 @@ public class MavenHelper {
         return pomModel;
     }
 
-    private void readPomFile(Path p) throws IOException, XmlPullParserException {
+    /**
+     * Reads a POM file from the specified path.
+     *
+     * @param p the path to the pom.xml file
+     * @throws IOException if the file cannot be read
+     * @throws XmlPullParserException if the file cannot be parsed
+     */
+    public void readPomFile(Path p) throws IOException, XmlPullParserException {
         pomPath = p.toAbsolutePath();
         MavenXpp3Reader reader = new MavenXpp3Reader();
 
