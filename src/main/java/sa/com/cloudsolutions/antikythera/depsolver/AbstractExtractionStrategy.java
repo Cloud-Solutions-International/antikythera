@@ -2,10 +2,13 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -18,6 +21,7 @@ import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Abstract base class for all dependency resolution strategies.
@@ -127,4 +131,23 @@ public abstract class AbstractExtractionStrategy {
             }
         }
     }
+
+    /**
+     * Qualify inner class types in the method signature (parameters and return type).
+     * If a type refers to an inner class of the target class, qualify it with the target class name.
+     */
+    void qualifyInnerTypes(MethodDeclaration method, ClassOrInterfaceDeclaration targetClass) {
+        Set<String> innerClassNames = targetClass.getMembers().stream()
+                .filter(BodyDeclaration::isTypeDeclaration)
+                .map(bd -> bd.asTypeDeclaration().getNameAsString())
+                .collect(Collectors.toSet());
+
+        method.findAll(ClassOrInterfaceType.class).forEach(t -> {
+            if (t.getScope().isEmpty() && innerClassNames.contains(t.getNameAsString())) {
+                t.setScope(new ClassOrInterfaceType(null, targetClass.getNameAsString()));
+            }
+        });
+    }
+
+
 }

@@ -4,6 +4,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -23,6 +24,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Strategy for breaking circular dependencies by extracting an interface.
@@ -99,11 +101,18 @@ public class InterfaceExtractionStrategy extends AbstractExtractionStrategy {
             return false;
         }
 
-        // Step 3: Generate interface
+        // Step 3: Generate interface or update existing one
         String interfaceName = INTERFACE_PREFIX + getSimpleClassName(edge.targetBean());
         String targetPackage = getPackageName(edge.targetBean());
-        CompilationUnit interfaceCU = generateInterface(interfaceName, targetPackage, usedMethods, targetClass);
-        generatedInterfaces.put(edge.targetBean(), interfaceCU);
+        
+        CompilationUnit interfaceCU;
+        if (generatedInterfaces.containsKey(edge.targetBean())) {
+            interfaceCU = generatedInterfaces.get(edge.targetBean());
+            updateInterface(interfaceCU, usedMethods, targetClass);
+        } else {
+            interfaceCU = generateInterface(interfaceName, targetPackage, usedMethods, targetClass);
+            generatedInterfaces.put(edge.targetBean(), interfaceCU);
+        }
 
         // Step 4: Modify target class to implement interface
         addImplementsClause(targetClass, interfaceName);
@@ -144,10 +153,12 @@ public class InterfaceExtractionStrategy extends AbstractExtractionStrategy {
         Set<MethodDeclaration> methods = new HashSet<>();
 
         for (String methodName : methodNames) {
+            // Include ALL public methods with the matching name to handle overloads
+            // This ensures we capture the specific version used by the caller,
+            // and maybe others, but that's safe for an interface.
             targetClass.getMethodsByName(methodName).stream()
                     .filter(MethodDeclaration::isPublic)
-                    .findFirst()
-                    .ifPresent(methods::add);
+                    .forEach(methods::add);
         }
 
         return methods;
@@ -165,6 +176,11 @@ public class InterfaceExtractionStrategy extends AbstractExtractionStrategy {
             cu.setPackageDeclaration(packageName);
         }
 
+        // Copy imports from the target class to ensure types in method signatures resolve
+        targetClass.findCompilationUnit().ifPresent(sourceCu ->
+                sourceCu.getImports().forEach(cu::addImport)
+        );
+
         ClassOrInterfaceDeclaration iface = cu.addInterface(interfaceName);
         iface.setModifier(Modifier.Keyword.PUBLIC, true);
 
@@ -177,8 +193,33 @@ public class InterfaceExtractionStrategy extends AbstractExtractionStrategy {
             iface.setTypeParameters(typeParams);
         }
 
-        // Add method signatures
+        addMethodsToInterface(iface, methods, targetClass);
+
+        return cu;
+    }
+
+    private void updateInterface(CompilationUnit cu, Set<MethodDeclaration> methods, ClassOrInterfaceDeclaration targetClass) {
+        cu.findFirst(ClassOrInterfaceDeclaration.class).ifPresent(iface ->
+            addMethodsToInterface(iface, methods, targetClass)
+        );
+        
+        // Also merge imports? imports are set on CU.
+        // We already copied imports from targetClass when creating.
+        // Since targetClass is the same, imports should be same.
+        // But if we had multiple target classes (not possible, targetBean is unique key), it would matter.
+        // So imports are fine.
+    }
+
+    private void addMethodsToInterface(ClassOrInterfaceDeclaration iface, Set<MethodDeclaration> methods, ClassOrInterfaceDeclaration targetClass) {
         for (MethodDeclaration method : methods) {
+            // Check if method already exists in interface
+            boolean exists = iface.getMethods().stream().anyMatch(m -> 
+                m.getNameAsString().equals(method.getNameAsString()) &&
+                m.getParameters().toString().equals(method.getParameters().toString()) // Simple signature check
+            );
+            
+            if (exists) continue;
+
             MethodDeclaration sig = new MethodDeclaration();
             sig.setName(method.getNameAsString());
             sig.setType(method.getType().clone());
@@ -200,11 +241,12 @@ public class InterfaceExtractionStrategy extends AbstractExtractionStrategy {
 
             // Interface methods have no body
             sig.removeBody();
+            
+            // Qualify inner class types in signatures
+            qualifyInnerTypes(sig, targetClass);
 
             iface.addMember(sig);
         }
-
-        return cu;
     }
 
     /**
