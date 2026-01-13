@@ -9,6 +9,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.InitializerDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
@@ -17,6 +18,7 @@ import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.SimpleName;
@@ -198,6 +200,49 @@ public class DependencyAnalyzer {
     }
 
     /**
+     * Hook method for subclasses to handle field accesses.
+     * Default implementation does nothing (analysis-only).
+     *
+     * @param node Graph node context
+     * @param fae  Field access expression
+     */
+    protected void onFieldAccessed(GraphNode node, FieldAccessExpr fae) {
+        // Override in subclasses to track field access edges
+    }
+
+    /**
+     * Hook method for subclasses to handle type usage.
+     * Default implementation does nothing (analysis-only).
+     * Called when a type is explicitly referenced (e.g., in casts, catch clauses, type arguments).
+     *
+     * @param node Graph node context
+     * @param type The type being used
+     */
+    protected void onTypeUsed(GraphNode node, Type type) {
+        // Override in subclasses to track USES edges
+    }
+
+    /**
+     * Hook method for subclasses to handle lambda discoveries.
+     *
+     * @param node   Graph node context
+     * @param lambda The lambda expression
+     */
+    protected void onLambdaDiscovered(GraphNode node, LambdaExpr lambda) {
+        // Override in subclasses to track lambda enclosure edges
+    }
+
+    /**
+     * Hook method for subclasses to handle nested type discoveries.
+     *
+     * @param node       Graph node context
+     * @param nestedType The nested class/interface declaration
+     */
+    protected void onNestedTypeDiscovered(GraphNode node, ClassOrInterfaceDeclaration nestedType) {
+        // Override in subclasses to track ENCLOSES edges
+    }
+
+    /**
      * Iterative Depth first search.
      * 
      * Operates in three stages:
@@ -234,15 +279,69 @@ public class DependencyAnalyzer {
         }
     }
 
-    private String getNodeSignature(GraphNode node) {
-        if (node.getNode() instanceof CallableDeclaration<?> cd) {
-            String className = node.getEnclosingType() != null
-                    ? node.getEnclosingType().getFullyQualifiedName().orElse(node.getEnclosingType().getNameAsString())
-                    : "Unknown";
-            return className + "." + cd.getSignature();
+    /**
+     * Generate a stable signature for a GraphNode.
+     * Used for deterministic node identification in knowledge graphs.
+     *
+     * @param node the graph node to get signature for
+     * @return stable signature string, or null if node type is unsupported
+     */
+    protected String getNodeSignature(GraphNode node) {
+        String className = node.getEnclosingType() != null
+                ? node.getEnclosingType().getFullyQualifiedName().orElse(node.getEnclosingType().getNameAsString())
+                : "Unknown";
+
+        Node astNode = node.getNode();
+
+        if (astNode instanceof CallableDeclaration<?> cd) {
+            return className + "#" + cd.getNameAsString() + "(" + getParameterTypes(cd) + ")";
         }
+
+        if (astNode instanceof FieldDeclaration fd) {
+            String fieldName = fd.getVariables().isEmpty() ? "unknown" : fd.getVariable(0).getNameAsString();
+            return className + "#" + fieldName;
+        }
+
+        if (astNode instanceof TypeDeclaration<?> td) {
+            return td.getFullyQualifiedName().orElse(className + "$" + td.getNameAsString());
+        }
+
+        if (astNode instanceof InitializerDeclaration id) {
+            int index = getInitializerIndex(node, id);
+            return className + "#<clinit>" + (index > 0 ? "_" + index : "");
+        }
+
         return null;
     }
+
+    /**
+     * Get parameter types as a comma-separated string.
+     */
+    private String getParameterTypes(CallableDeclaration<?> cd) {
+        return cd.getParameters().stream()
+                .map(p -> p.getType().asString())
+                .collect(Collectors.joining(","));
+    }
+
+    /**
+     * Get the index of an initializer block within its enclosing type.
+     */
+    private int getInitializerIndex(GraphNode node, InitializerDeclaration id) {
+        if (node.getEnclosingType() == null) {
+            return 0;
+        }
+        int index = 0;
+        for (var member : node.getEnclosingType().getMembers()) {
+            if (member instanceof InitializerDeclaration) {
+                if (member == id) {
+                    return index;
+                }
+                index++;
+            }
+        }
+        return 0;
+    }
+
 
     /**
      * Checks if the node is a field and adds it to the class or enum.
@@ -355,7 +454,17 @@ public class DependencyAnalyzer {
 
         names.clear();
         cd.accept(new VariableVisitor(), node);
-        cd.accept(new DependencyVisitor(), node);
+        cd.accept(createDependencyVisitor(), node);
+    }
+
+    /**
+     * Factory method for creating DependencyVisitor instances.
+     * Subclasses can override this to provide custom visitor implementations.
+     *
+     * @return a new DependencyVisitor instance
+     */
+    protected DependencyVisitor createDependencyVisitor() {
+        return new DependencyVisitor();
     }
 
     /**
@@ -423,7 +532,7 @@ public class DependencyAnalyzer {
         if (init.isPresent()) {
             Expression initializer = init.get();
             if (initializer.isObjectCreationExpr() || initializer.isMethodCallExpr()) {
-                initializer.accept(new DependencyVisitor(), node);
+                initializer.accept(createDependencyVisitor(), node);
             } else if (initializer.isNameExpr()) {
                 Resolver.resolveNameExpr(node, initializer.asNameExpr(), new NodeList<>());
             }
@@ -508,10 +617,12 @@ public class DependencyAnalyzer {
             if (param.getType().isUnionType()) {
                 UnionType ut = param.getType().asUnionType();
                 for (Type t : ut.getElements()) {
+                    onTypeUsed(node, t);
                     ImportUtils.addImport(node, t);
                 }
             } else {
                 Type t = param.getType();
+                onTypeUsed(node, t);
                 ImportUtils.addImport(node, t);
             }
             super.visit(n, node);
@@ -549,6 +660,18 @@ public class DependencyAnalyzer {
             super.visit(mce, node);
         }
 
+        /**
+         * Visit field access expressions for read-only field access detection.
+         * This handles cases like: obj.field, this.field, ClassName.staticField
+         */
+        @Override
+        public void visit(FieldAccessExpr fae, GraphNode node) {
+            // Track the field access for knowledge graph
+            onFieldAccessed(node, fae);
+            ImportUtils.addImport(node, fae);
+            super.visit(fae, node);
+        }
+
         @Override
         public void visit(BinaryExpr n, GraphNode node) {
             Optional<Node> parent = n.getParentNode();
@@ -565,6 +688,7 @@ public class DependencyAnalyzer {
 
         @Override
         public void visit(CastExpr n, GraphNode node) {
+            onTypeUsed(node, n.getType());
             ImportUtils.addImport(node, n.getType());
             super.visit(n, node);
         }
@@ -577,6 +701,27 @@ public class DependencyAnalyzer {
             Resolver.chainedMethodCall(node, mceWrapper);
 
             super.visit(oce, node);
+        }
+
+        /**
+         * Visit lambda expressions to enable knowledge graph traversal into lambdas.
+         */
+        @Override
+        public void visit(LambdaExpr le, GraphNode node) {
+            onLambdaDiscovered(node, le);
+            super.visit(le, node);
+        }
+
+        /**
+         * Visit nested class/interface declarations.
+         */
+        @Override
+        public void visit(ClassOrInterfaceDeclaration cid, GraphNode node) {
+            // Only process if this is a nested type (inner class)
+            if (cid.isNestedType()) {
+                onNestedTypeDiscovered(node, cid);
+            }
+            super.visit(cid, node);
         }
     }
 
