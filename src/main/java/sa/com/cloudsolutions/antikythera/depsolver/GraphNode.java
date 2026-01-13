@@ -7,6 +7,7 @@ import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.InitializerDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
@@ -434,7 +435,30 @@ public class GraphNode {
             b.append("@");
             b.append(cd.getSignature().toString());
         }
+        else if (node instanceof InitializerDeclaration) {
+            b.append("#<clinit>");
+            int index = getInitializerIndex();
+            if (index > 0) {
+                b.append("_").append(index);
+            }
+        }
         return b.toString();
+    }
+
+    private int getInitializerIndex() {
+        if (enclosingType == null) {
+            return 0;
+        }
+        int index = 0;
+        for (var member : enclosingType.getMembers()) {
+            if (member instanceof InitializerDeclaration) {
+                if (member == node) {
+                    return index;
+                }
+                index++;
+            }
+        }
+        return 0;
     }
 
     /**

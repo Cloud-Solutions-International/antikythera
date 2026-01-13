@@ -149,7 +149,7 @@ class DependencyAnalyzerHooksTest {
         CustomVisitorAnalyzer customAnalyzer = new CustomVisitorAnalyzer();
         DependencyAnalyzer.DependencyVisitor visitor = customAnalyzer.createDependencyVisitor();
 
-        assertTrue(visitor instanceof CustomVisitorAnalyzer.TrackingVisitor);
+        assertInstanceOf(CustomVisitorAnalyzer.TrackingVisitor.class, visitor);
     }
 
     /**
