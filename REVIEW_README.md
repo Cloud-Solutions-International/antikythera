@@ -29,10 +29,23 @@ This directory contains a comprehensive review of the TYPE_WRAPPER_REVIEW.md mig
 
 **Length**: 648 lines (~30 min read)
 
-### 3. [TYPE_WRAPPER_REVIEW.md](https://github.com/e4c5/antikythera/pull/4) (External)
+### 3. [TYPE_WRAPPER_REVIEW_REVISED.md](./TYPE_WRAPPER_REVIEW_REVISED.md) ⭐ **RECOMMENDED**
+**Target Audience**: All stakeholders - this is the definitive migration plan
+
+**Contents**:
+- Complete revised migration plan incorporating all analysis findings
+- Original plan structure enhanced with gap mitigations
+- Phase 0 (Preparation) added with testing strategy
+- All 8 identified gaps addressed with code examples
+- Updated timeline, risk assessment, and success criteria
+
+**Length**: 698 lines (~40 min read)
+
+### 4. [TYPE_WRAPPER_REVIEW.md](https://github.com/e4c5/antikythera/pull/4) (External - Original)
 **Source**: PR #4 by google-labs-jules[bot]
 
 **Contents**: Original migration plan proposing evolutionary strategy to incorporate JavaParser's ResolvedType
+**Note**: This has been superseded by TYPE_WRAPPER_REVIEW_REVISED.md which addresses identified gaps
 
 ---
 
@@ -45,9 +58,9 @@ This directory contains a comprehensive review of the TYPE_WRAPPER_REVIEW.md mig
 
 ### For Implementers
 1. Read **EXECUTIVE_SUMMARY.md** for context (10 minutes)
-2. Read **TYPE_WRAPPER_REVIEW_ANALYSIS.md** in full (30 minutes)
-3. Review code examples in Appendix A
-4. Reference during implementation of each phase
+2. Read **TYPE_WRAPPER_REVIEW_REVISED.md** - THE definitive implementation plan (40 minutes)
+3. Reference **TYPE_WRAPPER_REVIEW_ANALYSIS.md** for detailed gap analysis (as needed)
+4. Use TYPE_WRAPPER_REVIEW_REVISED.md during implementation of each phase
 
 ### For Reviewers
 1. Scan **EXECUTIVE_SUMMARY.md** findings (5 minutes)
@@ -159,9 +172,10 @@ Migration is successful when:
 - Time: 10-15 minutes
 
 **Developer / Implementer**:
-- Start: [TYPE_WRAPPER_REVIEW_ANALYSIS.md](./TYPE_WRAPPER_REVIEW_ANALYSIS.md)
-- Focus: Sections 1-3 (gaps), Section 7 (revised plan)
-- Time: 30-45 minutes
+- Start: [TYPE_WRAPPER_REVIEW_REVISED.md](./TYPE_WRAPPER_REVIEW_REVISED.md) ⭐
+- Focus: Phase-by-phase implementation plan (Sections 8-9)
+- Reference: [TYPE_WRAPPER_REVIEW_ANALYSIS.md](./TYPE_WRAPPER_REVIEW_ANALYSIS.md) for gap details
+- Time: 40-60 minutes
 
 **Code Reviewer**:
 - Start: [TYPE_WRAPPER_REVIEW_ANALYSIS.md](./TYPE_WRAPPER_REVIEW_ANALYSIS.md)
