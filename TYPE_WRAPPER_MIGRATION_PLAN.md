@@ -179,7 +179,13 @@ TypeWrapper wrapper = findType(cu, "int");  // Returns null!
 
 **Impact**: Migration to ResolvedType will break array handling unless primitives are explicitly supported.
 
-**Solution**: Add primitive type resolution using `ResolvedPrimitiveType`.
+**Solution**: Add primitive type resolution using `ResolvedPrimitiveType`. **Leverage existing infrastructure** from `sa.com.cloudsolutions.antikythera.evaluator.Reflect` which already has:
+- `wrapperToPrimitive` and `primitiveToWrapper` maps (lines 88-113)
+- `BOXED_TYPE_MAP` for type name to Class mapping (lines 96-147)
+- `primitiveToWrapper(String className)` method (lines 319-331)
+- `getComponentClass(String elementType)` for resolving primitive and boxed types (lines 333-343)
+
+These utilities should be reused in AbstractCompiler.findType() when resolving primitive type names instead of creating duplicate logic.
 
 ### 3.4 🟡 MEDIUM: Reflection-Based Entity Queries
 
@@ -210,6 +216,13 @@ if (imp.isAsterisk() && imp.getNameAsString().endsWith("." + className)) {
 **Impact**: Symbol solver may not handle this correctly without hybrid approach.
 
 **Solution**: Use hybrid resolution strategy combining symbol solver with fallback.
+
+**Note for DepSolver**: With the hybrid resolution approach and leveraging Reflect.java's existing infrastructure, much of the wildcard import complexity may be handled by JavaSymbolSolver natively. However, DepSolver usage should be thoroughly checked to ensure:
+- Dependency graph building still works correctly with both source and JAR dependencies
+- Bean wiring resolution handles wildcard imports properly
+- Type compatibility checks work across source/compiled boundaries
+
+This should be validated during Phase 0 testing and Phase 3 consumer migration.
 
 ### 3.6 🟡 MEDIUM: Multi-Stage Resolution Pipeline
 
@@ -295,12 +308,12 @@ public class TypeWrapper {
     }
     
     // NEW: Field abstraction for reflection entities
-    public List<FieldInfo> getFields() {
+    public List<ResolvedFieldAdapter> getFields() {
         if (resolvedType != null && resolvedType.isReferenceType()) {
             ResolvedReferenceTypeDeclaration decl = 
                 resolvedType.asReferenceType().getTypeDeclaration().orElseThrow();
             return decl.getDeclaredFields().stream()
-                .map(FieldInfo::new)
+                .map(ResolvedFieldAdapter::new)
                 .collect(Collectors.toList());
         }
         return Collections.emptyList();
@@ -308,16 +321,19 @@ public class TypeWrapper {
 }
 ```
 
-### 4.3 FieldInfo Helper Class
+### 4.3 ResolvedFieldAdapter Helper Class
+
+**Note**: Named `ResolvedFieldAdapter` to avoid confusion with JavaAssist's `FieldInfo` class.
 
 ```java
 /**
  * Abstraction for field access that works with both AST and reflection.
+ * Named ResolvedFieldAdapter to avoid conflict with javassist.bytecode.FieldInfo.
  */
-public class FieldInfo {
+public class ResolvedFieldAdapter {
     private final ResolvedFieldDeclaration field;
     
-    public FieldInfo(ResolvedFieldDeclaration field) {
+    public ResolvedFieldAdapter(ResolvedFieldDeclaration field) {
         this.field = field;
     }
     
@@ -370,9 +386,26 @@ public static TypeWrapper findType(CompilationUnit cu, String className) {
 
 ### 4.5 Primitive Type Resolution
 
+**Recommendation**: Leverage existing utilities from `sa.com.cloudsolutions.antikythera.evaluator.Reflect` instead of implementing new switch statements.
+
 ```java
+// Use existing Reflect utilities
 private static ResolvedType resolvePrimitiveType(String name) {
-    return switch (name) {
+    try {
+        // Leverage Reflect.getComponentClass() which handles both primitives and boxed types
+        Class<?> clazz = Reflect.getComponentClass(name);
+        if (clazz != null && clazz.isPrimitive()) {
+            return convertToResolvedPrimitiveType(clazz);
+        }
+    } catch (ClassNotFoundException e) {
+        // Not a primitive type
+    }
+    return null;
+}
+
+private static ResolvedType convertToResolvedPrimitiveType(Class<?> primitiveClass) {
+    // Map Class<?> to ResolvedPrimitiveType
+    return switch (primitiveClass.getName()) {
         case "int" -> ResolvedPrimitiveType.INT;
         case "boolean" -> ResolvedPrimitiveType.BOOLEAN;
         case "byte" -> ResolvedPrimitiveType.BYTE;
@@ -385,6 +418,12 @@ private static ResolvedType resolvePrimitiveType(String name) {
     };
 }
 ```
+
+This approach:
+- Reuses existing primitive handling logic from Reflect.java
+- Maintains consistency with existing codebase patterns
+- Reduces code duplication
+- Benefits from Reflect's BOXED_TYPE_MAP and primitive/wrapper conversions
 
 ### 4.6 Generic Type Ordering Preservation
 
@@ -475,7 +514,7 @@ public class TypeWrapper {
 - [ ] Add error handling for resolution failures
 
 **`sa.com.cloudsolutions.antikythera.parser.AbstractCompiler`**:
-- [ ] Add primitive type resolution (see § 4.5)
+- [ ] Add primitive type resolution leveraging `Reflect.getComponentClass()` (see § 4.5)
 - [ ] Update `findType()` with hybrid approach (see § 4.4)
 - [ ] Preserve enum constant lookup (stage 5)
 - [ ] Preserve AntikytheraRunTime cache lookups (stages 2, 3, 6)
@@ -520,11 +559,11 @@ public class TypeWrapper {
 - [ ] Refactor `isAssignableFrom()`: delegate to `resolvedType.isAssignableBy()`
 - [ ] Add `getTypeArguments()` preserving ordering contract (see § 4.6)
 - [ ] Add `getRawType()` helper
-- [ ] Add `getFields()` returning `List<FieldInfo>` (see § 4.3)
+- [ ] Add `getFields()` returning `List<ResolvedFieldAdapter>` (see § 4.3)
 - [ ] Update JavaDoc for all methods
 
 **New File**:
-- [ ] Create `sa.com.cloudsolutions.antikythera.generator.FieldInfo` class
+- [ ] Create `sa.com.cloudsolutions.antikythera.generator.ResolvedFieldAdapter` class
 
 **Testing**:
 - [ ] Verify annotation checks work for AST types
@@ -536,7 +575,7 @@ public class TypeWrapper {
 
 **Deliverables**:
 - TypeWrapper with dynamic behavior
-- FieldInfo helper class
+- ResolvedFieldAdapter helper class
 - All tests passing
 
 **Exit Criteria**:
@@ -666,7 +705,7 @@ public class TypeWrapper {
 | Enum constant resolution breaks | High | Medium | Keep `enumConstant` field permanently | ✅ Addressed |
 | Generic type ordering changes | High | High | Add explicit tests + preserve contract | ✅ Addressed |
 | Primitive type NPEs | High | Medium | Add primitive resolution in Phase 1 | ✅ Addressed |
-| Query generation fails (reflection entities) | Medium | High | Add FieldInfo abstraction | ✅ Addressed |
+| Query generation fails (reflection entities) | Medium | High | Add ResolvedFieldAdapter abstraction | ✅ Addressed |
 | Performance regression | Medium | Medium | Benchmark + lazy loading + caching | ✅ Addressed |
 | Breaking changes for external users | Low | Low | Maintain API compatibility | ✅ Addressed |
 | Symbol solver slower than manual | Medium | Low | Hybrid approach + caching | ✅ Addressed |
@@ -690,7 +729,7 @@ public class TypeWrapper {
 - Validation: Ensure array component type extraction works
 
 **Reflection Entities**:
-- Solution: FieldInfo abstraction in Phase 2
+- Solution: ResolvedFieldAdapter abstraction in Phase 2
 - Testing: Test query generation with JAR entities
 - Validation: Verify field metadata accessible
 
@@ -748,7 +787,7 @@ If migration fails:
 
 **Phase 2**:
 - [ ] Dynamic annotation checking works
-- [ ] FieldInfo abstraction complete
+- [ ] ResolvedFieldAdapter abstraction complete
 - [ ] Generic ordering preserved
 
 **Phase 3**:
