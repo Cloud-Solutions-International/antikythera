@@ -35,10 +35,14 @@ public class MavenHelper {
     public static final String POM_XML = "pom.xml";
     private static final Logger logger = LoggerFactory.getLogger(MavenHelper.class);
     private static final Map<String, Artifact> artifacts = new HashMap<>();
+    private static boolean jarPathsBuilt = false;
     private Model pomModel;
     private Path pomPath;
 
     public static String[] getJarPaths() {
+        if (!jarPathsBuilt) {
+            initializeJarPaths();
+        }
         List<String> paths = new ArrayList<>();
         for (Artifact artifact : artifacts.values()) {
             if (artifact.jarFile != null) {
@@ -47,6 +51,19 @@ public class MavenHelper {
         }
 
         return paths.toArray(new String[] {});
+    }
+
+    private static synchronized void initializeJarPaths() {
+        if (jarPathsBuilt) return;
+        try {
+            MavenHelper helper = new MavenHelper();
+            helper.readPomFile();
+            helper.buildJarPaths();
+            jarPathsBuilt = true;
+        } catch (Exception e) {
+            logger.warn("Could not build JAR paths: {}", e.getMessage());
+            jarPathsBuilt = true; // Don't retry on failure
+        }
     }
 
     private static void addDependency(String m2, String groupIdPath, String artifactId, String version)
