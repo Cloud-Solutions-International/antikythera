@@ -49,7 +49,6 @@ public class MavenHelper {
                 paths.add(artifact.jarFile);
             }
         }
-
         return paths.toArray(new String[] {});
     }
 
@@ -58,7 +57,11 @@ public class MavenHelper {
         try {
             MavenHelper helper = new MavenHelper();
             helper.readPomFile();
+            logger.debug("Read pom from: {}", helper.pomPath);
+            logger.debug("Found {} dependencies in pom", 
+                helper.pomModel != null ? helper.pomModel.getDependencies().size() : 0);
             helper.buildJarPaths();
+            logger.debug("Built {} jar paths", artifacts.size());
             jarPathsBuilt = true;
         } catch (Exception e) {
             logger.warn("Could not build JAR paths: {}", e.getMessage());
@@ -289,16 +292,22 @@ public class MavenHelper {
         if (pomModel != null) {
             List<Dependency> dependencies = pomModel.getDependencies();
 
-            Settings.getProperty("variables.m2_folder", String.class)
-                    .ifPresent(m2 -> {
-                        for (Dependency dependency : dependencies) {
-                            try {
-                                addJarPath(dependency, m2);
-                            } catch (XmlPullParserException | IOException e) {
-                                throw new AntikytheraException(e);
-                            }
-                        }
+            // Get m2 folder from settings, or fall back to default ~/.m2/repository
+            String m2 = Settings.getProperty("variables.m2_folder", String.class)
+                    .orElseGet(() -> {
+                        String home = System.getProperty("user.home");
+                        return home != null ? home + "/.m2/repository" : null;
                     });
+            
+            if (m2 != null) {
+                for (Dependency dependency : dependencies) {
+                    try {
+                        addJarPath(dependency, m2);
+                    } catch (XmlPullParserException | IOException e) {
+                        throw new AntikytheraException(e);
+                    }
+                }
+            }
         }
 
     }
