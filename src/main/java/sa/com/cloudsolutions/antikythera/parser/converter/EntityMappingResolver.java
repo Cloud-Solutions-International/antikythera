@@ -50,17 +50,44 @@ public class EntityMappingResolver {
             throw new AntikytheraException("Already built");
         }
         for (TypeWrapper type : AntikytheraRunTime.getResolvedTypes().values()) {
-            TypeDeclaration<?> typeDecl = type.getType();
-            String fullyQualifiedName = type.getFullyQualifiedName();
-            String name = type.getName();
-            shortNames.computeIfAbsent(name, k -> new HashSet<>()).add(fullyQualifiedName);
-
-            if (typeDecl != null && typeDecl.getAnnotationByName("Entity").isPresent()) {
-                mapping.put(fullyQualifiedName, buildMetadataFromSources(typeDecl));
-            } else if (type.getClazz() != null && type.getClazz().isAnnotationPresent(Entity.class)) {
-                mapping.put(fullyQualifiedName, buildEntityMetadata(type.getClazz()));
-            }
+            buildOnTheFly(type);
         }
+    }
+
+    /**
+     * Builds entity metadata for a type on the fly.
+     * This is useful for entities found in JARs that were not part of the initial
+     * scan.
+     *
+     * @param type the type wrapper for the entity
+     * @return the built EntityMetadata, or null if it's not an entity
+     */
+    public static EntityMetadata buildOnTheFly(TypeWrapper type) {
+        TypeDeclaration<?> typeDecl = type.getType();
+        String fullyQualifiedName = type.getFullyQualifiedName();
+        String name = type.getName();
+
+        if (fullyQualifiedName == null) {
+            return null;
+        }
+
+        if (mapping.containsKey(fullyQualifiedName)) {
+            return mapping.get(fullyQualifiedName);
+        }
+
+        shortNames.computeIfAbsent(name, k -> new HashSet<>()).add(fullyQualifiedName);
+
+        EntityMetadata meta = null;
+        if (typeDecl != null && typeDecl.getAnnotationByName("Entity").isPresent()) {
+            meta = buildMetadataFromSources(typeDecl);
+        } else if (type.getClazz() != null && type.getClazz().isAnnotationPresent(Entity.class)) {
+            meta = buildEntityMetadata(type.getClazz());
+        }
+
+        if (meta != null) {
+            mapping.put(fullyQualifiedName, meta);
+        }
+        return meta;
     }
 
     /**

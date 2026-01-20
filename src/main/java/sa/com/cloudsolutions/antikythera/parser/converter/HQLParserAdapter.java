@@ -360,6 +360,10 @@ public class HQLParserAdapter {
             }
 
             EntityMetadata meta = EntityMappingResolver.getMapping().get(fullName);
+            if (meta == null && typeWrapper != null) {
+                meta = EntityMappingResolver.buildOnTheFly(typeWrapper);
+            }
+
             if (meta == null) {
                 logger.warn("No metadata found for entity: {} (fullName: {})", name, fullName);
                 continue;

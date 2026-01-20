@@ -38,6 +38,9 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 
 import java.io.FileNotFoundException;
@@ -85,6 +88,7 @@ public class AbstractCompiler {
      * are specific to each instance.
      */
     public static final String SUFFIX = ".java";
+    private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
 
     private static JavaParser javaParser;
     protected static JavaSymbolSolver symbolResolver;
@@ -122,6 +126,22 @@ public class AbstractCompiler {
      */
     public static void setEnableLexicalPreservation(boolean enable) {
         enableLexicalPreservation = enable;
+    }
+
+    /**
+     * Loads dependencies from the Maven pom.xml file on demand.
+     * This will populate MavenHelper with JAR paths and refresh the parser
+     * configuration to include these JARs in the symbol resolver.
+     */
+    public static void loadDependencies() {
+        MavenHelper mavenHelper = new MavenHelper();
+        try {
+            mavenHelper.readPomFile();
+            mavenHelper.buildJarPaths();
+            setupParser();
+        } catch (Exception e) {
+            logger.warn("Failed to load maven dependencies from POM: {}", e.getMessage());
+        }
     }
 
     protected static void setupParser() throws IOException {
@@ -194,7 +214,7 @@ public class AbstractCompiler {
     public static Class<?> loadClass(String resolvedClass) throws ClassNotFoundException {
         try {
             return Class.forName(resolvedClass);
-        } catch (ClassNotFoundException cnf) {
+        } catch (ClassNotFoundException | NoClassDefFoundError cnf) {
             return loader.loadClass(resolvedClass);
         }
     }
