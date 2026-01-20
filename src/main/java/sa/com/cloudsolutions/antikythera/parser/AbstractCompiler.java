@@ -147,7 +147,18 @@ public class AbstractCompiler {
     protected static void setupParser() throws IOException {
         combinedTypeSolver = new CombinedTypeSolver();
         combinedTypeSolver.add(new ReflectionTypeSolver());
-        combinedTypeSolver.add(new JavaParserTypeSolver(Settings.getBasePath()));
+        String basePath = Settings.getBasePath();
+        combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
+        
+        // Add standard source roots if they exist
+        java.nio.file.Path mainJava = java.nio.file.Paths.get(basePath, "src", "main", "java");
+        if (java.nio.file.Files.exists(mainJava)) {
+            combinedTypeSolver.add(new JavaParserTypeSolver(mainJava.toFile()));
+        }
+        java.nio.file.Path testJava = java.nio.file.Paths.get(basePath, "src", "test", "java");
+        if (java.nio.file.Files.exists(testJava)) {
+            combinedTypeSolver.add(new JavaParserTypeSolver(testJava.toFile()));
+        }
         jarSolvers = new ArrayList<>();
 
         Set<String> jarFiles = new HashSet<>();
@@ -180,6 +191,7 @@ public class AbstractCompiler {
                 .setSymbolResolver(symbolResolver)
                 .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
         javaParser = new JavaParser(parserConfiguration);
+        StaticJavaParser.setConfiguration(parserConfiguration);
     }
 
     /**
@@ -425,7 +437,7 @@ public class AbstractCompiler {
         return false;
     }
 
-    protected JavaParser getJavaParser() {
+    public static JavaParser getJavaParser() {
         return javaParser;
     }
 
