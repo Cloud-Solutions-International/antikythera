@@ -7,10 +7,15 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.resolution.types.ResolvedArrayType;
 import com.github.javaparser.resolution.types.ResolvedPrimitiveType;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -289,11 +294,28 @@ public class TypeWrapper {
     }
 
     // ========================================================================
-    // Legacy Getters (Preserved for Backward Compatibility)
+    // Legacy Getters (Preserved for Backward Compatibility with Lazy Derivation)
     // ========================================================================
 
+    /**
+     * Get the AST TypeDeclaration if available.
+     * <p>
+     * Implements lazy derivation: if type is null but resolvedType is available,
+     * attempts to retrieve the TypeDeclaration from AntikytheraRunTime cache.
+     * </p>
+     *
+     * @return TypeDeclaration or null if not available
+     */
     @SuppressWarnings("java:S1452")
     public TypeDeclaration<?> getType() {
+        if (type == null && resolvedType != null && resolvedType.isReferenceType()) {
+            try {
+                String fqn = resolvedType.asReferenceType().getQualifiedName();
+                type = AntikytheraRunTime.getTypeDeclaration(fqn).orElse(null);
+            } catch (Exception e) {
+                logger.debug("Could not derive TypeDeclaration from ResolvedType: {}", e.getMessage());
+            }
+        }
         return type;
     }
 
@@ -301,7 +323,27 @@ public class TypeWrapper {
         this.type = type;
     }
 
+    /**
+     * Get the reflection Class if available.
+     * <p>
+     * Implements lazy derivation: if clazz is null but resolvedType is available,
+     * attempts to load the Class using Class.forName().
+     * </p>
+     *
+     * @return Class or null if not available (e.g., source-only types)
+     */
     public Class<?> getClazz() {
+        if (clazz == null && resolvedType != null && resolvedType.isReferenceType()) {
+            try {
+                String fqn = resolvedType.asReferenceType().getQualifiedName();
+                clazz = Class.forName(fqn);
+            } catch (ClassNotFoundException e) {
+                // Source-only type, no Class available - this is expected
+                logger.debug("Class not found for {}", e.getMessage());
+            } catch (Exception e) {
+                logger.debug("Could not derive Class from ResolvedType: {}", e.getMessage());
+            }
+        }
         return clazz;
     }
 
@@ -338,7 +380,25 @@ public class TypeWrapper {
         return null;
     }
 
+    /**
+     * Check if this type is annotated with @Controller or @RestController.
+     * <p>
+     * Uses dynamic annotation checking via reflection when possible,
+     * falling back to the cached flag.
+     * </p>
+     *
+     * @return true if the type is a Spring controller
+     */
     public boolean isController() {
+        // Try dynamic checking via reflection first
+        if (clazz != null || (resolvedType != null && resolvedType.isReferenceType())) {
+            Class<?> c = getClazz();
+            if (c != null) {
+                return hasAnnotation(c, "org.springframework.stereotype.Controller")
+                        || hasAnnotation(c, "org.springframework.web.bind.annotation.RestController");
+            }
+        }
+        // Fall back to cached flag (set during preprocessing)
         return isController;
     }
 
@@ -346,7 +406,24 @@ public class TypeWrapper {
         this.isController = isController;
     }
 
+    /**
+     * Check if this type is annotated with @Service.
+     * <p>
+     * Uses dynamic annotation checking via reflection when possible,
+     * falling back to the cached flag.
+     * </p>
+     *
+     * @return true if the type is a Spring service
+     */
     public boolean isService() {
+        // Try dynamic checking via reflection first
+        if (clazz != null || (resolvedType != null && resolvedType.isReferenceType())) {
+            Class<?> c = getClazz();
+            if (c != null) {
+                return hasAnnotation(c, "org.springframework.stereotype.Service");
+            }
+        }
+        // Fall back to cached flag
         return isService;
     }
 
@@ -354,7 +431,24 @@ public class TypeWrapper {
         this.isService = isService;
     }
 
+    /**
+     * Check if this type is annotated with @Component.
+     * <p>
+     * Uses dynamic annotation checking via reflection when possible,
+     * falling back to the cached flag.
+     * </p>
+     *
+     * @return true if the type is a Spring component
+     */
     public boolean isComponent() {
+        // Try dynamic checking via reflection first
+        if (clazz != null || (resolvedType != null && resolvedType.isReferenceType())) {
+            Class<?> c = getClazz();
+            if (c != null) {
+                return hasAnnotation(c, "org.springframework.stereotype.Component");
+            }
+        }
+        // Fall back to cached flag
         return component;
     }
 
@@ -362,7 +456,23 @@ public class TypeWrapper {
         this.component = component;
     }
 
+    /**
+     * Check if this type is an interface.
+     * <p>
+     * Uses reflection or AST inspection when possible,
+     * falling back to the cached flag.
+     * </p>
+     *
+     * @return true if the type is an interface
+     */
     public boolean isInterface() {
+        if (clazz != null) {
+            return clazz.isInterface();
+        }
+        if (type != null && type.isClassOrInterfaceDeclaration()) {
+            return type.asClassOrInterfaceDeclaration().isInterface();
+        }
+        // Fall back to cached flag
         return isInterface;
     }
 
@@ -378,12 +488,46 @@ public class TypeWrapper {
         this.enumConstant = enumConstant;
     }
 
+    /**
+     * Check if this type is annotated with @Entity.
+     * <p>
+     * Uses dynamic annotation checking via reflection when possible,
+     * falling back to the cached flag.
+     * </p>
+     *
+     * @return true if the type is a JPA entity
+     */
     public boolean isEntity() {
+        // Try dynamic checking via reflection first
+        if (clazz != null || (resolvedType != null && resolvedType.isReferenceType())) {
+            Class<?> c = getClazz();
+            if (c != null) {
+                return hasAnnotation(c, "jakarta.persistence.Entity")
+                        || hasAnnotation(c, "javax.persistence.Entity");
+            }
+        }
+        // Fall back to cached flag
         return isEntity;
     }
 
     public void setEntity(boolean isEntity) {
         this.isEntity = isEntity;
+    }
+
+    /**
+     * Helper method to check if a class has a specific annotation.
+     *
+     * @param c the class to check
+     * @param annotationFqn the fully qualified name of the annotation
+     * @return true if the annotation is present
+     */
+    private boolean hasAnnotation(Class<?> c, String annotationFqn) {
+        for (java.lang.annotation.Annotation ann : c.getAnnotations()) {
+            if (ann.annotationType().getName().equals(annotationFqn)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -461,7 +605,15 @@ public class TypeWrapper {
 
     /**
      * Check if this type can be assigned from the other type.
-     * Handles both reflection-based and AST-based types.
+     * <p>
+     * Implements multi-stage fallback:
+     * <ol>
+     *   <li>ResolvedType.isAssignableBy() if both have ResolvedType</li>
+     *   <li>FQN equality check (fast path)</li>
+     *   <li>Cross-boundary resolution (source ↔ JAR)</li>
+     *   <li>AST inheritance traversal</li>
+     *   <li>Reflection fallback</li>
+     * </ol>
      *
      * @param other the type wrapper to check compatibility with
      * @return true if compatible
@@ -480,12 +632,7 @@ public class TypeWrapper {
             }
         }
 
-        // 2. If both are reflection-based, use standard reflection
-        if (this.clazz != null && other.clazz != null) {
-            return this.clazz.isAssignableFrom(other.clazz);
-        }
-
-        // 3. If both are AST-based or Mixed - Check FQN equality first
+        // 2. FQN equality check (fast path)
         String fqn1 = this.getFullyQualifiedName();
         String fqn2 = other.getFullyQualifiedName();
 
@@ -493,17 +640,95 @@ public class TypeWrapper {
             return true;
         }
 
+        // 3. Cross-boundary resolution (source ↔ JAR)
+        // When one type is from source and other from JAR
+        if (this.resolvedType != null && other.clazz != null) {
+            if (isAssignableFromMixed(fqn1, other.clazz)) {
+                return true;
+            }
+        }
+        if (this.clazz != null && other.resolvedType != null) {
+            if (isAssignableFromMixed(fqn2, this.clazz)) {
+                // Note: reversed - checking if other's type is assignable from this
+                return false; // This check doesn't make sense for assignability direction
+            }
+        }
+
         // 4. AST Inheritance Check
         // If the OTHER type is an AST type, we can check its ancestors to see if THIS
         // (ancestor) is one of them.
         if (other.type != null && other.type.isClassOrInterfaceDeclaration()) {
-            return isAssignableFrom(other, fqn1);
+            if (isAssignableFromAST(other, fqn1)) {
+                return true;
+            }
+        }
+
+        // 5. Reflection fallback
+        if (this.clazz != null && other.clazz != null) {
+            return this.clazz.isAssignableFrom(other.clazz);
+        }
+
+        // 6. Try to derive clazz for both and use reflection
+        Class<?> thisClass = this.getClazz();
+        Class<?> otherClass = other.getClazz();
+        if (thisClass != null && otherClass != null) {
+            return thisClass.isAssignableFrom(otherClass);
         }
 
         return false;
     }
 
-    private static boolean isAssignableFrom(TypeWrapper other, String fqn1) {
+    /**
+     * Handle cross-boundary type compatibility when one type is from ResolvedType
+     * and the other is from reflection.
+     *
+     * @param resolvedFqn the FQN of the resolved type
+     * @param otherClass the Class to check
+     * @return true if otherClass implements/extends the resolved type
+     */
+    private boolean isAssignableFromMixed(String resolvedFqn, Class<?> otherClass) {
+        if (resolvedFqn == null || otherClass == null) {
+            return false;
+        }
+
+        // Direct match
+        if (resolvedFqn.equals(otherClass.getName())) {
+            return true;
+        }
+
+        // Check if otherClass implements the resolved type (interface check)
+        for (Class<?> iface : otherClass.getInterfaces()) {
+            if (iface.getName().equals(resolvedFqn)) {
+                return true;
+            }
+            // Recursive check for interface hierarchy
+            if (isAssignableFromMixed(resolvedFqn, iface)) {
+                return true;
+            }
+        }
+
+        // Check superclass hierarchy
+        Class<?> superclass = otherClass.getSuperclass();
+        while (superclass != null) {
+            if (superclass.getName().equals(resolvedFqn)) {
+                return true;
+            }
+            // Also check superclass interfaces
+            for (Class<?> iface : superclass.getInterfaces()) {
+                if (iface.getName().equals(resolvedFqn)) {
+                    return true;
+                }
+            }
+            superclass = superclass.getSuperclass();
+        }
+
+        return false;
+    }
+
+    /**
+     * AST-based inheritance check.
+     */
+    private static boolean isAssignableFromAST(TypeWrapper other, String fqn1) {
         var typeDecl = other.type.asClassOrInterfaceDeclaration();
 
         // Check extended types (superclasses)
@@ -529,5 +754,97 @@ public class TypeWrapper {
             }
         }
         return false;
+    }
+
+    // ========================================================================
+    // Generic Type Support (New API)
+    // ========================================================================
+
+    /**
+     * Get the type arguments if this is a parameterized type.
+     * <p>
+     * For example, for {@code List<String>}, returns a list containing
+     * the TypeWrapper for String.
+     * </p>
+     *
+     * @return list of type argument TypeWrappers, or empty list if not parameterized
+     */
+    public List<TypeWrapper> getTypeArguments() {
+        if (resolvedType != null && resolvedType.isReferenceType()) {
+            try {
+                var refType = resolvedType.asReferenceType();
+                var typeParams = refType.getTypeParametersMap();
+                if (!typeParams.isEmpty()) {
+                    List<TypeWrapper> result = new ArrayList<>();
+                    for (var pair : typeParams) {
+                        result.add(fromResolvedType(pair.b));
+                    }
+                    return result;
+                }
+            } catch (Exception e) {
+                logger.debug("Could not get type arguments: {}", e.getMessage());
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * Get the raw type (erased type) for this TypeWrapper.
+     * <p>
+     * For a parameterized type like {@code List<String>}, returns the TypeWrapper
+     * for the raw type {@code List}.
+     * </p>
+     *
+     * @return this TypeWrapper (which represents the raw type)
+     */
+    public TypeWrapper getRawType() {
+        // For a TypeWrapper, this IS the raw type
+        // The type arguments are accessed separately via getTypeArguments()
+        return this;
+    }
+
+    // ========================================================================
+    // Field Access Support (New API)
+    // ========================================================================
+
+    /**
+     * Get the declared fields of this type.
+     * <p>
+     * Works with both AST-based and reflection-based types through the
+     * ResolvedFieldAdapter abstraction.
+     * </p>
+     *
+     * @return list of field adapters, or empty list if fields cannot be accessed
+     */
+    public List<ResolvedFieldAdapter> getFields() {
+        // Try ResolvedType first
+        if (resolvedType != null && resolvedType.isReferenceType()) {
+            try {
+                Optional<ResolvedReferenceTypeDeclaration> declOpt =
+                        resolvedType.asReferenceType().getTypeDeclaration();
+                if (declOpt.isPresent()) {
+                    var decl = declOpt.get();
+                    List<ResolvedFieldAdapter> result = new ArrayList<>();
+                    for (var field : decl.getDeclaredFields()) {
+                        result.add(new ResolvedFieldAdapter(field));
+                    }
+                    return result;
+                }
+            } catch (Exception e) {
+                logger.debug("Could not get fields from ResolvedType: {}", e.getMessage());
+            }
+        }
+
+        // Fall back to reflection
+        Class<?> c = getClazz();
+        if (c != null) {
+            List<ResolvedFieldAdapter> result = new ArrayList<>();
+            for (java.lang.reflect.Field field : c.getDeclaredFields()) {
+                result.add(new ResolvedFieldAdapter(field));
+            }
+            return result;
+        }
+
+        return Collections.emptyList();
     }
 }
