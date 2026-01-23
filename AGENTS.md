@@ -59,6 +59,121 @@ graph TD
 
 ---
 
+## 📦 TypeWrapper: The Universal Type Abstraction
+
+`TypeWrapper` is the core type abstraction that bridges three representations of Java types:
+- **AST-based** (`TypeDeclaration`) - from parsed source code
+- **Reflection-based** (`Class<?>`) - from compiled bytecode/JARs
+- **ResolvedType** - from JavaParser's symbol solver (preferred)
+
+### Creating TypeWrapper Instances
+
+**Factory Methods (Preferred)**
+```java
+// From AST TypeDeclaration
+TypeWrapper wrapper = TypeWrapper.fromTypeDeclaration(classDecl);
+
+// From reflection Class
+TypeWrapper wrapper = TypeWrapper.fromClass(MyService.class);
+
+// From enum constant (special case)
+TypeWrapper wrapper = TypeWrapper.fromEnumConstant(enumConstant);
+
+// From JavaParser's ResolvedType
+TypeWrapper wrapper = TypeWrapper.fromResolvedType(resolvedType);
+
+// For unresolved types, use the sentinel
+if (cannotResolve) {
+    return TypeWrapper.UNKNOWN;
+}
+```
+
+**Via AbstractCompiler (Most Common)**
+```java
+// Resolve by name
+TypeWrapper wrapper = AbstractCompiler.findType(cu, "MyService");
+
+// Resolve by Type node
+TypeWrapper wrapper = AbstractCompiler.findType(cu, fieldType);
+
+// Get generic type arguments (returns [TypeArg1, ..., RawType])
+List<TypeWrapper> types = AbstractCompiler.findWrappedTypes(cu, genericType);
+```
+
+### Key Methods
+
+| Method | Description |
+| :--- | :--- |
+| `getResolvedType()` | Get underlying JavaParser ResolvedType (preferred) |
+| `isResolved()` | Check if ResolvedType is available |
+| `getFullyQualifiedName()` | Get FQN (uses ResolvedType, falls back to legacy) |
+| `isPrimitive()` | Check if primitive type (int, boolean, etc.) |
+| `isArray()` | Check if array type |
+| `getComponentType()` | Get array component type |
+| `getTypeArguments()` | Get generic type parameters |
+| `getFields()` | Get fields via `ResolvedFieldAdapter` |
+
+### Spring Annotation Detection
+
+TypeWrapper provides dynamic annotation checking with reflection fallback:
+
+```java
+wrapper.isController()  // @Controller or @RestController
+wrapper.isService()     // @Service
+wrapper.isComponent()   // @Component
+wrapper.isEntity()      // @Entity (jakarta or javax)
+wrapper.isInterface()   // Interface check
+```
+
+### Type Compatibility
+
+```java
+// Check if thisType can be assigned from otherType
+boolean compatible = thisWrapper.isAssignableFrom(otherWrapper);
+
+// Works across boundaries:
+// - Source type extending JAR type
+// - JAR type implementing source interface
+// - Generic type compatibility
+```
+
+### Field Access with ResolvedFieldAdapter
+
+```java
+// Get all declared fields (works with both AST and reflection)
+List<ResolvedFieldAdapter> fields = wrapper.getFields();
+
+for (ResolvedFieldAdapter field : fields) {
+    String name = field.getName();
+    TypeWrapper fieldType = field.getType();
+    boolean isStatic = field.isStatic();
+    boolean hasAnnotation = field.hasAnnotation("jakarta.persistence.Column");
+}
+```
+
+### Legacy Methods (Backward Compatible)
+
+These methods implement lazy derivation - they attempt to derive values from `ResolvedType` when the legacy field is null:
+
+```java
+// Returns TypeDeclaration (lazily derived from AntikytheraRunTime cache)
+TypeDeclaration<?> type = wrapper.getType();
+
+// Returns Class (lazily derived via Class.forName())
+Class<?> clazz = wrapper.getClazz();
+```
+
+### Special Cases
+
+| Case | Handling |
+| :--- | :--- |
+| **Enum Constants** | Use `fromEnumConstant()`. Cannot be represented as ResolvedType. |
+| **Primitives** | Fully supported via `isPrimitive()` and `getComponentType()` for arrays. |
+| **Generics** | Use `getTypeArguments()`. Ordering preserved: `[TypeArg1, ..., RawType]`. |
+| **Unknown Types** | Use `TypeWrapper.UNKNOWN` sentinel instead of null. |
+
+---
+
 ## 🛠 versatile Use Cases & Entry Points
 
 ### Use Case A: "I need to analyze code dependencies"
@@ -146,5 +261,11 @@ database:
 | **Find Dependencies** | `depsolver.DepSolver` | `processMethod(signature)` |
 | **Convert Query** | `parser.converter` | `MethodToSQLConverter` |
 | **Get Entity Info** | `parser.converter` | `EntityMappingResolver` |
+| **Create TypeWrapper** | `generator.TypeWrapper` | `fromTypeDeclaration()`, `fromClass()` |
+| **Check Type Compatibility** | `generator.TypeWrapper` | `isAssignableFrom(other)` |
+| **Get Type Fields** | `generator.TypeWrapper` | `getFields()` → `ResolvedFieldAdapter` |
+| **Check Spring Annotations** | `generator.TypeWrapper` | `isService()`, `isController()`, etc. |
 
 **Rule of Thumb**: Always check `AntikytheraRunTime` caches before doing heavy lifting.
+
+**TypeWrapper Tip**: Prefer factory methods (`TypeWrapper.fromXxx()`) over deprecated constructors. Use `TypeWrapper.UNKNOWN` instead of null for unresolved types.

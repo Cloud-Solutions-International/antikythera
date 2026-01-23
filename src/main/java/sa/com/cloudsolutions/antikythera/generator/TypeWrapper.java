@@ -22,21 +22,52 @@ import java.util.Optional;
  * Wrapper for Java types that bridges AST-based types (TypeDeclaration),
  * reflection-based types (Class), and JavaParser's ResolvedType.
  *
- * <p>This class is undergoing migration to use ResolvedType as the primary
- * internal representation. During the migration period, all three representations
- * may coexist.</p>
+ * <p>This class uses ResolvedType as the preferred internal representation,
+ * with lazy derivation of legacy fields (type, clazz) for backward compatibility.</p>
  *
- * <h3>Factory Methods (Preferred)</h3>
+ * <h3>Factory Methods (Preferred for New Code)</h3>
  * <ul>
- *   <li>{@link #fromTypeDeclaration(TypeDeclaration)} - Create from AST type</li>
- *   <li>{@link #fromClass(Class)} - Create from reflection type</li>
- *   <li>{@link #fromEnumConstant(EnumConstantDeclaration)} - Create from enum constant</li>
- *   <li>{@link #fromResolvedType(ResolvedType)} - Create directly from ResolvedType</li>
+ *   <li>{@link #fromTypeDeclaration(TypeDeclaration)} - Create from AST type declaration</li>
+ *   <li>{@link #fromClass(Class)} - Create from reflection Class</li>
+ *   <li>{@link #fromEnumConstant(EnumConstantDeclaration)} - Create from enum constant (special case)</li>
+ *   <li>{@link #fromResolvedType(ResolvedType)} - Create directly from JavaParser's ResolvedType</li>
  * </ul>
  *
- * <h3>Legacy Constructors (Deprecated)</h3>
- * <p>The single-argument constructors are deprecated but still functional for
- * backward compatibility. New code should use factory methods.</p>
+ * <h3>New API Methods</h3>
+ * <ul>
+ *   <li>{@link #getResolvedType()} - Get the underlying ResolvedType</li>
+ *   <li>{@link #isResolved()} - Check if ResolvedType is available</li>
+ *   <li>{@link #isPrimitive()} - Check if this is a primitive type</li>
+ *   <li>{@link #isArray()} - Check if this is an array type</li>
+ *   <li>{@link #getComponentType()} - Get array component type</li>
+ *   <li>{@link #getTypeArguments()} - Get generic type arguments</li>
+ *   <li>{@link #getFields()} - Get fields via ResolvedFieldAdapter</li>
+ * </ul>
+ *
+ * <h3>Legacy API (Backward Compatible)</h3>
+ * <p>The following methods remain available for backward compatibility and implement
+ * lazy derivation from ResolvedType when possible:</p>
+ * <ul>
+ *   <li>{@link #getType()} - Returns TypeDeclaration (lazily derived from AntikytheraRunTime cache)</li>
+ *   <li>{@link #getClazz()} - Returns Class (lazily derived via Class.forName())</li>
+ *   <li>{@link #getFullyQualifiedName()} - Returns FQN (prefers ResolvedType, falls back to legacy)</li>
+ *   <li>{@link #isController()}, {@link #isService()}, {@link #isComponent()}, {@link #isEntity()} -
+ *       Dynamic annotation checking via reflection with cached flag fallback</li>
+ * </ul>
+ *
+ * <h3>Deprecated Constructors</h3>
+ * <p>The single-argument constructors are deprecated but remain functional.
+ * New code should use the factory methods above.</p>
+ *
+ * <h3>Special Cases</h3>
+ * <ul>
+ *   <li><strong>Enum Constants:</strong> Use {@link #fromEnumConstant(EnumConstantDeclaration)}.
+ *       Enum constants cannot be represented as ResolvedType.</li>
+ *   <li><strong>Unknown Types:</strong> Use {@link #UNKNOWN} sentinel instead of null.</li>
+ * </ul>
+ *
+ * @see ResolvedFieldAdapter
+ * @see AbstractCompiler#findType(com.github.javaparser.ast.CompilationUnit, String)
  */
 public class TypeWrapper {
 
@@ -53,26 +84,52 @@ public class TypeWrapper {
     // ========================================================================
 
     /**
-     * Primary type representation (Phase 1+).
-     * Will become the single source of truth after migration.
+     * Primary type representation using JavaParser's ResolvedType.
+     * <p>
+     * This is the preferred internal representation and will become the single
+     * source of truth after the migration is complete. Use {@link #getResolvedType()}
+     * to access this field, and {@link #isResolved()} to check availability.
+     * </p>
      */
     private ResolvedType resolvedType;
 
     /**
      * AST-based type representation.
-     * @deprecated Will be lazily derived from resolvedType in future versions.
+     * <p>
+     * <strong>Migration Note:</strong> This field is lazily derived from
+     * {@link #resolvedType} when accessed via {@link #getType()}. Direct field
+     * access is discouraged; use the getter method instead.
+     * </p>
+     *
+     * @deprecated Since migration Phase 4. Use {@link #getResolvedType()} for new code.
+     *             The {@link #getType()} method remains available for backward compatibility
+     *             and will derive the TypeDeclaration from resolvedType when possible.
      */
+    @Deprecated
     TypeDeclaration<?> type;
 
     /**
      * Reflection-based type representation.
-     * @deprecated Will be lazily derived from resolvedType in future versions.
+     * <p>
+     * <strong>Migration Note:</strong> This field is lazily derived from
+     * {@link #resolvedType} when accessed via {@link #getClazz()}. Direct field
+     * access is discouraged; use the getter method instead.
+     * </p>
+     *
+     * @deprecated Since migration Phase 4. Use {@link #getResolvedType()} for new code.
+     *             The {@link #getClazz()} method remains available for backward compatibility
+     *             and will derive the Class from resolvedType when possible.
      */
+    @Deprecated
     Class<?> clazz;
 
     /**
-     * Special case: enum constant (cannot be represented as ResolvedType).
-     * This field is NOT deprecated as enum constants require special handling.
+     * Special case: enum constant declaration.
+     * <p>
+     * <strong>NOT DEPRECATED:</strong> This field is intentionally preserved as enum
+     * constants cannot be represented by JavaParser's ResolvedType. Use
+     * {@link #getEnumConstant()} to access this field.
+     * </p>
      */
     EnumConstantDeclaration enumConstant;
 
