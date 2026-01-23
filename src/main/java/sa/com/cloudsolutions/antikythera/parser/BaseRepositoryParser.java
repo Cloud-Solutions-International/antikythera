@@ -176,11 +176,11 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (cu.isPresent()) {
             for (ImportWrapper wrapper : AbstractCompiler.findImport(cu.get(), fd)) {
                 if (wrapper.getType() != null) {
-                    return new TypeWrapper(wrapper.getType());
+                    return TypeWrapper.fromTypeDeclaration(wrapper.getType());
                 } else if (!wrapper.getImport().getNameAsString().startsWith("java.util")) {
                     try {
                         Class<?> cls = AbstractCompiler.loadClass(wrapper.getImport().getNameAsString());
-                        return new TypeWrapper(cls);
+                        return TypeWrapper.fromClass(cls);
 
                     } catch (ClassNotFoundException e) {
                         // can be ignored, we are trying to check for the existence of the class
@@ -188,7 +188,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                     }
                 }
             }
-            return new TypeWrapper(AbstractCompiler.findInSamePackage(cu.get(), fd).orElse(null));
+            return TypeWrapper.fromTypeDeclaration(AbstractCompiler.findInSamePackage(cu.get(), fd).orElse(null));
         }
         return null;
     }

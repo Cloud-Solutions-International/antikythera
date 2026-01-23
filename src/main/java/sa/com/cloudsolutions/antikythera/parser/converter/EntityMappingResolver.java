@@ -150,7 +150,7 @@ public class EntityMappingResolver {
         // Relationship mappings not yet implemented for AST-based approach
         Map<String, JoinMapping> relationshipMappings = new HashMap<>();
 
-        return new EntityMetadata(new TypeWrapper(typeDecl), tableName,
+        return new EntityMetadata(TypeWrapper.fromTypeDeclaration(typeDecl), tableName,
                 propertyToColumnMappings, relationshipMappings);
     }
 
@@ -161,7 +161,7 @@ public class EntityMappingResolver {
         Map<String, String> propertyToColumnMappings = buildPropertyToColumnMappings(entityClass);
         Map<String, JoinMapping> relationshipMappings = buildRelationshipMappings(entityClass, tableMapping);
 
-        return new EntityMetadata(new TypeWrapper(entityClass), getTableName(entityClass),
+        return new EntityMetadata(TypeWrapper.fromClass(entityClass), getTableName(entityClass),
                 propertyToColumnMappings, relationshipMappings);
     }
 

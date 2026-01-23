@@ -361,7 +361,7 @@ public class AbstractCompiler {
     }
 
     private void processType(TypeDeclaration<?> type, CompilationUnit cu) {
-        TypeWrapper typeWrapper = new TypeWrapper(type);
+        TypeWrapper typeWrapper = TypeWrapper.fromTypeDeclaration(type);
         if (type.isAnnotationPresent("Service")
                 || type.isAnnotationPresent("org.springframework.stereotype.Service")) {
             typeWrapper.setService(true);
@@ -688,7 +688,7 @@ public class AbstractCompiler {
          */
         TypeDeclaration<?> p = getMatchingType(cu, className).orElse(null);
         if (p != null) {
-            return new TypeWrapper(p);
+            return TypeWrapper.fromTypeDeclaration(p);
         }
 
         // Check AntikytheraRunTime for types matching the short name
@@ -698,14 +698,14 @@ public class AbstractCompiler {
             String samePackageFqn = packageName + "." + className;
             Optional<TypeDeclaration<?>> samePackageType = AntikytheraRunTime.getTypeDeclaration(samePackageFqn);
             if (samePackageType.isPresent()) {
-                return new TypeWrapper(samePackageType.orElseThrow());
+                return TypeWrapper.fromTypeDeclaration(samePackageType.orElseThrow());
             }
         }
 
         // Priority 2: Exact match (might be a fully qualified name passed as className)
         Optional<TypeDeclaration<?>> exactMatch = AntikytheraRunTime.getTypeDeclaration(className);
         if (exactMatch.isPresent()) {
-            return new TypeWrapper(exactMatch.orElseThrow());
+            return TypeWrapper.fromTypeDeclaration(exactMatch.orElseThrow());
         }
 
         TypeWrapper imp = getTypeWrapperFromImports(cu, className);
@@ -715,7 +715,7 @@ public class AbstractCompiler {
         for (EnumDeclaration ed : cu.findAll(EnumDeclaration.class)) {
             for (EnumConstantDeclaration constant : ed.getEntries()) {
                 if (constant.getNameAsString().equals(className)) {
-                    return new TypeWrapper(constant);
+                    return TypeWrapper.fromEnumConstant(constant);
                 }
             }
         }
@@ -732,7 +732,7 @@ public class AbstractCompiler {
             if (resolvedFqn.endsWith("." + className)) {
                 Optional<TypeDeclaration<?>> typeDecl = AntikytheraRunTime.getTypeDeclaration(resolvedFqn);
                 if (typeDecl.isPresent()) {
-                    return new TypeWrapper(typeDecl.orElseThrow());
+                    return TypeWrapper.fromTypeDeclaration(typeDecl.orElseThrow());
                 }
             }
         }
@@ -743,13 +743,13 @@ public class AbstractCompiler {
         ImportWrapper imp = findImport(cu, className);
         if (imp != null) {
             if (imp.getType() != null) {
-                return new TypeWrapper(imp.getType());
+                return TypeWrapper.fromTypeDeclaration(imp.getType());
             }
             try {
                 if (imp.getImport().isAsterisk()) {
-                    return new TypeWrapper(Class.forName(imp.getNameAsString() + "." + className));
+                    return TypeWrapper.fromClass(Class.forName(imp.getNameAsString() + "." + className));
                 }
-                return new TypeWrapper(AbstractCompiler.loadClass(imp.getNameAsString()));
+                return TypeWrapper.fromClass(AbstractCompiler.loadClass(imp.getNameAsString()));
             } catch (ClassNotFoundException e) {
                 // ignorable
             }
@@ -760,13 +760,13 @@ public class AbstractCompiler {
     private static TypeWrapper findTypeFromJavaLang(String className) {
         try {
             Class<?> c = Class.forName("java.lang." + className);
-            return new TypeWrapper(c);
+            return TypeWrapper.fromClass(c);
         } catch (ClassNotFoundException e) {
             /*
              * dirty hack to handle an extreme edge case
              */
             if (className.equals("Optional")) {
-                return new TypeWrapper(Optional.class);
+                return TypeWrapper.fromClass(Optional.class);
             }
         }
         return null;
@@ -777,13 +777,13 @@ public class AbstractCompiler {
         String tentativeName = packageName.isEmpty() ? className : packageName + "." + className;
         Optional<TypeDeclaration<?>> t = AntikytheraRunTime.getTypeDeclaration(tentativeName);
         if (t.isPresent()) {
-            return new TypeWrapper(t.get());
+            return TypeWrapper.fromTypeDeclaration(t.get());
         }
 
         try {
             Class<?> clazz = AbstractCompiler.loadClass(className);
             if (clazz != null) {
-                return new TypeWrapper(clazz);
+                return TypeWrapper.fromClass(clazz);
             }
         } catch (ClassNotFoundException e) {
             /*
@@ -794,7 +794,7 @@ public class AbstractCompiler {
         }
 
         try {
-            return new TypeWrapper(Class.forName("java.lang." + className));
+            return TypeWrapper.fromClass(Class.forName("java.lang." + className));
 
         } catch (ClassNotFoundException ex) {
             /*
@@ -803,7 +803,7 @@ public class AbstractCompiler {
         }
 
         try {
-            return new TypeWrapper(Class.forName(tentativeName));
+            return TypeWrapper.fromClass(Class.forName(tentativeName));
         } catch (ClassNotFoundException ex) {
             /*
              * Once again ignore the exception. We don't have the class in the lang package.
@@ -813,7 +813,7 @@ public class AbstractCompiler {
              */
             if (className.contains(".")) {
                 try {
-                    return new TypeWrapper(Class.forName(className));
+                    return TypeWrapper.fromClass(Class.forName(className));
                 } catch (ClassNotFoundException e) {
                     return null;
                 }
