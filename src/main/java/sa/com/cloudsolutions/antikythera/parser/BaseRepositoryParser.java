@@ -251,11 +251,31 @@ public class BaseRepositoryParser extends AbstractCompiler {
     }
 
     private static boolean isRepositoryInterface(String interfaceName) {
-        return interfaceName != null && (interfaceName.contains(JPA_REPOSITORY) ||
+        if (interfaceName == null) {
+            return false;
+        }
+        // Exclude MongoDB repositories - they use a different query paradigm
+        if (isMongoRepository(interfaceName)) {
+            return false;
+        }
+        return interfaceName.contains(JPA_REPOSITORY) ||
                 interfaceName.contains("CrudRepository") ||
                 interfaceName.contains("PagingAndSortingRepository") ||
                 interfaceName.contains("Repository") &&
-                        (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository")));
+                        (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository"));
+    }
+
+    /**
+     * Checks if the interface name represents a MongoDB repository.
+     * MongoDB repositories use a different query paradigm and should not be processed
+     * for SQL/JPQL optimization.
+     *
+     * @param interfaceName the interface name to check
+     * @return true if it's a MongoDB repository interface
+     */
+    private static boolean isMongoRepository(String interfaceName) {
+        return interfaceName.contains("MongoRepository") ||
+                interfaceName.contains("ReactiveMongoRepository");
     }
 
     public static DatabaseDialect getDialect() {

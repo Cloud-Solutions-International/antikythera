@@ -502,4 +502,41 @@ class BaseRepositoryParserTest {
             assertTrue(sql.contains("first_name"), "Query should reference first_name column: " + sql);
         });
     }
+
+    @Test
+    void testMongoRepositoryIsExcluded() throws IOException {
+        // MongoRepository classes should not be considered JPA repositories
+        // because they use a different query paradigm (MongoDB queries, not SQL/JPQL)
+        String mongoRepoCode = """
+                package com.example.repository;
+                import org.springframework.data.mongodb.repository.MongoRepository;
+                public interface DocumentRepository extends MongoRepository<Document, String> {
+                    Document findByTitle(String title);
+                }
+                """;
+        CompilationUnit cu = StaticJavaParser.parse(mongoRepoCode);
+        TypeDeclaration<?> type = cu.getType(0);
+
+        assertFalse(BaseRepositoryParser.isJpaRepository(type),
+                "MongoRepository should not be considered a JPA repository");
+        assertFalse(BaseRepositoryParser.isJpaRepository(new TypeWrapper(type)),
+                "MongoRepository TypeWrapper should not be considered a JPA repository");
+    }
+
+    @Test
+    void testReactiveMongoRepositoryIsExcluded() throws IOException {
+        // ReactiveMongoRepository classes should also be excluded
+        String reactiveMongoRepoCode = """
+                package com.example.repository;
+                import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
+                public interface ReactiveDocumentRepository extends ReactiveMongoRepository<Document, String> {
+                    reactor.core.publisher.Mono<Document> findByTitle(String title);
+                }
+                """;
+        CompilationUnit cu = StaticJavaParser.parse(reactiveMongoRepoCode);
+        TypeDeclaration<?> type = cu.getType(0);
+
+        assertFalse(BaseRepositoryParser.isJpaRepository(type),
+                "ReactiveMongoRepository should not be considered a JPA repository");
+    }
 }
