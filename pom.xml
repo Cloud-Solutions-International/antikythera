@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>sa.com.cloudsolutions</groupId>
     <artifactId>antikythera</artifactId>
-    <version>0.1.3.0</version>
+    <version>0.1.3.1</version>
 
     <name>Antikythera</name>
     <description>Automated Test Generator for Java projects. Generates unit tests and API tests for Spring applications.</description>
@@ -15,12 +15,6 @@
             <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
         </license>
     </licenses>
-
-    <scm>
-        <connection>scm:git:git://github.com/Cloud-Solutions-International/antikythera.git</connection>
-        <developerConnection>scm:git:ssh://github.com/Cloud-Solutions-International/antikythera.git</developerConnection>
-        <url>https://github.com/Cloud-Solutions-International/antikythera/tree/master</url>
-    </scm>
 
     <properties>
         <api-framework-version>2.0.0</api-framework-version>
