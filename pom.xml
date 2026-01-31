@@ -104,9 +104,9 @@
 
         <!-- HQL/JPQL Parser with ANTLR4 -->
         <dependency>
-            <groupId>com.github.e4c5</groupId>
+            <groupId>com.raditha</groupId>
             <artifactId>hql-parser</artifactId>
-            <version>0.0.15</version>
+            <version>0.0.16</version>
         </dependency>
         
         <!-- Explicitly declare ANTLR 4 runtime to ensure IDE classpath includes it -->

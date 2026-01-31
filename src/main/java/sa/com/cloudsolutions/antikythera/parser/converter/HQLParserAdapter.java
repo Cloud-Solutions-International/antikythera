@@ -351,36 +351,55 @@ public class HQLParserAdapter {
         Set<String> tables = new HashSet<>();
         Map<String, Map<String, JoinMapping>> relationshipMetadata = new HashMap<>();
 
+        // Track resolved entities (simple name -> EntityMetadata)
+        Map<String, EntityMetadata> resolvedEntities = new HashMap<>();
+        // Track unresolved entity names
+        Set<String> unresolvedEntities = new LinkedHashSet<>(analysis.getEntityNames());
+
+        // First pass: resolve entities directly
         for (String name : analysis.getEntityNames()) {
-            TypeWrapper typeWrapper = AbstractCompiler.findType(cu, name);
-            String fullName = null;
-            if (typeWrapper == null) {
-                fullName = getEntiyNameForEntity(name);
-            } else {
-                fullName = typeWrapper.getFullyQualifiedName();
+            EntityMetadata meta = resolveEntityDirectly(name);
+            if (meta != null) {
+                resolvedEntities.put(name, meta);
+                unresolvedEntities.remove(name);
             }
+        }
 
-            EntityMetadata meta = EntityMappingResolver.getMapping().get(fullName);
-            if (meta == null && typeWrapper != null) {
-                meta = EntityMappingResolver.buildOnTheFly(typeWrapper);
+        // Second pass: resolve entities through join paths
+        // Keep iterating until no more can be resolved
+        boolean progress = true;
+        while (progress && !unresolvedEntities.isEmpty()) {
+            progress = false;
+            Iterator<String> it = unresolvedEntities.iterator();
+            while (it.hasNext()) {
+                String name = it.next();
+                EntityMetadata meta = resolveEntityFromJoinPaths(name, analysis, resolvedEntities);
+                if (meta != null) {
+                    resolvedEntities.put(name, meta);
+                    it.remove();
+                    progress = true;
+                }
             }
+        }
 
-            if (meta == null) {
-                logger.warn("No metadata found for entity: {} (fullName: {})", name, fullName);
-                continue;
-            }
+        // Log warnings for still unresolved entities
+        for (String name : unresolvedEntities) {
+            logger.warn("No metadata found for entity: {} (could not resolve through join paths)", name);
+        }
+
+        // Register all resolved entities
+        for (var entry : resolvedEntities.entrySet()) {
+            String name = entry.getKey();
+            EntityMetadata meta = entry.getValue();
 
             tables.add(meta.tableName());
             sqlConverter.registerEntityMapping(name, meta.tableName());
 
             if (meta.propertyToColumnMap() != null) {
-                for (var entry : meta.propertyToColumnMap().entrySet()) {
-                    String propertyName = entry.getKey();
-                    String columnName = entry.getValue();
-                    sqlConverter.registerFieldMapping(
-                            name,
-                            propertyName,
-                            columnName);
+                for (var propEntry : meta.propertyToColumnMap().entrySet()) {
+                    String propertyName = propEntry.getKey();
+                    String columnName = propEntry.getValue();
+                    sqlConverter.registerFieldMapping(name, propertyName, columnName);
                 }
             }
 
@@ -393,6 +412,93 @@ public class HQLParserAdapter {
         sqlConverter.setRelationshipMetadata(relationshipMetadata);
 
         return tables;
+    }
+
+    /**
+     * Attempts to resolve an entity directly (without using join paths).
+     */
+    private EntityMetadata resolveEntityDirectly(String name) {
+        TypeWrapper typeWrapper = AbstractCompiler.findType(cu, name);
+        String fullName = null;
+        if (typeWrapper == null) {
+            fullName = getEntiyNameForEntity(name);
+        } else {
+            fullName = typeWrapper.getFullyQualifiedName();
+        }
+
+        EntityMetadata meta = EntityMappingResolver.getMapping().get(fullName);
+        if (meta == null && typeWrapper != null) {
+            meta = EntityMappingResolver.buildOnTheFly(typeWrapper);
+        }
+        return meta;
+    }
+
+    /**
+     * Attempts to resolve an entity by following join paths from already-resolved entities.
+     * For example, if we have "join rt.criterions rtc" and rt is resolved to ResourceScheduleTemplate,
+     * we can look at ResourceScheduleTemplate's relationship map to find the actual type of 'criterions'.
+     */
+    private EntityMetadata resolveEntityFromJoinPaths(String targetEntityName, MetaData analysis,
+            Map<String, EntityMetadata> resolvedEntities) {
+        // Look for join paths where this entity is the target
+        for (var joinEntry : analysis.getJoinPaths().entrySet()) {
+            MetaData.JoinPathInfo joinPath = joinEntry.getValue();
+
+            // Check if this join path targets the entity we're trying to resolve
+            if (!targetEntityName.equals(joinPath.targetEntity())) {
+                continue;
+            }
+
+            // Get the source alias and find its entity
+            String sourceAlias = joinPath.sourceAlias();
+            String sourceEntityName = analysis.getEntityForAlias(sourceAlias);
+            if (sourceEntityName == null) {
+                continue;
+            }
+
+            // Check if we've already resolved the source entity
+            EntityMetadata sourceMetadata = resolvedEntities.get(sourceEntityName);
+            if (sourceMetadata == null) {
+                continue;
+            }
+
+            // Extract the field name from the path (e.g., "rt.criterions" -> "criterions")
+            String pathExpr = joinPath.pathExpression();
+            String fieldName = pathExpr.contains(".") ?
+                    pathExpr.substring(pathExpr.lastIndexOf('.') + 1) : pathExpr;
+
+            // Look up the relationship in the source entity's relationship map
+            if (sourceMetadata.relationshipMap() != null) {
+                JoinMapping joinMapping = sourceMetadata.relationshipMap().get(fieldName);
+                if (joinMapping != null) {
+                    // Found the actual target entity name from the relationship mapping
+                    String actualTargetEntity = joinMapping.targetEntity();
+                    logger.debug("Resolved entity {} through join path {} -> field {} -> {}",
+                            targetEntityName, sourceEntityName, fieldName, actualTargetEntity);
+
+                    // Try to find metadata for the actual target entity
+                    Set<String> fullNames = EntityMappingResolver.getFullNamesForEntity(actualTargetEntity);
+                    for (String fullName : fullNames) {
+                        EntityMetadata meta = EntityMappingResolver.getMapping().get(fullName);
+                        if (meta != null) {
+                            return meta;
+                        }
+                    }
+
+                    // Try to resolve by searching resolved types
+                    for (Map.Entry<String, TypeWrapper> entry : AntikytheraRunTime.getResolvedTypes().entrySet()) {
+                        String fqn = entry.getKey();
+                        if (fqn.endsWith("." + actualTargetEntity)) {
+                            TypeWrapper tw = entry.getValue();
+                            if (isEntity(tw)) {
+                                return EntityMappingResolver.buildOnTheFly(tw);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private void registerRelationshipMappings(String name, EntityMetadata meta,
