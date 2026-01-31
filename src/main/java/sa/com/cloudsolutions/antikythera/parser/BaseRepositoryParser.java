@@ -506,7 +506,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
         StringBuilder sql = new StringBuilder();
         String tableName = findTableName(entity);
         boolean top = false;
-        boolean isExistsQuery = components.contains("existsBy");
+        boolean isExistsQuery = components.contains("existsBy") || components.contains("existsAllBy");
         if (tableName != null) {
             top = MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, tableName);
         } else {
@@ -516,7 +516,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
             applyTopLimit(sql);
         }
 
-        // Close the EXISTS subquery if needed
+        // Close the EXISTS subquery if needed (closes both the inner SELECT and the EXISTS function)
         if (isExistsQuery) {
             sql.append(")");
         }

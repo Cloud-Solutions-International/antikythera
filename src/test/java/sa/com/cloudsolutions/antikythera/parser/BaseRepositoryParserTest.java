@@ -314,6 +314,31 @@ class BaseRepositoryParserTest {
     }
 
     @Test
+    void testExistsAllByQuery() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        // Create a mock method to test existsAllBy
+        String methodCode = "public interface TestRepo { boolean existsAllByActiveAndStatus(Boolean active, String status); }";
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+        assertNotNull(q);
+        String sql = q.getQuery();
+        assertTrue(sql.contains("SELECT EXISTS"), "Query should use EXISTS: " + sql);
+        assertTrue(sql.contains("FROM users"), "Query should reference users table: " + sql);
+        assertTrue(sql.contains("WHERE"), "Query should have WHERE clause: " + sql);
+        assertTrue(sql.contains("AND"), "Query should have AND clause: " + sql);
+        // Verify the closing parenthesis - existsAllBy should also have balanced parens
+        int openParens = sql.length() - sql.replace("(", "").length();
+        int closeParens = sql.length() - sql.replace(")", "").length();
+        assertEquals(openParens, closeParens, "Parentheses should be balanced for existsAllBy: " + sql);
+    }
+
+    @Test
     void testCountByWithMultipleConditions() throws IOException {
         CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
         BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
