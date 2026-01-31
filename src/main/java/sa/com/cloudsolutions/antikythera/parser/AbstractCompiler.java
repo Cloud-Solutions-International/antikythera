@@ -117,6 +117,11 @@ public class AbstractCompiler {
         }
     }
 
+    public static void loadDependencies() throws IOException {
+        setupParser();
+    }
+
+
     /**
      * Enables or disables LexicalPreservingPrinter for all subsequently parsed
      * files.
