@@ -147,11 +147,133 @@ public class EntityMappingResolver {
         String tableName = getTableName(typeDecl);
         Map<String, String> propertyToColumnMappings = buildPropertyToColumnMapFromAST(typeDecl);
 
-        // Relationship mappings not yet implemented for AST-based approach
-        Map<String, JoinMapping> relationshipMappings = new HashMap<>();
+        // Build relationship mappings from AST
+        Map<String, JoinMapping> relationshipMappings = buildRelationshipMappingsFromAST(typeDecl, tableName);
 
         return new EntityMetadata(new TypeWrapper(typeDecl), tableName,
                 propertyToColumnMappings, relationshipMappings);
+    }
+
+    /**
+     * Builds relationship mappings from AST by analyzing JPA relationship annotations.
+     */
+    private static Map<String, JoinMapping> buildRelationshipMappingsFromAST(TypeDeclaration<?> typeDecl, String sourceTableName) {
+        Map<String, JoinMapping> joinMappings = new HashMap<>();
+
+        for (FieldDeclaration field : typeDecl.getFields()) {
+            if (isTransientFieldFromAST(field) || !isRelationshipFieldFromAST(field)) {
+                continue;
+            }
+            for (VariableDeclarator variable : field.getVariables()) {
+                String propertyName = variable.getNameAsString();
+                JoinMapping joinMapping = buildJoinMappingFromAST(field, variable, propertyName, sourceTableName);
+                if (joinMapping != null) {
+                    joinMappings.put(propertyName, joinMapping);
+                }
+            }
+        }
+
+        return joinMappings;
+    }
+
+    private static boolean isRelationshipFieldFromAST(FieldDeclaration field) {
+        return field.getAnnotationByName("OneToOne").isPresent() ||
+                field.getAnnotationByName("OneToMany").isPresent() ||
+                field.getAnnotationByName("ManyToOne").isPresent() ||
+                field.getAnnotationByName("ManyToMany").isPresent();
+    }
+
+    /**
+     * Builds a JoinMapping from AST field information.
+     */
+    private static JoinMapping buildJoinMappingFromAST(FieldDeclaration field, VariableDeclarator variable,
+            String propertyName, String sourceTableName) {
+        TypeWrapper targetType = getTargetTypeFromAST(field, variable);
+        if (targetType == null || targetType.getName() == null) {
+            return null;
+        }
+
+        String targetEntityName = targetType.getName();
+        String targetTableName = resolveTargetTableName(targetEntityName);
+        String[] joinColumnInfo = extractJoinColumnInfoFromAST(field, propertyName);
+
+        return new JoinMapping(
+                propertyName,
+                targetEntityName,
+                joinColumnInfo[0],
+                joinColumnInfo[1],
+                determineJoinTypeFromAST(field),
+                sourceTableName,
+                targetTableName);
+    }
+
+    private static TypeWrapper getTargetTypeFromAST(FieldDeclaration field, VariableDeclarator variable) {
+        List<TypeWrapper> types = AbstractCompiler.findTypesInVariable(variable);
+        if (types.isEmpty()) {
+            return null;
+        }
+
+        // For collection types (OneToMany, ManyToMany), the target is the first type (generic argument)
+        // For single types (OneToOne, ManyToOne), the target is the last type
+        boolean isCollection = field.getAnnotationByName("OneToMany").isPresent() ||
+                field.getAnnotationByName("ManyToMany").isPresent();
+
+        if (isCollection && types.size() > 1) {
+            return types.getFirst();
+        }
+        return types.getLast();
+    }
+
+    private static String resolveTargetTableName(String targetEntityName) {
+        Set<String> fullNames = getFullNamesForEntity(targetEntityName);
+        for (String fullName : fullNames) {
+            EntityMetadata meta = mapping.get(fullName);
+            if (meta != null) {
+                return meta.tableName();
+            }
+        }
+        return AbstractCompiler.camelToSnakeCase(targetEntityName);
+    }
+
+    private static String[] extractJoinColumnInfoFromAST(FieldDeclaration field, String propertyName) {
+        String joinColumnName = AbstractCompiler.camelToSnakeCase(propertyName) + "_id";
+        String referencedColumnName = "id";
+
+        Optional<AnnotationExpr> joinColumnAnn = field.getAnnotationByName("JoinColumn");
+        if (joinColumnAnn.isPresent()) {
+            Map<String, Expression> attrs = AbstractCompiler.extractAnnotationAttributes(joinColumnAnn.get());
+            Expression nameExpr = attrs.get("name");
+            if (nameExpr != null) {
+                joinColumnName = nameExpr.toString().replace("\"", "");
+            }
+            Expression refExpr = attrs.get("referencedColumnName");
+            if (refExpr != null) {
+                referencedColumnName = refExpr.toString().replace("\"", "");
+            }
+        }
+
+        return new String[] { joinColumnName, referencedColumnName };
+    }
+
+    /**
+     * Determines the join type from AST annotations.
+     */
+    private static JoinType determineJoinTypeFromAST(FieldDeclaration field) {
+        // Check ManyToOne and OneToOne - these can have optional=false for INNER join
+        for (String annotationName : List.of("ManyToOne", "OneToOne")) {
+            Optional<AnnotationExpr> annotation = field.getAnnotationByName(annotationName);
+            if (annotation.isPresent()) {
+                Map<String, Expression> attrs = AbstractCompiler.extractAnnotationAttributes(annotation.get());
+                Expression optional = attrs.get("optional");
+                if (optional != null && "false".equals(optional.toString())) {
+                    return JoinType.INNER;
+                }
+                return JoinType.LEFT;
+            }
+        }
+
+        // OneToMany and ManyToMany are typically LEFT joins
+        return JoinType.LEFT;
     }
 
     private static EntityMetadata buildEntityMetadata(Class<?> entityClass) {
@@ -344,37 +466,27 @@ public class EntityMappingResolver {
     }
 
     private static Map<String, String> buildPropertyToColumnMap(Class<?> entityClass) {
-        Map<String, String> propertyToColumnMap = new HashMap<>();
-
-        for (Field field : getAllFields(entityClass)) {
-            if (isTransientField(field)) {
-                continue;
-            }
-
-            String propertyName = field.getName();
-            String columnName = getColumnName(field);
-            propertyToColumnMap.put(propertyName, columnName);
-        }
-
-        return propertyToColumnMap;
+        return buildPropertyToColumnMap(entityClass, false, false);
     }
 
     private static Map<String, String> buildPropertyToColumnMappings(Class<?> entityClass) {
-        Map<String, String> columnMappings = new HashMap<>();
+        return buildPropertyToColumnMap(entityClass, true, true);
+    }
+
+    private static Map<String, String> buildPropertyToColumnMap(Class<?> entityClass, boolean useFullyQualifiedKey, boolean skipRelationships) {
+        Map<String, String> propertyToColumnMap = new HashMap<>();
 
         for (Field field : getAllFields(entityClass)) {
-            if (isTransientField(field) || isRelationshipField(field)) {
+            if (isTransientField(field) || (skipRelationships && isRelationshipField(field))) {
                 continue;
             }
-
             String propertyName = field.getName();
             String columnName = getColumnName(field);
-            String fullPropertyName = entityClass.getName() + "." + propertyName;
-
-            columnMappings.put(fullPropertyName, columnName);
+            String key = useFullyQualifiedKey ? entityClass.getName() + "." + propertyName : propertyName;
+            propertyToColumnMap.put(key, columnName);
         }
 
-        return columnMappings;
+        return propertyToColumnMap;
     }
 
     private static Map<String, JoinMapping> buildRelationshipMappings(Class<?> entityClass, TableMapping tableMapping) {
@@ -509,6 +621,10 @@ public class EntityMappingResolver {
                 return AbstractCompiler.camelToSnakeCase(entityName);
             }
             EntityMetadata m = mapping.get(n.stream().findFirst().orElseThrow());
+            if (m == null) {
+                // FQN exists in shortNames but no metadata (not an entity or couldn't be parsed)
+                return AbstractCompiler.camelToSnakeCase(entityName);
+            }
             return m.tableName();
         }
         return meta.tableName();

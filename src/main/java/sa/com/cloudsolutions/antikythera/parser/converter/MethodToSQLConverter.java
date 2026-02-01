@@ -45,10 +45,14 @@ public final class MethodToSQLConverter {
     public static final String ALL_IGNORE_CASE = "AllIgnoreCase";
     public static final String FIND_BY = "findBy";
     public static final String FIND_ALL = "findAll";
+    public static final String FIND_ALL_BY = "findAllBy";
     public static final String FIND_ALL_BY_ID = "findAllById";
     public static final String COUNT_BY = "countBy";
+    public static final String COUNT_ALL_BY = "countAllBy";
     public static final String DELETE_BY = "deleteBy";
+    public static final String DELETE_ALL_BY = "deleteAllBy";
     public static final String EXISTS_BY = "existsBy";
+    public static final String EXISTS_ALL_BY = "existsAllBy";
     public static final String FIND_FIRST_BY = "findFirstBy";
     public static final String FIND_TOP_BY = "findTopBy";
     public static final String FIND_DISTINCT_BY = "findDistinctBy";
@@ -62,7 +66,8 @@ public final class MethodToSQLConverter {
 
     private static final List<String> QUERY_TYPES = List.of(
             READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY, REMOVE_BY, GET, SAVE, FIND_BY,
-            FIND_FIRST_BY, FIND_TOP_BY, FIND_DISTINCT_BY, FIND_ALL, COUNT_BY, DELETE_BY, EXISTS_BY);
+            FIND_FIRST_BY, FIND_TOP_BY, FIND_DISTINCT_BY, FIND_ALL, FIND_ALL_BY, FIND_ALL_BY_ID,
+            COUNT_BY, COUNT_ALL_BY, DELETE_BY, DELETE_ALL_BY, EXISTS_BY, EXISTS_ALL_BY);
 
     private static final List<String> OPERATORS = List.of(
             AND, OR, BETWEEN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL, GREATER_THAN,
@@ -79,11 +84,11 @@ public final class MethodToSQLConverter {
     private static final Set<String> NO_EQUALS_OPERATORS = Set.of(
             BETWEEN, GREATER_THAN, LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL,
             IS_NOT_NULL, IS_NULL, IS_NOT, LIKE, CONTAINING, IN, NOT_IN, NOT,
-            STARTING_WITH, ENDING_WITH, BEFORE, AFTER, IS_TRUE, IS_FALSE, TRUE, FALSE, IGNORE_CASE);
+            STARTING_WITH, ENDING_WITH, BEFORE, AFTER, IS_TRUE, IS_FALSE, TRUE, FALSE);
     // Note: AND/OR are intentionally excluded so that a bare field before a logical
-    // operator
-    // still receives an implicit "= ?" comparator (e.g., "...Where userId And
-    // tenantId..." -> "user_id = ? AND tenant_id = ?").
+    // operator still receives an implicit "= ?" comparator.
+    // Note: IGNORE_CASE is NOT in this set - it should still get "= ?" appended,
+    // with case-insensitive comparison handled by the database or application layer.
 
     private MethodToSQLConverter() {
     }
@@ -177,11 +182,35 @@ public final class MethodToSQLConverter {
             return hasFollowingUppercase(methodName, keywordEnd);
         }
 
-        if (isSyntacticSugar(keyword) && isSyntacticSugarFollowedByBooleanOp(methodName, keywordEnd)) {
-            return false;
+        // Syntactic sugar keywords (Is, Equals) should only be matched when followed by:
+        // 1. Another operator (True, False, Null, NotNull, Not, And, Or)
+        // 2. The end of the string
+        // NOT when followed by what looks like a field name (e.g., "IsActive" -> "Is" should not match)
+        if (isSyntacticSugar(keyword)) {
+            return isSyntacticSugarValidPosition(methodName, keywordEnd);
         }
 
         return isGeneralOperatorBoundary(methodName, keywordEnd);
+    }
+
+    /**
+     * Checks if a syntactic sugar keyword (Is, Equals) is at a valid position.
+     * Valid positions are:
+     * - At end of string (e.g., "findByStatusIs" - though unusual)
+     * - Followed by known suffixes: True, False, Null, NotNull, Not, And, Or
+     * This prevents "Is" from matching at the start of field names like "IsActive"
+     */
+    private static boolean isSyntacticSugarValidPosition(String methodName, int keywordEnd) {
+        if (keywordEnd >= methodName.length()) {
+            return true; // At end of string
+        }
+
+        // Check if followed by known suffixes that make sense after "Is"
+        String remainder = methodName.substring(keywordEnd);
+        return remainder.startsWith("True") || remainder.startsWith("False") ||
+               remainder.startsWith("Null") || remainder.startsWith("NotNull") ||
+               remainder.startsWith("Not") || // covers IsNot, IsNotNull, IsNotIn, etc.
+               remainder.startsWith("And") || remainder.startsWith("Or");
     }
 
     private static boolean hasFollowingUppercase(String methodName, int keywordEnd) {
@@ -270,8 +299,9 @@ public final class MethodToSQLConverter {
                 || methodName.startsWith(FIND_FIRST_BY)
                 || methodName.startsWith(FIND_TOP_BY)
                 || methodName.startsWith(FIND_DISTINCT_BY)
-                || methodName.startsWith(FIND_ALL)
-                || methodName.startsWith(FIND_ALL_BY_ID)) {
+                || methodName.startsWith(FIND_ALL_BY_ID)
+                || methodName.startsWith(FIND_ALL_BY)
+                || methodName.startsWith(FIND_ALL)) {
             return methodName;
         }
         // If the only occurrence of "By" is the one in "OrderBy", do not normalize.
@@ -350,22 +380,22 @@ public final class MethodToSQLConverter {
                         .append(" WHERE id IN (?)");
                 return true;
             }
-            case FIND_BY, GET, READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY -> {
+            case FIND_BY, FIND_ALL_BY, GET, READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY -> {
                 sql.append(BaseRepositoryParser.SELECT_STAR).append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
             }
-            case COUNT_BY -> {
+            case COUNT_BY, COUNT_ALL_BY -> {
                 sql.append("SELECT COUNT(*) FROM ").append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
             }
-            case DELETE_BY, REMOVE_BY -> {
+            case DELETE_BY, DELETE_ALL_BY, REMOVE_BY -> {
                 sql.append("DELETE FROM ").append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
             }
-            case EXISTS_BY -> {
+            case EXISTS_BY, EXISTS_ALL_BY -> {
                 sql.append("SELECT EXISTS (SELECT 1 FROM ").append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
@@ -424,8 +454,9 @@ public final class MethodToSQLConverter {
                 return true;
             }
             case CONTAINING, LIKE, STARTING_WITH, ENDING_WITH -> sql.append(" LIKE ? ");
-            case IS, EQUAL, IGNORE_CASE -> {
-                // Syntactic sugar or handled elsewhere
+            case IS, EQUAL, IGNORE_CASE, ALL_IGNORE_CASE -> {
+                // Syntactic sugar or modifiers handled elsewhere
+                // These don't produce SQL fragments themselves
                 return true;
             }
             default -> {

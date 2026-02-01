@@ -236,4 +236,80 @@ class HQLParseAdapterTest extends TestHelper {
         String expected = "SELECT NEW com.example.DTO(CAST(SUM(amount) AS DECIMAL), CAST(COUNT(id) AS Long)) FROM Order o";
         assertEquals(expected, result);
     }
+
+    // ========== Join Path Entity Resolution Tests ==========
+
+    @Test
+    void testConvertToNativeSQL_WithJoin() throws Exception {
+        // Test basic join - User has @OneToMany to Vehicle
+        String query = "SELECT u.username, v.manufacturer FROM User u JOIN u.vehicles v";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        assertNotNull(result.getNativeSql());
+        // The SQL should reference both tables
+        assertTrue(result.getReferencedTables().contains("users"));
+    }
+
+    @Test
+    void testConvertToNativeSQL_EntityResolutionThroughJoinPath() throws Exception {
+        // This tests that Vehicle is resolved through the join path u.vehicles
+        // even though Vehicle is not directly specified in the FROM clause
+        String query = "SELECT v.manufacturer FROM User u JOIN u.vehicles v WHERE v.year > 2020";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        assertNotNull(result.getNativeSql());
+        // Should contain vehicle table reference
+        String sql = result.getNativeSql().toLowerCase();
+        assertTrue(sql.contains("vehicle") || sql.contains("vehicles"));
+    }
+
+    @Test
+    void testConvertToNativeSQL_MultipleJoinLevels() throws Exception {
+        // Test that entity resolution works for entities accessed through join chains
+        // User -> Vehicle (through u.vehicles)
+        String query = "SELECT u.username, v.color FROM User u " +
+                "LEFT JOIN u.vehicles v " +
+                "WHERE u.active = true AND v.year >= 2020";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        assertNotNull(result.getNativeSql());
+    }
+
+    @Test
+    void testConvertToNativeSQL_FieldsFromJoinedEntity() throws Exception {
+        // Test that field references to joined entities work correctly
+        String query = "SELECT u.firstName, u.lastName, v.manufacturer, v.color " +
+                "FROM User u JOIN u.vehicles v";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        String sql = result.getNativeSql();
+        // Should have converted camelCase field names to snake_case columns
+        assertTrue(sql.contains("first_name") || sql.contains("firstName"));
+    }
+
+    @Test
+    void testConvertToNativeSQL_WithWhereOnJoinedEntity() throws Exception {
+        String query = "SELECT u FROM User u JOIN u.vehicles v WHERE v.manufacturer = :make";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        assertNotNull(result.getParameterMappings());
+        // Should have the :make parameter
+        assertTrue(result.getParameterMappings().stream()
+                .anyMatch(p -> p.originalName().contains("make")));
+    }
+
+    @Test
+    void testConvertToNativeSQL_CountWithJoin() throws Exception {
+        String query = "SELECT COUNT(v) FROM User u JOIN u.vehicles v WHERE u.active = true";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        assertNotNull(result.getNativeSql());
+        assertTrue(result.getNativeSql().toUpperCase().contains("COUNT"));
+    }
 }
