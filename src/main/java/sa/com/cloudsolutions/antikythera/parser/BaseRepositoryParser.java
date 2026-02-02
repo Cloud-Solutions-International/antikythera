@@ -258,11 +258,17 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (isMongoRepository(interfaceName)) {
             return false;
         }
+
+        // Strip generic type parameters for endsWith check (e.g., "ExtendedRepository<T, ID>" -> "ExtendedRepository")
+        String baseName = interfaceName.contains("<")
+                ? interfaceName.substring(0, interfaceName.indexOf('<'))
+                : interfaceName;
+
         return interfaceName.contains(JPA_REPOSITORY) ||
                 interfaceName.contains("CrudRepository") ||
                 interfaceName.contains("PagingAndSortingRepository") ||
                 interfaceName.contains("Repository") &&
-                        (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository"));
+                        (interfaceName.contains("org.springframework.data") || baseName.endsWith("Repository"));
     }
 
     /**
