@@ -57,4 +57,11 @@ public class JunitAsserter extends Asserter {
         return assertDoesNotThrow;
     }
 
+    @Override
+    public Expression assertOutput(String expected) {
+        MethodCallExpr assertEquals = new MethodCallExpr("assertEquals");
+        assertEquals.addArgument("\"" + expected.replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\"");
+        assertEquals.addArgument("outputStream.toString().trim()");
+        return assertEquals;
+    }
 }

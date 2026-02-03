@@ -260,10 +260,23 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     break;
                 }
 
+                if (onTest) {
+                    startOutputCapture();
+                }
                 executeMethod(md);
+                String output = null;
+                if (onTest) {
+                    output = stopOutputCapture();
+                    if (output != null && !output.isEmpty()) {
+                        System.out.print(output);
+                    }
+                }
 
                 if (md.getType().isVoidType()) {
                     MethodResponse mr = new MethodResponse();
+                    if (onTest) {
+                        mr.setCapturedOutput(output);
+                    }
                     createTests(mr);
                 }
                 safetyCheck++;
@@ -490,6 +503,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     }
                     MethodResponse mr = new MethodResponse();
                     mr.setBody(returnValue);
+                    if (capturedOutputStream != null) {
+                        mr.setCapturedOutput(capturedOutputStream.toString());
+                    }
                     createTests(mr);
                 }
             }

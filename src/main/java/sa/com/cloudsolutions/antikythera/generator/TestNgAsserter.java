@@ -47,4 +47,12 @@ public class TestNgAsserter extends  Asserter {
         // Just return the invocation itself as a statement
         return new NameExpr(invocation.replace(';', ' '));
     }
+
+    @Override
+    public Expression assertOutput(String expected) {
+        // Placeholder for TestNG
+        return new MethodCallExpr(new NameExpr(ASSERT), "assertEquals")
+                .addArgument("outputStream.toString().trim()")
+                .addArgument("\"" + expected.replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\"");
+    }
 }

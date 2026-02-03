@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -843,13 +844,19 @@ public class UnitTestGenerator extends TestGenerator {
             getBody(testMethod).addStatement(invocation);
             noSideEffectAsserts(response);
         } else {
-            int statementsBefore = getBody(testMethod).getStatements().size();
+            BlockStmt body = getBody(testMethod);
+            int statementsBefore = body.getStatements().size();
+            body.addStatement(invocation);
+            int statementsBeforeAsserts = body.getStatements().size();
+
             sideEffectAsserts();
-            int statementsAfter = getBody(testMethod).getStatements().size();
-            if (statementsBefore == statementsAfter) {
-                getBody(testMethod).addStatement(asserter.assertDoesNotThrow(invocation));
-            } else {
-                getBody(testMethod).addStatement(invocation);
+            if (response.getCapturedOutput() != null && !response.getCapturedOutput().trim().isEmpty()) {
+                body.addStatement(asserter.assertOutput(response.getCapturedOutput().trim()));
+            }
+
+            if (body.getStatements().size() == statementsBeforeAsserts) {
+                body.getStatements().remove(statementsBefore);
+                body.addStatement(asserter.assertDoesNotThrow(invocation));
             }
         }
     }
@@ -905,6 +912,9 @@ public class UnitTestGenerator extends TestGenerator {
         else {
             body.addStatement(asserter.assertNull("resp"));
         }
+        if (response.getCapturedOutput() != null && !response.getCapturedOutput().trim().isEmpty()) {
+            body.addStatement(asserter.assertOutput(response.getCapturedOutput().trim()));
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -947,6 +957,7 @@ public class UnitTestGenerator extends TestGenerator {
     @Override
     public void addBeforeClass() {
         identifyFieldsToBeMocked();
+        addOutputCaptureFields();
 
         MethodDeclaration before = new MethodDeclaration();
         before.setType(void.class);
@@ -955,6 +966,8 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt beforeBody = new BlockStmt();
         before.setBody(beforeBody);
         beforeBody.addStatement("MockitoAnnotations.openMocks(this);");
+        beforeBody.addStatement("originalOut = System.out;");
+        beforeBody.addStatement("System.setOut(new PrintStream(outputStream));");
         before.setJavadocComment("Author : Antikythera");
 
         if (baseTestClass != null) {
@@ -966,6 +979,39 @@ public class UnitTestGenerator extends TestGenerator {
         for (TypeDeclaration<?> t : gen.getTypes()) {
             if(t.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("setUp")).isEmpty()) {
                 t.addMember(before);
+            }
+        }
+        addAfterEach();
+    }
+
+    private void addOutputCaptureFields() {
+        for (TypeDeclaration<?> t : gen.getTypes()) {
+            if (t.getFieldByName("outputStream").isEmpty()) {
+                t.addField("ByteArrayOutputStream", "outputStream", Modifier.Keyword.PRIVATE, Modifier.Keyword.FINAL)
+                        .getVariable(0).setInitializer("new ByteArrayOutputStream()");
+                t.addField("PrintStream", "originalOut", Modifier.Keyword.PRIVATE);
+            }
+        }
+    }
+
+    private void addAfterEach() {
+        MethodDeclaration after = new MethodDeclaration();
+        after.setType(void.class);
+        after.addAnnotation("AfterEach");
+        after.setName("tearDown");
+        BlockStmt afterBody = new BlockStmt();
+        after.setBody(afterBody);
+        afterBody.addStatement("System.setOut(originalOut);");
+        afterBody.addStatement("outputStream.reset();");
+        after.setJavadocComment("Author : Antikythera");
+
+        addImport(new ImportDeclaration("org.junit.jupiter.api.AfterEach", false, false));
+        addImport(new ImportDeclaration("java.io.PrintStream", false, false));
+        addImport(new ImportDeclaration("java.io.ByteArrayOutputStream", false, false));
+
+        for (TypeDeclaration<?> t : gen.getTypes()) {
+            if(t.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("tearDown")).isEmpty()) {
+                t.addMember(after);
             }
         }
     }
