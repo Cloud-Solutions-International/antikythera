@@ -11,6 +11,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -353,8 +354,14 @@ public class BaseRepositoryParser extends AbstractCompiler {
             } else {
                 queries.put(callable, parseNonAnnotatedMethod(callable));
             }
-        } catch (ReflectiveOperationException e) {
-            throw new AntikytheraException(e);
+        } catch (Exception e) {
+            // Check if we should log or throw based on dependencies.on_error setting
+            if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
+                logger.warn("Skipping method {} due to query parsing error: {}",
+                        methodDeclaration.getNameAsString(), e.getMessage());
+            } else {
+                throw new AntikytheraException(e);
+            }
         }
     }
 
@@ -605,7 +612,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 // Use converted SQL to set the statement instead of parsing HQL
                 rql.setStatementFromConversionResult(conversionResult);
             } catch (Exception e) {
-                logger.error("Failed to parse HQL query: {}", query);
+                logger.warn("Failed to parse HQL query: {}", query);
                 throw new AntikytheraException(e);
             }
         } else {
