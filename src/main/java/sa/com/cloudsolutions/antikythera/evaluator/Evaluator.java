@@ -2317,4 +2317,12 @@ public class Evaluator implements EvaluationEngine {
         }
         return null;
     }
+
+    public static Exception getLastException() {
+        return lastException;
+    }
+
+    public static void clearLastException() {
+        lastException = null;
+    }
 }

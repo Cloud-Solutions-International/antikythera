@@ -57,6 +57,14 @@ public abstract class TestGenerator {
         whenThen.add(expr);
     }
 
+    public static void clearWhenThen() {
+        whenThen.clear();
+    }
+
+    public static List<Expression> getWhenThen() {
+        return whenThen;
+    }
+
     public static void addImport(ImportDeclaration s) {
         imports.add(s);
     }

@@ -263,6 +263,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 if (onTest) {
                     startOutputCapture();
                 }
+                Evaluator.clearLastException();
+                TestGenerator.clearWhenThen();
                 executeMethod(md);
                 String output = null;
                 if (onTest) {
@@ -273,11 +275,19 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
 
                 if (md.getType().isVoidType()) {
-                    MethodResponse mr = new MethodResponse();
-                    if (onTest) {
-                        mr.setCapturedOutput(output);
+                    boolean hasSideEffects = (output != null && !output.isEmpty())
+                            || !TestGenerator.getWhenThen().isEmpty()
+                            || !Branching.getApplicableConditions(md).isEmpty()
+                            || Evaluator.getLastException() != null
+                            || sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder.hasLogs();
+
+                    if (hasSideEffects) {
+                        MethodResponse mr = new MethodResponse();
+                        if (onTest) {
+                            mr.setCapturedOutput(output);
+                        }
+                        createTests(mr);
                     }
-                    createTests(mr);
                 }
                 safetyCheck++;
                 if (currentConditional != null) {
