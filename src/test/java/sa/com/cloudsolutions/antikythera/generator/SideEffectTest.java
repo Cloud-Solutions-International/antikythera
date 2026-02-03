@@ -26,7 +26,35 @@ class SideEffectTest {
     }
 
     @Test
-    void testVoidMethodsSideEffects() throws ReflectiveOperationException {
+    void testSideEffectsDefault() throws ReflectiveOperationException {
+        // Default behavior should be skipping
+        Settings.setProperty(Settings.SKIP_VOID_NO_SIDE_EFFECTS, null);
+        
+        String genSource = runGenerator();
+
+        // hasSideEffect should have a test
+        assertTrue(genSource.contains("hasSideEffectTest"), "hasSideEffect should have a generated test");
+        
+        // noSideEffect should NOT have a test
+        assertFalse(genSource.contains("noSideEffectTest"), "noSideEffect should NOT have a generated test");
+
+        // returnsValue should have a test
+        assertTrue(genSource.contains("returnsValueTest"), "returnsValue should have a generated test");
+    }
+
+    @Test
+    void testSideEffectsDisabled() throws ReflectiveOperationException {
+        // When skipping is disabled, no-op void methods should get tests
+        Settings.setProperty(Settings.SKIP_VOID_NO_SIDE_EFFECTS, false);
+        
+        String genSource = runGenerator();
+
+        assertTrue(genSource.contains("hasSideEffectTest"), "hasSideEffect should have a generated test");
+        assertTrue(genSource.contains("noSideEffectTest"), "noSideEffect should have a test when skipping is disabled");
+        assertTrue(genSource.contains("returnsValueTest"), "returnsValue should have a generated test");
+    }
+
+    private String runGenerator() throws ReflectiveOperationException {
         String cls = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.VoidNoOp";
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(cls);
         assertNotNull(cu);
@@ -47,15 +75,6 @@ class SideEffectTest {
 
         CompilationUnit gen = generator.getCompilationUnit();
         assertNotNull(gen);
-        String genSource = gen.toString();
-
-        // hasSideEffect should have a test
-        assertTrue(genSource.contains("hasSideEffectTest"), "hasSideEffect should have a generated test");
-        
-        // noSideEffect should NOT have a test
-        assertFalse(genSource.contains("noSideEffectTest"), "noSideEffect should NOT have a generated test");
-
-        // returnsValue should have a test
-        assertTrue(genSource.contains("returnsValueTest"), "returnsValue should have a generated test");
+        return gen.toString();
     }
 }

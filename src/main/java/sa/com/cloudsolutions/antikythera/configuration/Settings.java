@@ -53,6 +53,7 @@ public class Settings {
     private static final String JAR_FILES = "jar_files";
     public static final String DATABASE = "database";
     public static final String SQL_QUERY_CONVERSION = "query_conversion";
+    public static final String SKIP_VOID_NO_SIDE_EFFECTS = "skip_void_no_side_effects";
     /**
      * HashMap to store the configurations.
      */

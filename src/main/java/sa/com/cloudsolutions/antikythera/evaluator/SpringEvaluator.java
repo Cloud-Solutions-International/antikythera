@@ -275,13 +275,14 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
 
                 if (md.getType().isVoidType()) {
+                    boolean skipNoSideEffects = Settings.getProperty(Settings.SKIP_VOID_NO_SIDE_EFFECTS, Boolean.class).orElse(true);
                     boolean hasSideEffects = (output != null && !output.isEmpty())
                             || !TestGenerator.getWhenThen().isEmpty()
                             || !Branching.getApplicableConditions(md).isEmpty()
                             || Evaluator.getLastException() != null
                             || sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder.hasLogs();
 
-                    if (hasSideEffects) {
+                    if (!skipNoSideEffects || hasSideEffects) {
                         MethodResponse mr = new MethodResponse();
                         if (onTest) {
                             mr.setCapturedOutput(output);
