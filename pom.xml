@@ -16,12 +16,6 @@
         </license>
     </licenses>
 
-    <scm>
-        <connection>scm:git:git://github.com/Cloud-Solutions-International/antikythera.git</connection>
-        <developerConnection>scm:git:ssh://github.com/Cloud-Solutions-International/antikythera.git</developerConnection>
-        <url>https://github.com/Cloud-Solutions-International/antikythera/tree/master</url>
-    </scm>
-
     <properties>
         <api-framework-version>2.0.0</api-framework-version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
