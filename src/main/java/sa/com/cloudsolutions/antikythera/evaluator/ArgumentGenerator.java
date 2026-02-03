@@ -20,6 +20,9 @@ public abstract class ArgumentGenerator {
 
         ConstructorDeclaration matched = null;
         String className = classUnderTest.getNameAsString();
+        if (classUnderTest.isNestedType() && classUnderTest.getParentNode().isPresent() && classUnderTest.getParentNode().get() instanceof TypeDeclaration<?> parent) {
+            className = parent.getNameAsString() + "." + className;
+        }
 
         for (ConstructorDeclaration cd : classUnderTest.findAll(ConstructorDeclaration.class)) {
             if (matched == null) {

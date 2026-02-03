@@ -124,6 +124,7 @@ public class Evaluator implements EvaluationEngine {
      * The most recent return value that was encountered.
      */
     protected Variable returnValue;
+    private static final ThreadLocal<Boolean> executingToString = new ThreadLocal<>();
 
     /**
      * The parent block of the last executed return statement.
@@ -2158,7 +2159,35 @@ public class Evaluator implements EvaluationEngine {
 
     @Override
     public String toString() {
-        return getClass().getName() + " : " + getClassName();
+        if (Boolean.TRUE.equals(executingToString.get())) {
+            return "Evaluator for " + getClassName() + " (recursive toString)";
+        }
+        try {
+            executingToString.set(Boolean.TRUE);
+            if (typeDeclaration != null) {
+                Optional<MethodDeclaration> toStringMd = typeDeclaration.getMethodsByName("toString").stream()
+                        .filter(md -> md.getParameters().isEmpty())
+                        .findFirst();
+                if (toStringMd.isPresent()) {
+                    Node origReturnFrom = returnFrom;
+                    Variable origReturnValue = returnValue;
+
+                    Variable v = executeMethod(toStringMd.get());
+
+                    returnFrom = origReturnFrom;
+                    returnValue = origReturnValue;
+
+                    if (v != null && v.getValue() != null) {
+                        return v.getValue().toString();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Error during symbolic toString", e);
+        } finally {
+            executingToString.remove();
+        }
+        return "Evaluator for " + getClassName();
     }
 
     public CompilationUnit getCompilationUnit() {

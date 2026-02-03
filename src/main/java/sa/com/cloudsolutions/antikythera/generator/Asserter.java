@@ -25,6 +25,7 @@ public abstract class Asserter {
     public abstract void setupImports(CompilationUnit gen);
     public abstract Expression assertEquals(String rhs, String lhs);
     public abstract Expression assertThrows(String invocation, MethodResponse response);
+    public abstract Expression assertDoesNotThrow(String invocation);
 
     public void addFieldAsserts(MethodResponse resp, BlockStmt body) {
         if (resp.getBody() != null && resp.getBody().getValue() instanceof Evaluator ev) {

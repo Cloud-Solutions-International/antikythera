@@ -50,4 +50,11 @@ public class JunitAsserter extends Asserter {
         return assertThrows;
     }
 
+    @Override
+    public Expression assertDoesNotThrow(String invocation) {
+        MethodCallExpr assertDoesNotThrow = new MethodCallExpr("assertDoesNotThrow");
+        assertDoesNotThrow.addArgument(String.format("() -> %s", invocation.replace(';', ' ')));
+        return assertDoesNotThrow;
+    }
+
 }

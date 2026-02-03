@@ -15,16 +15,16 @@ public class Arithmetics {
      * @return the result of the add operation which may be arithmetic or string concatenation
      */
     static Variable operate(Variable left, Variable right, BinaryExpr.Operator operator) {
-        if (left.getValue() instanceof String || right.getValue() instanceof String) {
-            if (right.getValue() == null) {
-                return new Variable(left.getValue().toString() + "null");
-            }
-            if (left.getValue() == null && right.getValue() instanceof String) {
-                return new Variable("null" + right.getValue().toString());
-            }
-            return new Variable(left.getValue().toString() + right.getValue().toString());
+        Object leftVal = left != null ? left.getValue() : null;
+        Object rightVal = right != null ? right.getValue() : null;
+
+        if (operator == BinaryExpr.Operator.PLUS && (leftVal instanceof String || rightVal instanceof String)) {
+            String l = leftVal == null ? "null" : leftVal.toString();
+            String r = rightVal == null ? "null" : rightVal.toString();
+            return new Variable(l + r);
         }
-        if (left.getValue() instanceof Number l && right.getValue() instanceof Number r) {
+
+        if (leftVal instanceof Number l && rightVal instanceof Number r) {
             return createNumericVariable(operator, l, r);
         }
         return null;

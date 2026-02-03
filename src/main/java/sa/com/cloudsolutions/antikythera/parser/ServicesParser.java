@@ -99,7 +99,9 @@ public class ServicesParser {
         generator = (UnitTestGenerator) Factory.create("unit", cu);
         generator.addBeforeClass();
 
-        evaluator = EvaluatorFactory.create(cls, SpringEvaluator.class);
+        TypeDeclaration<?> type = md.findAncestor(TypeDeclaration.class).orElse(null);
+        String targetCls = type != null ? type.getFullyQualifiedName().orElse(cls) : cls;
+        evaluator = EvaluatorFactory.create(targetCls, SpringEvaluator.class);
         evaluator.addGenerator(generator);
         evaluator.setOnTest(true);
         evaluator.setArgumentGenerator(gen);
