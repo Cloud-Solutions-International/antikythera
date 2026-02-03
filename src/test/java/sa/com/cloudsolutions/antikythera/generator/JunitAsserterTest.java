@@ -101,4 +101,10 @@ class JunitAsserterTest {
         assertEquals("assertEquals(42, resp.getCount())", expr.toString());
     }
 
+    @Test
+    void assertOutputGeneratesCorrectExpression() {
+        Expression expr = asserter.assertOutput("Hello World");
+        assertEquals("assertEquals(\"Hello World\", outputStream.toString().trim())", expr.toString());
+    }
+
 }

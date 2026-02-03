@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
@@ -221,6 +222,19 @@ class TestEvaluator extends TestHelper {
             Evaluator.validateReflectiveMethod(notNullVariable, args, null);
         });
         assertEquals("Error evaluating method call: missingMethod", ex.getMessage());
+    }
+
+    @Test
+    void testOutputRedirection() throws ReflectiveOperationException {
+        evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Noisy", Evaluator.class);
+        MethodDeclaration md = evaluator.getCompilationUnit().findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("noisyMethod")).orElseThrow();
+
+        evaluator.startOutputCapture();
+        evaluator.executeMethod(md);
+        String output = evaluator.stopOutputCapture();
+
+        assertEquals("This is a noisy method!", output.trim());
     }
 
 }

@@ -222,6 +222,23 @@ class TestSpringEvaluator extends TestHelper {
         VariableDeclarator variable = fieldDecl.getVariable(0);
         assertNull(evaluator.autoWire(variable, List.of(new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(PERSON_REPO).orElseThrow()))));
     }
+
+    @Test
+    void testVisitCapturesOutput() throws ReflectiveOperationException {
+        String cls = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Noisy";
+        SpringEvaluator eval = EvaluatorFactory.create(cls, SpringEvaluator.class);
+        MethodDeclaration md = eval.getCompilationUnit().findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("noisyMethod")).orElseThrow();
+
+        eval.setOnTest(true);
+        eval.visit(md);
+
+        // We can't easily check the MethodResponse here because visit() creates tests internally,
+        // but we can check if anything was printed to our outContent (due to mirroring)
+        // or if the internal capture mechanism worked if we had access to it.
+        // Since we implemented mirroring, outContent should contain the string.
+        assertTrue(outContent.toString().contains("This is a noisy method!"));
+    }
 }
 
 class TestSpringEvaluatorAgain {
