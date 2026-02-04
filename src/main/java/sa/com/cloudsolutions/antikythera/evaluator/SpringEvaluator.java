@@ -66,6 +66,7 @@ import java.util.Optional;
 /**
  * Extends the basic evaluator to provide support for JPA repositories and their special behavior.
  */
+@SuppressWarnings("java:S106")
 public class SpringEvaluator extends ControlFlowEvaluator {
     private static final Logger logger = LoggerFactory.getLogger(SpringEvaluator.class);
 
@@ -158,30 +159,33 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private static boolean resultToEntity(Variable variable, ResultSet rs) {
         try {
             if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
-
-
-                for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
-                    for (VariableDeclarator fieldVar : field.getVariables()) {
-                        String fieldName = fieldVar.getNameAsString();
-                        try {
-                            if (rs.findColumn(BaseRepositoryParser.camelToSnake(fieldName)) > 0) {
-                                Object value = rs.getObject(BaseRepositoryParser.camelToSnake(fieldName));
-                                Variable v = new Variable(value);
-                                v.setType(fieldVar.getType());
-                                evaluator.setField(fieldName, v);
-                            }
-                        } catch (SQLException e) {
-                            logger.warn(e.getMessage());
-                        }
-                    }
-                }
+                resultToEntity(rs, evaluator);
                 return true;
             }
         } catch (SQLException e) {
             logger.warn(e.getMessage());
         }
         return false;
+    }
+
+    private static void resultToEntity(ResultSet rs, Evaluator evaluator) {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
+
+        for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
+            for (VariableDeclarator fieldVar : field.getVariables()) {
+                String fieldName = fieldVar.getNameAsString();
+                try {
+                    if (rs.findColumn(BaseRepositoryParser.camelToSnake(fieldName)) > 0) {
+                        Object value = rs.getObject(BaseRepositoryParser.camelToSnake(fieldName));
+                        Variable v = new Variable(value);
+                        v.setType(fieldVar.getType());
+                        evaluator.setField(fieldName, v);
+                    }
+                } catch (SQLException e) {
+                    logger.warn(e.getMessage());
+                }
+            }
+        }
     }
 
     private static Variable wireFromByteCode(String resolvedClass) {
@@ -240,7 +244,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * This is done by setting the values of variables to ensure conditionals evaluate to both the
      * true state and the false state
      *
-     * @param md The MethodDeclaration being worked on
+     * @param cd The ConstructorDeclaration being worked on
      * @throws AntikytheraException         if evaluation fails
      * @throws ReflectiveOperationException if a reflection operation fails
      */
@@ -271,21 +275,24 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     break;
                 }
 
-                if (onTest) {
-                    startOutputCapture();
-                }
-                Evaluator.clearLastException();
-                TestGenerator.clearWhenThen();
-                if (cd instanceof MethodDeclaration md) {
-                    executeMethod(md);
-                } else if (cd instanceof ConstructorDeclaration constructorDeclaration) {
-                    executeConstructor(constructorDeclaration);
-                }
                 String output = null;
-                if (onTest) {
-                    output = stopOutputCapture();
-                    if (output != null && !output.isEmpty()) {
-                        System.out.print(output);
+                try {
+                    if (onTest) {
+                        startOutputCapture();
+                    }
+                    Evaluator.clearLastException();
+                    TestGenerator.clearWhenThen();
+                    if (cd instanceof MethodDeclaration md) {
+                        executeMethod(md);
+                    } else if (cd instanceof ConstructorDeclaration constructorDeclaration) {
+                        executeConstructor(constructorDeclaration);
+                    }
+                } finally {
+                    if (onTest) {
+                        output = stopOutputCapture();
+                        if (output != null && !output.isEmpty()) {
+                            System.out.print(output);
+                        }
                     }
                 }
 
