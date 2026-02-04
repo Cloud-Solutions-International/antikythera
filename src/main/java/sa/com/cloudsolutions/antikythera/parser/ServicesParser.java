@@ -27,7 +27,7 @@ import java.io.IOException;
 import java.util.Set;
 
 
-public class ServicesParser {
+public class ServicesParser extends DepsolvingParser {
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
 
     /**
@@ -38,9 +38,7 @@ public class ServicesParser {
     boolean generateConstructorTests = Settings.getProperty(Settings.GENERATE_CONSTRUCTOR_TESTS, Boolean.class).orElse(false);
 
     Set<CallableDeclaration<?>> methods = new java.util.HashSet<>();
-    CompilationUnit cu;
     String cls;
-    SpringEvaluator evaluator;
     UnitTestGenerator generator;
 
     public ServicesParser(String cls) {
@@ -114,6 +112,12 @@ public class ServicesParser {
         // This is expected and we can safely skip writing files
     }
 
+    @Override
+    public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+        evaluateCallable(md, gen);
+    }
+
+    @Override
     public void evaluateCallable(CallableDeclaration<?> md, ArgumentGenerator gen) {
         generator = (UnitTestGenerator) Factory.create("unit", cu);
         generator.addBeforeClass();
@@ -123,26 +127,7 @@ public class ServicesParser {
         evaluator = EvaluatorFactory.create(targetCls, SpringEvaluator.class);
         evaluator.addGenerator(generator);
         evaluator.setOnTest(true);
-        evaluator.setArgumentGenerator(gen);
-        evaluator.reset();
-        Branching.clear();
-        AntikytheraRunTime.reset();
-        try {
-            if (md instanceof MethodDeclaration methodDeclaration) {
-                evaluator.visit(methodDeclaration);
-            } else if (md instanceof ConstructorDeclaration constructorDeclaration) {
-                evaluator.visit(constructorDeclaration);
-            }
-
-        } catch (AntikytheraException | ReflectiveOperationException e) {
-            if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
-                logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
-            } else {
-                throw new GeneratorException(e);
-            }
-        } finally {
-            logger.info(md.getNameAsString());
-        }
+        super.evaluateCallable(md, gen);
     }
 
 }

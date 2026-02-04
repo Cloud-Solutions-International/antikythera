@@ -16,27 +16,19 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
-import sa.com.cloudsolutions.antikythera.evaluator.Branching;
 import sa.com.cloudsolutions.antikythera.evaluator.DatabaseArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
-import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.generator.Antikythera;
 import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 
 public class RestControllerParser extends DepsolvingParser {
-    private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
-
     /**
      * Maintain stats of the controllers and methods parsed
      */
@@ -126,10 +118,14 @@ public class RestControllerParser extends DepsolvingParser {
         public void visit(ConstructorDeclaration cd, Void arg) {
             super.visit(cd, arg);
             if (generateConstructorTests) {
-                evaluateCallable(cd, new NullArgumentGenerator());
-                evaluateCallable(cd, new DummyArgumentGenerator());
-                evaluateCallable(cd, new DatabaseArgumentGenerator());
+                callableVisitor(cd);
             }
+        }
+
+        private void callableVisitor(CallableDeclaration<?> cd) {
+            RestControllerParser.this.evaluateCallable(cd, new NullArgumentGenerator());
+            RestControllerParser.this.evaluateCallable(cd, new DummyArgumentGenerator());
+            RestControllerParser.this.evaluateCallable(cd, new DatabaseArgumentGenerator());
         }
 
         /**
@@ -140,32 +136,7 @@ public class RestControllerParser extends DepsolvingParser {
             super.visit(md, arg);
 
             if (checkEligible(md)) {
-                 evaluateCallable(md, new NullArgumentGenerator());
-                 evaluateCallable(md, new DummyArgumentGenerator());
-                 evaluateCallable(md, new DatabaseArgumentGenerator());
-            }
-        }
-
-        protected void evaluateCallable(CallableDeclaration<?> md, ArgumentGenerator gen) {
-            evaluator.setArgumentGenerator(gen);
-            evaluator.reset();
-            Branching.clear();
-            AntikytheraRunTime.reset();
-            try {
-                if (md instanceof MethodDeclaration methodDeclaration) {
-                    evaluator.visit(methodDeclaration);
-                } else if (md instanceof ConstructorDeclaration constructorDeclaration) {
-                    evaluator.visit(constructorDeclaration);
-                }
-
-            } catch (AntikytheraException | ReflectiveOperationException e) {
-                if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
-                    logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
-                } else {
-                    throw new GeneratorException(e);
-                }
-            } finally {
-                logger.info(md.getNameAsString());
+                callableVisitor(md);
             }
         }
 
