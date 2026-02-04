@@ -99,6 +99,12 @@ import java.util.stream.Stream;
  */
 public class Evaluator implements EvaluationEngine {
     private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
+    
+    /**
+     * Default exception class name used when exception type cannot be determined.
+     */
+    private static final String DEFAULT_EXCEPTION_CLASS = "java.lang.Exception";
+    
     /**
      * The fields that were encountered in the current class.
      */
@@ -1885,7 +1891,7 @@ public class Evaluator implements EvaluationEngine {
             } else {
                 String typeName = (v != null && v.getType() != null) 
                     ? AbstractCompiler.findFullyQualifiedName(cu, v.getType().asString())
-                    : "java.lang.Exception";
+                    : DEFAULT_EXCEPTION_CLASS;
                 throw new ByteBuddy().subclass(Exception.class)
                         .name(typeName)
                         .make()
