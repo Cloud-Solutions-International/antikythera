@@ -265,74 +265,95 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
             int safetyCheck = 0;
             while (safetyCheck < 16) {
-                getLocals().clear();
-                LogRecorder.clearLogs();
-                setupFields();
-                mockMethodArguments(cd);
+                prepareInvocationContext(cd);
 
                 currentConditional = Branching.getHighestPriority(cd);
                 if ((currentConditional == null || currentConditional.isFullyTravelled()) && oldSize != 0) {
                     break;
                 }
 
-                String output = null;
-                try {
-                    if (onTest) {
-                        startOutputCapture();
-                    }
-                    Evaluator.clearLastException();
-                    TestGenerator.clearWhenThen();
-                    if (cd instanceof MethodDeclaration md) {
-                        executeMethod(md);
-                    } else if (cd instanceof ConstructorDeclaration constructorDeclaration) {
-                        executeConstructor(constructorDeclaration);
-                    }
-                } finally {
-                    if (onTest) {
-                        output = stopOutputCapture();
-                        if (output != null && !output.isEmpty()) {
-                            System.out.print(output);
-                        }
-                    }
-                }
+                String output = invokeCallableWithCapture(cd);
+                maybeRecordVoidResponse(cd, output);
 
-                boolean isVoid = cd instanceof MethodDeclaration md && md.getType().isVoidType();
-                boolean isConstructor = cd instanceof ConstructorDeclaration;
-
-                if (isVoid || isConstructor) {
-                    boolean skipNoSideEffects = Settings.getProperty(Settings.SKIP_VOID_NO_SIDE_EFFECTS, Boolean.class).orElse(true);
-                    boolean hasSideEffects = (output != null && !output.isEmpty())
-                            || !TestGenerator.getWhenThen().isEmpty()
-                            || !Branching.getApplicableConditions(cd).isEmpty()
-                            || Evaluator.getLastException() != null
-                            || sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder.hasLogs();
-
-                    if (!skipNoSideEffects || hasSideEffects) {
-                        MethodResponse mr = new MethodResponse();
-                        if (onTest) {
-                            mr.setCapturedOutput(output);
-                        }
-                        createTests(mr);
-                    }
-                }
                 safetyCheck++;
-                if (currentConditional != null) {
-                    currentConditional.transition();
-                    Branching.add(currentConditional);
-
-                    if (currentConditional.getPreconditions() != null) {
-                        currentConditional.getPreconditions().clear();
-                    }
-                }
-                if (Branching.size(cd) == 0) {
+                oldSize = advanceBranchingState(cd);
+                if (oldSize < 0) {
                     break;
-                } else {
-                    oldSize = Branching.size(cd);
                 }
             }
         } catch (AUTException aex) {
             logger.warn("This has probably been handled {}", aex.getMessage());
         }
+    }
+
+    private void prepareInvocationContext(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
+        getLocals().clear();
+        LogRecorder.clearLogs();
+        setupFields();
+        mockMethodArguments(cd);
+    }
+
+    private String invokeCallableWithCapture(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
+        String output = null;
+        try {
+            if (onTest) {
+                startOutputCapture();
+            }
+            Evaluator.clearLastException();
+            TestGenerator.clearWhenThen();
+            if (cd instanceof MethodDeclaration md) {
+                executeMethod(md);
+            } else if (cd instanceof ConstructorDeclaration constructorDeclaration) {
+                executeConstructor(constructorDeclaration);
+            }
+        } finally {
+            if (onTest) {
+                output = stopOutputCapture();
+                if (output != null && !output.isEmpty()) {
+                    System.out.print(output);
+                }
+            }
+        }
+        return output;
+    }
+
+    private void maybeRecordVoidResponse(CallableDeclaration<?> cd, String output) {
+        boolean isVoid = cd instanceof MethodDeclaration md && md.getType().isVoidType();
+        boolean isConstructor = cd instanceof ConstructorDeclaration;
+
+        if (!(isVoid || isConstructor)) {
+            return;
+        }
+
+        boolean skipNoSideEffects = Settings.getProperty(Settings.SKIP_VOID_NO_SIDE_EFFECTS, Boolean.class).orElse(true);
+        boolean hasSideEffects = (output != null && !output.isEmpty())
+                || !TestGenerator.getWhenThen().isEmpty()
+                || !Branching.getApplicableConditions(cd).isEmpty()
+                || Evaluator.getLastException() != null
+                || sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder.hasLogs();
+
+        if (!skipNoSideEffects || hasSideEffects) {
+            MethodResponse mr = new MethodResponse();
+            if (onTest) {
+                mr.setCapturedOutput(output);
+            }
+            createTests(mr);
+        }
+    }
+
+    private int advanceBranchingState(CallableDeclaration<?> cd) {
+        if (currentConditional != null) {
+            currentConditional.transition();
+            Branching.add(currentConditional);
+
+            if (currentConditional.getPreconditions() != null) {
+                currentConditional.getPreconditions().clear();
+            }
+        }
+        if (Branching.size(cd) == 0) {
+            return -1;
+        }
+        return Branching.size(cd);
     }
 
     private void beforeVisit(CallableDeclaration<?> cd) {
