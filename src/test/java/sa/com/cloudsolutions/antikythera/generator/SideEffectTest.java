@@ -30,6 +30,7 @@ class SideEffectTest {
 
     @AfterEach
     void restoreSettings() {
+        Settings.setProperty(Settings.GENERATE_CONSTRUCTOR_TESTS, null);
         Settings.setProperty(Settings.SKIP_VOID_NO_SIDE_EFFECTS, null);
     }
 

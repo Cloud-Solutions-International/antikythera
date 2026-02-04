@@ -117,7 +117,7 @@ public class RestControllerParser extends DepsolvingParser {
         @Override
         public void visit(ConstructorDeclaration cd, Void arg) {
             super.visit(cd, arg);
-            if (generateConstructorTests) {
+            if (generateConstructorTests && !cd.isPrivate()) {
                 callableVisitor(cd);
             }
         }
