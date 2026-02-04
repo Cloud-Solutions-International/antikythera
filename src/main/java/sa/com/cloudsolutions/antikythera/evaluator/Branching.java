@@ -1,6 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
-import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.CallableDeclaration;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.PriorityQueue;
 
 public class Branching {
-    private static final HashMap<MethodDeclaration, PriorityQueue<LineOfCode>> conditionals = new HashMap<>();
+    private static final HashMap<CallableDeclaration<?>, PriorityQueue<LineOfCode>> conditionals = new HashMap<>();
     private static final HashMap<Integer, LineOfCode> branches = new HashMap<>();
 
     private Branching() {
@@ -22,7 +22,7 @@ public class Branching {
 
     public static void add(LineOfCode lineOfCode) {
         PriorityQueue<LineOfCode> queue = conditionals.computeIfAbsent(
-            lineOfCode.getMethodDeclaration(),
+            lineOfCode.getCallableDeclaration(),
             k -> new PriorityQueue<>(new LineOfCodeComparator())
         );
         queue.add(lineOfCode);
@@ -33,7 +33,7 @@ public class Branching {
         return branches.get(hashCode);
     }
 
-    public static List<LineOfCode> get(MethodDeclaration methodDeclaration) {
+    public static List<LineOfCode> get(CallableDeclaration<?> methodDeclaration) {
         PriorityQueue<LineOfCode> queue = conditionals.get(methodDeclaration);
         if (queue == null) {
             return new ArrayList<>();
@@ -41,24 +41,24 @@ public class Branching {
         return new ArrayList<>(queue);
     }
 
-    public static List<Precondition> getApplicableConditions(MethodDeclaration methodDeclaration) {
+    public static List<Precondition> getApplicableConditions(CallableDeclaration<?> methodDeclaration) {
         List<Precondition> applicableConditions = new ArrayList<>();
 
         for (LineOfCode lineOfCode : branches.values()) {
-            if (lineOfCode.getPathTaken() != LineOfCode.BOTH_PATHS && lineOfCode.getMethodDeclaration().equals(methodDeclaration)) {
+            if (lineOfCode.getPathTaken() != LineOfCode.BOTH_PATHS && lineOfCode.getCallableDeclaration().equals(methodDeclaration)) {
                 applicableConditions.addAll(lineOfCode.getPreconditions());
             }
         }
         return applicableConditions;
     }
 
-    public static int size(MethodDeclaration methodDeclaration)
+    public static int size(CallableDeclaration<?> methodDeclaration)
     {
         PriorityQueue<LineOfCode> queue = conditionals.get(methodDeclaration);
         return queue != null ? queue.size() : 0;
     }
 
-    public static LineOfCode getHighestPriority(MethodDeclaration md) {
+    public static LineOfCode getHighestPriority(CallableDeclaration<?> md) {
         PriorityQueue<LineOfCode> queue = conditionals.get(md);
         return queue != null ? queue.remove() : null;
     }

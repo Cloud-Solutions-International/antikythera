@@ -3,8 +3,10 @@ package sa.com.cloudsolutions.antikythera.generator;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -151,7 +153,8 @@ public class UnitTestGenerator extends TestGenerator {
             }
 
             if (t.isClassOrInterfaceDeclaration()) {
-                loadPredefinedBaseClassForTest(t.asClassOrInterfaceDeclaration());
+                testClass = t.asClassOrInterfaceDeclaration();
+                loadPredefinedBaseClassForTest(testClass);
             }
             identifyExistingMocks(t);
         }
@@ -239,11 +242,17 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     @Override
-    public void createTests(MethodDeclaration md, MethodResponse response) {
+    public void createTests(CallableDeclaration<?> md, MethodResponse response) {
         methodUnderTest = md;
         testMethod = buildTestMethod(md);
         gen.getType(0).addMember(testMethod);
-        createInstance();
+        if (md instanceof MethodDeclaration) {
+            createInstance();
+        } else {
+            md.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c ->
+                    instanceName = AbstractCompiler.classToInstanceName(c.getNameAsString())
+            );
+        }
         mockArguments();
         identifyVariables();
         applyPreconditions();
@@ -254,8 +263,7 @@ public class UnitTestGenerator extends TestGenerator {
         setupAsserterImports();
 
         if (response.getException() == null) {
-            getBody(testMethod).addStatement(invocation);
-            addAsserts(response);
+            addAsserts(response, invocation);
             for (ReferenceType t : md.getThrownExceptions()) {
                 testMethod.addThrownException(t);
             }
@@ -461,14 +469,14 @@ public class UnitTestGenerator extends TestGenerator {
         String typeName = paramType.asString();
 
         switch (typeName) {
-            case "Integer" -> v.setInitializer("0");
-            case "Long" -> v.setInitializer("0L");
-            case "Double" -> v.setInitializer("0.0");
-            case "Float" -> v.setInitializer("0.0f");
+            case "int", "Integer" -> v.setInitializer("0");
+            case "long", "Long" -> v.setInitializer("0L");
+            case "double", "Double" -> v.setInitializer("0.0");
+            case "float", "Float" -> v.setInitializer("0.0f");
             case "boolean", "Boolean" -> v.setInitializer("false");
-            case "Character" -> v.setInitializer("'\\0'");
-            case "Byte" -> v.setInitializer("(byte)0");
-            case "Short" -> v.setInitializer("(short)0");
+            case "char", "Character" -> v.setInitializer("'\\0'");
+            case "byte", "Byte" -> v.setInitializer("(byte)0");
+            case "short", "Short" -> v.setInitializer("(short)0");
             default -> v.setInitializer("null");
         }
 
@@ -486,7 +494,8 @@ public class UnitTestGenerator extends TestGenerator {
             // If initializer is empty but value is a Mockito mock, generate Mockito.mock()
             if (isMockitoMock(v.getValue())) {
                 BlockStmt body = getBody(testMethod);
-                body.addStatement(buildMockDeclaration(param.getTypeAsString(), nameAsString));
+                String type = getTypeName(param.getType());
+                body.addStatement(buildMockDeclaration(type, nameAsString));
                 return;
             }
             if (mockWhenInitializerIsAbsent(param, v)) return;
@@ -503,7 +512,8 @@ public class UnitTestGenerator extends TestGenerator {
             CompilationUnit cu = param.findCompilationUnit().orElseThrow();
             if (t instanceof ArrayType) {
                 Variable mocked = Reflect.variableFactory(t.asString());
-                body.addStatement(param.getTypeAsString() + " " + nameAsString + " = " + mocked.getInitializer().getFirst() + ";");
+                String type = getTypeName(t);
+                body.addStatement(type + " " + nameAsString + " = " + mocked.getInitializer().getFirst() + ";");
                 mockParameterFields(v, nameAsString);
                 return true;
             }
@@ -511,7 +521,7 @@ public class UnitTestGenerator extends TestGenerator {
             if (t.isClassOrInterfaceType()) {
                 TypeWrapper wrapper = AbstractCompiler.findType(cu, t);
                 if (wrapper != null && wrapper.isInterface()) {
-                    body.addStatement(buildMockDeclaration(param.getTypeAsString(), nameAsString));
+                    body.addStatement(buildMockDeclaration(getTypeName(t), nameAsString));
                     return false;
                 }
             }
@@ -521,9 +531,9 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }
         if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-            body.addStatement(buildMockDeclaration(t.asClassOrInterfaceType().getNameAsString(), nameAsString));
+            body.addStatement(buildMockDeclaration(getTypeName(t), nameAsString));
         } else {
-            body.addStatement(buildMockDeclaration(param.getTypeAsString(), nameAsString));
+            body.addStatement(buildMockDeclaration(getTypeName(t), nameAsString));
         }
         return false;
     }
@@ -809,15 +819,21 @@ public class UnitTestGenerator extends TestGenerator {
     String invokeMethod() {
         StringBuilder b = new StringBuilder();
 
-        Type t = methodUnderTest.getType();
-        if (t != null && !t.toString().equals("void")) {
-            b.append(t.asString()).append(" resp = ");
-            for (ImportWrapper imp : AbstractCompiler.findImport(compilationUnitUnderTest, t)) {
-                addImport(imp.getImport());
+        if (methodUnderTest instanceof MethodDeclaration md) {
+            Type t = md.getType();
+            if (t != null && !t.toString().equals("void")) {
+                b.append(getTypeName(t)).append(" resp = ");
+                for (ImportWrapper imp : AbstractCompiler.findImport(compilationUnitUnderTest, t)) {
+                    addImport(imp.getImport());
+                }
             }
+
+            b.append(instanceName).append(".").append(md.getNameAsString()).append("(");
+        } else if (methodUnderTest instanceof ConstructorDeclaration cd) {
+            String typeName = cd.getNameAsString();
+            b.append(typeName).append(" ").append(instanceName).append(" = new ").append(typeName).append("(");
         }
 
-        b.append(instanceName).append(".").append(methodUnderTest.getNameAsString()).append("(");
         for (int i = 0; i < methodUnderTest.getParameters().size(); i++) {
             b.append(methodUnderTest.getParameter(i).getNameAsString());
             if (i < methodUnderTest.getParameters().size() - 1) {
@@ -828,19 +844,49 @@ public class UnitTestGenerator extends TestGenerator {
         return b.toString();
     }
 
-    private void addAsserts(MethodResponse response) {
-        Type t = methodUnderTest.getType();
-
-        if (t == null) {
-            return;
+    private void addAsserts(MethodResponse response, String invocation) {
+        Type t = null;
+        if (methodUnderTest instanceof MethodDeclaration md) {
+            t = md.getType();
         }
 
-        addClassImports(t);
+        if (t != null && !t.isVoidType()) {
+            addClassImports(t);
 
-        if (response.getBody() != null) {
-            noSideEffectAsserts(response);
+            if (response.getBody() != null) {
+                getBody(testMethod).addStatement(invocation);
+                noSideEffectAsserts(response);
+            } else {
+                BlockStmt body = getBody(testMethod);
+                int statementsBefore = body.getStatements().size();
+                body.addStatement(invocation);
+                int statementsBeforeAsserts = body.getStatements().size();
+
+                sideEffectAsserts();
+                if (response.getCapturedOutput() != null && !response.getCapturedOutput().trim().isEmpty()) {
+                    body.addStatement(asserter.assertOutput(response.getCapturedOutput().trim()));
+                }
+
+                if (body.getStatements().size() == statementsBeforeAsserts) {
+                    body.getStatements().remove(statementsBefore);
+                    body.addStatement(asserter.assertDoesNotThrow(invocation));
+                }
+            }
         } else {
+            BlockStmt body = getBody(testMethod);
+            int statementsBefore = body.getStatements().size();
+            body.addStatement(invocation);
+            int statementsBeforeAsserts = body.getStatements().size();
+
             sideEffectAsserts();
+            if (response.getCapturedOutput() != null && !response.getCapturedOutput().trim().isEmpty()) {
+                body.addStatement(asserter.assertOutput(response.getCapturedOutput().trim()));
+            }
+
+            if (body.getStatements().size() == statementsBeforeAsserts) {
+                body.getStatements().remove(statementsBefore);
+                body.addStatement(asserter.assertDoesNotThrow(invocation));
+            }
         }
     }
 
@@ -876,8 +922,9 @@ public class UnitTestGenerator extends TestGenerator {
         Variable result = response.getBody();
         BlockStmt body = getBody(testMethod);
         if (result.getValue() != null) {
-            if (result.getType() != null && result.getType().isPrimitiveType()) {
-                body.addStatement(asserter.assertEquals(String.valueOf(result.getValue()), "resp"));
+            if (result.getType() != null && (result.getType().isPrimitiveType() || result.getValue() instanceof String)) {
+                String val = result.getValue() instanceof String ? "\"" + result.getValue().toString().replace("\"", "\\\"") + "\"" : String.valueOf(result.getValue());
+                body.addStatement(asserter.assertEquals(val, "resp"));
             }
             else {
                 body.addStatement(asserter.assertNotNull("resp"));
@@ -893,6 +940,9 @@ public class UnitTestGenerator extends TestGenerator {
         }
         else {
             body.addStatement(asserter.assertNull("resp"));
+        }
+        if (response.getCapturedOutput() != null && !response.getCapturedOutput().trim().isEmpty()) {
+            body.addStatement(asserter.assertOutput(response.getCapturedOutput().trim()));
         }
     }
 
@@ -936,6 +986,7 @@ public class UnitTestGenerator extends TestGenerator {
     @Override
     public void addBeforeClass() {
         identifyFieldsToBeMocked();
+        addOutputCaptureFields();
 
         MethodDeclaration before = new MethodDeclaration();
         before.setType(void.class);
@@ -944,6 +995,8 @@ public class UnitTestGenerator extends TestGenerator {
         BlockStmt beforeBody = new BlockStmt();
         before.setBody(beforeBody);
         beforeBody.addStatement("MockitoAnnotations.openMocks(this);");
+        beforeBody.addStatement("originalOut = System.out;");
+        beforeBody.addStatement("System.setOut(new PrintStream(outputStream));");
         before.setJavadocComment("Author : Antikythera");
 
         if (baseTestClass != null) {
@@ -955,6 +1008,39 @@ public class UnitTestGenerator extends TestGenerator {
         for (TypeDeclaration<?> t : gen.getTypes()) {
             if(t.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("setUp")).isEmpty()) {
                 t.addMember(before);
+            }
+        }
+        addAfterEach();
+    }
+
+    private void addOutputCaptureFields() {
+        for (TypeDeclaration<?> t : gen.getTypes()) {
+            if (t.getFieldByName("outputStream").isEmpty()) {
+                t.addField("ByteArrayOutputStream", "outputStream", Modifier.Keyword.PRIVATE, Modifier.Keyword.FINAL)
+                        .getVariable(0).setInitializer("new ByteArrayOutputStream()");
+                t.addField("PrintStream", "originalOut", Modifier.Keyword.PRIVATE);
+            }
+        }
+    }
+
+    private void addAfterEach() {
+        MethodDeclaration after = new MethodDeclaration();
+        after.setType(void.class);
+        after.addAnnotation("AfterEach");
+        after.setName("tearDown");
+        BlockStmt afterBody = new BlockStmt();
+        after.setBody(afterBody);
+        afterBody.addStatement("System.setOut(originalOut);");
+        afterBody.addStatement("outputStream.reset();");
+        after.setJavadocComment("Author : Antikythera");
+
+        addImport(new ImportDeclaration("org.junit.jupiter.api.AfterEach", false, false));
+        addImport(new ImportDeclaration("java.io.PrintStream", false, false));
+        addImport(new ImportDeclaration("java.io.ByteArrayOutputStream", false, false));
+
+        for (TypeDeclaration<?> t : gen.getTypes()) {
+            if(t.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals("tearDown")).isEmpty()) {
+                t.addMember(after);
             }
         }
     }
@@ -1120,6 +1206,21 @@ public class UnitTestGenerator extends TestGenerator {
 
         assertion.addArgument(condition);
         return assertion;
+    }
+
+    private String getTypeName(Type t) {
+        if (t.isClassOrInterfaceType()) {
+            ClassOrInterfaceType ct = t.asClassOrInterfaceType();
+            String typeName = ct.getNameAsString();
+            TypeWrapper wrapper = AbstractCompiler.findType(compilationUnitUnderTest, typeName);
+            if (wrapper != null && wrapper.getType() != null) {
+                TypeDeclaration<?> typeDecl = wrapper.getType();
+                if (typeDecl.isNestedType() && typeDecl.getParentNode().isPresent() && typeDecl.getParentNode().get() instanceof TypeDeclaration<?> parent) {
+                    return parent.getNameAsString() + "." + typeDecl.getNameAsString();
+                }
+            }
+        }
+        return t.asString();
     }
 
 }

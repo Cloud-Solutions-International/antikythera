@@ -12,6 +12,7 @@ public class MethodResponse {
     Type type;
     Variable response;
     Variable body;
+    String capturedOutput;
 
     private static Map<String, Integer> statusCodes = new HashMap<>();
     static {
@@ -75,5 +76,13 @@ public class MethodResponse {
 
     public EvaluatorException getException() {
         return eex;
+    }
+
+    public String getCapturedOutput() {
+        return capturedOutput;
+    }
+
+    public void setCapturedOutput(String capturedOutput) {
+        this.capturedOutput = capturedOutput;
     }
 }

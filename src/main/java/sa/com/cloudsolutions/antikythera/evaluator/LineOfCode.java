@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.stmt.IfStmt;
@@ -44,9 +45,9 @@ public class LineOfCode {
      */
     private Statement statement;
     /**
-     * The method declaration that this line of code belongs to.
+     * The method or constructor declaration that this line of code belongs to.
      */
-    private MethodDeclaration methodDeclaration;
+    private CallableDeclaration<?> callableDeclaration;
     /**
      * The if conditions that are direct descendents of the current statement
      */
@@ -75,7 +76,7 @@ public class LineOfCode {
      */
     @SuppressWarnings("unchecked")
     public LineOfCode(Statement statement) {
-        this.methodDeclaration = statement.findAncestor(MethodDeclaration.class).orElseThrow();
+        this.callableDeclaration = statement.findAncestor(CallableDeclaration.class).orElseThrow();
         this.statement = statement;
         if (statement instanceof IfStmt ifStmt) {
             this.binaryExpr = ifStmt.getCondition();
@@ -87,7 +88,7 @@ public class LineOfCode {
 
         binaryExpr.findAncestor(Statement.class).ifPresent(stmt -> {
             statement = stmt;
-            this.methodDeclaration = binaryExpr.findAncestor(MethodDeclaration.class).orElseThrow();
+            this.callableDeclaration = binaryExpr.findAncestor(CallableDeclaration.class).orElseThrow();
         });
         this.binaryExpr = binaryExpr;
     }
@@ -113,7 +114,7 @@ public class LineOfCode {
      */
     @Override
     public int hashCode() {
-        return statement.hashCode() + 109 * (methodDeclaration == null ? 11 : methodDeclaration.hashCode());
+        return statement.hashCode() + 109 * (callableDeclaration == null ? 11 : callableDeclaration.hashCode());
     }
 
     /**
@@ -256,12 +257,21 @@ public class LineOfCode {
     }
 
     /**
+     * Gets the method or constructor declaration that this line of code belongs to.
+     *
+     * @return The callable declaration.
+     */
+    public CallableDeclaration<?> getCallableDeclaration() {
+        return callableDeclaration;
+    }
+
+    /**
      * Gets the method declaration that this line of code belongs to.
      *
      * @return The method declaration.
      */
     public MethodDeclaration getMethodDeclaration() {
-        return methodDeclaration;
+        return (MethodDeclaration) callableDeclaration;
     }
 
     /**

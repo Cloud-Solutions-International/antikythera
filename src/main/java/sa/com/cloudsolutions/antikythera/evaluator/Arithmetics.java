@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.type.Type;
 
 public class Arithmetics {
 
@@ -15,16 +16,16 @@ public class Arithmetics {
      * @return the result of the add operation which may be arithmetic or string concatenation
      */
     static Variable operate(Variable left, Variable right, BinaryExpr.Operator operator) {
-        if (left.getValue() instanceof String || right.getValue() instanceof String) {
-            if (right.getValue() == null) {
-                return new Variable(left.getValue().toString() + "null");
-            }
-            if (left.getValue() == null && right.getValue() instanceof String) {
-                return new Variable("null" + right.getValue().toString());
-            }
-            return new Variable(left.getValue().toString() + right.getValue().toString());
+        Object leftVal = left != null ? left.getValue() : null;
+        Object rightVal = right != null ? right.getValue() : null;
+
+        if (operator == BinaryExpr.Operator.PLUS && (isStringOperand(left, leftVal) || isStringOperand(right, rightVal))) {
+            String l = leftVal == null ? "null" : leftVal.toString();
+            String r = rightVal == null ? "null" : rightVal.toString();
+            return new Variable(l + r);
         }
-        if (left.getValue() instanceof Number l && right.getValue() instanceof Number r) {
+
+        if (leftVal instanceof Number l && rightVal instanceof Number r) {
             return createNumericVariable(operator, l, r);
         }
         return null;
@@ -59,5 +60,24 @@ public class Arithmetics {
             default ->
                     throw new IllegalArgumentException("Unsupported operator: " + operator);
         };
+    }
+
+    private static boolean isStringOperand(Variable variable, Object runtimeValue) {
+        if (runtimeValue instanceof String) {
+            return true;
+        }
+        if (variable == null) {
+            return false;
+        }
+        Class<?> declaredClass = variable.getClazz();
+        if (declaredClass != null && String.class.isAssignableFrom(declaredClass)) {
+            return true;
+        }
+        Type declaredType = variable.getType();
+        if (declaredType != null) {
+            String typeName = declaredType.asString();
+            return "String".equals(typeName) || String.class.getName().equals(typeName);
+        }
+        return false;
     }
 }

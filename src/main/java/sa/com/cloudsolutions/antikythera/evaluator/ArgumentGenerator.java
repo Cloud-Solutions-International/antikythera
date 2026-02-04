@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -19,7 +20,7 @@ public abstract class ArgumentGenerator {
     public static String instantiateClass(TypeDeclaration<?> classUnderTest, String instanceName) {
 
         ConstructorDeclaration matched = null;
-        String className = classUnderTest.getNameAsString();
+        String className = resolveNestedName(classUnderTest);
 
         for (ConstructorDeclaration cd : classUnderTest.findAll(ConstructorDeclaration.class)) {
             if (matched == null) {
@@ -42,5 +43,22 @@ public abstract class ArgumentGenerator {
         } else {
             return className + " " + instanceName + " = new " + className + "();";
         }
+    }
+
+    private static String resolveNestedName(TypeDeclaration<?> type) {
+        String name = type.getNameAsString();
+        TypeDeclaration<?> current = type;
+        while (current.isNestedType()) {
+            if (current.getParentNode().isEmpty()) {
+                break;
+            }
+            Node parentNode = current.getParentNode().get();
+            if (!(parentNode instanceof TypeDeclaration<?> parent)) {
+                break;
+            }
+            name = parent.getNameAsString() + "." + name;
+            current = parent;
+        }
+        return name;
     }
 }

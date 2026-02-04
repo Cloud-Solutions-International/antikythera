@@ -40,4 +40,19 @@ public class TestNgAsserter extends  Asserter {
     public Expression assertThrows(String invocation, MethodResponse response) {
         throw new IllegalStateException("Not implemented");
     }
+
+    @Override
+    public Expression assertDoesNotThrow(String invocation) {
+        // TestNG doesn't have a direct equivalent of assertDoesNotThrow
+        // Just return the invocation itself as a statement
+        return new NameExpr(invocation.replace(';', ' '));
+    }
+
+    @Override
+    public Expression assertOutput(String expected) {
+        // Placeholder for TestNG
+        return new MethodCallExpr(new NameExpr(ASSERT), "assertEquals")
+                .addArgument("outputStream.toString().trim()")
+                .addArgument("\"" + expected.replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\"");
+    }
 }
