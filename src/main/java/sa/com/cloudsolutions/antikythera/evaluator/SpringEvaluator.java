@@ -155,7 +155,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      */
     private static boolean resultToEntity(Variable variable, ResultSet rs) {
         try {
-            if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
+            if (variable != null && variable.getValue() instanceof Evaluator evaluator && rs.next()) {
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
 
 

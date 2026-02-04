@@ -1562,7 +1562,9 @@ public class Evaluator implements EvaluationEngine {
         if (init.isPresent()) {
             if (init.get().isObjectCreationExpr()) {
                 Variable v = createObject(init.get().asObjectCreationExpr());
-                v.setType(variable.getType());
+                if (v != null) {
+                    v.setType(variable.getType());
+                }
                 return v;
             } else {
                 Evaluator eval = EvaluatorFactory.create(resolvedClass, this);
@@ -1878,11 +1880,14 @@ public class Evaluator implements EvaluationEngine {
         if (t.getExpression().isObjectCreationExpr()) {
             ObjectCreationExpr oce = t.getExpression().asObjectCreationExpr();
             Variable v = createObject(oce);
-            if (v.getValue() instanceof Exception ex) {
+            if (v != null && v.getValue() instanceof Exception ex) {
                 throw ex;
             } else {
+                String typeName = (v != null && v.getType() != null) 
+                    ? AbstractCompiler.findFullyQualifiedName(cu, v.getType().asString())
+                    : "java.lang.Exception";
                 throw new ByteBuddy().subclass(Exception.class)
-                        .name(AbstractCompiler.findFullyQualifiedName(cu, v.getType().asString()))
+                        .name(typeName)
                         .make()
                         .load(getClass().getClassLoader()).getLoaded().getDeclaredConstructor().newInstance();
             }
