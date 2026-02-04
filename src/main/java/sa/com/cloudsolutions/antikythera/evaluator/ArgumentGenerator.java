@@ -46,7 +46,7 @@ public abstract class ArgumentGenerator {
     }
 
     private static String resolveNestedName(TypeDeclaration<?> type) {
-        String name = type.getNameAsString();
+        StringBuilder name = new StringBuilder(type.getNameAsString());
         TypeDeclaration<?> current = type;
         while (current.isNestedType()) {
             if (current.getParentNode().isEmpty()) {
@@ -56,9 +56,9 @@ public abstract class ArgumentGenerator {
             if (!(parentNode instanceof TypeDeclaration<?> parent)) {
                 break;
             }
-            name = parent.getNameAsString() + "." + name;
+            name.insert(0, parent.getNameAsString() + ".");
             current = parent;
         }
-        return name;
+        return name.toString();
     }
 }

@@ -99,6 +99,7 @@ import java.io.PrintStream;
 /**
  * Expression evaluator engine.
  */
+@SuppressWarnings("java:S106")
 public class Evaluator implements EvaluationEngine {
     private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
     /**

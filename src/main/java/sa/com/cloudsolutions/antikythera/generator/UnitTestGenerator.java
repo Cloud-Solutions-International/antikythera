@@ -79,6 +79,7 @@ public class UnitTestGenerator extends TestGenerator {
     public static final String TEST_NAME_SUFFIX = "AKTest";
     public static final String MOCK_BEAN = "MockBean";
     public static final String MOCK = "Mock";
+    public static final String AUTHOR_ANTIKYTHERA = "Author : Antikythera";
     private final String filePath;
 
     private boolean autoWired;
@@ -857,36 +858,27 @@ public class UnitTestGenerator extends TestGenerator {
                 getBody(testMethod).addStatement(invocation);
                 noSideEffectAsserts(response);
             } else {
-                BlockStmt body = getBody(testMethod);
-                int statementsBefore = body.getStatements().size();
-                body.addStatement(invocation);
-                int statementsBeforeAsserts = body.getStatements().size();
-
-                sideEffectAsserts();
-                if (response.getCapturedOutput() != null && !response.getCapturedOutput().trim().isEmpty()) {
-                    body.addStatement(asserter.assertOutput(response.getCapturedOutput().trim()));
-                }
-
-                if (body.getStatements().size() == statementsBeforeAsserts) {
-                    body.getStatements().remove(statementsBefore);
-                    body.addStatement(asserter.assertDoesNotThrow(invocation));
-                }
+                sideEffects(response, invocation);
             }
         } else {
-            BlockStmt body = getBody(testMethod);
-            int statementsBefore = body.getStatements().size();
-            body.addStatement(invocation);
-            int statementsBeforeAsserts = body.getStatements().size();
+            sideEffects(response, invocation);
+        }
+    }
 
-            sideEffectAsserts();
-            if (response.getCapturedOutput() != null && !response.getCapturedOutput().trim().isEmpty()) {
-                body.addStatement(asserter.assertOutput(response.getCapturedOutput().trim()));
-            }
+    private void sideEffects(MethodResponse response, String invocation) {
+        BlockStmt body = getBody(testMethod);
+        int statementsBefore = body.getStatements().size();
+        body.addStatement(invocation);
+        int statementsBeforeAsserts = body.getStatements().size();
 
-            if (body.getStatements().size() == statementsBeforeAsserts) {
-                body.getStatements().remove(statementsBefore);
-                body.addStatement(asserter.assertDoesNotThrow(invocation));
-            }
+        sideEffectAsserts();
+        if (response.getCapturedOutput() != null && !response.getCapturedOutput().trim().isEmpty()) {
+            body.addStatement(asserter.assertOutput(response.getCapturedOutput().trim()));
+        }
+
+        if (body.getStatements().size() == statementsBeforeAsserts) {
+            body.getStatements().remove(statementsBefore);
+            body.addStatement(asserter.assertDoesNotThrow(invocation));
         }
     }
 
@@ -953,7 +945,7 @@ public class UnitTestGenerator extends TestGenerator {
             MethodDeclaration md = new MethodDeclaration().setName("setupLoggers")
                     .setType(void.class)
                     .addAnnotation("BeforeEach")
-                    .setJavadocComment("Author : Antikythera")
+                    .setJavadocComment(AUTHOR_ANTIKYTHERA)
                     .setBody(body);
 
             body.addStatement(String.format("appLogger = (Logger) LoggerFactory.getLogger(%s.class);",
@@ -997,7 +989,7 @@ public class UnitTestGenerator extends TestGenerator {
         beforeBody.addStatement("MockitoAnnotations.openMocks(this);");
         beforeBody.addStatement("originalOut = System.out;");
         beforeBody.addStatement("System.setOut(new PrintStream(outputStream));");
-        before.setJavadocComment("Author : Antikythera");
+        before.setJavadocComment(AUTHOR_ANTIKYTHERA);
 
         if (baseTestClass != null) {
             baseTestClass.findFirst(MethodDeclaration.class,
@@ -1032,7 +1024,7 @@ public class UnitTestGenerator extends TestGenerator {
         after.setBody(afterBody);
         afterBody.addStatement("System.setOut(originalOut);");
         afterBody.addStatement("outputStream.reset();");
-        after.setJavadocComment("Author : Antikythera");
+        after.setJavadocComment(AUTHOR_ANTIKYTHERA);
 
         addImport(new ImportDeclaration("org.junit.jupiter.api.AfterEach", false, false));
         addImport(new ImportDeclaration("java.io.PrintStream", false, false));

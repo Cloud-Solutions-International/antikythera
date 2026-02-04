@@ -287,7 +287,7 @@ class UnitTestGeneratorTest {
     }
 
     @Test
-    void testAddAssertsWithCapturedOutput() throws NoSuchMethodException {
+    void testAddAssertsWithCapturedOutput() {
         MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals("queries2")).orElseThrow();
 
