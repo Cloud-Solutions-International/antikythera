@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.type.Type;
 
 public class Arithmetics {
 
@@ -18,7 +19,7 @@ public class Arithmetics {
         Object leftVal = left != null ? left.getValue() : null;
         Object rightVal = right != null ? right.getValue() : null;
 
-        if (operator == BinaryExpr.Operator.PLUS && (leftVal instanceof String || rightVal instanceof String)) {
+        if (operator == BinaryExpr.Operator.PLUS && (isStringOperand(left, leftVal) || isStringOperand(right, rightVal))) {
             String l = leftVal == null ? "null" : leftVal.toString();
             String r = rightVal == null ? "null" : rightVal.toString();
             return new Variable(l + r);
@@ -59,5 +60,24 @@ public class Arithmetics {
             default ->
                     throw new IllegalArgumentException("Unsupported operator: " + operator);
         };
+    }
+
+    private static boolean isStringOperand(Variable variable, Object runtimeValue) {
+        if (runtimeValue instanceof String) {
+            return true;
+        }
+        if (variable == null) {
+            return false;
+        }
+        Class<?> declaredClass = variable.getClazz();
+        if (declaredClass != null && String.class.isAssignableFrom(declaredClass)) {
+            return true;
+        }
+        Type declaredType = variable.getType();
+        if (declaredType != null) {
+            String typeName = declaredType.asString();
+            return "String".equals(typeName) || String.class.getName().equals(typeName);
+        }
+        return false;
     }
 }
