@@ -275,6 +275,8 @@ public class DependencyAnalyzer {
                 fieldSearch(node);
                 methodSearch(node);
                 constructorSearch(node);
+                initializerSearch(node);
+                typeInitializerDiscovery(node);
             }
         }
     }
@@ -403,7 +405,7 @@ public class DependencyAnalyzer {
         for (String t : AntikytheraRunTime.findImplementations(cdecl.getFullyQualifiedName().orElseThrow())) {
             AntikytheraRunTime.getTypeDeclaration(t).ifPresent(td -> {
                 for (MethodDeclaration m : td.getMethodsByName(md.getNameAsString())) {
-                    if (m.getParameters().size() == md.getParameters().size()) {
+                    if (signaturesMatch(m, md)) {
                         createAnalysisNode(m);
                     }
                 }
@@ -424,7 +426,7 @@ public class DependencyAnalyzer {
             TypeWrapper wrapper = AbstractCompiler.findType(node.getCompilationUnit(), parent.getNameAsString());
             if (wrapper != null && wrapper.getType() != null) {
                 for (MethodDeclaration pmd : wrapper.getType().getMethodsByName(md.getNameAsString())) {
-                    if (pmd.getParameters().size() == md.getParameters().size()) {
+                    if (signaturesMatch(pmd, md)) {
                         createAnalysisNode(pmd);
                     }
                 }
@@ -440,6 +442,30 @@ public class DependencyAnalyzer {
     private void constructorSearch(GraphNode node) {
         if (node.getEnclosingType() != null && node.getNode() instanceof ConstructorDeclaration cd) {
             callableSearch(node, cd);
+        }
+    }
+
+    /**
+     * Search initializer blocks (static/instance).
+     */
+    private void initializerSearch(GraphNode node) {
+        if (node.getEnclosingType() != null && node.getNode() instanceof InitializerDeclaration id) {
+            names.clear();
+            id.accept(new VariableVisitor(), node);
+            id.accept(createDependencyVisitor(), node);
+        }
+    }
+
+    /**
+     * If a type is discovered, enqueue its initializer blocks for analysis.
+     */
+    private void typeInitializerDiscovery(GraphNode node) {
+        if (node.getNode() instanceof TypeDeclaration<?> td) {
+            for (var member : td.getMembers()) {
+                if (member instanceof InitializerDeclaration) {
+                    createAnalysisNode(member);
+                }
+            }
         }
     }
 
@@ -486,11 +512,19 @@ public class DependencyAnalyzer {
     protected static void addOverRide(CallableDeclaration<?> cd, String s) {
         AntikytheraRunTime.getTypeDeclaration(s).ifPresent(parent -> {
             for (MethodDeclaration md : parent.getMethodsByName(cd.getNameAsString())) {
-                if (md.getParameters().size() == cd.getParameters().size()) {
+                if (cd instanceof MethodDeclaration base && signaturesMatch(md, base)) {
                     Graph.createGraphNode(md);
                 }
             }
         });
+    }
+
+    /**
+     * Compare method signatures using JavaParser's signature rendering.
+     * This is more precise than matching just parameter counts.
+     */
+    private static boolean signaturesMatch(MethodDeclaration a, MethodDeclaration b) {
+        return a.getSignature().asString().equals(b.getSignature().asString());
     }
 
     /**
@@ -528,13 +562,12 @@ public class DependencyAnalyzer {
      * Initialize field dependencies.
      */
     public void initField(FieldDeclaration field, GraphNode node) {
-        Optional<Expression> init = field.getVariables().get(0).getInitializer();
-        if (init.isPresent()) {
-            Expression initializer = init.get();
-            if (initializer.isObjectCreationExpr() || initializer.isMethodCallExpr()) {
+        for (VariableDeclarator vd : field.getVariables()) {
+            Optional<Expression> init = vd.getInitializer();
+            if (init.isPresent()) {
+                Expression initializer = init.get();
+                Resolver.processExpression(node, initializer, new NodeList<>());
                 initializer.accept(createDependencyVisitor(), node);
-            } else if (initializer.isNameExpr()) {
-                Resolver.resolveNameExpr(node, initializer.asNameExpr(), new NodeList<>());
             }
         }
     }
@@ -588,24 +621,41 @@ public class DependencyAnalyzer {
     protected class DependencyVisitor extends AnnotationVisitor {
         @Override
         public void visit(ExplicitConstructorInvocationStmt n, GraphNode node) {
-            if (node.getNode() instanceof ConstructorDeclaration cd
-                    && node.getEnclosingType().isClassOrInterfaceDeclaration()) {
-                visitConstructor(node, cd);
+            if (!(node.getNode() instanceof ConstructorDeclaration)
+                    || !node.getEnclosingType().isClassOrInterfaceDeclaration()) {
+                super.visit(n, node);
+                return;
             }
+
+            MCEWrapper wrapper = Resolver.resolveArgumentTypes(node, n);
+
+            if (n.isThis()) {
+                TypeDeclaration<?> decl = node.getEnclosingType();
+                AbstractCompiler.findConstructorDeclaration(wrapper, decl)
+                        .ifPresent(callable -> {
+                            if (callable.getCallableDeclaration() instanceof ConstructorDeclaration cd) {
+                                createAnalysisNode(cd);
+                            }
+                        });
+            } else if (n.isSuper()) {
+                visitConstructor(node, wrapper);
+            }
+            super.visit(n, node);
         }
 
-        private void visitConstructor(GraphNode node, ConstructorDeclaration cd) {
+        private void visitConstructor(GraphNode node, MCEWrapper wrapper) {
             for (ClassOrInterfaceType cdecl : node.getEnclosingType()
                     .asClassOrInterfaceDeclaration().getExtendedTypes()) {
                 String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(
                         node.getCompilationUnit(), cdecl.getNameAsString());
                 if (fullyQualifiedName != null) {
                     AntikytheraRunTime.getTypeDeclaration(fullyQualifiedName).ifPresent(cid -> {
-                        for (ConstructorDeclaration constructorDeclaration : cid.getConstructors()) {
-                            if (constructorDeclaration.getParameters().size() == cd.getParameters().size()) {
-                                createAnalysisNode(constructorDeclaration);
-                            }
-                        }
+                        AbstractCompiler.findConstructorDeclaration(wrapper, cid)
+                                .ifPresent(callable -> {
+                                    if (callable.getCallableDeclaration() instanceof ConstructorDeclaration cd) {
+                                        createAnalysisNode(cd);
+                                    }
+                                });
                     });
                 }
             }
@@ -642,6 +692,11 @@ public class DependencyAnalyzer {
                             f -> f.getVariable(0).getNameAsString().equals(nmae.asString()))
                             .ifPresent(DependencyAnalyzer.this::createAnalysisNode);
                     ImportUtils.addImport(arg, fae);
+                } else if (assignExpr.getTarget().isNameExpr()) {
+                    String name = assignExpr.getTarget().asNameExpr().getNameAsString();
+                    arg.getEnclosingType().findFirst(FieldDeclaration.class,
+                            f -> f.getVariable(0).getNameAsString().equals(name))
+                            .ifPresent(DependencyAnalyzer.this::createAnalysisNode);
                 }
             }
             super.visit(n, arg);
@@ -668,6 +723,7 @@ public class DependencyAnalyzer {
         public void visit(FieldAccessExpr fae, GraphNode node) {
             // Track the field access for knowledge graph
             onFieldAccessed(node, fae);
+            Resolver.resolveField(node, fae);
             ImportUtils.addImport(node, fae);
             super.visit(fae, node);
         }
