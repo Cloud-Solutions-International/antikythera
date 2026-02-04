@@ -137,9 +137,9 @@ class TestSpringEvaluator extends TestHelper {
     void testCreateTests() throws ReflectiveOperationException {
         SpringEvaluator evaluator = EvaluatorFactory.create("TestClass", SpringEvaluator.class);
 
-        // Access private currentMethod field via reflection
-        Field currentMethodField = SpringEvaluator.class.getDeclaredField("currentMethod");
-        currentMethodField.setAccessible(true);
+        // Access private currentCallable field via reflection
+        Field currentCallableField = SpringEvaluator.class.getDeclaredField("currentCallable");
+        currentCallableField.setAccessible(true);
 
         // Mock TestGenerator
         TestGenerator mockGenerator = mock(TestGenerator.class);
@@ -148,7 +148,7 @@ class TestSpringEvaluator extends TestHelper {
         // Create test data
         MethodDeclaration methodDecl = new MethodDeclaration()
                 .setName("testMethod");
-        currentMethodField.set(evaluator, methodDecl);
+        currentCallableField.set(evaluator, methodDecl);
 
         // Create a method response
         ResponseEntity<String> responseEntity = new ResponseEntity<>(HttpStatus.OK);
@@ -225,19 +225,17 @@ class TestSpringEvaluator extends TestHelper {
 
     @Test
     void testVisitCapturesOutput() throws ReflectiveOperationException {
-        String cls = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Noisy";
+        String cls = SERVICE_CLASS;
         SpringEvaluator eval = EvaluatorFactory.create(cls, SpringEvaluator.class);
+        eval.setArgumentGenerator(new DummyArgumentGenerator());
         MethodDeclaration md = eval.getCompilationUnit().findFirst(MethodDeclaration.class,
-                m -> m.getNameAsString().equals("noisyMethod")).orElseThrow();
+                m -> m.getNameAsString().equals("utils")).orElseThrow();
 
         eval.setOnTest(true);
+        AntikytheraRunTime.push(new Variable("Hello World"));
         eval.visit(md);
 
-        // We can't easily check the MethodResponse here because visit() creates tests internally,
-        // but we can check if anything was printed to our outContent (due to mirroring)
-        // or if the internal capture mechanism worked if we had access to it.
-        // Since we implemented mirroring, outContent should contain the string.
-        assertTrue(outContent.toString().contains("This is a noisy method!"));
+        assertTrue(outContent.toString().contains("Non empty!"));
     }
 }
 

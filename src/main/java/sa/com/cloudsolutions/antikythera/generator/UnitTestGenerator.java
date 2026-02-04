@@ -6,6 +6,7 @@ import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.PackageDeclaration;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -241,11 +242,17 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     @Override
-    public void createTests(MethodDeclaration md, MethodResponse response) {
+    public void createTests(CallableDeclaration<?> md, MethodResponse response) {
         methodUnderTest = md;
         testMethod = buildTestMethod(md);
         gen.getType(0).addMember(testMethod);
-        createInstance();
+        if (md instanceof MethodDeclaration) {
+            createInstance();
+        } else {
+            md.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(c ->
+                    instanceName = AbstractCompiler.classToInstanceName(c.getNameAsString())
+            );
+        }
         mockArguments();
         identifyVariables();
         applyPreconditions();
@@ -812,15 +819,21 @@ public class UnitTestGenerator extends TestGenerator {
     String invokeMethod() {
         StringBuilder b = new StringBuilder();
 
-        Type t = methodUnderTest.getType();
-        if (t != null && !t.toString().equals("void")) {
-            b.append(getTypeName(t)).append(" resp = ");
-            for (ImportWrapper imp : AbstractCompiler.findImport(compilationUnitUnderTest, t)) {
-                addImport(imp.getImport());
+        if (methodUnderTest instanceof MethodDeclaration md) {
+            Type t = md.getType();
+            if (t != null && !t.toString().equals("void")) {
+                b.append(getTypeName(t)).append(" resp = ");
+                for (ImportWrapper imp : AbstractCompiler.findImport(compilationUnitUnderTest, t)) {
+                    addImport(imp.getImport());
+                }
             }
+
+            b.append(instanceName).append(".").append(md.getNameAsString()).append("(");
+        } else if (methodUnderTest instanceof ConstructorDeclaration cd) {
+            String typeName = cd.getNameAsString();
+            b.append(typeName).append(" ").append(instanceName).append(" = new ").append(typeName).append("(");
         }
 
-        b.append(instanceName).append(".").append(methodUnderTest.getNameAsString()).append("(");
         for (int i = 0; i < methodUnderTest.getParameters().size(); i++) {
             b.append(methodUnderTest.getParameter(i).getNameAsString());
             if (i < methodUnderTest.getParameters().size() - 1) {
@@ -832,17 +845,33 @@ public class UnitTestGenerator extends TestGenerator {
     }
 
     private void addAsserts(MethodResponse response, String invocation) {
-        Type t = methodUnderTest.getType();
-
-        if (t == null) {
-            return;
+        Type t = null;
+        if (methodUnderTest instanceof MethodDeclaration md) {
+            t = md.getType();
         }
 
-        addClassImports(t);
+        if (t != null && !t.isVoidType()) {
+            addClassImports(t);
 
-        if (response.getBody() != null) {
-            getBody(testMethod).addStatement(invocation);
-            noSideEffectAsserts(response);
+            if (response.getBody() != null) {
+                getBody(testMethod).addStatement(invocation);
+                noSideEffectAsserts(response);
+            } else {
+                BlockStmt body = getBody(testMethod);
+                int statementsBefore = body.getStatements().size();
+                body.addStatement(invocation);
+                int statementsBeforeAsserts = body.getStatements().size();
+
+                sideEffectAsserts();
+                if (response.getCapturedOutput() != null && !response.getCapturedOutput().trim().isEmpty()) {
+                    body.addStatement(asserter.assertOutput(response.getCapturedOutput().trim()));
+                }
+
+                if (body.getStatements().size() == statementsBeforeAsserts) {
+                    body.getStatements().remove(statementsBefore);
+                    body.addStatement(asserter.assertDoesNotThrow(invocation));
+                }
+            }
         } else {
             BlockStmt body = getBody(testMethod);
             int statementsBefore = body.getStatements().size();

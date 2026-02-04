@@ -24,7 +24,7 @@ class TestTestGenerator {
         // Create an anonymous concrete implementation of TestGenerator for testing
         testGenerator = new TestGenerator(null) {
             @Override
-            public void createTests(MethodDeclaration md, MethodResponse response) {
+            public void createTests(com.github.javaparser.ast.body.CallableDeclaration<?> md, MethodResponse response) {
                 // Not needed for this test
             }
 

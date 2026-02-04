@@ -1613,6 +1613,11 @@ public class Evaluator implements EvaluationEngine {
         executeMethod(md);
     }
 
+    @Override
+    public void visit(ConstructorDeclaration cd) throws ReflectiveOperationException {
+        executeConstructor(cd);
+    }
+
     /**
      * Execute a method represented by the CallableDeclaration
      *

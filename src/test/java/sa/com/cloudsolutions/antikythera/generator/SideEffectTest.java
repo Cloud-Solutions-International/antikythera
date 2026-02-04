@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -54,10 +56,26 @@ class SideEffectTest {
         assertTrue(genSource.contains("returnsValueTest"), "returnsValue should have a generated test");
     }
 
+    @Test
+    void testConstructorSideEffects() throws ReflectiveOperationException {
+        Settings.setProperty(Settings.GENERATE_CONSTRUCTOR_TESTS, true);
+        Settings.setProperty(Settings.LOG_APPENDER, "sa.com.cloudsolutions.LogAppender");
+
+        String genSource = runGenerator("sa.com.cloudsolutions.antikythera.testhelper.evaluator.ConstructorSideEffect");
+
+        assertTrue(genSource.contains("DefaultConstructorTest"), "Should have a test for the constructor");
+        assertTrue(genSource.contains("assertEquals(\"Constructor side effect!\", outputStream.toString().trim())"), 
+                "Should assert console output");
+        assertTrue(genSource.contains("LogAppender.hasMessage"), "Should assert logging output");
+    }
+
     private String runGenerator() throws ReflectiveOperationException {
-        String cls = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.VoidNoOp";
+        return runGenerator("sa.com.cloudsolutions.antikythera.testhelper.evaluator.VoidNoOp");
+    }
+
+    private String runGenerator(String cls) throws ReflectiveOperationException {
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(cls);
-        assertNotNull(cu);
+        assertNotNull(cu, "CompilationUnit for " + cls + " should not be null");
 
         UnitTestGenerator generator = new UnitTestGenerator(cu);
         generator.setArgumentGenerator(new DummyArgumentGenerator());
@@ -69,8 +87,12 @@ class SideEffectTest {
         evaluator.setArgumentGenerator(new DummyArgumentGenerator());
 
         // Process the class
-        for (MethodDeclaration md : cu.findAll(MethodDeclaration.class)) {
-            evaluator.visit(md);
+        for (CallableDeclaration<?> cd : cu.findAll(CallableDeclaration.class)) {
+            if (cd instanceof MethodDeclaration md) {
+                evaluator.visit(md);
+            } else if (cd instanceof ConstructorDeclaration constructorDeclaration) {
+                evaluator.visit(constructorDeclaration);
+            }
         }
 
         CompilationUnit gen = generator.getCompilationUnit();

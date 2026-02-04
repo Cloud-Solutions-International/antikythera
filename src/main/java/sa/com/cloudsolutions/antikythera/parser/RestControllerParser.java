@@ -1,10 +1,12 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.PackageDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.io.*;
@@ -118,6 +120,18 @@ public class RestControllerParser extends DepsolvingParser {
      *
      */
     private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
+        boolean generateConstructorTests = Settings.getProperty(Settings.GENERATE_CONSTRUCTOR_TESTS, Boolean.class).orElse(false);
+
+        @Override
+        public void visit(ConstructorDeclaration cd, Void arg) {
+            super.visit(cd, arg);
+            if (generateConstructorTests) {
+                evaluateCallable(cd, new NullArgumentGenerator());
+                evaluateCallable(cd, new DummyArgumentGenerator());
+                evaluateCallable(cd, new DatabaseArgumentGenerator());
+            }
+        }
+
         /**
          * Will trigger an evaluation which is like a fake execution of the code inside the method
          */
@@ -126,19 +140,23 @@ public class RestControllerParser extends DepsolvingParser {
             super.visit(md, arg);
 
             if (checkEligible(md)) {
-                 evaluateMethod(md, new NullArgumentGenerator());
-                 evaluateMethod(md, new DummyArgumentGenerator());
-                 evaluateMethod(md, new DatabaseArgumentGenerator());
+                 evaluateCallable(md, new NullArgumentGenerator());
+                 evaluateCallable(md, new DummyArgumentGenerator());
+                 evaluateCallable(md, new DatabaseArgumentGenerator());
             }
         }
 
-        protected void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+        protected void evaluateCallable(CallableDeclaration<?> md, ArgumentGenerator gen) {
             evaluator.setArgumentGenerator(gen);
             evaluator.reset();
             Branching.clear();
             AntikytheraRunTime.reset();
             try {
-                evaluator.visit(md);
+                if (md instanceof MethodDeclaration methodDeclaration) {
+                    evaluator.visit(methodDeclaration);
+                } else if (md instanceof ConstructorDeclaration constructorDeclaration) {
+                    evaluator.visit(constructorDeclaration);
+                }
 
             } catch (AntikytheraException | ReflectiveOperationException e) {
                 if ("log".equals(Settings.getProperty("dependencies.on_error"))) {

@@ -19,6 +19,7 @@ This document describes the various configuration settings available in Antikyth
 | `base_test_class` | A fully qualified name of a class that every generated test class should extend. |
 | `extra_imports` | A list of additional imports to be added to every generated test class. |
 | `skip_void_no_side_effects` | Boolean (default: `true`). If enabled, Antikythera will skip creating tests for `void` methods that do not produce any detectable side effects (e.g., logging, console output, or state changes). |
+| `generate_constructor_tests` | Boolean (default: `false`). If enabled, Antikythera will generate test cases for constructors. This is particularly useful for constructors that have side effects like initialization logging or validation. |
 | `log_appender` | The fully qualified name of the `LogAppender` class used to capture and verify log messages in tests. |
 
 ## Dependency Management

@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
@@ -34,7 +35,7 @@ public abstract class TestGenerator {
      */
     CompilationUnit gen;
     protected Asserter asserter;
-    protected MethodDeclaration methodUnderTest;
+    protected CallableDeclaration<?> methodUnderTest;
 
     MethodDeclaration testMethod;
     protected CompilationUnit compilationUnitUnderTest;
@@ -73,7 +74,7 @@ public abstract class TestGenerator {
         return imports;
     }
 
-    protected String createTestName(MethodDeclaration md) {
+    protected String createTestName(CallableDeclaration<?> md) {
         StringBuilder paramNames = new StringBuilder();
         for(var param : md.getParameters()) {
             param.getAnnotationByName("PathVariable").ifPresent(ann ->
@@ -83,6 +84,13 @@ public abstract class TestGenerator {
         }
 
         String testName = String.valueOf(md.getName());
+        if (md.isConstructorDeclaration()) {
+            testName = "Constructor";
+            if (md.getParameters().isEmpty()) {
+                testName = "DefaultConstructor";
+            }
+        }
+        
         if (paramNames.isEmpty()) {
             testName += "Test";
         } else {
@@ -105,10 +113,10 @@ public abstract class TestGenerator {
      * @param md the method being tested
      * @param response REST API response if this is a controller method
      */
-    public abstract void createTests(MethodDeclaration md, MethodResponse response);
+    public abstract void createTests(CallableDeclaration<?> md, MethodResponse response);
 
     @SuppressWarnings("unchecked")
-    MethodDeclaration buildTestMethod(MethodDeclaration md) {
+    MethodDeclaration buildTestMethod(CallableDeclaration<?> md) {
         MethodDeclaration tm = new MethodDeclaration();
 
         md.findAncestor(TypeDeclaration.class).ifPresent(c ->
