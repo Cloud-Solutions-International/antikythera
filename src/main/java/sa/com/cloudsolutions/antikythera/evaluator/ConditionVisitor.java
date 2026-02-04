@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.ConditionalExpr;
@@ -23,7 +25,7 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
     public void visit(IfStmt stmt, LineOfCode parent) {
         LineOfCode lineOfCode = new LineOfCode(stmt);
         lineOfCode.setParent(parent);
-        if (canMatchParameters(lineOfCode.getMethodDeclaration(), stmt.getCondition())) {
+        if (canMatchParameters(lineOfCode.getCallableDeclaration(), stmt.getCondition())) {
             Branching.add(lineOfCode);
         }
 
@@ -37,13 +39,13 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
     @Override
     public void visit(ConditionalExpr expr, LineOfCode parent) {
         LineOfCode lineOfCode = new LineOfCode(expr.getCondition());
-        if (canMatchParameters(lineOfCode.getMethodDeclaration(), expr.getCondition())) {
+        if (canMatchParameters(lineOfCode.getCallableDeclaration(), expr.getCondition())) {
             lineOfCode.setParent(parent);
             Branching.add(lineOfCode);
         }
     }
 
-    private boolean canMatchParameters(MethodDeclaration md, Expression condition) {
+    private boolean canMatchParameters(CallableDeclaration<?> md, Expression condition) {
         NameCollector nameCollector = new NameCollector();
 
         Set<String> names = nameCollector.getNames();
@@ -68,7 +70,7 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
         List<Expression> conditions = new ArrayList<>();
         Node current = stmt;
 
-        while (current != null && !(current instanceof MethodDeclaration)) {
+        while (current != null && !(current instanceof CallableDeclaration)) {
             Optional<Node> parentNode = current.getParentNode();
             if (parentNode.isEmpty()) break;
 

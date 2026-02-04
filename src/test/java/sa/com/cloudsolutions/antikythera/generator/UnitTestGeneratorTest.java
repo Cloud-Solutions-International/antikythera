@@ -274,6 +274,32 @@ class UnitTestGeneratorTest {
         assertTrue(whenThenString.contains("Optional.of(new TestClass())"),
                 "The whenThen expression should contain 'Optional.of(new TestClass())' but was: " + whenThenString);
     }
+
+    @Test
+    void testAddBeforeClassAddsOutputCaptureFields() {
+        unitTestGenerator.addBeforeClass();
+        CompilationUnit testCu = unitTestGenerator.getCompilationUnit();
+        String sources = testCu.toString();
+
+        assertTrue(sources.contains("private PrintStream originalOut;"));
+        assertTrue(sources.contains("private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();"));
+        assertTrue(sources.contains("System.setOut(new PrintStream(outputStream));"));
+    }
+
+    @Test
+    void testAddAssertsWithCapturedOutput() throws NoSuchMethodException {
+        MethodDeclaration methodUnderTest = classUnderTest.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("queries2")).orElseThrow();
+
+        MethodResponse response = new MethodResponse();
+        response.setCapturedOutput("Expected Console Output");
+
+        // Use reflection to access private addAsserts method or just call createTests which calls it
+        unitTestGenerator.createTests(methodUnderTest, response);
+        String sources = unitTestGenerator.getCompilationUnit().toString();
+
+        assertTrue(sources.contains("assertEquals(\"Expected Console Output\", outputStream.toString().trim());"));
+    }
 }
 
 class UnitTestGeneratorMoreTests extends TestHelper {

@@ -15,6 +15,10 @@ public class LogRecorder {
         logEntries.clear();
     }
 
+    public static boolean hasLogs() {
+        return !logEntries.isEmpty();
+    }
+
     public static void captureLog(String className, String level, String message, Object[] args) {
         logEntries.computeIfAbsent(className, k -> new ArrayList<>())
                 .add(new LogEntry(level, message, args));

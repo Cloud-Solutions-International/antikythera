@@ -1,10 +1,12 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
+import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.PackageDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.io.*;
@@ -14,27 +16,19 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.ArgumentGenerator;
-import sa.com.cloudsolutions.antikythera.evaluator.Branching;
 import sa.com.cloudsolutions.antikythera.evaluator.DatabaseArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.DummyArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.NullArgumentGenerator;
 import sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator;
-import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
-import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 import sa.com.cloudsolutions.antikythera.generator.Antikythera;
 import sa.com.cloudsolutions.antikythera.generator.SpringTestGenerator;
 
 public class RestControllerParser extends DepsolvingParser {
-    private static final Logger logger = LoggerFactory.getLogger(RestControllerParser.class);
-
     /**
      * Maintain stats of the controllers and methods parsed
      */
@@ -118,6 +112,22 @@ public class RestControllerParser extends DepsolvingParser {
      *
      */
     private class ControllerMethodVisitor extends VoidVisitorAdapter<Void> {
+        boolean generateConstructorTests = Settings.getProperty(Settings.GENERATE_CONSTRUCTOR_TESTS, Boolean.class).orElse(false);
+
+        @Override
+        public void visit(ConstructorDeclaration cd, Void arg) {
+            super.visit(cd, arg);
+            if (generateConstructorTests && !cd.isPrivate()) {
+                callableVisitor(cd);
+            }
+        }
+
+        private void callableVisitor(CallableDeclaration<?> cd) {
+            RestControllerParser.this.evaluateCallable(cd, new NullArgumentGenerator());
+            RestControllerParser.this.evaluateCallable(cd, new DummyArgumentGenerator());
+            RestControllerParser.this.evaluateCallable(cd, new DatabaseArgumentGenerator());
+        }
+
         /**
          * Will trigger an evaluation which is like a fake execution of the code inside the method
          */
@@ -126,28 +136,7 @@ public class RestControllerParser extends DepsolvingParser {
             super.visit(md, arg);
 
             if (checkEligible(md)) {
-                 evaluateMethod(md, new NullArgumentGenerator());
-                 evaluateMethod(md, new DummyArgumentGenerator());
-                 evaluateMethod(md, new DatabaseArgumentGenerator());
-            }
-        }
-
-        protected void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
-            evaluator.setArgumentGenerator(gen);
-            evaluator.reset();
-            Branching.clear();
-            AntikytheraRunTime.reset();
-            try {
-                evaluator.visit(md);
-
-            } catch (AntikytheraException | ReflectiveOperationException e) {
-                if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
-                    logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
-                } else {
-                    throw new GeneratorException(e);
-                }
-            } finally {
-                logger.info(md.getNameAsString());
+                callableVisitor(md);
             }
         }
 

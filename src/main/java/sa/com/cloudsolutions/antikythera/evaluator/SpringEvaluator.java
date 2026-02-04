@@ -3,7 +3,9 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
@@ -64,6 +66,7 @@ import java.util.Optional;
 /**
  * Extends the basic evaluator to provide support for JPA repositories and their special behavior.
  */
+@SuppressWarnings("java:S106")
 public class SpringEvaluator extends ControlFlowEvaluator {
     private static final Logger logger = LoggerFactory.getLogger(SpringEvaluator.class);
 
@@ -84,7 +87,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     /**
      * The method currently being analyzed
      */
-    private MethodDeclaration currentMethod;
+    private CallableDeclaration<?> currentCallable;
     private boolean onTest;
 
     protected SpringEvaluator(EvaluatorFactory.Context context) {
@@ -156,30 +159,33 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private static boolean resultToEntity(Variable variable, ResultSet rs) {
         try {
             if (variable.getValue() instanceof Evaluator evaluator && rs.next()) {
-                CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
-
-
-                for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
-                    for (VariableDeclarator fieldVar : field.getVariables()) {
-                        String fieldName = fieldVar.getNameAsString();
-                        try {
-                            if (rs.findColumn(BaseRepositoryParser.camelToSnake(fieldName)) > 0) {
-                                Object value = rs.getObject(BaseRepositoryParser.camelToSnake(fieldName));
-                                Variable v = new Variable(value);
-                                v.setType(fieldVar.getType());
-                                evaluator.setField(fieldName, v);
-                            }
-                        } catch (SQLException e) {
-                            logger.warn(e.getMessage());
-                        }
-                    }
-                }
+                resultToEntity(rs, evaluator);
                 return true;
             }
         } catch (SQLException e) {
             logger.warn(e.getMessage());
         }
         return false;
+    }
+
+    private static void resultToEntity(ResultSet rs, Evaluator evaluator) {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(evaluator.getClassName());
+
+        for (FieldDeclaration field : cu.findAll(FieldDeclaration.class)) {
+            for (VariableDeclarator fieldVar : field.getVariables()) {
+                String fieldName = fieldVar.getNameAsString();
+                try {
+                    if (rs.findColumn(BaseRepositoryParser.camelToSnake(fieldName)) > 0) {
+                        Object value = rs.getObject(BaseRepositoryParser.camelToSnake(fieldName));
+                        Variable v = new Variable(value);
+                        v.setType(fieldVar.getType());
+                        evaluator.setField(fieldName, v);
+                    }
+                } catch (SQLException e) {
+                    logger.warn(e.getMessage());
+                }
+            }
+        }
     }
 
     private static Variable wireFromByteCode(String resolvedClass) {
@@ -238,47 +244,41 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * This is done by setting the values of variables to ensure conditionals evaluate to both the
      * true state and the false state
      *
-     * @param md The MethodDeclaration being worked on
+     * @param cd The ConstructorDeclaration being worked on
      * @throws AntikytheraException         if evaluation fails
      * @throws ReflectiveOperationException if a reflection operation fails
      */
     @Override
+    public void visit(ConstructorDeclaration cd) throws AntikytheraException, ReflectiveOperationException {
+        visitCallable(cd);
+    }
+
+    @Override
     public void visit(MethodDeclaration md) throws AntikytheraException, ReflectiveOperationException {
-        beforeVisit(md);
+        visitCallable(md);
+    }
+
+    private void visitCallable(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
+        beforeVisit(cd);
         try {
-            int oldSize = Branching.size(md);
+            int oldSize = Branching.size(cd);
 
             int safetyCheck = 0;
             while (safetyCheck < 16) {
-                getLocals().clear();
-                LogRecorder.clearLogs();
-                setupFields();
-                mockMethodArguments(md);
+                prepareInvocationContext(cd);
 
-                currentConditional = Branching.getHighestPriority(md);
+                currentConditional = Branching.getHighestPriority(cd);
                 if ((currentConditional == null || currentConditional.isFullyTravelled()) && oldSize != 0) {
                     break;
                 }
 
-                executeMethod(md);
+                String output = invokeCallableWithCapture(cd);
+                maybeRecordVoidResponse(cd, output);
 
-                if (md.getType().isVoidType()) {
-                    MethodResponse mr = new MethodResponse();
-                    createTests(mr);
-                }
                 safetyCheck++;
-                if (currentConditional != null) {
-                    currentConditional.transition();
-                    Branching.add(currentConditional);
-
-                    if (currentConditional.getPreconditions() != null) {
-                        currentConditional.getPreconditions().clear();
-                    }
-                }
-                if (Branching.size(md) == 0) {
+                oldSize = advanceBranchingState(cd);
+                if (oldSize < 0) {
                     break;
-                } else {
-                    oldSize = Branching.size(md);
                 }
             }
         } catch (AUTException aex) {
@@ -286,17 +286,87 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
-    private void beforeVisit(MethodDeclaration md) {
-        md.getParentNode().ifPresent(p -> {
+    private void prepareInvocationContext(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
+        getLocals().clear();
+        LogRecorder.clearLogs();
+        setupFields();
+        mockMethodArguments(cd);
+    }
+
+    private String invokeCallableWithCapture(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
+        String output = null;
+        try {
+            if (onTest) {
+                startOutputCapture();
+            }
+            Evaluator.clearLastException();
+            TestGenerator.clearWhenThen();
+            if (cd instanceof MethodDeclaration md) {
+                executeMethod(md);
+            } else if (cd instanceof ConstructorDeclaration constructorDeclaration) {
+                executeConstructor(constructorDeclaration);
+            }
+        } finally {
+            if (onTest) {
+                output = stopOutputCapture();
+                if (output != null && !output.isEmpty()) {
+                    System.out.print(output);
+                }
+            }
+        }
+        return output;
+    }
+
+    private void maybeRecordVoidResponse(CallableDeclaration<?> cd, String output) {
+        boolean isVoid = cd instanceof MethodDeclaration md && md.getType().isVoidType();
+        boolean isConstructor = cd instanceof ConstructorDeclaration;
+
+        if (!(isVoid || isConstructor)) {
+            return;
+        }
+
+        boolean skipNoSideEffects = Settings.getProperty(Settings.SKIP_VOID_NO_SIDE_EFFECTS, Boolean.class).orElse(true);
+        boolean hasSideEffects = (output != null && !output.isEmpty())
+                || !TestGenerator.getWhenThen().isEmpty()
+                || !Branching.getApplicableConditions(cd).isEmpty()
+                || Evaluator.getLastException() != null
+                || sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder.hasLogs();
+
+        if (!skipNoSideEffects || hasSideEffects) {
+            MethodResponse mr = new MethodResponse();
+            if (onTest) {
+                mr.setCapturedOutput(output);
+            }
+            createTests(mr);
+        }
+    }
+
+    private int advanceBranchingState(CallableDeclaration<?> cd) {
+        if (currentConditional != null) {
+            currentConditional.transition();
+            Branching.add(currentConditional);
+
+            if (currentConditional.getPreconditions() != null) {
+                currentConditional.getPreconditions().clear();
+            }
+        }
+        if (Branching.size(cd) == 0) {
+            return -1;
+        }
+        return Branching.size(cd);
+    }
+
+    private void beforeVisit(CallableDeclaration<?> cd) {
+        cd.getParentNode().ifPresent(p -> {
             if (p instanceof ClassOrInterfaceDeclaration) {
-                currentMethod = md;
+                currentCallable = cd;
             }
         });
 
         Branching.clear();
         AntikytheraRunTime.reset();
 
-        md.accept(new ConditionVisitor(), null);
+        cd.accept(new ConditionVisitor(), null);
     }
 
     @Override
@@ -305,6 +375,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         NodeList<Parameter> parameters = md.getParameters();
         for (int i = parameters.size() - 1; i >= 0; i--) {
             setupParameter(md, parameters.get(i));
+        }
+    }
+
+    @Override
+    public void executeConstructor(ConstructorDeclaration cd) throws ReflectiveOperationException {
+        super.executeConstructor(cd);
+        NodeList<Parameter> parameters = cd.getParameters();
+        for (int i = parameters.size() - 1; i >= 0; i--) {
+            setupParameter(cd, parameters.get(i));
         }
     }
 
@@ -317,8 +396,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @param p  the parameter in question.
      * @throws ReflectiveOperationException if a reflection operation fails
      */
-    void setupParameter(MethodDeclaration md, Parameter p) throws ReflectiveOperationException {
-        Symbol va = getValue(md.getBody().orElseThrow(), p.getNameAsString());
+    void setupParameter(CallableDeclaration<?> md, Parameter p) throws ReflectiveOperationException {
+        BlockStmt body = md instanceof MethodDeclaration mdecl ? mdecl.getBody().orElseThrow() : ((ConstructorDeclaration)md).getBody();
+        Symbol va = getValue(body, p.getNameAsString());
 
         if (currentConditional != null) {
             if (currentConditional.getStatement() instanceof IfStmt || currentConditional.getConditionalExpression() != null) {
@@ -327,11 +407,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             applyPreconditions(p, va);
         }
 
-        md.getBody().ifPresent(body -> {
-            setLocal(body, p.getNameAsString(), va);
-            p.getAnnotationByName("RequestParam").ifPresent(SpringEvaluator::setupRequestParam);
-        });
-
+        setLocal(body, p.getNameAsString(), va);
+        p.getAnnotationByName("RequestParam").ifPresent(SpringEvaluator::setupRequestParam);
     }
 
     private void applyPreconditions(Parameter p, Symbol va) throws ReflectiveOperationException {
@@ -382,7 +459,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * @param md The method declaration representing an HTTP API end point
      * @throws ReflectiveOperationException if the variables cannot be mocked.
      */
-    void mockMethodArguments(MethodDeclaration md) throws ReflectiveOperationException {
+    void mockMethodArguments(CallableDeclaration<?> md) throws ReflectiveOperationException {
         for (int i = md.getParameters().size() - 1; i >= 0; i--) {
             var param = md.getParameter(i);
             argumentGenerator.generateArgument(param);
@@ -484,12 +561,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
             if (parent.isPresent() && returnValue != null && returnFrom != null) {
                 Optional<MethodDeclaration> ancestor = returnFrom.findAncestor(MethodDeclaration.class);
-                if (ancestor.isPresent() && ancestor.get().equals(currentMethod)) {
+                if (ancestor.isPresent() && ancestor.get().equals(currentCallable)) {
                     if (returnValue.getValue() instanceof MethodResponse mr) {
                         return createTests(mr);
                     }
                     MethodResponse mr = new MethodResponse();
                     mr.setBody(returnValue);
+                    if (capturedOutputStream != null) {
+                        mr.setCapturedOutput(capturedOutputStream.toString());
+                    }
                     createTests(mr);
                 }
             }
@@ -507,8 +587,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     Variable createTests(MethodResponse response) {
         if (response != null) {
             for (TestGenerator generator : generators) {
-                generator.setPreConditions(Branching.getApplicableConditions(currentMethod));
-                generator.createTests(currentMethod, response);
+                generator.setPreConditions(Branching.getApplicableConditions(currentCallable));
+                generator.createTests(currentCallable, response);
             }
             return new Variable(response);
         }
@@ -686,8 +766,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         Node node = parentNode.get();
         TypeWrapper keyType = (key instanceof FieldAccessExpr fieldAccessExpr)
-                ? AbstractCompiler.findType(cu, fieldAccessExpr.getScope().asNameExpr().getNameAsString())
-                : AbstractCompiler.findType(cu, key.asNameExpr().getNameAsString());
+                ? AbstractCompiler.findType(cu, fieldAccessExpr.getScope().toString())
+                : AbstractCompiler.findType(cu, key.toString());
 
         if (keyType != null && (keyType.getEnumConstant() != null || keyType.getType().isEnumDeclaration())) {
             adjustForEnumConstantComparison(node, combination, entry, result);

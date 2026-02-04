@@ -2,7 +2,9 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Precondition;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
@@ -88,32 +90,30 @@ public class SpringTestGenerator extends  TestGenerator {
      *                           ResponseEntity as well as the body of the ResponseEntity.
      */
     @Override
-    public void createTests(MethodDeclaration md, MethodResponse controllerResponse) {
-        this.methodUnderTest = md;
+    public void createTests(CallableDeclaration<?> cd, MethodResponse controllerResponse) {
+        this.methodUnderTest = cd;
 
-        RestControllerParser.getStats().setTests(RestControllerParser.getStats().getTests() + 1);
-        for (AnnotationExpr annotation : md.getAnnotations()) {
-            if (annotation.getNameAsString().equals("GetMapping") ) {
-                buildGetMethodTests(annotation, controllerResponse);
-            }
-            else if(annotation.getNameAsString().equals("PostMapping")) {
-                buildPostMethodTests(annotation, controllerResponse);
-            }
-            else if(annotation.getNameAsString().equals("DeleteMapping")) {
-                buildDeleteMethodTests(annotation, controllerResponse);
-            }
-            else if(annotation.getNameAsString().equals("PutMapping")) {
-                buildPutMethodTests(annotation, controllerResponse);
-            }
-            else if(annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
-                for (var pair : annotation.asNormalAnnotationExpr().getPairs()) {
-                    if (pair.getNameAsString().equals("method")) {
-                        switch(pair.getValue().toString()) {
-                            case "RequestMethod.GET" -> buildGetMethodTests(annotation, controllerResponse);
-                            case "RequestMethod.POST" -> buildPostMethodTests(annotation, controllerResponse);
-                            case "RequestMethod.PUT" -> buildPutMethodTests(annotation, controllerResponse);
-                            case "RequestMethod.DELETE" -> buildDeleteMethodTests(annotation, controllerResponse);
-                            default -> logger.debug("Unknown request method {}", pair.getValue());
+        if (cd instanceof MethodDeclaration md) {
+            RestControllerParser.getStats().setTests(RestControllerParser.getStats().getTests() + 1);
+            for (AnnotationExpr annotation : md.getAnnotations()) {
+                if (annotation.getNameAsString().equals("GetMapping")) {
+                    buildGetMethodTests(annotation, controllerResponse);
+                } else if (annotation.getNameAsString().equals("PostMapping")) {
+                    buildPostMethodTests(annotation, controllerResponse);
+                } else if (annotation.getNameAsString().equals("DeleteMapping")) {
+                    buildDeleteMethodTests(annotation, controllerResponse);
+                } else if (annotation.getNameAsString().equals("PutMapping")) {
+                    buildPutMethodTests(annotation, controllerResponse);
+                } else if (annotation.getNameAsString().equals("RequestMapping") && annotation.isNormalAnnotationExpr()) {
+                    for (var pair : annotation.asNormalAnnotationExpr().getPairs()) {
+                        if (pair.getNameAsString().equals("method")) {
+                            switch (pair.getValue().toString()) {
+                                case "RequestMethod.GET" -> buildGetMethodTests(annotation, controllerResponse);
+                                case "RequestMethod.POST" -> buildPostMethodTests(annotation, controllerResponse);
+                                case "RequestMethod.PUT" -> buildPutMethodTests(annotation, controllerResponse);
+                                case "RequestMethod.DELETE" -> buildDeleteMethodTests(annotation, controllerResponse);
+                                default -> logger.debug("Unknown request method {}", pair.getValue());
+                            }
                         }
                     }
                 }
@@ -134,12 +134,15 @@ public class SpringTestGenerator extends  TestGenerator {
     }
 
     private void httpWithoutBody(AnnotationExpr annotation, String call, MethodResponse response)  {
-        testMethod = buildTestMethod(methodUnderTest);
+        if (!(methodUnderTest instanceof MethodDeclaration md)) {
+            return;
+        }
+        testMethod = buildTestMethod(md);
         MethodCallExpr makeGetCall = new MethodCallExpr(call);
         makeGetCall.addArgument(new NameExpr("headers"));
         BlockStmt body = getBody(testMethod);
 
-        if(methodUnderTest.getParameters().isEmpty()) {
+        if (md.getParameters().isEmpty()) {
             /*
              * Empty parameters are very easy.
              */
@@ -237,7 +240,10 @@ public class SpringTestGenerator extends  TestGenerator {
 
     private void httpWithBody(AnnotationExpr annotation, MethodResponse resp, String call) {
 
-        testMethod = buildTestMethod(methodUnderTest);
+        if (!(methodUnderTest instanceof MethodDeclaration md)) {
+            return;
+        }
+        testMethod = buildTestMethod(md);
         MethodCallExpr makePost = new MethodCallExpr(call);
         BlockStmt body = getBody(testMethod);
 
@@ -245,8 +251,8 @@ public class SpringTestGenerator extends  TestGenerator {
         request.setPath(getPath(annotation).replace("\"", ""));
         handleURIVariables(request);
 
-        if(methodUnderTest.getParameters().isNonEmpty()) {
-            Parameter requestBody = findRequestBody(methodUnderTest);
+        if (md.getParameters().isNonEmpty()) {
+            Parameter requestBody = findRequestBody(md);
             if(requestBody != null) {
                 String paramClassName = requestBody.getTypeAsString();
 
@@ -279,7 +285,7 @@ public class SpringTestGenerator extends  TestGenerator {
             if (returnType.isClassOrInterfaceType() && returnType.asClassOrInterfaceType().getTypeArguments().isPresent()) {
                 NodeList<Type> a = returnType.asClassOrInterfaceType().getTypeArguments().get();
                 if (!a.isEmpty() && a.getFirst().isPresent() && a.getFirst().get().toString().equals("String")) {
-                    testForResponseBodyAsString(methodUnderTest, resp, body);
+                    testForResponseBodyAsString((MethodDeclaration) methodUnderTest, resp, body);
                 }
                 else {
                     logger.warn("THIS testing path is not completed");
@@ -290,7 +296,7 @@ public class SpringTestGenerator extends  TestGenerator {
                 {
                     Type respType = new ClassOrInterfaceType(null, returnType.asClassOrInterfaceType().getNameAsString());
                     if (respType.toString().equals("String")) {
-                        testForResponseBodyAsString(methodUnderTest, resp, body);
+                        testForResponseBodyAsString((MethodDeclaration) methodUnderTest, resp, body);
                     } else {
                         addCheckStatus(resp);
                     }
@@ -406,7 +412,7 @@ public class SpringTestGenerator extends  TestGenerator {
     }
 
     @Override
-    MethodDeclaration buildTestMethod(MethodDeclaration md) {
+    MethodDeclaration buildTestMethod(CallableDeclaration<?> md) {
         MethodDeclaration testMethod = super.buildTestMethod(md);
 
         NormalAnnotationExpr testCaseTypeAnnotation = new NormalAnnotationExpr();

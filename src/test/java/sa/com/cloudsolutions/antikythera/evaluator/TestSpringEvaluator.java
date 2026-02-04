@@ -137,9 +137,9 @@ class TestSpringEvaluator extends TestHelper {
     void testCreateTests() throws ReflectiveOperationException {
         SpringEvaluator evaluator = EvaluatorFactory.create("TestClass", SpringEvaluator.class);
 
-        // Access private currentMethod field via reflection
-        Field currentMethodField = SpringEvaluator.class.getDeclaredField("currentMethod");
-        currentMethodField.setAccessible(true);
+        // Access private currentCallable field via reflection
+        Field currentCallableField = SpringEvaluator.class.getDeclaredField("currentCallable");
+        currentCallableField.setAccessible(true);
 
         // Mock TestGenerator
         TestGenerator mockGenerator = mock(TestGenerator.class);
@@ -148,7 +148,7 @@ class TestSpringEvaluator extends TestHelper {
         // Create test data
         MethodDeclaration methodDecl = new MethodDeclaration()
                 .setName("testMethod");
-        currentMethodField.set(evaluator, methodDecl);
+        currentCallableField.set(evaluator, methodDecl);
 
         // Create a method response
         ResponseEntity<String> responseEntity = new ResponseEntity<>(HttpStatus.OK);
@@ -221,6 +221,21 @@ class TestSpringEvaluator extends TestHelper {
         FieldDeclaration fieldDecl = cu.findFirst(FieldDeclaration.class).get();
         VariableDeclarator variable = fieldDecl.getVariable(0);
         assertNull(evaluator.autoWire(variable, List.of(new TypeWrapper(AntikytheraRunTime.getTypeDeclaration(PERSON_REPO).orElseThrow()))));
+    }
+
+    @Test
+    void testVisitCapturesOutput() throws ReflectiveOperationException {
+        String cls = SERVICE_CLASS;
+        SpringEvaluator eval = EvaluatorFactory.create(cls, SpringEvaluator.class);
+        eval.setArgumentGenerator(new DummyArgumentGenerator());
+        MethodDeclaration md = eval.getCompilationUnit().findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals("utils")).orElseThrow();
+
+        eval.setOnTest(true);
+        AntikytheraRunTime.push(new Variable("Hello World"));
+        eval.visit(md);
+
+        assertTrue(outContent.toString().contains("Non empty!"));
     }
 }
 

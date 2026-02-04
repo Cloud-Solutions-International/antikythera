@@ -92,6 +92,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 
 
 /**
@@ -124,6 +126,7 @@ public class Evaluator implements EvaluationEngine {
      * The most recent return value that was encountered.
      */
     protected Variable returnValue;
+    private static final ThreadLocal<Boolean> executingToString = new ThreadLocal<>();
 
     /**
      * The parent block of the last executed return statement.
@@ -137,6 +140,7 @@ public class Evaluator implements EvaluationEngine {
     protected String variableName;
 
     protected TypeDeclaration<?> typeDeclaration;
+    protected ByteArrayOutputStream capturedOutputStream;
 
     private static long sequence = 0;
 
@@ -526,7 +530,11 @@ public class Evaluator implements EvaluationEngine {
             if (wrapper.getClazz() != null) {
                 Field field = wrapper.getClazz().getDeclaredField(fae.getNameAsString());
                 field.setAccessible(true);
-                return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), field.get(null));
+                Object value = field.get(null);
+                if (capturedOutputStream != null && (value == System.out || value == System.err)) {
+                    value = new PrintStream(capturedOutputStream, true);
+                }
+                return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), value);
             }
             Variable v = evaluateFieldAccessExpression(fae, wrapper.getType());
             if (v != null) {
@@ -1023,7 +1031,11 @@ public class Evaluator implements EvaluationEngine {
     private Variable evaluateScopedFieldAccess(Variable variable, Expression expr2) throws ReflectiveOperationException {
         if (variable.getClazz() != null && variable.getClazz().equals(System.class)) {
             Field field = System.class.getField(expr2.asFieldAccessExpr().getNameAsString());
-            variable = new Variable(field.get(null));
+            Object value = field.get(null);
+            if (capturedOutputStream != null && (value == System.out || value == System.err)) {
+                value = new PrintStream(capturedOutputStream, true);
+            }
+            variable = new Variable(value);
         } else if (variable.getValue() instanceof Evaluator eval) {
             Symbol s = eval.getValue(expr2, expr2.asFieldAccessExpr().getNameAsString());
             variable = (Variable) s;
@@ -1040,8 +1052,8 @@ public class Evaluator implements EvaluationEngine {
     @SuppressWarnings("java:S106")
     protected Object findScopeType(String s) {
         return switch (s) {
-            case "System.out" -> System.out;
-            case "System.err" -> System.err;
+            case "System.out" -> capturedOutputStream != null ? new PrintStream(capturedOutputStream, true) : System.out;
+            case "System.err" -> capturedOutputStream != null ? new PrintStream(capturedOutputStream, true) : System.err;
             case "System.in" -> System.in;
             default -> {
                 String fullyQualifiedName = AbstractCompiler.findFullyQualifiedName(cu, s);
@@ -1601,6 +1613,11 @@ public class Evaluator implements EvaluationEngine {
         executeMethod(md);
     }
 
+    @Override
+    public void visit(ConstructorDeclaration cd) throws ReflectiveOperationException {
+        executeConstructor(cd);
+    }
+
     /**
      * Execute a method represented by the CallableDeclaration
      *
@@ -2158,7 +2175,35 @@ public class Evaluator implements EvaluationEngine {
 
     @Override
     public String toString() {
-        return getClass().getName() + " : " + getClassName();
+        if (Boolean.TRUE.equals(executingToString.get())) {
+            return "Evaluator for " + getClassName() + " (recursive toString)";
+        }
+        try {
+            executingToString.set(Boolean.TRUE);
+            if (typeDeclaration != null) {
+                Optional<MethodDeclaration> toStringMd = typeDeclaration.getMethodsByName("toString").stream()
+                        .filter(md -> md.getParameters().isEmpty())
+                        .findFirst();
+                if (toStringMd.isPresent()) {
+                    Node origReturnFrom = returnFrom;
+                    Variable origReturnValue = returnValue;
+
+                    Variable v = executeMethod(toStringMd.get());
+
+                    returnFrom = origReturnFrom;
+                    returnValue = origReturnValue;
+
+                    if (v != null && v.getValue() != null) {
+                        return v.getValue().toString();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Error during symbolic toString", e);
+        } finally {
+            executingToString.remove();
+        }
+        return "Evaluator for " + getClassName();
     }
 
     public CompilationUnit getCompilationUnit() {
@@ -2263,5 +2308,26 @@ public class Evaluator implements EvaluationEngine {
                         }
                     });
         }
+    }
+
+    public void startOutputCapture() {
+        capturedOutputStream = new ByteArrayOutputStream();
+    }
+
+    public String stopOutputCapture() {
+        if (capturedOutputStream != null) {
+            String output = capturedOutputStream.toString();
+            capturedOutputStream = null;
+            return output;
+        }
+        return null;
+    }
+
+    public static Exception getLastException() {
+        return lastException;
+    }
+
+    public static void clearLastException() {
+        lastException = null;
     }
 }

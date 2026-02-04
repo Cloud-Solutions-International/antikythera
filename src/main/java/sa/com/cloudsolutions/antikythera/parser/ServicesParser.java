@@ -1,6 +1,8 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 
@@ -25,7 +27,7 @@ import java.io.IOException;
 import java.util.Set;
 
 
-public class ServicesParser {
+public class ServicesParser extends DepsolvingParser {
     private static final Logger logger = LoggerFactory.getLogger(ServicesParser.class);
 
     /**
@@ -33,11 +35,10 @@ public class ServicesParser {
      */
     private static final Stats stats = new Stats();
     boolean testPrivates = Settings.getProperty("test_privates", Boolean.class).orElse(false);
+    boolean generateConstructorTests = Settings.getProperty(Settings.GENERATE_CONSTRUCTOR_TESTS, Boolean.class).orElse(false);
 
-    Set<MethodDeclaration> methods = new java.util.HashSet<>();
-    CompilationUnit cu;
+    Set<CallableDeclaration<?>> methods = new java.util.HashSet<>();
     String cls;
-    SpringEvaluator evaluator;
     UnitTestGenerator generator;
 
     public ServicesParser(String cls) {
@@ -61,6 +62,14 @@ public class ServicesParser {
                     logger.debug("Skipping private method {}", md.getNameAsString());
                 }
             });
+            if (generateConstructorTests) {
+                decl.findAll(ConstructorDeclaration.class).forEach(cd -> {
+                    if (!cd.isPrivate() || testPrivates) {
+                        Graph.createGraphNode(cd);
+                        methods.add(cd);
+                    }
+                });
+            }
             solver.dfs();
         }
         eval();
@@ -75,15 +84,23 @@ public class ServicesParser {
                     methods.add(md);
                 }
             });
+            if (generateConstructorTests) {
+                decl.findAll(ConstructorDeclaration.class).forEach(cd -> {
+                    if ((!cd.isPrivate() || testPrivates ) && cd.getNameAsString().equals(method)) {
+                        Graph.createGraphNode(cd);
+                        methods.add(cd);
+                    }
+                });
+            }
             solver.dfs();
         }
         eval();
     }
 
     private void eval() {
-        for (MethodDeclaration md : methods) {
+        for (CallableDeclaration<?> md : methods) {
             stats.methods++;
-            evaluateMethod(md, new DummyArgumentGenerator());
+            evaluateCallable(md, new DummyArgumentGenerator());
         }
     }
 
@@ -95,29 +112,22 @@ public class ServicesParser {
         // This is expected and we can safely skip writing files
     }
 
+    @Override
     public void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen) {
+        evaluateCallable(md, gen);
+    }
+
+    @Override
+    public void evaluateCallable(CallableDeclaration<?> md, ArgumentGenerator gen) {
         generator = (UnitTestGenerator) Factory.create("unit", cu);
         generator.addBeforeClass();
 
-        evaluator = EvaluatorFactory.create(cls, SpringEvaluator.class);
+        TypeDeclaration<?> type = md.findAncestor(TypeDeclaration.class).orElse(null);
+        String targetCls = type != null ? type.getFullyQualifiedName().orElse(cls) : cls;
+        evaluator = EvaluatorFactory.create(targetCls, SpringEvaluator.class);
         evaluator.addGenerator(generator);
         evaluator.setOnTest(true);
-        evaluator.setArgumentGenerator(gen);
-        evaluator.reset();
-        Branching.clear();
-        AntikytheraRunTime.reset();
-        try {
-            evaluator.visit(md);
-
-        } catch (AntikytheraException | ReflectiveOperationException e) {
-            if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
-                logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
-            } else {
-                throw new GeneratorException(e);
-            }
-        } finally {
-            logger.info(md.getNameAsString());
-        }
+        super.evaluateCallable(md, gen);
     }
 
 }
