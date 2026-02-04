@@ -939,7 +939,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
             return new Variable(response);
         }
-        v.setType(type);
+        if (v != null) {
+            v.setType(type);
+        }
         return v;
     }
 
