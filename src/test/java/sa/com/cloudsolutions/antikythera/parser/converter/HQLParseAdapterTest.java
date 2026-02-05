@@ -167,6 +167,65 @@ class HQLParseAdapterTest extends TestHelper {
         assertEquals(sql, result);
     }
 
+    // ========== LIKE Wildcard Preprocessing Tests ==========
+
+    @Test
+    void testPreprocessLikeWildcards_BothWildcards() {
+        String query = "SELECT u FROM User u WHERE u.name LIKE %:searchTerm%";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT u FROM User u WHERE u.name LIKE CONCAT('%', :searchTerm, '%')", result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_PrefixWildcard() {
+        String query = "SELECT u FROM User u WHERE u.name LIKE %:searchTerm";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT u FROM User u WHERE u.name LIKE CONCAT('%', :searchTerm)", result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_SuffixWildcard() {
+        String query = "SELECT u FROM User u WHERE u.name LIKE :searchTerm%";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT u FROM User u WHERE u.name LIKE CONCAT(:searchTerm, '%')", result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_WithSpEL() {
+        String query = "SELECT u FROM User u WHERE u.name LIKE %:#{#search.term}%";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT u FROM User u WHERE u.name LIKE CONCAT('%', :#{#search.term}, '%')", result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_MultipleConditions() {
+        String query = "SELECT u FROM User u WHERE (u.name LIKE %:term% OR u.email LIKE %:term%)";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT u FROM User u WHERE (u.name LIKE CONCAT('%', :term, '%') OR u.email LIKE CONCAT('%', :term, '%'))", result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_NoWildcards() {
+        String query = "SELECT u FROM User u WHERE u.name LIKE :searchTerm";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        // No change expected
+        assertEquals(query, result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_CaseInsensitive() {
+        String query = "SELECT u FROM User u WHERE u.name like %:searchTerm%";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT u FROM User u WHERE u.name like CONCAT('%', :searchTerm, '%')", result);
+    }
+
     @Test
     void testRemoveASFromConstructorExpressions_SimpleCase() {
         String query = "SELECT NEW com.example.DTO(SUM(amount) AS total, COUNT(*) AS count) FROM Order o";

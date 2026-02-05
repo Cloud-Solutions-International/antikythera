@@ -37,6 +37,17 @@ public class HQLParserAdapter {
     private static final Pattern SPEL_PATTERN = Pattern.compile(":#\\{#([^}]+?)\\}");
     private static final Pattern CONSTRUCTOR_PATTERN = Pattern.compile("(?i)(SELECT\\s+NEW\\s+[\\w.]+\\s*\\()",
             Pattern.DOTALL);
+    /*
+     * Patterns to match Spring Data JPA wildcard syntax around parameters.
+     * These are invalid in HQL/JPQL and need to be converted to CONCAT expressions.
+     * Handles both regular parameters (:param) and SpEL expressions (:#{#...})
+     */
+    private static final Pattern LIKE_BOTH_WILDCARDS = Pattern.compile(
+            "(?i)(LIKE\\s+)%(:\\w+|:#\\{#[^}]+\\})%");
+    private static final Pattern LIKE_PREFIX_WILDCARD = Pattern.compile(
+            "(?i)(LIKE\\s+)%(:\\w+|:#\\{#[^}]+\\})(?!%)");
+    private static final Pattern LIKE_SUFFIX_WILDCARD = Pattern.compile(
+            "(?i)(LIKE\\s+)(:\\w+|:#\\{#[^}]+\\})%");
     // Pattern to find CAST keywords (used as a starting point, actual matching uses
     // parenthesis balancing)
     private static final Pattern CAST_KEYWORD_PATTERN = Pattern.compile("(?i)CAST\\s*\\(");
@@ -63,8 +74,11 @@ public class HQLParserAdapter {
      * @throws QueryConversionException if the conversion fails
      */
     public ConversionResult convertToNativeSQL(String jpaQuery) throws ParseException, ConversionException {
+        // Preprocess: Convert Spring Data JPA wildcard syntax to valid HQL CONCAT
+        String query = preprocessLikeWildcards(jpaQuery);
+
         // Preprocess: Replace SpEL expressions with simple named parameters
-        SpELPreprocessingResult preprocessing = preprocessSpELExpressions(jpaQuery);
+        SpELPreprocessingResult preprocessing = preprocessSpELExpressions(query);
         String preprocessedQuery = preprocessing.preprocessedQuery;
 
         // Preprocess: Remove AS aliases from inside SELECT NEW constructor expressions
@@ -314,6 +328,46 @@ public class HQLParserAdapter {
             String original = entry.getValue();
             result = result.replace(replacement, original);
         }
+        return result;
+    }
+
+    /**
+     * Preprocesses Spring Data JPA wildcard syntax around LIKE parameters.
+     * Converts invalid syntax like "LIKE %:param%" to valid HQL "LIKE CONCAT('%', :param, '%')".
+     *
+     * Spring Data JPA allows:
+     *   LIKE %:param%  (wildcards on both sides)
+     *   LIKE %:param   (prefix wildcard only)
+     *   LIKE :param%   (suffix wildcard only)
+     *
+     * These are converted to standard HQL CONCAT expressions.
+     *
+     * @param query The original query with potential wildcard syntax
+     * @return The query with wildcards converted to CONCAT expressions
+     */
+    String preprocessLikeWildcards(String query) {
+        String result = query;
+
+        // Order matters: handle both-wildcards first, then prefix, then suffix
+        // to avoid partial replacements
+
+        // LIKE %:param% -> LIKE CONCAT('%', :param, '%')
+        Matcher bothMatcher = LIKE_BOTH_WILDCARDS.matcher(result);
+        result = bothMatcher.replaceAll("$1CONCAT('%', $2, '%')");
+
+        // LIKE %:param -> LIKE CONCAT('%', :param)
+        Matcher prefixMatcher = LIKE_PREFIX_WILDCARD.matcher(result);
+        result = prefixMatcher.replaceAll("$1CONCAT('%', $2)");
+
+        // LIKE :param% -> LIKE CONCAT(:param, '%')
+        Matcher suffixMatcher = LIKE_SUFFIX_WILDCARD.matcher(result);
+        result = suffixMatcher.replaceAll("$1CONCAT($2, '%')");
+
+        if (!result.equals(query)) {
+            logger.debug("Converted LIKE wildcards: {} -> {}", query.substring(0, Math.min(100, query.length())),
+                    result.substring(0, Math.min(100, result.length())));
+        }
+
         return result;
     }
 
