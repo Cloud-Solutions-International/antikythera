@@ -211,6 +211,11 @@ public class AbstractCompiler {
         }
     }
 
+    /**
+     * Resets the compiler state by re-initializing the parser configuration and type solvers.
+     *
+     * @throws IOException if an I/O error occurs during setup
+     */
     public static void reset() throws IOException {
         setupParser();
     }
@@ -262,6 +267,14 @@ public class AbstractCompiler {
         return findWrappedTypes(cu.get(), type);
     }
 
+    /**
+     * Resolves the type wrapper for a given Type node within a compilation unit.
+     * Handles generic type arguments by resolving them recursively.
+     *
+     * @param cu   the compilation unit containing the type
+     * @param type the type to resolve
+     * @return a list of TypeWrappers, including the main type and its generic arguments if any
+     */
     public static List<TypeWrapper> findWrappedTypes(CompilationUnit cu, Type type) {
         if (type.isClassOrInterfaceType()) {
             ClassOrInterfaceType classType = type.asClassOrInterfaceType();
@@ -417,6 +430,11 @@ public class AbstractCompiler {
         return false;
     }
 
+    /**
+     * Gets the configured JavaParser instance.
+     *
+     * @return the JavaParser instance
+     */
     public static JavaParser getJavaParser() {
         return javaParser;
     }
@@ -562,6 +580,13 @@ public class AbstractCompiler {
         return false;
     }
 
+    /**
+     * Finds the fully qualified name for a given Type.
+     *
+     * @param cu the compilation unit context
+     * @param t  the type to resolve
+     * @return the fully qualified name, or null if it cannot be resolved
+     */
     public static String findFullyQualifiedName(CompilationUnit cu, Type t) {
         if (t instanceof ClassOrInterfaceType ctype) {
             return findFullyQualifiedName(cu, ctype.getNameAsString());
@@ -635,6 +660,13 @@ public class AbstractCompiler {
         return findFullyQualifiedName(cu, type);
     }
 
+    /**
+     * Finds the TypeWrapper for a given Type.
+     *
+     * @param cu   the compilation unit context
+     * @param type the type to resolve
+     * @return the TypeWrapper representing the type, or null if not found
+     */
     public static TypeWrapper findType(CompilationUnit cu, Type type) {
         if (type instanceof ClassOrInterfaceType ctype) {
             TypeWrapper wrapper = findType(cu, ctype.getNameAsString());
@@ -803,6 +835,13 @@ public class AbstractCompiler {
         }
     }
 
+    /**
+     * Finds import wrappers related to a specific type, including its generic type arguments.
+     *
+     * @param cu the compilation unit context
+     * @param t  the type to look for imports for
+     * @return a list of ImportWrapper objects
+     */
     public static List<ImportWrapper> findImport(CompilationUnit cu, Type t) {
         List<ImportWrapper> imports = new ArrayList<>();
         if (t.isClassOrInterfaceType()) {
@@ -980,6 +1019,13 @@ public class AbstractCompiler {
         return null;
     }
 
+    /**
+     * Finds a constructor declaration matching the given method call expression.
+     *
+     * @param methodCall the method call wrapper containing arguments to match
+     * @param decl       the type declaration to search for constructors
+     * @return an Optional containing the Callable if a matching constructor is found
+     */
     public static Optional<Callable> findConstructorDeclaration(MCEWrapper methodCall,
             TypeDeclaration<?> decl) {
         int found = -1;
@@ -1009,11 +1055,26 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
+    /**
+     * Finds a method declaration matching the given method call expression, considering overrides.
+     *
+     * @param methodCall the method call wrapper
+     * @param decl       the type declaration to search in
+     * @return an Optional containing the Callable if a matching method is found
+     */
     public static Optional<Callable> findMethodDeclaration(MCEWrapper methodCall,
             TypeDeclaration<?> decl) {
         return findMethodDeclaration(methodCall, decl, true);
     }
 
+    /**
+     * Finds a method declaration matching the given method call expression.
+     *
+     * @param methodCall the method call wrapper
+     * @param decl       the type declaration to search in
+     * @param overRides  whether to search in parent classes/interfaces
+     * @return an Optional containing the Callable if a matching method is found
+     */
     public static Optional<Callable> findMethodDeclaration(MCEWrapper methodCall,
             TypeDeclaration<?> decl, boolean overRides) {
 
@@ -1113,6 +1174,13 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
+    /**
+     * Finds either a method or constructor declaration matching the call expression.
+     *
+     * @param methodCall the method call wrapper
+     * @param decl       the type declaration to search in
+     * @return an Optional containing the Callable if found
+     */
     public static Optional<Callable> findCallableDeclaration(MCEWrapper methodCall,
             TypeDeclaration<?> decl) {
         if (methodCall.getMethodCallExpr() instanceof MethodCallExpr) {
@@ -1250,6 +1318,12 @@ public class AbstractCompiler {
         }
     }
 
+    /**
+     * Finds the enclosing type declaration (Class, Interface, Enum, or Annotation) for a given node.
+     *
+     * @param n the node to start searching from
+     * @return the enclosing TypeDeclaration, or null if not found
+     */
     @SuppressWarnings("java:S1452")
     public static TypeDeclaration<?> getEnclosingType(Node n) {
         if (n instanceof ClassOrInterfaceDeclaration cdecl) {
@@ -1270,6 +1344,12 @@ public class AbstractCompiler {
         return null;
     }
 
+    /**
+     * Converts a literal expression to its corresponding Type.
+     *
+     * @param literal the literal expression (e.g., "string", 1, true)
+     * @return the Type representing the literal, or UnknownType if not recognized
+     */
     public static Type convertLiteralToType(LiteralExpr literal) {
         if (literal.isBooleanLiteralExpr()) {
             return PrimitiveType.booleanType();
@@ -1308,6 +1388,12 @@ public class AbstractCompiler {
         return null; // No block statement found
     }
 
+    /**
+     * Finds the expression statement that contains the given method call.
+     *
+     * @param methodCall the method call expression
+     * @return an Optional containing the ExpressionStmt if found
+     */
     public static Optional<ExpressionStmt> findExpressionStatement(MethodCallExpr methodCall) {
         Node n = methodCall;
         while (n != null && !(n instanceof MethodDeclaration)) {
@@ -1322,6 +1408,13 @@ public class AbstractCompiler {
         return Optional.empty();
     }
 
+    /**
+     * Checks if a class is declared as final.
+     *
+     * @param t               the type to check
+     * @param compilationUnit the compilation unit context
+     * @return true if the class is final, false otherwise
+     */
     public static boolean isFinalClass(Type t, CompilationUnit compilationUnit) {
         String fullClassName = AbstractCompiler.findFullyQualifiedName(compilationUnit, t);
 
@@ -1345,6 +1438,12 @@ public class AbstractCompiler {
         return false;
     }
 
+    /**
+     * Creates a Type object from a TypeDeclaration.
+     *
+     * @param typeDecl the type declaration
+     * @return a Type representing the declaration
+     */
     public static Type typeFromDeclaration(TypeDeclaration<?> typeDecl) {
         return new ClassOrInterfaceType()
                 .setName(typeDecl.getNameAsString())
@@ -1382,6 +1481,12 @@ public class AbstractCompiler {
         return name;
     }
 
+    /**
+     * Extracts the short class name from a fully qualified name.
+     *
+     * @param name the fully qualified name
+     * @return the short name (everything after the last dot)
+     */
     public static String fullyQualifiedToShortName(String name) {
         int index = name.lastIndexOf(".");
         if (index > 0) {
@@ -1390,10 +1495,21 @@ public class AbstractCompiler {
         return name;
     }
 
+    /**
+     * Gets the class loader used by the compiler.
+     *
+     * @return the class loader
+     */
     public static ClassLoader getClassLoader() {
         return loader;
     }
 
+    /**
+     * Converts a variable name (instance name) to a class name convention (CamelCase).
+     *
+     * @param string the variable name
+     * @return the class name (capitalized first letter)
+     */
     public static String instanceToClassName(String string) {
         return string.substring(0, 1).toUpperCase() + string.substring(1);
     }
