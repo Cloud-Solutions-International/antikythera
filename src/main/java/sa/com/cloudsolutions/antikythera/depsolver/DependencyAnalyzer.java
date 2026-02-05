@@ -102,7 +102,7 @@ public class DependencyAnalyzer {
      * @param methods The methods to analyze
      * @return Set of GraphNodes representing all discovered dependencies
      */
-    public Set<GraphNode> collectDependencies(Collection<MethodDeclaration> methods) {
+    public Set<GraphNode> collectDependencies(Collection<? extends CallableDeclaration<?>> methods) {
         return collectDependencies(methods, null);
     }
 
@@ -114,12 +114,12 @@ public class DependencyAnalyzer {
      * @return Set of GraphNodes representing all discovered dependencies
      */
     public Set<GraphNode> collectDependencies(
-            Collection<MethodDeclaration> methods,
+            Collection<? extends CallableDeclaration<?>> methods,
             Predicate<GraphNode> filter) {
         resetAnalysis();
 
         // Initialize graph nodes for input methods
-        for (MethodDeclaration method : methods) {
+        for (CallableDeclaration<?> method : methods) {
             createAnalysisNode(method);
         }
 
@@ -144,7 +144,7 @@ public class DependencyAnalyzer {
      * @return Set of GraphNodes representing dependencies, excluding cycle classes
      */
     public Set<GraphNode> collectDependenciesExcluding(
-            Collection<MethodDeclaration> methods,
+            Collection<? extends CallableDeclaration<?>> methods,
             Set<String> cycleFqns) {
         return collectDependencies(methods, node -> {
             Optional<String> fqn = node.getEnclosingType().getFullyQualifiedName();
@@ -265,6 +265,9 @@ public class DependencyAnalyzer {
                 visitedSignatures.add(sig);
             }
 
+            // Ensure type initializers are discovered even if the type node is already visited
+            typeInitializerDiscovery(node);
+
             if (!node.isVisited()) {
                 node.setVisited(true);
 
@@ -276,7 +279,6 @@ public class DependencyAnalyzer {
                 methodSearch(node);
                 constructorSearch(node);
                 initializerSearch(node);
-                typeInitializerDiscovery(node);
             }
         }
     }
@@ -376,17 +378,6 @@ public class DependencyAnalyzer {
             node.processTypeArgument(returnType.asClassOrInterfaceType());
         }
 
-        // Handle generic type parameters
-        for (com.github.javaparser.ast.type.TypeParameter typeParameter : md.getTypeParameters()) {
-            for (ClassOrInterfaceType bound : typeParameter.getTypeBound()) {
-                node.processTypeArgument(bound);
-            }
-        }
-
-        for (Type thrownException : md.getThrownExceptions()) {
-            ImportUtils.addImport(node, thrownException);
-        }
-
         if (md.getAnnotationByName("Override").isPresent()) {
             findParentMethods(node, md);
         }
@@ -477,6 +468,17 @@ public class DependencyAnalyzer {
         onCallableDiscovered(node, cd);
 
         searchMethodParameters(node, cd.getParameters());
+
+        // Handle generic type parameters
+        for (com.github.javaparser.ast.type.TypeParameter typeParameter : cd.getTypeParameters()) {
+            for (ClassOrInterfaceType bound : typeParameter.getTypeBound()) {
+                node.processTypeArgument(bound);
+            }
+        }
+
+        for (Type thrownException : cd.getThrownExceptions()) {
+            ImportUtils.addImport(node, thrownException);
+        }
 
         names.clear();
         cd.accept(new VariableVisitor(), node);
@@ -637,7 +639,7 @@ public class DependencyAnalyzer {
                                 createAnalysisNode(cd);
                             }
                         });
-            } else if (n.isSuper()) {
+            } else {
                 visitConstructor(node, wrapper);
             }
             super.visit(n, node);
