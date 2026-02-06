@@ -171,47 +171,47 @@ class HQLParseAdapterTest extends TestHelper {
 
     @Test
     void testPreprocessLikeWildcards_BothWildcards() {
-        String query = "SELECT u FROM User u WHERE u.name LIKE %:searchTerm%";
+        String query = "SELECT c FROM Crop c WHERE c.variety LIKE %:searchTerm%";
         String result = adapter.preprocessLikeWildcards(query);
 
-        assertEquals("SELECT u FROM User u WHERE u.name LIKE CONCAT('%', :searchTerm, '%')", result);
+        assertEquals("SELECT c FROM Crop c WHERE c.variety LIKE CONCAT('%', :searchTerm, '%')", result);
     }
 
     @Test
     void testPreprocessLikeWildcards_PrefixWildcard() {
-        String query = "SELECT u FROM User u WHERE u.name LIKE %:searchTerm";
+        String query = "SELECT c FROM Crop c WHERE c.variety LIKE %:searchTerm";
         String result = adapter.preprocessLikeWildcards(query);
 
-        assertEquals("SELECT u FROM User u WHERE u.name LIKE CONCAT('%', :searchTerm)", result);
+        assertEquals("SELECT c FROM Crop c WHERE c.variety LIKE CONCAT('%', :searchTerm)", result);
     }
 
     @Test
     void testPreprocessLikeWildcards_SuffixWildcard() {
-        String query = "SELECT u FROM User u WHERE u.name LIKE :searchTerm%";
+        String query = "SELECT c FROM Crop c WHERE c.variety LIKE :searchTerm%";
         String result = adapter.preprocessLikeWildcards(query);
 
-        assertEquals("SELECT u FROM User u WHERE u.name LIKE CONCAT(:searchTerm, '%')", result);
+        assertEquals("SELECT c FROM Crop c WHERE c.variety LIKE CONCAT(:searchTerm, '%')", result);
     }
 
     @Test
     void testPreprocessLikeWildcards_WithSpEL() {
-        String query = "SELECT u FROM User u WHERE u.name LIKE %:#{#search.term}%";
+        String query = "SELECT c FROM Crop c WHERE c.variety LIKE %:#{#search.term}%";
         String result = adapter.preprocessLikeWildcards(query);
 
-        assertEquals("SELECT u FROM User u WHERE u.name LIKE CONCAT('%', :#{#search.term}, '%')", result);
+        assertEquals("SELECT c FROM Crop c WHERE c.variety LIKE CONCAT('%', :#{#search.term}, '%')", result);
     }
 
     @Test
     void testPreprocessLikeWildcards_MultipleConditions() {
-        String query = "SELECT u FROM User u WHERE (u.name LIKE %:term% OR u.email LIKE %:term%)";
+        String query = "SELECT f FROM Field f WHERE (f.fieldName LIKE %:term% OR f.soilType LIKE %:term%)";
         String result = adapter.preprocessLikeWildcards(query);
 
-        assertEquals("SELECT u FROM User u WHERE (u.name LIKE CONCAT('%', :term, '%') OR u.email LIKE CONCAT('%', :term, '%'))", result);
+        assertEquals("SELECT f FROM Field f WHERE (f.fieldName LIKE CONCAT('%', :term, '%') OR f.soilType LIKE CONCAT('%', :term, '%'))", result);
     }
 
     @Test
     void testPreprocessLikeWildcards_NoWildcards() {
-        String query = "SELECT u FROM User u WHERE u.name LIKE :searchTerm";
+        String query = "SELECT c FROM Crop c WHERE c.variety LIKE :searchTerm";
         String result = adapter.preprocessLikeWildcards(query);
 
         // No change expected
@@ -220,10 +220,10 @@ class HQLParseAdapterTest extends TestHelper {
 
     @Test
     void testPreprocessLikeWildcards_CaseInsensitive() {
-        String query = "SELECT u FROM User u WHERE u.name like %:searchTerm%";
+        String query = "SELECT c FROM Crop c WHERE c.variety like %:searchTerm%";
         String result = adapter.preprocessLikeWildcards(query);
 
-        assertEquals("SELECT u FROM User u WHERE u.name like CONCAT('%', :searchTerm, '%')", result);
+        assertEquals("SELECT c FROM Crop c WHERE c.variety like CONCAT('%', :searchTerm, '%')", result);
     }
 
     @Test

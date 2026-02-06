@@ -535,8 +535,8 @@ class BaseRepositoryParserTest {
         String mongoRepoCode = """
                 package com.example.repository;
                 import org.springframework.data.mongodb.repository.MongoRepository;
-                public interface DocumentRepository extends MongoRepository<Document, String> {
-                    Document findByTitle(String title);
+                public interface CropYieldRepository extends MongoRepository<CropYield, String> {
+                    CropYield findBySeason(String season);
                 }
                 """;
         CompilationUnit cu = StaticJavaParser.parse(mongoRepoCode);
@@ -554,8 +554,8 @@ class BaseRepositoryParserTest {
         String reactiveMongoRepoCode = """
                 package com.example.repository;
                 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
-                public interface ReactiveDocumentRepository extends ReactiveMongoRepository<Document, String> {
-                    reactor.core.publisher.Mono<Document> findByTitle(String title);
+                public interface ReactiveHarvestRepository extends ReactiveMongoRepository<Harvest, String> {
+                    reactor.core.publisher.Mono<Harvest> findByCropType(String cropType);
                 }
                 """;
         CompilationUnit cu = StaticJavaParser.parse(reactiveMongoRepoCode);

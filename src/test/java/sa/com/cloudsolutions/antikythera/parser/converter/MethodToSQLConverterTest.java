@@ -291,51 +291,51 @@ class MethodToSQLConverterTest {
     void testBuildSelectAndWhereClauses_FindAllByIsActive() {
         StringBuilder sql = new StringBuilder();
         List<String> components = List.of("findAllBy", "IsActive");
-        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "appointment_schedule");
-        assertEquals("SELECT * FROM appointment_schedule WHERE is_active = ? ", sql.toString());
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "irrigation_schedules");
+        assertEquals("SELECT * FROM irrigation_schedules WHERE is_active = ? ", sql.toString());
     }
 
     @Test
     void testExtractComponents_ExistsAllByAvailable() {
-        List<String> components = MethodToSQLConverter.extractComponents("existsAllByAvailableAndResourceLinkInAndLevel");
-        assertEquals(List.of("existsAllBy", "Available", "And", "ResourceLink", "In", "And", "Level"), components);
+        List<String> components = MethodToSQLConverter.extractComponents("existsAllByAvailableAndFieldIdInAndSoilType");
+        assertEquals(List.of("existsAllBy", "Available", "And", "FieldId", "In", "And", "SoilType"), components);
     }
 
     @Test
     void testBuildSelectAndWhereClauses_ExistsAllBy() {
         StringBuilder sql = new StringBuilder();
-        List<String> components = List.of("existsAllBy", "Available", "And", "ResourceLink", "In");
-        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "resources");
+        List<String> components = List.of("existsAllBy", "Available", "And", "FieldId", "In");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "farm_equipment");
         // Note: There's a space before IN (?) due to the appendDefaultComponent logic
-        assertEquals("SELECT EXISTS (SELECT 1 FROM resources WHERE available = ?  AND resource_link  IN (?) ", sql.toString());
+        assertEquals("SELECT EXISTS (SELECT 1 FROM farm_equipment WHERE available = ?  AND field_id  IN (?) ", sql.toString());
     }
 
     @Test
     void testExtractComponents_CountAllByStatus() {
-        List<String> components = MethodToSQLConverter.extractComponents("countAllByStatus");
-        assertEquals(List.of("countAllBy", "Status"), components);
+        List<String> components = MethodToSQLConverter.extractComponents("countAllByCropStatus");
+        assertEquals(List.of("countAllBy", "CropStatus"), components);
     }
 
     @Test
     void testBuildSelectAndWhereClauses_CountAllBy() {
         StringBuilder sql = new StringBuilder();
-        List<String> components = List.of("countAllBy", "Status");
-        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "orders");
-        assertEquals("SELECT COUNT(*) FROM orders WHERE status = ? ", sql.toString());
+        List<String> components = List.of("countAllBy", "CropStatus");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "plantings");
+        assertEquals("SELECT COUNT(*) FROM plantings WHERE crop_status = ? ", sql.toString());
     }
 
     @Test
     void testExtractComponents_DeleteAllByExpired() {
-        List<String> components = MethodToSQLConverter.extractComponents("deleteAllByExpiredIsTrue");
-        assertEquals(List.of("deleteAllBy", "Expired", "IsTrue"), components);
+        List<String> components = MethodToSQLConverter.extractComponents("deleteAllBySpoiledIsTrue");
+        assertEquals(List.of("deleteAllBy", "Spoiled", "IsTrue"), components);
     }
 
     @Test
     void testBuildSelectAndWhereClauses_DeleteAllBy() {
         StringBuilder sql = new StringBuilder();
-        List<String> components = List.of("deleteAllBy", "Expired", "IsTrue");
-        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "sessions");
-        assertEquals("DELETE FROM sessions WHERE expired = true ", sql.toString());
+        List<String> components = List.of("deleteAllBy", "Spoiled", "IsTrue");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "grain_storage");
+        assertEquals("DELETE FROM grain_storage WHERE spoiled = true ", sql.toString());
     }
 
     @Test
