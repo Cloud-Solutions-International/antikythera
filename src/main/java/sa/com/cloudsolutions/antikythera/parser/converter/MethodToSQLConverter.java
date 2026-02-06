@@ -303,30 +303,84 @@ public final class MethodToSQLConverter {
      * keyword.
      * For example, convert "findUserByEmail" to "findByEmail" so downstream parsing
      * recognizes the query type correctly. This mirrors Spring Data semantics where
-     * the
-     * part between the verb and "By" is the (optional) subject and does not affect
-     * the
-     * predicate parsing.
+     * the part between the verb and "By" is the (optional) subject and does not affect
+     * the predicate parsing.
      *
-     * Only applies to names starting with the verb "find" to keep the change
-     * conservative.
+     * Handles all query verbs: find, exists, count, delete, read, query, search, stream, remove.
      */
     private static String normalizeFindSubject(String methodName) {
-        if (!methodName.startsWith("find")) {
+        // Try to normalize each query verb type
+        // IMPORTANT: Check longer prefixes first (e.g., existsAll before exists)
+        // to avoid incorrect matches
+
+        String result = tryNormalizeVerb(methodName, "find", FIND_BY,
+                FIND_FIRST_BY, FIND_TOP_BY, FIND_DISTINCT_BY, FIND_ALL_BY_ID, FIND_ALL_BY, FIND_ALL);
+        if (!result.equals(methodName)) return result;
+
+        // Check existsAll before exists
+        result = tryNormalizeVerb(methodName, "existsAll", EXISTS_ALL_BY);
+        if (!result.equals(methodName)) return result;
+        result = tryNormalizeVerb(methodName, "exists", EXISTS_BY);
+        if (!result.equals(methodName)) return result;
+
+        // Check countAll before count
+        result = tryNormalizeVerb(methodName, "countAll", COUNT_ALL_BY);
+        if (!result.equals(methodName)) return result;
+        result = tryNormalizeVerb(methodName, "count", COUNT_BY);
+        if (!result.equals(methodName)) return result;
+
+        // Check deleteAll before delete
+        result = tryNormalizeVerb(methodName, "deleteAll", DELETE_ALL_BY);
+        if (!result.equals(methodName)) return result;
+        result = tryNormalizeVerb(methodName, "delete", DELETE_BY);
+        if (!result.equals(methodName)) return result;
+
+        result = tryNormalizeVerb(methodName, "remove", REMOVE_BY);
+        if (!result.equals(methodName)) return result;
+
+        result = tryNormalizeVerb(methodName, "read", READ_BY);
+        if (!result.equals(methodName)) return result;
+
+        result = tryNormalizeVerb(methodName, "query", QUERY_BY);
+        if (!result.equals(methodName)) return result;
+
+        result = tryNormalizeVerb(methodName, "search", SEARCH_BY);
+        if (!result.equals(methodName)) return result;
+
+        result = tryNormalizeVerb(methodName, "stream", STREAM_BY);
+        if (!result.equals(methodName)) return result;
+
+        return methodName;
+    }
+
+    /**
+     * Tries to normalize a method name for a specific query verb.
+     *
+     * @param methodName the method name to normalize
+     * @param verb the query verb (e.g., "find", "exists", "count")
+     * @param recognizedPrefixes the already-recognized prefixes that should not be normalized
+     * @return the normalized method name, or the original if no normalization was needed
+     */
+    private static String tryNormalizeVerb(String methodName, String verb, String... recognizedPrefixes) {
+        if (!methodName.startsWith(verb)) {
             return methodName;
         }
-        // Do not normalize when the method already uses a recognized find* query type
-        if (methodName.startsWith(FIND_BY)
-                || methodName.startsWith(FIND_FIRST_BY)
-                || methodName.startsWith(FIND_TOP_BY)
-                || methodName.startsWith(FIND_DISTINCT_BY)
-                || methodName.startsWith(FIND_ALL_BY_ID)
-                || methodName.startsWith(FIND_ALL_BY)
-                || methodName.startsWith(FIND_ALL)) {
+
+        // Check if method already uses a recognized query type prefix
+        for (String prefix : recognizedPrefixes) {
+            if (methodName.startsWith(prefix)) {
+                return methodName;
+            }
+        }
+
+        // Check if this method would match a longer verb (e.g., "existsAll" vs "exists")
+        // If so, skip this verb and let the longer one handle it
+        if (methodStartsWithLongerVerb(methodName, verb)) {
             return methodName;
         }
-        // If the only occurrence of "By" is the one in "OrderBy", do not normalize.
-        int byIdx = methodName.indexOf("By", 4); // look for the first "By" after "find"
+
+        // Look for "By" after the verb
+        int byIdx = methodName.indexOf("By", verb.length());
         if (byIdx > 0) {
             // If this By is part of OrderBy, skip normalization to preserve ordering clause
             int orderStart = byIdx - "Order".length();
@@ -336,10 +390,28 @@ public final class MethodToSQLConverter {
                     return methodName;
                 }
             }
-            // Convert things like findSomethingByXxxYyy... -> findByXxxYyy...
-            return FIND_BY + methodName.substring(byIdx + 2);
+            // Convert things like existsSomethingByXxx... -> existsByXxx...
+            // Use the first recognized prefix as the normalized form
+            String normalizedPrefix = recognizedPrefixes.length > 0 ? recognizedPrefixes[0] : verb + "By";
+            return normalizedPrefix + methodName.substring(byIdx + 2);
         }
         return methodName;
+    }
+
+    /**
+     * Checks if the method name starts with a longer verb variant.
+     * For example, if checking "exists" verb, returns true if method starts with "existsAll".
+     */
+    private static boolean methodStartsWithLongerVerb(String methodName, String verb) {
+        // Map of shorter verbs to their longer variants
+        if ("exists".equals(verb) && methodName.startsWith("existsAll")) return true;
+        if ("count".equals(verb) && methodName.startsWith("countAll")) return true;
+        if ("delete".equals(verb) && methodName.startsWith("deleteAll")) return true;
+        if ("find".equals(verb) && (methodName.startsWith("findAll") ||
+                                     methodName.startsWith("findFirst") ||
+                                     methodName.startsWith("findTop") ||
+                                     methodName.startsWith("findDistinct"))) return true;
+        return false;
     }
 
     /**

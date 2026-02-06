@@ -431,4 +431,88 @@ class MethodToSQLConverterTest {
                 "findByStatusOrderByCreatedAtDescNameAsc");
         assertEquals(List.of("findBy", "Status", "OrderBy", "CreatedAt", "Desc", "Name", "Asc"), components);
     }
+
+    // ========== Subject Normalization Tests for All Query Verbs ==========
+
+    @Test
+    void testExtractComponents_ExistsWithSubject() {
+        // existsRecipientConfigByLocationId -> existsByLocationId (subject "RecipientConfig" is removed)
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "existsHarvestRecordByFarmIdAndSeasonAndCropType");
+        assertEquals(List.of("existsBy", "FarmId", "And", "Season", "And", "CropType"), components,
+                "Subject between 'exists' and 'By' should be normalized away");
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_ExistsWithSubject() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "existsHarvestRecordByFarmIdAndSeasonAndCropType");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "harvest_records");
+        assertTrue(sql.toString().contains("SELECT EXISTS"),
+                "Should generate EXISTS query: " + sql);
+        assertTrue(sql.toString().contains("farm_id"),
+                "Should have farm_id in WHERE clause: " + sql);
+    }
+
+    @Test
+    void testExtractComponents_CountWithSubject() {
+        // countCropsByFarmId -> countByFarmId
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "countCropsByFarmIdAndSeason");
+        assertEquals(List.of("countBy", "FarmId", "And", "Season"), components,
+                "Subject between 'count' and 'By' should be normalized away");
+    }
+
+    @Test
+    void testExtractComponents_DeleteWithSubject() {
+        // deleteSpoiledGrainByStorageId -> deleteByStorageId
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "deleteSpoiledGrainByStorageIdAndExpiryDateBefore");
+        assertEquals(List.of("deleteBy", "StorageId", "And", "ExpiryDate", "Before"), components,
+                "Subject between 'delete' and 'By' should be normalized away");
+    }
+
+    @Test
+    void testExtractComponents_ReadWithSubject() {
+        // readFieldDataByFieldId -> readByFieldId
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "readFieldDataByFieldIdAndSensorType");
+        assertEquals(List.of("readBy", "FieldId", "And", "SensorType"), components,
+                "Subject between 'read' and 'By' should be normalized away");
+    }
+
+    @Test
+    void testExtractComponents_QueryWithSubject() {
+        // queryIrrigationLogsByDate -> queryByDate
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "queryIrrigationLogsByDateAndFieldId");
+        assertEquals(List.of("queryBy", "Date", "And", "FieldId"), components,
+                "Subject between 'query' and 'By' should be normalized away");
+    }
+
+    @Test
+    void testExtractComponents_ExistsAllByWithSubject() {
+        // existsAllCropRecordsByFarmId -> existsAllByFarmId
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "existsAllCropRecordsByFarmIdAndIsActive");
+        assertEquals(List.of("existsAllBy", "FarmId", "And", "IsActive"), components,
+                "Subject between 'existsAll' and 'By' should be normalized away");
+    }
+
+    @Test
+    void testExtractComponents_ExistsByNotNormalized() {
+        // existsByFarmId should NOT be changed (already normalized)
+        List<String> components = MethodToSQLConverter.extractComponents("existsByFarmIdAndSeason");
+        assertEquals(List.of("existsBy", "FarmId", "And", "Season"), components);
+    }
+
+    @Test
+    void testExtractComponents_FindWithSubjectPreservesOrderBy() {
+        // findCropsByFarmIdOrderByPlantingDate should keep OrderBy intact
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "findCropsByFarmIdOrderByPlantingDateDesc");
+        assertEquals(List.of("findBy", "FarmId", "OrderBy", "PlantingDate", "Desc"), components,
+                "OrderBy should be preserved when normalizing subject");
+    }
 }
