@@ -370,4 +370,65 @@ class MethodToSQLConverterTest {
         MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
         assertEquals("SELECT * FROM users WHERE first_name = ?  AND last_name = ? ", sql.toString());
     }
+
+    @Test
+    void testExtractComponents_DescriptionNotSplitByDesc() {
+        // "Description" should NOT be split by "Desc" keyword - Desc is only for ORDER BY
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "findByFarmIdAndDescriptionIgnoreCaseAndIdNotAndIsActiveAndCropType");
+        assertEquals(List.of("findBy", "FarmId", "And", "Description", "IgnoreCase",
+                "And", "Id", "Not", "And", "IsActive", "And", "CropType"), components,
+                "Description should NOT be split into 'Desc' + 'ription'");
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_DescriptionField() {
+        // Verify SQL is correct when "Description" is used as a field name
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "FarmId", "And", "Description", "IgnoreCase",
+                "And", "Id", "Not", "And", "IsActive", "And", "CropType");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "harvest_records");
+        assertEquals("SELECT * FROM harvest_records WHERE farm_id = ?  AND description = ?  AND id != ?  AND is_active = ?  AND crop_type = ? ",
+                sql.toString());
+    }
+
+    @Test
+    void testExtractComponents_DescendingFieldNotSplitByDesc() {
+        // "Descending" field name should not be split by "Desc"
+        List<String> components = MethodToSQLConverter.extractComponents("findByDescendingOrder");
+        assertEquals(List.of("findBy", "DescendingOrder"), components,
+                "DescendingOrder should be a single field, not split by Desc");
+    }
+
+    @Test
+    void testExtractComponents_DescInOrderByContext() {
+        // "Desc" after OrderBy SHOULD be recognized as the DESC keyword
+        List<String> components = MethodToSQLConverter.extractComponents("findByNameOrderByCreatedAtDesc");
+        assertEquals(List.of("findBy", "Name", "OrderBy", "CreatedAt", "Desc"), components,
+                "Desc after OrderBy should be recognized as DESC keyword");
+    }
+
+    @Test
+    void testExtractComponents_AscriptionNotSplitByAsc() {
+        // "Ascription" field name should not be split by "Asc"
+        List<String> components = MethodToSQLConverter.extractComponents("findByAscriptionAndName");
+        assertEquals(List.of("findBy", "Ascription", "And", "Name"), components,
+                "Ascription should be a single field, not split by Asc");
+    }
+
+    @Test
+    void testExtractComponents_AscInOrderByContext() {
+        // "Asc" after OrderBy SHOULD be recognized as the ASC keyword
+        List<String> components = MethodToSQLConverter.extractComponents("findByNameOrderByCreatedAtAsc");
+        assertEquals(List.of("findBy", "Name", "OrderBy", "CreatedAt", "Asc"), components,
+                "Asc after OrderBy should be recognized as ASC keyword");
+    }
+
+    @Test
+    void testExtractComponents_MultipleOrderByFieldsWithDescAsc() {
+        // Multiple ORDER BY fields with mixed Desc/Asc
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "findByStatusOrderByCreatedAtDescNameAsc");
+        assertEquals(List.of("findBy", "Status", "OrderBy", "CreatedAt", "Desc", "Name", "Asc"), components);
+    }
 }

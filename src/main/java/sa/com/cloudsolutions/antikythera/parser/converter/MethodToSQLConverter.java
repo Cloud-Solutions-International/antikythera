@@ -75,7 +75,13 @@ public final class MethodToSQLConverter {
             NOT_IN, IS_TRUE, IS_FALSE, TRUE, FALSE, IS, EQUAL, CONTAINING, STARTING_WITH, ENDING_WITH);
 
     private static final List<String> MODIFIERS = List.of(
-            BaseRepositoryParser.ORDER_BY, DESC, ASC, IGNORE_CASE, ALL_IGNORE_CASE);
+            BaseRepositoryParser.ORDER_BY, IGNORE_CASE, ALL_IGNORE_CASE);
+
+    /**
+     * Keywords that are only valid in ORDER BY context.
+     * These should NOT be matched as keywords when parsing field names.
+     */
+    private static final List<String> ORDER_BY_ONLY_KEYWORDS = List.of(DESC, ASC);
 
     /**
      * Set of operators that do not require an equals sign to be appended.
@@ -100,6 +106,7 @@ public final class MethodToSQLConverter {
      * - Field names start with lowercase letters (e.g., eApprovalStatus)
      * - Keywords are followed by lowercase letters (part of field names)
      * - Short keywords (In, Or, Not, Asc, Desc) that could be part of field names
+     * - Desc/Asc only recognized after OrderBy (not in "Description", "Ascending", etc.)
      *
      * @param methodName The method name to parse.
      * @return A list of components.
@@ -112,18 +119,23 @@ public final class MethodToSQLConverter {
         List<String> components = new ArrayList<>();
         List<String> keywords = getKeywordsByLengthDesc();
         int i = 0;
+        boolean inOrderByContext = false;
 
         while (i < methodName.length()) {
             // 1) Try to match a known keyword at the current index
-            String matchedKeyword = tryMatchKeyword(methodName, i, keywords);
+            String matchedKeyword = tryMatchKeyword(methodName, i, keywords, inOrderByContext);
             if (matchedKeyword != null) {
                 components.add(matchedKeyword);
                 i += matchedKeyword.length();
+                // Track when we enter ORDER BY context
+                if (BaseRepositoryParser.ORDER_BY.equals(matchedKeyword)) {
+                    inOrderByContext = true;
+                }
                 continue;
             }
 
             // 2) Otherwise scan a field token until the next valid keyword boundary
-            ScanResult scan = scanField(methodName, i, keywords);
+            ScanResult scan = scanField(methodName, i, keywords, inOrderByContext);
             i = scan.nextIndex;
             if (!scan.fieldToken.isEmpty()) {
                 components.add(scan.fieldToken);
@@ -134,19 +146,19 @@ public final class MethodToSQLConverter {
     }
 
     // Attempts to match a keyword at position 'index' using the same boundary rules
-    // as {@link #findNextKeyword(String, int, List)}.
-    private static String tryMatchKeyword(String methodName, int index, List<String> keywords) {
-        return findNextKeyword(methodName, index, keywords);
+    // as {@link #findNextKeyword(String, int, List, boolean)}.
+    private static String tryMatchKeyword(String methodName, int index, List<String> keywords, boolean inOrderByContext) {
+        return findNextKeyword(methodName, index, keywords, inOrderByContext);
     }
 
     // Scans characters from 'start' until a valid keyword boundary is reached,
     // returning the token and new index.
-    private static ScanResult scanField(String methodName, int start, List<String> keywords) {
+    private static ScanResult scanField(String methodName, int start, List<String> keywords, boolean inOrderByContext) {
         StringBuilder fieldName = new StringBuilder();
         int i = start;
 
         while (i < methodName.length()) {
-            String nextKeyword = findNextKeyword(methodName, i, keywords);
+            String nextKeyword = findNextKeyword(methodName, i, keywords, inOrderByContext);
             if (nextKeyword != null) {
                 break;
             }
@@ -158,13 +170,21 @@ public final class MethodToSQLConverter {
 
     // Returns a keyword that starts at 'index' and forms a valid boundary per rules
     // used previously; otherwise null.
-    private static String findNextKeyword(String methodName, int index, List<String> keywords) {
+    private static String findNextKeyword(String methodName, int index, List<String> keywords, boolean inOrderByContext) {
         for (String keyword : keywords) {
             if (!methodName.startsWith(keyword, index)) {
                 continue;
             }
 
             int keywordEnd = index + keyword.length();
+
+            // DESC/ASC are only keywords in ORDER BY context
+            if (ORDER_BY_ONLY_KEYWORDS.contains(keyword)) {
+                if (inOrderByContext && isGeneralOperatorBoundary(methodName, keywordEnd)) {
+                    return keyword;
+                }
+                continue; // Skip DESC/ASC when not in ORDER BY context
+            }
 
             if (isAlwaysKeyword(keyword)) {
                 return keyword;
@@ -271,6 +291,7 @@ public final class MethodToSQLConverter {
         allKeywords.addAll(QUERY_TYPES);
         allKeywords.addAll(OPERATORS);
         allKeywords.addAll(MODIFIERS);
+        allKeywords.addAll(ORDER_BY_ONLY_KEYWORDS);
 
         // Sort by length descending to match longest keywords first
         allKeywords.sort((a, b) -> b.length() - a.length());
