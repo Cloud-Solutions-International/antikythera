@@ -75,10 +75,10 @@ class HQLParseAdapterTest extends TestHelper {
     @MethodSource("spelPreprocessingProvider")
     void testPreprocessSpELExpressions(String query, String spelKey, String expectedMapping) {
         HQLParserAdapter.SpELPreprocessingResult result = adapter.preprocessSpELExpressions(query);
-        assertEquals("SELECT u FROM User u WHERE u.id = :userId", result.preprocessedQuery);
-        assertEquals(1, result.spelMapping.size());
-        assertTrue(result.spelMapping.containsKey(spelKey));
-        assertEquals(expectedMapping, result.spelMapping.get(spelKey));
+        assertEquals("SELECT u FROM User u WHERE u.id = :userId", result.preprocessedQuery());
+        assertEquals(1, result.spelMapping().size());
+        assertTrue(result.spelMapping().containsKey(spelKey));
+        assertEquals(expectedMapping, result.spelMapping().get(spelKey));
     }
 
     @Test
@@ -86,10 +86,10 @@ class HQLParseAdapterTest extends TestHelper {
         String query = "SELECT u FROM User u WHERE u.id = :#{#model.userId} AND u.name = :#{#model.userName}";
         HQLParserAdapter.SpELPreprocessingResult result = adapter.preprocessSpELExpressions(query);
 
-        assertEquals("SELECT u FROM User u WHERE u.id = :userId AND u.name = :userName", result.preprocessedQuery);
-        assertEquals(2, result.spelMapping.size());
-        assertTrue(result.spelMapping.containsKey(":#{#model.userId}"));
-        assertTrue(result.spelMapping.containsKey(":#{#model.userName}"));
+        assertEquals("SELECT u FROM User u WHERE u.id = :userId AND u.name = :userName", result.preprocessedQuery());
+        assertEquals(2, result.spelMapping().size());
+        assertTrue(result.spelMapping().containsKey(":#{#model.userId}"));
+        assertTrue(result.spelMapping().containsKey(":#{#model.userName}"));
     }
 
     @Test
@@ -100,17 +100,17 @@ class HQLParseAdapterTest extends TestHelper {
                 "(:#{#inPatientPhrSearchModel.getPayerGroupId()} IS NOT NULL))";
         HQLParserAdapter.SpELPreprocessingResult result = adapter.preprocessSpELExpressions(query);
 
-        assertTrue(result.preprocessedQuery.contains(":admissionId"));
-        assertTrue(result.preprocessedQuery.contains(":patientId"));
-        assertTrue(result.preprocessedQuery.contains(":payerGroupId"));
+        assertTrue(result.preprocessedQuery().contains(":admissionId"));
+        assertTrue(result.preprocessedQuery().contains(":patientId"));
+        assertTrue(result.preprocessedQuery().contains(":payerGroupId"));
         // Note: The same SpEL expression appears twice, but the mapping only stores
         // unique expressions
         // So we have 3 unique SpEL expressions: admissionId, patientId, and
         // getPayerGroupId()
-        assertEquals(3, result.spelMapping.size());
-        assertTrue(result.spelMapping.containsKey(":#{#inPatientPhrSearchModel.admissionId}"));
-        assertTrue(result.spelMapping.containsKey(":#{#inPatientPhrSearchModel.patientId}"));
-        assertTrue(result.spelMapping.containsKey(":#{#inPatientPhrSearchModel.getPayerGroupId()}"));
+        assertEquals(3, result.spelMapping().size());
+        assertTrue(result.spelMapping().containsKey(":#{#inPatientPhrSearchModel.admissionId}"));
+        assertTrue(result.spelMapping().containsKey(":#{#inPatientPhrSearchModel.patientId}"));
+        assertTrue(result.spelMapping().containsKey(":#{#inPatientPhrSearchModel.getPayerGroupId()}"));
     }
 
     @Test
@@ -118,8 +118,8 @@ class HQLParseAdapterTest extends TestHelper {
         String query = "SELECT u FROM User u WHERE u.id = :userId";
         HQLParserAdapter.SpELPreprocessingResult result = adapter.preprocessSpELExpressions(query);
 
-        assertEquals(query, result.preprocessedQuery);
-        assertEquals(0, result.spelMapping.size());
+        assertEquals(query, result.preprocessedQuery());
+        assertEquals(0, result.spelMapping().size());
     }
 
     @Test

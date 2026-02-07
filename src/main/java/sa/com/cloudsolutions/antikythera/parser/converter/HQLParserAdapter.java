@@ -363,28 +363,17 @@ public class HQLParserAdapter {
         Matcher suffixMatcher = LIKE_SUFFIX_WILDCARD.matcher(result);
         result = suffixMatcher.replaceAll("$1CONCAT($2, '%')");
 
-        if (!result.equals(query)) {
-            logger.debug("Converted LIKE wildcards: {} -> {}", query.substring(0, Math.min(100, query.length())),
-                    result.substring(0, Math.min(100, result.length())));
-        }
-
         return result;
     }
 
     /**
      * Result of SpEL preprocessing containing the preprocessed query and mappings.
+     *
+     * @param spelMapping    original -> replacement
+     * @param reverseMapping replacement -> original
      */
-    static class SpELPreprocessingResult {
-        final String preprocessedQuery;
-        final Map<String, String> spelMapping; // original -> replacement
-        final Map<String, String> reverseMapping; // replacement -> original
-
-        SpELPreprocessingResult(String preprocessedQuery, Map<String, String> spelMapping,
-                Map<String, String> reverseMapping) {
-            this.preprocessedQuery = preprocessedQuery;
-            this.spelMapping = spelMapping;
-            this.reverseMapping = reverseMapping;
-        }
+    record SpELPreprocessingResult(String preprocessedQuery, Map<String, String> spelMapping,
+                                       Map<String, String> reverseMapping) {
     }
 
     /**
@@ -615,6 +604,10 @@ public class HQLParserAdapter {
             }
         }
 
+        return broadSearchEntityName(name);
+    }
+
+    private String broadSearchEntityName(String name) {
         // Check 5: Search all resolved types for matching simple name
         for (Map.Entry<String, TypeWrapper> entry : AntikytheraRunTime.getResolvedTypes().entrySet()) {
             String fqn = entry.getKey();
