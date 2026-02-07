@@ -41,6 +41,7 @@ class TestAKBuddy extends TestHelper {
         mavenHelper.readPomFile();
         mavenHelper.buildJarPaths();
         AbstractCompiler.reset();
+        AntikytheraRunTime.resetAll();
         AbstractCompiler.preProcess();
     }
 
