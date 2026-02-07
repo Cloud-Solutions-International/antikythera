@@ -269,11 +269,14 @@ public class AbstractCompiler {
 
     /**
      * Resolves the type wrapper for a given Type node within a compilation unit.
-     * Handles generic type arguments by resolving them recursively.
-     *
-     * @param cu   the compilation unit containing the type
-     * @param type the type to resolve
-     * @return a list of TypeWrappers, including the main type and its generic arguments if any
+      * Resolves type information for a given Type node within a compilation unit.
+      * Handles generic type arguments by resolving them recursively.
+      *
+      * @param cu   the compilation unit containing the type
+      * @param type the type to resolve
+      * @return a list of TypeWrappers for the resolved types; entries may be {@code null}
+      *         when a type cannot be resolved, and the list may be empty if no types
+      *         can be resolved
      */
     public static List<TypeWrapper> findWrappedTypes(CompilationUnit cu, Type type) {
         if (type.isClassOrInterfaceType()) {

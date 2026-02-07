@@ -174,7 +174,7 @@ public class MavenHelper {
     /**
      * Gets the path to the currently loaded pom.xml file.
      *
-     * @return the Path of the pom.xml
+     * @return the Path of the pom.xml, or {@code null} if no POM has been loaded yet
      */
     public Path getPomPath() {
         return pomPath;
