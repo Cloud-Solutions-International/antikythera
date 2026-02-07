@@ -45,7 +45,6 @@ public class Antikythera {
     private final Collection<String> services;
     private static MavenHelper mavenHelper;
 
-
     private Antikythera() {
         controllers = Settings.getPropertyList(Settings.CONTROLLERS, String.class);
         services = Settings.getPropertyList(Settings.SERVICES, String.class);
@@ -57,13 +56,9 @@ public class Antikythera {
                 Settings.loadConfigMap();
                 configureStaticJavaParser();
                 instance = new Antikythera();
-                mavenHelper = new MavenHelper();
-                mavenHelper.readPomFile();
-                mavenHelper.buildJarPaths();
+                AbstractCompiler.loadDependencies();
             } catch (IOException e) {
                 throw new AntikytheraException("Failed to initialize Antikythera", e);
-            } catch (XmlPullParserException xe) {
-                logger.error("Could not parse the POM file", xe);
             }
             try {
                 Map<String, List<Expression>> customMocks = MockConfigReader.readDefaultMockExpressions();
@@ -71,7 +66,8 @@ public class Antikythera {
                     MockingRegistry.setCustomMockExpressions(customMocks);
                 }
             } catch (IllegalArgumentException e) {
-                // can safely ignore this exception, as it is thrown when no mock configuration is found
+                // can safely ignore this exception, as it is thrown when no mock configuration
+                // is found
             }
         }
         return instance;
@@ -136,24 +132,28 @@ public class Antikythera {
             pathToCopy = Paths.get(outputPath, PACKAGE_PATH, "constants");
             Files.createDirectories(pathToCopy);
             /*
-             * Todo resurrect the Constants class that as in the com.sa.com.cloudsolutions.antikythera.constants package
-             *  and move it to the resources
-            copyFolder(Paths.get(PACKAGE_PATH, "constants"), pathToCopy);
-            */
+             * Todo resurrect the Constants class that as in the
+             * com.sa.com.cloudsolutions.antikythera.constants package
+             * and move it to the resources
+             * copyFolder(Paths.get(PACKAGE_PATH, "constants"), pathToCopy);
+             */
             pathToCopy = Paths.get(outputPath, PACKAGE_PATH, "configurations");
             Files.createDirectories(pathToCopy);
-        }
-        else {
-            throw  new AntikytheraException("Could not copy resources");
+        } else {
+            throw new AntikytheraException("Could not copy resources");
         }
     }
+
     /**
      * Generate tests for the controllers
      *
-     * @throws IOException            if any of the files associated with the application under test cannot be read, or
+     * @throws IOException            if any of the files associated with the
+     *                                application under test cannot be read, or
      *                                if the output folder cannot be written to
-     * @throws XmlPullParserException if attempts to convert the POM file to an xml tree fail
-     * @throws EvaluatorException     if evaluating java expressions in the AUT code fails.
+     * @throws XmlPullParserException if attempts to convert the POM file to an xml
+     *                                tree fail
+     * @throws EvaluatorException     if evaluating java expressions in the AUT code
+     *                                fails.
      */
     public void generateApiTests() throws IOException, XmlPullParserException, EvaluatorException {
         for (String controller : controllers) {
@@ -165,7 +165,8 @@ public class Antikythera {
     }
 
     public void writeFilesToTest(String belongingPackage, String filename, String content) throws IOException {
-        String filePath = Settings.getOutputPath() + File.separator + SRC + File.separator + "test" + File.separator + "java"
+        String filePath = Settings.getOutputPath() + File.separator + SRC + File.separator + "test" + File.separator
+                + "java"
                 + File.separator + belongingPackage.replace(".", File.separator) + File.separator + filename;
 
         writeFile(filePath, content);
@@ -204,7 +205,7 @@ public class Antikythera {
 
     private void processPackage(String packagePath, String[] parts) throws IOException {
         Path dirPath = Paths.get(Settings.getBasePath(), packagePath.replace('.', File.separatorChar));
-        
+
         if (!Files.isDirectory(dirPath)) {
             logger.warn("Service path {} not found as file or package", packagePath);
             return;
@@ -212,8 +213,8 @@ public class Antikythera {
 
         try (var paths = Files.walk(dirPath)) {
             paths.filter(Files::isRegularFile)
-                 .filter(p -> p.toString().endsWith(JAVA))
-                 .forEach(file -> processServiceFile(file, parts));
+                    .filter(p -> p.toString().endsWith(JAVA))
+                    .forEach(file -> processServiceFile(file, parts));
         }
     }
 
@@ -233,15 +234,16 @@ public class Antikythera {
             CompilationUnit cu = StaticJavaParser.parse(file.toFile());
             String fileName = file.getFileName().toString().replace(JAVA, "");
             Optional<String> packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString);
-            
+
             String className = packageName.map(pkg -> pkg + "." + fileName).orElse(fileName);
-            
+
             if (AntikytheraRunTime.getCompilationUnit(className) == null) {
-                logger.debug("Skipping {} - class not found in compilation unit cache. File package ({}) may not match directory structure.", 
-                    className, packageName.orElse("default package"));
+                logger.debug(
+                        "Skipping {} - class not found in compilation unit cache. File package ({}) may not match directory structure.",
+                        className, packageName.orElse("default package"));
                 return null;
             }
-            
+
             return className;
         } catch (Exception e) {
             logger.debug("Could not parse file {} to determine class name", file, e);

@@ -45,10 +45,14 @@ public final class MethodToSQLConverter {
     public static final String ALL_IGNORE_CASE = "AllIgnoreCase";
     public static final String FIND_BY = "findBy";
     public static final String FIND_ALL = "findAll";
+    public static final String FIND_ALL_BY = "findAllBy";
     public static final String FIND_ALL_BY_ID = "findAllById";
     public static final String COUNT_BY = "countBy";
+    public static final String COUNT_ALL_BY = "countAllBy";
     public static final String DELETE_BY = "deleteBy";
+    public static final String DELETE_ALL_BY = "deleteAllBy";
     public static final String EXISTS_BY = "existsBy";
+    public static final String EXISTS_ALL_BY = "existsAllBy";
     public static final String FIND_FIRST_BY = "findFirstBy";
     public static final String FIND_TOP_BY = "findTopBy";
     public static final String FIND_DISTINCT_BY = "findDistinctBy";
@@ -62,7 +66,8 @@ public final class MethodToSQLConverter {
 
     private static final List<String> QUERY_TYPES = List.of(
             READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY, REMOVE_BY, GET, SAVE, FIND_BY,
-            FIND_FIRST_BY, FIND_TOP_BY, FIND_DISTINCT_BY, FIND_ALL, COUNT_BY, DELETE_BY, EXISTS_BY);
+            FIND_FIRST_BY, FIND_TOP_BY, FIND_DISTINCT_BY, FIND_ALL, FIND_ALL_BY, FIND_ALL_BY_ID,
+            COUNT_BY, COUNT_ALL_BY, DELETE_BY, DELETE_ALL_BY, EXISTS_BY, EXISTS_ALL_BY);
 
     private static final List<String> OPERATORS = List.of(
             AND, OR, BETWEEN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL, GREATER_THAN,
@@ -70,7 +75,13 @@ public final class MethodToSQLConverter {
             NOT_IN, IS_TRUE, IS_FALSE, TRUE, FALSE, IS, EQUAL, CONTAINING, STARTING_WITH, ENDING_WITH);
 
     private static final List<String> MODIFIERS = List.of(
-            BaseRepositoryParser.ORDER_BY, DESC, ASC, IGNORE_CASE, ALL_IGNORE_CASE);
+            BaseRepositoryParser.ORDER_BY, IGNORE_CASE, ALL_IGNORE_CASE);
+
+    /**
+     * Keywords that are only valid in ORDER BY context.
+     * These should NOT be matched as keywords when parsing field names.
+     */
+    private static final List<String> ORDER_BY_ONLY_KEYWORDS = List.of(DESC, ASC);
 
     /**
      * Set of operators that do not require an equals sign to be appended.
@@ -79,11 +90,11 @@ public final class MethodToSQLConverter {
     private static final Set<String> NO_EQUALS_OPERATORS = Set.of(
             BETWEEN, GREATER_THAN, LESS_THAN, LESS_THAN_EQUAL, GREATER_THAN_EQUAL,
             IS_NOT_NULL, IS_NULL, IS_NOT, LIKE, CONTAINING, IN, NOT_IN, NOT,
-            STARTING_WITH, ENDING_WITH, BEFORE, AFTER, IS_TRUE, IS_FALSE, TRUE, FALSE, IGNORE_CASE);
+            STARTING_WITH, ENDING_WITH, BEFORE, AFTER, IS_TRUE, IS_FALSE, TRUE, FALSE);
     // Note: AND/OR are intentionally excluded so that a bare field before a logical
-    // operator
-    // still receives an implicit "= ?" comparator (e.g., "...Where userId And
-    // tenantId..." -> "user_id = ? AND tenant_id = ?").
+    // operator still receives an implicit "= ?" comparator.
+    // Note: IGNORE_CASE is NOT in this set - it should still get "= ?" appended,
+    // with case-insensitive comparison handled by the database or application layer.
 
     private MethodToSQLConverter() {
     }
@@ -95,6 +106,7 @@ public final class MethodToSQLConverter {
      * - Field names start with lowercase letters (e.g., eApprovalStatus)
      * - Keywords are followed by lowercase letters (part of field names)
      * - Short keywords (In, Or, Not, Asc, Desc) that could be part of field names
+     * - Desc/Asc only recognized after OrderBy (not in "Description", "Ascending", etc.)
      *
      * @param methodName The method name to parse.
      * @return A list of components.
@@ -107,18 +119,23 @@ public final class MethodToSQLConverter {
         List<String> components = new ArrayList<>();
         List<String> keywords = getKeywordsByLengthDesc();
         int i = 0;
+        boolean inOrderByContext = false;
 
         while (i < methodName.length()) {
             // 1) Try to match a known keyword at the current index
-            String matchedKeyword = tryMatchKeyword(methodName, i, keywords);
+            String matchedKeyword = tryMatchKeyword(methodName, i, keywords, inOrderByContext);
             if (matchedKeyword != null) {
                 components.add(matchedKeyword);
                 i += matchedKeyword.length();
+                // Track when we enter ORDER BY context
+                if (BaseRepositoryParser.ORDER_BY.equals(matchedKeyword)) {
+                    inOrderByContext = true;
+                }
                 continue;
             }
 
             // 2) Otherwise scan a field token until the next valid keyword boundary
-            ScanResult scan = scanField(methodName, i, keywords);
+            ScanResult scan = scanField(methodName, i, keywords, inOrderByContext);
             i = scan.nextIndex;
             if (!scan.fieldToken.isEmpty()) {
                 components.add(scan.fieldToken);
@@ -129,19 +146,19 @@ public final class MethodToSQLConverter {
     }
 
     // Attempts to match a keyword at position 'index' using the same boundary rules
-    // as {@link #findNextKeyword(String, int, List)}.
-    private static String tryMatchKeyword(String methodName, int index, List<String> keywords) {
-        return findNextKeyword(methodName, index, keywords);
+    // as {@link #findNextKeyword(String, int, List, boolean)}.
+    private static String tryMatchKeyword(String methodName, int index, List<String> keywords, boolean inOrderByContext) {
+        return findNextKeyword(methodName, index, keywords, inOrderByContext);
     }
 
     // Scans characters from 'start' until a valid keyword boundary is reached,
     // returning the token and new index.
-    private static ScanResult scanField(String methodName, int start, List<String> keywords) {
+    private static ScanResult scanField(String methodName, int start, List<String> keywords, boolean inOrderByContext) {
         StringBuilder fieldName = new StringBuilder();
         int i = start;
 
         while (i < methodName.length()) {
-            String nextKeyword = findNextKeyword(methodName, i, keywords);
+            String nextKeyword = findNextKeyword(methodName, i, keywords, inOrderByContext);
             if (nextKeyword != null) {
                 break;
             }
@@ -153,13 +170,21 @@ public final class MethodToSQLConverter {
 
     // Returns a keyword that starts at 'index' and forms a valid boundary per rules
     // used previously; otherwise null.
-    private static String findNextKeyword(String methodName, int index, List<String> keywords) {
+    private static String findNextKeyword(String methodName, int index, List<String> keywords, boolean inOrderByContext) {
         for (String keyword : keywords) {
             if (!methodName.startsWith(keyword, index)) {
                 continue;
             }
 
             int keywordEnd = index + keyword.length();
+
+            // DESC/ASC are only keywords in ORDER BY context
+            if (ORDER_BY_ONLY_KEYWORDS.contains(keyword)) {
+                if (inOrderByContext && isGeneralOperatorBoundary(methodName, keywordEnd)) {
+                    return keyword;
+                }
+                continue; // Skip DESC/ASC when not in ORDER BY context
+            }
 
             if (isAlwaysKeyword(keyword)) {
                 return keyword;
@@ -177,11 +202,35 @@ public final class MethodToSQLConverter {
             return hasFollowingUppercase(methodName, keywordEnd);
         }
 
-        if (isSyntacticSugar(keyword) && isSyntacticSugarFollowedByBooleanOp(methodName, keywordEnd)) {
-            return false;
+        // Syntactic sugar keywords (Is, Equals) should only be matched when followed by:
+        // 1. Another operator (True, False, Null, NotNull, Not, And, Or)
+        // 2. The end of the string
+        // NOT when followed by what looks like a field name (e.g., "IsActive" -> "Is" should not match)
+        if (isSyntacticSugar(keyword)) {
+            return isSyntacticSugarValidPosition(methodName, keywordEnd);
         }
 
         return isGeneralOperatorBoundary(methodName, keywordEnd);
+    }
+
+    /**
+     * Checks if a syntactic sugar keyword (Is, Equals) is at a valid position.
+     * Valid positions are:
+     * - At end of string (e.g., "findByStatusIs" - though unusual)
+     * - Followed by known suffixes: True, False, Null, NotNull, Not, And, Or
+     * This prevents "Is" from matching at the start of field names like "IsActive"
+     */
+    private static boolean isSyntacticSugarValidPosition(String methodName, int keywordEnd) {
+        if (keywordEnd >= methodName.length()) {
+            return true; // At end of string
+        }
+
+        // Check if followed by known suffixes that make sense after "Is"
+        String remainder = methodName.substring(keywordEnd);
+        return remainder.startsWith("True") || remainder.startsWith("False") ||
+               remainder.startsWith("Null") || remainder.startsWith("NotNull") ||
+               remainder.startsWith("Not") || // covers IsNot, IsNotNull, IsNotIn, etc.
+               remainder.startsWith("And") || remainder.startsWith("Or");
     }
 
     private static boolean hasFollowingUppercase(String methodName, int keywordEnd) {
@@ -242,6 +291,7 @@ public final class MethodToSQLConverter {
         allKeywords.addAll(QUERY_TYPES);
         allKeywords.addAll(OPERATORS);
         allKeywords.addAll(MODIFIERS);
+        allKeywords.addAll(ORDER_BY_ONLY_KEYWORDS);
 
         // Sort by length descending to match longest keywords first
         allKeywords.sort((a, b) -> b.length() - a.length());
@@ -253,29 +303,84 @@ public final class MethodToSQLConverter {
      * keyword.
      * For example, convert "findUserByEmail" to "findByEmail" so downstream parsing
      * recognizes the query type correctly. This mirrors Spring Data semantics where
-     * the
-     * part between the verb and "By" is the (optional) subject and does not affect
-     * the
-     * predicate parsing.
+     * the part between the verb and "By" is the (optional) subject and does not affect
+     * the predicate parsing.
      *
-     * Only applies to names starting with the verb "find" to keep the change
-     * conservative.
+     * Handles all query verbs: find, exists, count, delete, read, query, search, stream, remove.
      */
     private static String normalizeFindSubject(String methodName) {
-        if (!methodName.startsWith("find")) {
+        // Try to normalize each query verb type
+        // IMPORTANT: Check longer prefixes first (e.g., existsAll before exists)
+        // to avoid incorrect matches
+
+        String result = tryNormalizeVerb(methodName, "find", FIND_BY,
+                FIND_FIRST_BY, FIND_TOP_BY, FIND_DISTINCT_BY, FIND_ALL_BY_ID, FIND_ALL_BY, FIND_ALL);
+        if (!result.equals(methodName)) return result;
+
+        // Check existsAll before exists
+        result = tryNormalizeVerb(methodName, "existsAll", EXISTS_ALL_BY);
+        if (!result.equals(methodName)) return result;
+        result = tryNormalizeVerb(methodName, "exists", EXISTS_BY);
+        if (!result.equals(methodName)) return result;
+
+        // Check countAll before count
+        result = tryNormalizeVerb(methodName, "countAll", COUNT_ALL_BY);
+        if (!result.equals(methodName)) return result;
+        result = tryNormalizeVerb(methodName, "count", COUNT_BY);
+        if (!result.equals(methodName)) return result;
+
+        // Check deleteAll before delete
+        result = tryNormalizeVerb(methodName, "deleteAll", DELETE_ALL_BY);
+        if (!result.equals(methodName)) return result;
+        result = tryNormalizeVerb(methodName, "delete", DELETE_BY);
+        if (!result.equals(methodName)) return result;
+
+        result = tryNormalizeVerb(methodName, "remove", REMOVE_BY);
+        if (!result.equals(methodName)) return result;
+
+        result = tryNormalizeVerb(methodName, "read", READ_BY);
+        if (!result.equals(methodName)) return result;
+
+        result = tryNormalizeVerb(methodName, "query", QUERY_BY);
+        if (!result.equals(methodName)) return result;
+
+        result = tryNormalizeVerb(methodName, "search", SEARCH_BY);
+        if (!result.equals(methodName)) return result;
+
+        result = tryNormalizeVerb(methodName, "stream", STREAM_BY);
+        if (!result.equals(methodName)) return result;
+
+        return methodName;
+    }
+
+    /**
+     * Tries to normalize a method name for a specific query verb.
+     *
+     * @param methodName the method name to normalize
+     * @param verb the query verb (e.g., "find", "exists", "count")
+     * @param recognizedPrefixes the already-recognized prefixes that should not be normalized
+     * @return the normalized method name, or the original if no normalization was needed
+     */
+    private static String tryNormalizeVerb(String methodName, String verb, String... recognizedPrefixes) {
+        if (!methodName.startsWith(verb)) {
             return methodName;
         }
-        // Do not normalize when the method already uses a recognized find* query type
-        if (methodName.startsWith(FIND_BY)
-                || methodName.startsWith(FIND_FIRST_BY)
-                || methodName.startsWith(FIND_TOP_BY)
-                || methodName.startsWith(FIND_DISTINCT_BY)
-                || methodName.startsWith(FIND_ALL)
-                || methodName.startsWith(FIND_ALL_BY_ID)) {
+
+        // Check if method already uses a recognized query type prefix
+        for (String prefix : recognizedPrefixes) {
+            if (methodName.startsWith(prefix)) {
+                return methodName;
+            }
+        }
+
+        // Check if this method would match a longer verb (e.g., "existsAll" vs "exists")
+        // If so, skip this verb and let the longer one handle it
+        if (methodStartsWithLongerVerb(methodName, verb)) {
             return methodName;
         }
-        // If the only occurrence of "By" is the one in "OrderBy", do not normalize.
-        int byIdx = methodName.indexOf("By", 4); // look for the first "By" after "find"
+
+        // Look for "By" after the verb
+        int byIdx = methodName.indexOf("By", verb.length());
         if (byIdx > 0) {
             // If this By is part of OrderBy, skip normalization to preserve ordering clause
             int orderStart = byIdx - "Order".length();
@@ -285,10 +390,28 @@ public final class MethodToSQLConverter {
                     return methodName;
                 }
             }
-            // Convert things like findSomethingByXxxYyy... -> findByXxxYyy...
-            return FIND_BY + methodName.substring(byIdx + 2);
+            // Convert things like existsSomethingByXxx... -> existsByXxx...
+            // Use the first recognized prefix as the normalized form
+            String normalizedPrefix = recognizedPrefixes.length > 0 ? recognizedPrefixes[0] : verb + "By";
+            return normalizedPrefix + methodName.substring(byIdx + 2);
         }
         return methodName;
+    }
+
+    /**
+     * Checks if the method name starts with a longer verb variant.
+     * For example, if checking "exists" verb, returns true if method starts with "existsAll".
+     */
+    private static boolean methodStartsWithLongerVerb(String methodName, String verb) {
+        // Map of shorter verbs to their longer variants
+        if ("exists".equals(verb) && methodName.startsWith("existsAll")) return true;
+        if ("count".equals(verb) && methodName.startsWith("countAll")) return true;
+        if ("delete".equals(verb) && methodName.startsWith("deleteAll")) return true;
+        if ("find".equals(verb) && (methodName.startsWith("findAll") ||
+                                     methodName.startsWith("findFirst") ||
+                                     methodName.startsWith("findTop") ||
+                                     methodName.startsWith("findDistinct"))) return true;
+        return false;
     }
 
     /**
@@ -350,22 +473,22 @@ public final class MethodToSQLConverter {
                         .append(" WHERE id IN (?)");
                 return true;
             }
-            case FIND_BY, GET, READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY -> {
+            case FIND_BY, FIND_ALL_BY, GET, READ_BY, QUERY_BY, SEARCH_BY, STREAM_BY -> {
                 sql.append(BaseRepositoryParser.SELECT_STAR).append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
             }
-            case COUNT_BY -> {
+            case COUNT_BY, COUNT_ALL_BY -> {
                 sql.append("SELECT COUNT(*) FROM ").append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
             }
-            case DELETE_BY, REMOVE_BY -> {
+            case DELETE_BY, DELETE_ALL_BY, REMOVE_BY -> {
                 sql.append("DELETE FROM ").append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
             }
-            case EXISTS_BY -> {
+            case EXISTS_BY, EXISTS_ALL_BY -> {
                 sql.append("SELECT EXISTS (SELECT 1 FROM ").append(tableName)
                         .append(" ").append(BaseRepositoryParser.WHERE).append(" ");
                 return true;
@@ -424,8 +547,9 @@ public final class MethodToSQLConverter {
                 return true;
             }
             case CONTAINING, LIKE, STARTING_WITH, ENDING_WITH -> sql.append(" LIKE ? ");
-            case IS, EQUAL, IGNORE_CASE -> {
-                // Syntactic sugar or handled elsewhere
+            case IS, EQUAL, IGNORE_CASE, ALL_IGNORE_CASE -> {
+                // Syntactic sugar or modifiers handled elsewhere
+                // These don't produce SQL fragments themselves
                 return true;
             }
             default -> {
