@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.depsolver;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -327,7 +328,15 @@ public class Resolver {
         final FieldAccessExpr fae = expr.asFieldAccessExpr();
         Expression scope = fae.getScope();
 
-        if (scope.isNameExpr()) {
+        if (scope.isThisExpr()) {
+            GraphNode resolved = Resolver.resolveThisFieldAccess(node, fae);
+            if (resolved != null && resolved.getNode() instanceof FieldDeclaration fd) {
+                types.add(fd.getElementType());
+            }
+            return resolved;
+        } else if (scope.isSuperExpr()) {
+            return Resolver.resolveSuperFieldAccess(node, fae, types);
+        } else if (scope.isNameExpr()) {
             return handleNameExprScope(node, fae, scope, types);
         } else if (scope.isFieldAccessExpr()) {
             return handleFieldAccessExprScope(node, fae, scope, types);
@@ -341,6 +350,32 @@ public class Resolver {
             }
             return null;
         }
+    }
+
+    /**
+     * Resolve a field that is accessed through the <code>super.</code> prefix.
+     *
+     * @param node  a graph node representing the current context
+     * @param value the field access expression
+     * @param types list to collect resolved types
+     * @return a graph node representing the resolved field, or null
+     */
+    private static GraphNode resolveSuperFieldAccess(GraphNode node, FieldAccessExpr value, NodeList<Type> types) {
+        TypeDeclaration<?> decl = node.getEnclosingType();
+        if (decl == null || !decl.isClassOrInterfaceDeclaration()) {
+            return null;
+        }
+        for (ClassOrInterfaceType parent : decl.asClassOrInterfaceDeclaration().getExtendedTypes()) {
+            TypeWrapper wrapper = AbstractCompiler.findType(node.getCompilationUnit(), parent);
+            if (wrapper != null && wrapper.getType() != null) {
+                Optional<FieldDeclaration> fd = wrapper.getType().getFieldByName(value.getNameAsString());
+                if (fd.isPresent()) {
+                    types.add(fd.get().getElementType());
+                    return Graph.createGraphNode(fd.get());
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -431,6 +466,14 @@ public class Resolver {
                 }
             }
         } else if (mceWrapper.getMethodCallExpr() instanceof ObjectCreationExpr oce) {
+            // Resolve constructor dependencies, not just the type import
+            TypeWrapper wrapper = AbstractCompiler.findType(node.getCompilationUnit(), oce.getType());
+            if (wrapper != null && wrapper.getType() != null) {
+                Optional<Callable> ctor = AbstractCompiler.findConstructorDeclaration(mceWrapper, wrapper.getType());
+                if (ctor.isPresent() && ctor.get().getCallableDeclaration() instanceof ConstructorDeclaration cd) {
+                    return Graph.createGraphNode(cd);
+                }
+            }
             return ImportUtils.addImport(node, oce.getType());
         }
         return null;
