@@ -39,6 +39,12 @@ public class MavenHelper {
     private Model pomModel;
     private Path pomPath;
 
+    /**
+     * Gets the paths to all JAR files identified as dependencies.
+     * Initializes the paths if they haven't been built yet.
+     *
+     * @return an array of absolute file paths to JARs
+     */
     public static String[] getJarPaths() {
         if (!jarPathsBuilt) {
             initializeJarPaths();
@@ -94,6 +100,13 @@ public class MavenHelper {
         }
     }
 
+    /**
+     * Reads the pom.xml file located in the configured base path or its parent directories.
+     *
+     * @return the parsed Maven Model of the pom.xml
+     * @throws IOException            if the file cannot be read
+     * @throws XmlPullParserException if the file cannot be parsed
+     */
     public Model readPomFile() throws IOException, XmlPullParserException {
         String basePath = Settings.getBasePath();
         Path p = null;
@@ -158,6 +171,11 @@ public class MavenHelper {
         }
     }
 
+    /**
+     * Gets the path to the currently loaded pom.xml file.
+     *
+     * @return the Path of the pom.xml, or {@code null} if no POM has been loaded yet
+     */
     public Path getPomPath() {
         return pomPath;
     }
@@ -287,6 +305,10 @@ public class MavenHelper {
         }
     }
 
+    /**
+     * Resolves dependencies from the POM model and builds the list of JAR paths.
+     * Looks for JARs in the local Maven repository.
+     */
     public void buildJarPaths() {
 
         if (pomModel != null) {
@@ -337,6 +359,15 @@ public class MavenHelper {
         }
     }
 
+    /**
+     * Compares two version strings numerically.
+     * Handles standard dot-separated version numbers (e.g., 1.2.3 vs 1.2.4).
+     *
+     * @param v1 the first version string
+     * @param v2 the second version string
+     * @return a negative integer, zero, or a positive integer as the first argument
+     *         is less than, equal to, or greater than the second
+     */
     public static int compareVersions(String v1, String v2) {
         try {
             String[] parts1 = v1.split("\\.");
@@ -378,6 +409,13 @@ public class MavenHelper {
         }
     }
 
+    /**
+     * Gets the current POM model, reading it from disk if not yet loaded.
+     *
+     * @return the Maven Model
+     * @throws XmlPullParserException if parsing fails
+     * @throws IOException            if reading fails
+     */
     public Model getPomModel() throws XmlPullParserException, IOException {
         if (pomModel == null) {
             return readPomFile();

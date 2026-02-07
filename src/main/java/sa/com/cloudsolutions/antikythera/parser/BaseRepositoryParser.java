@@ -110,6 +110,13 @@ public class BaseRepositoryParser extends AbstractCompiler {
         queries = new HashMap<>();
     }
 
+    /**
+     * Creates a new instance of BaseRepositoryParser with the provided compilation unit.
+     *
+     * @param cu the compilation unit to associate with the parser
+     * @return a new BaseRepositoryParser instance
+     * @throws IOException if an I/O error occurs during initialization
+     */
     public static BaseRepositoryParser create(CompilationUnit cu) throws IOException {
         BaseRepositoryParser parser = new BaseRepositoryParser();
         parser.cu = cu;
@@ -234,6 +241,12 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return isJpaRepository(typeWrapper.getType());
     }
 
+    /**
+     * Checks if the given type declaration represents a JPA repository.
+     *
+     * @param type the type declaration to check
+     * @return true if the type is a JPA repository, false otherwise
+     */
     public static boolean isJpaRepository(TypeDeclaration<?> type) {
         if (type instanceof ClassOrInterfaceDeclaration classOrInterface && classOrInterface.isInterface()) {
 
@@ -258,6 +271,11 @@ public class BaseRepositoryParser extends AbstractCompiler {
                         (interfaceName.contains("org.springframework.data") || interfaceName.endsWith("Repository")));
     }
 
+    /**
+     * Gets the database dialect currently configured for the parser.
+     *
+     * @return the database dialect
+     */
     public static DatabaseDialect getDialect() {
         return dialect;
     }
@@ -270,6 +288,12 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return count;
     }
 
+    /**
+     * Retrieves the repository query associated with the given method.
+     *
+     * @param repoMethod the repository method to look up
+     * @return the RepositoryQuery associated with the method, or null if not found
+     */
     public RepositoryQuery getQueryFromRepositoryMethod(Callable repoMethod) {
         return queries.get(repoMethod);
     }
@@ -601,6 +625,10 @@ public class BaseRepositoryParser extends AbstractCompiler {
         return queries.values();
     }
 
+    /**
+     * Builds and processes all queries defined in the repository.
+     * This involves parsing HQL/JPQL and converting them to native SQL where applicable.
+     */
     public void buildQueries() {
         queries.clear();
         parserAdapter = new HQLParserAdapter(cu, entity);
@@ -634,6 +662,11 @@ public class BaseRepositoryParser extends AbstractCompiler {
         }
     }
 
+    /**
+     * Gets the entity associated with this repository.
+     *
+     * @return a TypeWrapper representing the entity managed by this repository
+     */
     public TypeWrapper getEntity() {
         return entity;
     }

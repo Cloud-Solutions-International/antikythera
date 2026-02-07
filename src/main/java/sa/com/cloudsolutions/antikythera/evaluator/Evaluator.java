@@ -1574,7 +1574,9 @@ public class Evaluator implements EvaluationEngine {
         if (init.isPresent()) {
             if (init.get().isObjectCreationExpr()) {
                 Variable v = createObject(init.get().asObjectCreationExpr());
-                v.setType(variable.getType());
+                if (v != null) {
+                    v.setType(variable.getType());
+                }
                 return v;
             } else {
                 Evaluator eval = EvaluatorFactory.create(resolvedClass, this);
@@ -1592,7 +1594,9 @@ public class Evaluator implements EvaluationEngine {
         Optional<Expression> init = variable.getInitializer();
         if (init.isPresent()) {
             v = evaluateExpression(init.get());
-            v.setType(variable.getType());
+            if (v != null) {
+                v.setType(variable.getType());
+            }
         } else {
             v = new Variable(variable.getType(), Reflect.getDefault(variable.getType().toString()));
         }
@@ -1608,12 +1612,10 @@ public class Evaluator implements EvaluationEngine {
         return (Variable) v;
     }
 
-    @Override
     public void visit(MethodDeclaration md) throws ReflectiveOperationException {
         executeMethod(md);
     }
 
-    @Override
     public void visit(ConstructorDeclaration cd) throws ReflectiveOperationException {
         executeConstructor(cd);
     }
