@@ -335,8 +335,7 @@ public class Resolver {
             }
             return resolved;
         } else if (scope.isSuperExpr()) {
-            GraphNode resolved = Resolver.resolveSuperFieldAccess(node, fae, types);
-            return resolved;
+            return Resolver.resolveSuperFieldAccess(node, fae, types);
         } else if (scope.isNameExpr()) {
             return handleNameExprScope(node, fae, scope, types);
         } else if (scope.isFieldAccessExpr()) {
