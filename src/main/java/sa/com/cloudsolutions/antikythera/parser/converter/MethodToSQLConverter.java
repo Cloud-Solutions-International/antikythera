@@ -183,15 +183,11 @@ public final class MethodToSQLConverter {
                 if (inOrderByContext && isGeneralOperatorBoundary(methodName, keywordEnd)) {
                     return keyword;
                 }
-                continue; // Skip DESC/ASC when not in ORDER BY context
             }
-
-            if (isAlwaysKeyword(keyword)) {
-                return keyword;
-            }
-
-            if (isValidOperatorBoundary(methodName, keyword, keywordEnd)) {
-                return keyword;
+            else {
+                if (isAlwaysKeyword(keyword) || isValidOperatorBoundary(methodName, keyword, keywordEnd)) {
+                    return keyword;
+                }
             }
         }
         return null;
@@ -227,7 +223,7 @@ public final class MethodToSQLConverter {
 
         // Check if followed by known suffixes that make sense after "Is"
         String remainder = methodName.substring(keywordEnd);
-        return remainder.startsWith("True") || remainder.startsWith("False") ||
+        return remainder.startsWith("True") || remainder.startsWith(FALSE) ||
                remainder.startsWith("Null") || remainder.startsWith("NotNull") ||
                remainder.startsWith("Not") || // covers IsNot, IsNotNull, IsNotIn, etc.
                remainder.startsWith("And") || remainder.startsWith("Or");
@@ -235,11 +231,6 @@ public final class MethodToSQLConverter {
 
     private static boolean hasFollowingUppercase(String methodName, int keywordEnd) {
         return keywordEnd < methodName.length() && Character.isUpperCase(methodName.charAt(keywordEnd));
-    }
-
-    private static boolean isSyntacticSugarFollowedByBooleanOp(String methodName, int keywordEnd) {
-        return hasFollowingUppercase(methodName, keywordEnd)
-                && isFollowedByFieldWithBooleanOp(methodName, keywordEnd);
     }
 
     private static boolean isGeneralOperatorBoundary(String methodName, int keywordEnd) {
@@ -256,27 +247,6 @@ public final class MethodToSQLConverter {
 
     private static boolean isSyntacticSugar(String keyword) {
         return IS.equals(keyword) || EQUAL.equals(keyword);
-    }
-
-    /**
-     * Checks if the position is followed by a field name that ends with a boolean
-     * operator.
-     * For example, in "IsActiveIsTrue", at position 0, this returns true because
-     * "Active" is followed by "IsTrue".
-     */
-    private static boolean isFollowedByFieldWithBooleanOp(String methodName, int startPos) {
-        // Scan ahead to find the next keyword
-        int pos = startPos;
-        while (pos < methodName.length() && Character.isLetter(methodName.charAt(pos))) {
-            // Check if we're at the start of a boolean operator
-            if (methodName.startsWith(IS_TRUE, pos) || methodName.startsWith(IS_FALSE, pos) ||
-                    methodName.startsWith(IS_NULL, pos) || methodName.startsWith(IS_NOT_NULL, pos)) {
-                // There's a field name between startPos and pos, followed by a boolean operator
-                return pos > startPos;
-            }
-            pos++;
-        }
-        return false;
     }
 
     // Small holder for scan results
@@ -407,11 +377,10 @@ public final class MethodToSQLConverter {
         if ("exists".equals(verb) && methodName.startsWith("existsAll")) return true;
         if ("count".equals(verb) && methodName.startsWith("countAll")) return true;
         if ("delete".equals(verb) && methodName.startsWith("deleteAll")) return true;
-        if ("find".equals(verb) && (methodName.startsWith("findAll") ||
+        return ("find".equals(verb) && (methodName.startsWith(FIND_ALL) ||
                                      methodName.startsWith("findFirst") ||
                                      methodName.startsWith("findTop") ||
-                                     methodName.startsWith("findDistinct"))) return true;
-        return false;
+                                     methodName.startsWith("findDistinct")));
     }
 
     /**
@@ -537,10 +506,8 @@ public final class MethodToSQLConverter {
             case IS_NULL -> sql.append(" IS NULL ");
             case IS_NOT_NULL -> sql.append(" IS NOT NULL ");
             case IS_NOT -> sql.append(" != ? ");
-            case IS_TRUE -> sql.append(" = true ");
-            case IS_FALSE -> sql.append(" = false ");
-            case TRUE -> sql.append(" = true ");
-            case FALSE -> sql.append(" = false ");
+            case IS_TRUE, TRUE -> sql.append(" = true ");
+            case IS_FALSE, FALSE -> sql.append(" = false ");
             case AND, OR -> sql.append(" ").append(component.toUpperCase()).append(' ');
             case NOT -> {
                 handleNotOperator(next, sql);

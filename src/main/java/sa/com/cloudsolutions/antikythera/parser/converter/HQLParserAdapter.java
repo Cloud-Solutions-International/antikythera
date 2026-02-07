@@ -481,7 +481,7 @@ public class HQLParserAdapter {
      * For example, if we have "join rt.criterions rtc" and rt is resolved to ResourceScheduleTemplate,
      * we can look at ResourceScheduleTemplate's relationship map to find the actual type of 'criterions'.
      */
-    private EntityMetadata resolveEntityFromJoinPaths(String targetEntityName, MetaData analysis,
+    EntityMetadata resolveEntityFromJoinPaths(String targetEntityName, MetaData analysis,
             Map<String, EntityMetadata> resolvedEntities) {
         // Look for join paths where this entity is the target
         for (var joinEntry : analysis.getJoinPaths().entrySet()) {

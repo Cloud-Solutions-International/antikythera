@@ -529,7 +529,7 @@ class BaseRepositoryParserTest {
     }
 
     @Test
-    void testMongoRepositoryIsExcluded() throws IOException {
+    void testMongoRepositoryIsExcluded() {
         // MongoRepository classes should not be considered JPA repositories
         // because they use a different query paradigm (MongoDB queries, not SQL/JPQL)
         String mongoRepoCode = """
@@ -549,7 +549,7 @@ class BaseRepositoryParserTest {
     }
 
     @Test
-    void testReactiveMongoRepositoryIsExcluded() throws IOException {
+    void testReactiveMongoRepositoryIsExcluded() {
         // ReactiveMongoRepository classes should also be excluded
         String reactiveMongoRepoCode = """
                 package com.example.repository;
