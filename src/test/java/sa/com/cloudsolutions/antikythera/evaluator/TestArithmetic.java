@@ -7,7 +7,6 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import com.github.javaparser.ast.body.MethodDeclaration;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

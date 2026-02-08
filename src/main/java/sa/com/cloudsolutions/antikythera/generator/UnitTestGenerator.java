@@ -532,7 +532,8 @@ public class UnitTestGenerator extends TestGenerator {
             }
         }
         if (t != null && t.isClassOrInterfaceType() && t.asClassOrInterfaceType().getTypeArguments().isPresent()) {
-            body.addStatement(buildMockDeclaration(getTypeName(t), nameAsString));
+            String rawType = t.asClassOrInterfaceType().getNameAsString();
+            body.addStatement(String.format("%s %s = Mockito.mock(%s.class);", getTypeName(t), nameAsString, rawType));
         } else {
             body.addStatement(buildMockDeclaration(getTypeName(t), nameAsString));
         }

@@ -19,6 +19,7 @@ import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.matcher.ElementMatchers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -370,12 +371,7 @@ public class AKBuddy {
             }
             return Reflect.getComponentClass(t.getFullyQualifiedName());
         } catch (ClassNotFoundException e) {
-            /*
-             * TODO : fix this temporary hack.
-             * Lots of functions will actually fail to evaluate due to returning an object.class however
-             * the program will not crash.
-             */
-            return Object.class;
+            return handleTypeResolutionFailure("parameter type '" + p.getTypeAsString() + "'", e);
         }
     }
 
@@ -418,7 +414,6 @@ public class AKBuddy {
         return builder;
     }
 
-    @SuppressWarnings("unchecked")
     /**
      * Applies non-Lombok field annotations to the defined field when the annotation types are available at runtime.
      * Invalid/unsupported annotations are skipped with a warning rather than failing generation.
@@ -430,6 +425,7 @@ public class AKBuddy {
      * @param fieldType resolved field type.
      * @return updated builder possibly with annotations applied.
      */
+    @SuppressWarnings("unchecked")
     private static DynamicType.Builder<?> addFieldAnnotations(CompilationUnit cu, DynamicType.Builder<?> builder, FieldDeclaration field, String fieldName, Class<?> fieldType) {
         // For inner classes (especially inside interfaces), cu may be null.
         // Get it from the field's AST node if needed
@@ -552,7 +548,10 @@ public class AKBuddy {
                 return wrapper.getClazz();
             }
             return Object.class;
+        } catch (ClassNotFoundException e) {
+            return handleTypeResolutionFailure("field type '" + vd.getTypeAsString() + "'", e);
         } catch (Exception e) {
+            logger.warn("Unexpected error resolving field type '{}': {}", vd.getTypeAsString(), e.getMessage());
             return Object.class;
         }
     }
@@ -588,12 +587,52 @@ public class AKBuddy {
                 return wrapper.getClazz();
             }
             return Object.class;
+        } catch (ClassNotFoundException e) {
+            return handleTypeResolutionFailure("return type '" + method.getType().asString() + "'", e);
         } catch (Exception e) {
+            logger.warn("Unexpected error resolving return type '{}': {}", method.getType().asString(), e.getMessage());
             return Object.class;
         }
     }
 
-    @SuppressWarnings("java:S3011")
+    /**
+     * Handles type resolution failures based on the strict_type_resolution configuration.
+     * 
+     * <p>When strict mode is disabled (default), this method logs a trace message and returns Object.class
+     * as a fallback, allowing class generation to proceed with reduced type fidelity. This graceful
+     * degradation is intentional: the interceptor-based evaluation can still function correctly even when
+     * exact types are unavailable, as method invocations are delegated to the MethodInterceptor.</p>
+     * 
+     * <p>When strict mode is enabled, type resolution failures throw AntikytheraException, which is useful
+     * for debugging type resolution issues but may prevent generation for classes with complex dependencies.</p>
+     * 
+     * <p><strong>Trade-offs of fallback behavior:</strong></p>
+     * <ul>
+     *   <li><strong>Pros:</strong> Resilient generation; works with partial classpath; testing/mocking still functional</li>
+     *   <li><strong>Cons:</strong> Reflective type inspection returns Object.class; potential runtime type mismatches</li>
+     * </ul>
+     *
+     * @param typeDescription human-readable description of the type being resolved (e.g., "parameter type 'String'")
+     * @param cause the ClassNotFoundException that triggered the failure
+     * @return Object.class when strict mode is disabled
+     * @throws AntikytheraException when strict mode is enabled
+     */
+    private static Class<?> handleTypeResolutionFailure(String typeDescription, ClassNotFoundException cause) {
+        boolean strictMode = Settings.getProperty(Settings.STRICT_TYPE_RESOLUTION, Boolean.class).orElse(false);
+        
+        if (strictMode) {
+            throw new AntikytheraException(
+                "Failed to resolve " + typeDescription + " during dynamic class generation. " +
+                "Enable debug logging or disable strict_type_resolution for graceful degradation.", 
+                cause);
+        }
+        
+        logger.trace("Type resolution failed for {}, using Object.class fallback. " +
+                     "Enable strict_type_resolution to fail fast on type resolution issues. Cause: {}",
+                     typeDescription, cause.getMessage());
+        return Object.class;
+    }
+
     /**
      * Creates an instance of the previously generated class and injects the provided MethodInterceptor into
      * the private INSTANCE_INTERCEPTOR field so that subsequent calls are routed correctly. Also synchronizes
@@ -604,6 +643,7 @@ public class AKBuddy {
      * @return a new instance with the interceptor injected.
      * @throws ReflectiveOperationException if the default constructor or field injection fails.
      */
+    @SuppressWarnings("java:S3011")
     public static Object createInstance(Class<?> dynamicClass, MethodInterceptor interceptor) throws ReflectiveOperationException {
         Object instance = dynamicClass.getDeclaredConstructor().newInstance();
         Field icpt = instance.getClass().getDeclaredField(INSTANCE_INTERCEPTOR);

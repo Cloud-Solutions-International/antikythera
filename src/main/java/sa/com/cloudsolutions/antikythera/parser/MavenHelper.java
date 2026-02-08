@@ -80,12 +80,10 @@ public class MavenHelper {
         Path p = Paths.get(m2, groupIdPath, artifactId, version,
                 artifactId + "-" + version + ".jar");
         if (Files.exists(p)) {
-            Artifact artifact = artifacts.get(artifactId);
-            if (artifact != null) {
-                artifact.jarFile = p.toString();
-                artifact.version = version;
-            } else {
-                artifacts.put(artifactId, new Artifact(artifactId, version, p.toString()));
+            String key = groupIdPath.replace('/', '.') + ":" + artifactId;
+            Artifact artifact = artifacts.get(key);
+            if (artifact == null) {
+                artifacts.put(key, new Artifact(artifactId, version, p.toString()));
 
                 Path pom = Paths.get(m2, groupIdPath, artifactId, version,
                         artifactId + "-" + version + ".pom");

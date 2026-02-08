@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.raditha.hql.parser.HQLParser;
 import com.raditha.hql.parser.ParseException;
 import com.raditha.hql.model.MetaData;
@@ -36,6 +35,17 @@ public class HQLParserAdapter {
     private static final Pattern SPEL_PATTERN = Pattern.compile(":#\\{#([^}]+?)\\}");
     private static final Pattern CONSTRUCTOR_PATTERN = Pattern.compile("(?i)(SELECT\\s+NEW\\s+[\\w.]+\\s*\\()",
             Pattern.DOTALL);
+    /*
+     * Patterns to match Spring Data JPA wildcard syntax around parameters.
+     * These are invalid in HQL/JPQL and need to be converted to CONCAT expressions.
+     * Handles both regular parameters (:param) and SpEL expressions (:#{#...})
+     */
+    private static final Pattern LIKE_BOTH_WILDCARDS = Pattern.compile(
+            "(?i)(LIKE\\s+)%(:\\w+|:#\\{#[^}]+\\})%");
+    private static final Pattern LIKE_PREFIX_WILDCARD = Pattern.compile(
+            "(?i)(LIKE\\s+)%(:\\w+|:#\\{#[^}]+\\})(?!%)");
+    private static final Pattern LIKE_SUFFIX_WILDCARD = Pattern.compile(
+            "(?i)(LIKE\\s+)(:\\w+|:#\\{#[^}]+\\})%");
     // Pattern to find CAST keywords (used as a starting point, actual matching uses
     // parenthesis balancing)
     private static final Pattern CAST_KEYWORD_PATTERN = Pattern.compile("(?i)CAST\\s*\\(");
@@ -62,8 +72,11 @@ public class HQLParserAdapter {
      * @throws QueryConversionException if the conversion fails
      */
     public ConversionResult convertToNativeSQL(String jpaQuery) throws ParseException, ConversionException {
+        // Preprocess: Convert Spring Data JPA wildcard syntax to valid HQL CONCAT
+        String query = preprocessLikeWildcards(jpaQuery);
+
         // Preprocess: Replace SpEL expressions with simple named parameters
-        SpELPreprocessingResult preprocessing = preprocessSpELExpressions(jpaQuery);
+        SpELPreprocessingResult preprocessing = preprocessSpELExpressions(query);
         String preprocessedQuery = preprocessing.preprocessedQuery;
 
         // Preprocess: Remove AS aliases from inside SELECT NEW constructor expressions
@@ -317,19 +330,48 @@ public class HQLParserAdapter {
     }
 
     /**
-     * Result of SpEL preprocessing containing the preprocessed query and mappings.
+     * Preprocesses Spring Data JPA wildcard syntax around LIKE parameters.
+     * Converts invalid syntax like "LIKE %:param%" to valid HQL "LIKE CONCAT('%', :param, '%')".
+     *
+     * Spring Data JPA allows:
+     *   LIKE %:param%  (wildcards on both sides)
+     *   LIKE %:param   (prefix wildcard only)
+     *   LIKE :param%   (suffix wildcard only)
+     *
+     * These are converted to standard HQL CONCAT expressions.
+     *
+     * @param query The original query with potential wildcard syntax
+     * @return The query with wildcards converted to CONCAT expressions
      */
-    static class SpELPreprocessingResult {
-        final String preprocessedQuery;
-        final Map<String, String> spelMapping; // original -> replacement
-        final Map<String, String> reverseMapping; // replacement -> original
+    String preprocessLikeWildcards(String query) {
+        String result = query;
 
-        SpELPreprocessingResult(String preprocessedQuery, Map<String, String> spelMapping,
-                Map<String, String> reverseMapping) {
-            this.preprocessedQuery = preprocessedQuery;
-            this.spelMapping = spelMapping;
-            this.reverseMapping = reverseMapping;
-        }
+        // Order matters: handle both-wildcards first, then prefix, then suffix
+        // to avoid partial replacements
+
+        // LIKE %:param% -> LIKE CONCAT('%', :param, '%')
+        Matcher bothMatcher = LIKE_BOTH_WILDCARDS.matcher(result);
+        result = bothMatcher.replaceAll("$1CONCAT('%', $2, '%')");
+
+        // LIKE %:param -> LIKE CONCAT('%', :param)
+        Matcher prefixMatcher = LIKE_PREFIX_WILDCARD.matcher(result);
+        result = prefixMatcher.replaceAll("$1CONCAT('%', $2)");
+
+        // LIKE :param% -> LIKE CONCAT(:param, '%')
+        Matcher suffixMatcher = LIKE_SUFFIX_WILDCARD.matcher(result);
+        result = suffixMatcher.replaceAll("$1CONCAT($2, '%')");
+
+        return result;
+    }
+
+    /**
+     * Result of SpEL preprocessing containing the preprocessed query and mappings.
+     *
+     * @param spelMapping    original -> replacement
+     * @param reverseMapping replacement -> original
+     */
+    record SpELPreprocessingResult(String preprocessedQuery, Map<String, String> spelMapping,
+                                       Map<String, String> reverseMapping) {
     }
 
     /**
@@ -350,32 +392,55 @@ public class HQLParserAdapter {
         Set<String> tables = new HashSet<>();
         Map<String, Map<String, JoinMapping>> relationshipMetadata = new HashMap<>();
 
-        for (String name : analysis.getEntityNames()) {
-            TypeWrapper typeWrapper = AbstractCompiler.findType(cu, name);
-            String fullName = null;
-            if (typeWrapper == null) {
-                fullName = getEntiyNameForEntity(name);
-            } else {
-                fullName = typeWrapper.getFullyQualifiedName();
-            }
+        // Track resolved entities (simple name -> EntityMetadata)
+        Map<String, EntityMetadata> resolvedEntities = new HashMap<>();
+        // Track unresolved entity names
+        Set<String> unresolvedEntities = new LinkedHashSet<>(analysis.getEntityNames());
 
-            EntityMetadata meta = EntityMappingResolver.getMapping().get(fullName);
-            if (meta == null) {
-                logger.warn("No metadata found for entity: {} (fullName: {})", name, fullName);
-                continue;
+        // First pass: resolve entities directly
+        for (String name : analysis.getEntityNames()) {
+            EntityMetadata meta = resolveEntityDirectly(name);
+            if (meta != null) {
+                resolvedEntities.put(name, meta);
+                unresolvedEntities.remove(name);
             }
+        }
+
+        // Second pass: resolve entities through join paths
+        // Keep iterating until no more can be resolved
+        boolean progress = true;
+        while (progress && !unresolvedEntities.isEmpty()) {
+            progress = false;
+            Iterator<String> it = unresolvedEntities.iterator();
+            while (it.hasNext()) {
+                String name = it.next();
+                EntityMetadata meta = resolveEntityFromJoinPaths(name, analysis, resolvedEntities);
+                if (meta != null) {
+                    resolvedEntities.put(name, meta);
+                    it.remove();
+                    progress = true;
+                }
+            }
+        }
+
+        // Log warnings for still unresolved entities
+        for (String name : unresolvedEntities) {
+            logger.warn("No metadata found for entity: {} (could not resolve through join paths)", name);
+        }
+
+        // Register all resolved entities
+        for (var entry : resolvedEntities.entrySet()) {
+            String name = entry.getKey();
+            EntityMetadata meta = entry.getValue();
 
             tables.add(meta.tableName());
             sqlConverter.registerEntityMapping(name, meta.tableName());
 
             if (meta.propertyToColumnMap() != null) {
-                for (var entry : meta.propertyToColumnMap().entrySet()) {
-                    String propertyName = entry.getKey();
-                    String columnName = entry.getValue();
-                    sqlConverter.registerFieldMapping(
-                            name,
-                            propertyName,
-                            columnName);
+                for (var propEntry : meta.propertyToColumnMap().entrySet()) {
+                    String propertyName = propEntry.getKey();
+                    String columnName = propEntry.getValue();
+                    sqlConverter.registerFieldMapping(name, propertyName, columnName);
                 }
             }
 
@@ -388,6 +453,91 @@ public class HQLParserAdapter {
         sqlConverter.setRelationshipMetadata(relationshipMetadata);
 
         return tables;
+    }
+
+    /**
+     * Attempts to resolve an entity directly (without using join paths).
+     */
+    private EntityMetadata resolveEntityDirectly(String name) {
+        TypeWrapper typeWrapper = AbstractCompiler.findType(cu, name);
+        String fullName = null;
+        if (typeWrapper == null) {
+            fullName = getEntiyNameForEntity(name);
+        } else {
+            fullName = typeWrapper.getFullyQualifiedName();
+        }
+
+        EntityMetadata meta = EntityMappingResolver.getMapping().get(fullName);
+        if (meta == null && typeWrapper != null) {
+            meta = EntityMappingResolver.buildOnTheFly(typeWrapper);
+        }
+        return meta;
+    }
+
+    private EntityMetadata findEntityMetaForJoinEnty(String targetEntityName, MetaData analysis,Map<String, EntityMetadata> resolvedEntities,
+                                                     MetaData.JoinPathInfo joinPath) {
+        // Check if this join path targets the entity we're trying to resolve
+        if (!targetEntityName.equals(joinPath.targetEntity())) {
+            return null;
+        }
+
+        // Get the source alias and find its entity
+        String sourceAlias = joinPath.sourceAlias();
+        String sourceEntityName = analysis.getEntityForAlias(sourceAlias);
+        if (sourceEntityName == null) {
+            return null;
+        }
+
+        // Check if we've already resolved the source entity
+        return  resolvedEntities.get(sourceEntityName);
+    }
+
+    /**
+     * Attempts to resolve an entity by following join paths from already-resolved entities.
+     * For example, if we have "join rt.criterions rtc" and rt is resolved to ResourceScheduleTemplate,
+     * we can look at ResourceScheduleTemplate's relationship map to find the actual type of 'criterions'.
+     */
+    EntityMetadata resolveEntityFromJoinPaths(String targetEntityName, MetaData analysis,
+            Map<String, EntityMetadata> resolvedEntities) {
+        // Look for join paths where this entity is the target
+        for (var joinEntry : analysis.getJoinPaths().entrySet()) {
+            MetaData.JoinPathInfo joinPath = joinEntry.getValue();
+
+            EntityMetadata sourceMetadata = findEntityMetaForJoinEnty(targetEntityName, analysis, resolvedEntities, joinPath);
+            if (sourceMetadata == null) {
+                continue;
+            }
+
+            // Extract the field name from the path (e.g., "rt.criterions" -> "criterions")
+            String pathExpr = joinPath.pathExpression();
+            String fieldName = pathExpr.contains(".") ?
+                    pathExpr.substring(pathExpr.lastIndexOf('.') + 1) : pathExpr;
+
+            // Look up the relationship in the source entity's relationship map
+            if (sourceMetadata.relationshipMap() != null) {
+                JoinMapping joinMapping = sourceMetadata.relationshipMap().get(fieldName);
+                if (joinMapping != null) {
+                    // Found the actual target entity name from the relationship mapping
+                    String actualTargetEntity = joinMapping.targetEntity();
+
+                    // Try to find metadata for the actual target entity
+                    Set<String> fullNames = EntityMappingResolver.getFullNamesForEntity(actualTargetEntity);
+                    for (String fullName : fullNames) {
+                        EntityMetadata meta = EntityMappingResolver.getMapping().get(fullName);
+                        if (meta != null) {
+                            return meta;
+                        }
+                    }
+
+                    // Try to resolve by searching resolved types
+                    Optional<EntityMetadata> resolvedMeta = EntityMappingResolver.resolveEntity(actualTargetEntity);
+                    if (resolvedMeta.isPresent()) {
+                        return resolvedMeta.get();
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private void registerRelationshipMappings(String name, EntityMetadata meta,
@@ -410,27 +560,14 @@ public class HQLParserAdapter {
     }
 
     String getEntiyNameForEntity(String name) {
+        // Check 1: Is it the context entity?
         if (name.equals(entity.getName()) || name.equals(entity.getFullyQualifiedName())) {
             return entity.getFullyQualifiedName();
         }
-        Optional<String> n = EntityMappingResolver.getFullNamesForEntity(name).stream().findFirst();
-        if (n.isPresent()) {
-            return n.stream().findFirst().orElseThrow();
-        }
 
-        if (entity.getClazz() == null) {
-            for (FieldDeclaration f : entity.getType().getFields()) {
-                for (TypeWrapper tw : AbstractCompiler.findTypesInVariable(f.getVariable(0))) {
-                    if (tw.getFullyQualifiedName().equals(name) || tw.getName().equals(name)) {
-                        return tw.getFullyQualifiedName();
-                    }
-                }
-            }
-        } else if (entity.getClazz().getName().equals(name)) {
-            return entity.getFullyQualifiedName();
-        }
-        return null;
+        return EntityMappingResolver.resolveRelatedEntity(entity, name);
     }
+
 
     /**
      * Extracts parameter mappings from the query analysis.
@@ -445,16 +582,7 @@ public class HQLParserAdapter {
         Set<String> parameters = analysis.getParameters();
 
         // Build reverse lookup: replacement parameter -> original SpEL
-        Map<String, String> replacementToOriginal = new HashMap<>();
-        if (spelMapping != null) {
-            for (Map.Entry<String, String> entry : spelMapping.entrySet()) {
-                String original = entry.getKey(); // e.g., :#{#inPatientPhrSearchModel.admissionId}
-                String replacement = entry.getValue(); // e.g., :admissionId
-                // Remove the leading colon for lookup
-                String replacementKey = replacement.startsWith(":") ? replacement.substring(1) : replacement;
-                replacementToOriginal.put(replacementKey, original);
-            }
-        }
+        Map<String, String> replacementToOriginal = getSPELReplacements(spelMapping);
 
         int position = 1;
         for (String paramName : parameters) {
@@ -467,5 +595,19 @@ public class HQLParserAdapter {
         }
 
         return mappings;
+    }
+
+    private static Map<String, String> getSPELReplacements(Map<String, String> spelMapping) {
+        Map<String, String> replacementToOriginal = new HashMap<>();
+        if (spelMapping != null) {
+            for (Map.Entry<String, String> entry : spelMapping.entrySet()) {
+                String original = entry.getKey(); // e.g., :#{#inPatientPhrSearchModel.admissionId}
+                String replacement = entry.getValue(); // e.g., :admissionId
+                // Remove the leading colon for lookup
+                String replacementKey = replacement.startsWith(":") ? replacement.substring(1) : replacement;
+                replacementToOriginal.put(replacementKey, original);
+            }
+        }
+        return replacementToOriginal;
     }
 }

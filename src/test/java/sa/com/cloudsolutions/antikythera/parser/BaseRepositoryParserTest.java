@@ -314,6 +314,31 @@ class BaseRepositoryParserTest {
     }
 
     @Test
+    void testExistsAllByQuery() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        // Create a mock method to test existsAllBy
+        String methodCode = "public interface TestRepo { boolean existsAllByActiveAndStatus(Boolean active, String status); }";
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+        assertNotNull(q);
+        String sql = q.getQuery();
+        assertTrue(sql.contains("SELECT EXISTS"), "Query should use EXISTS: " + sql);
+        assertTrue(sql.contains("FROM users"), "Query should reference users table: " + sql);
+        assertTrue(sql.contains("WHERE"), "Query should have WHERE clause: " + sql);
+        assertTrue(sql.contains("AND"), "Query should have AND clause: " + sql);
+        // Verify the closing parenthesis - existsAllBy should also have balanced parens
+        int openParens = sql.length() - sql.replace("(", "").length();
+        int closeParens = sql.length() - sql.replace(")", "").length();
+        assertEquals(openParens, closeParens, "Parentheses should be balanced for existsAllBy: " + sql);
+    }
+
+    @Test
     void testCountByWithMultipleConditions() throws IOException {
         CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
         BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
@@ -501,5 +526,42 @@ class BaseRepositoryParserTest {
             assertTrue(sql.contains("IN"), "Query should contain IN: " + sql);
             assertTrue(sql.contains("first_name"), "Query should reference first_name column: " + sql);
         });
+    }
+
+    @Test
+    void testMongoRepositoryIsExcluded() {
+        // MongoRepository classes should not be considered JPA repositories
+        // because they use a different query paradigm (MongoDB queries, not SQL/JPQL)
+        String mongoRepoCode = """
+                package com.example.repository;
+                import org.springframework.data.mongodb.repository.MongoRepository;
+                public interface CropYieldRepository extends MongoRepository<CropYield, String> {
+                    CropYield findBySeason(String season);
+                }
+                """;
+        CompilationUnit cu = StaticJavaParser.parse(mongoRepoCode);
+        TypeDeclaration<?> type = cu.getType(0);
+
+        assertFalse(BaseRepositoryParser.isJpaRepository(type),
+                "MongoRepository should not be considered a JPA repository");
+        assertFalse(BaseRepositoryParser.isJpaRepository(new TypeWrapper(type)),
+                "MongoRepository TypeWrapper should not be considered a JPA repository");
+    }
+
+    @Test
+    void testReactiveMongoRepositoryIsExcluded() {
+        // ReactiveMongoRepository classes should also be excluded
+        String reactiveMongoRepoCode = """
+                package com.example.repository;
+                import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
+                public interface ReactiveHarvestRepository extends ReactiveMongoRepository<Harvest, String> {
+                    reactor.core.publisher.Mono<Harvest> findByCropType(String cropType);
+                }
+                """;
+        CompilationUnit cu = StaticJavaParser.parse(reactiveMongoRepoCode);
+        TypeDeclaration<?> type = cu.getType(0);
+
+        assertFalse(BaseRepositoryParser.isJpaRepository(type),
+                "ReactiveMongoRepository should not be considered a JPA repository");
     }
 }

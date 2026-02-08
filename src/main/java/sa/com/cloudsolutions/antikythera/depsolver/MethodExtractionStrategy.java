@@ -12,6 +12,7 @@ import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ThisExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Strategy for breaking circular dependencies by extracting methods into a new
@@ -57,6 +57,64 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         String dependencyBeanName;
         String dependencyFieldName;
         Set<String> fieldsToMove = new HashSet<>();
+    }
+
+    private static class ClassAnalysis {
+        Map<String, Set<MethodDeclaration>> fieldUsers = new HashMap<>();
+        Map<MethodDeclaration, Set<String>> methodUsedFields = new HashMap<>();
+        Map<MethodDeclaration, Set<MethodDeclaration>> methodCallGraph = new HashMap<>();
+    }
+
+    private class ClassAnalysisVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+        private final ClassAnalysis analysis;
+        private final ClassOrInterfaceDeclaration clazz;
+
+        ClassAnalysisVisitor(ClassAnalysis analysis, ClassOrInterfaceDeclaration clazz) {
+            this.analysis = analysis;
+            this.clazz = clazz;
+        }
+
+        @Override
+        public void visit(MethodDeclaration md, MethodDeclaration arg) {
+            // Traverse the method body
+            super.visit(md, md);
+        }
+
+        @Override
+        public void visit(NameExpr n, MethodDeclaration currentMethod) {
+            if (currentMethod != null) {
+                recordFieldUsage(n.getNameAsString(), currentMethod);
+            }
+            super.visit(n, currentMethod);
+        }
+
+        @Override
+        public void visit(FieldAccessExpr n, MethodDeclaration currentMethod) {
+            if (currentMethod != null && n.getScope().isThisExpr()) {
+                recordFieldUsage(n.getNameAsString(), currentMethod);
+            }
+            super.visit(n, currentMethod);
+        }
+
+        private void recordFieldUsage(String name, MethodDeclaration currentMethod) {
+            if (clazz.getFieldByName(name).isPresent()) {
+                analysis.fieldUsers.computeIfAbsent(name, k -> new HashSet<>()).add(currentMethod);
+                analysis.methodUsedFields.computeIfAbsent(currentMethod, k -> new HashSet<>()).add(name);
+            }
+        }
+
+        @Override
+        public void visit(MethodCallExpr n, MethodDeclaration currentMethod) {
+            if (currentMethod != null && isLocalMethodCall(n)) {
+                clazz.getMethodsByName(n.getNameAsString()).stream()
+                        .filter(m -> m.getParameters().size() == n.getArguments().size())
+                        .findFirst()
+                        .ifPresent(target -> 
+                            analysis.methodCallGraph.computeIfAbsent(currentMethod, k -> new HashSet<>()).add(target)
+                        );
+            }
+            super.visit(n, currentMethod);
+        }
     }
 
     /**
@@ -114,6 +172,9 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
                 continue;
             }
 
+            ClassAnalysis analysis = new ClassAnalysis();
+            new ClassAnalysisVisitor(analysis, beanClass).visit(beanClass, null);
+
             for (String otherBean : cycle) {
                 if (beanName.equals(otherBean))
                     continue;
@@ -121,10 +182,10 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
                 Optional<FieldDeclaration> depField = findDependencyField(beanClass, otherBean);
                 if (depField.isPresent()) {
                     String fieldName = depField.get().getVariable(0).getNameAsString();
-                    Set<MethodDeclaration> methods = findMethodsUsing(beanClass, fieldName);
+                    Set<MethodDeclaration> methods = new HashSet<>(analysis.fieldUsers.getOrDefault(fieldName, new HashSet<>()));
 
                     if (!methods.isEmpty()) {
-                        collectTransitiveDependencies(beanClass, methods);
+                        collectTransitiveDependencies(methods, analysis);
 
                         ExtractionCandidate candidate = new ExtractionCandidate();
                         candidate.sourceClass = beanClass;
@@ -133,15 +194,8 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
                         candidate.dependencyFieldName = fieldName;
 
                         // Identify other fields used by extracted methods that should be moved
-                        Set<String> usedFields = collectUsedFields(beanClass, methods, fieldName);
-                        for (String usedField : usedFields) {
-                            if (isFieldSafeToMove(beanClass, usedField, methods)) {
-                                candidate.fieldsToMove.add(usedField);
-                            } else {
-                                logger.warn("Field '{}' is used by both extracted and non-extracted methods. " +
-                                        "It cannot be safely moved, which may cause compilation errors.", usedField);
-                            }
-                        }
+                        Set<String> fieldsToMove = collectFieldsToMove(methods, fieldName, analysis);
+                        candidate.fieldsToMove.addAll(fieldsToMove);
 
                         candidates.add(candidate);
                     }
@@ -160,8 +214,7 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         return sb.toString();
     }
 
-    private void collectTransitiveDependencies(ClassOrInterfaceDeclaration clazz,
-                                               Set<MethodDeclaration> methods) {
+    private void collectTransitiveDependencies(Set<MethodDeclaration> methods, ClassAnalysis analysis) {
 
         Set<MethodDeclaration> workingSet = new HashSet<>(methods);
         Set<MethodDeclaration> processed = new HashSet<>();
@@ -171,19 +224,15 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
             workingSet.remove(current);
             processed.add(current);
 
-            current.findAll(MethodCallExpr.class).forEach(mce -> {
-                if (isLocalMethodCall(mce)) {
-                    clazz.getMethodsByName(mce.getNameAsString()).stream()
-                            .filter(m -> m.getParameters().size() == mce.getArguments().size())
-                            .findFirst()
-                            .ifPresent(target -> {
-                                if (!processed.contains(target) && !methods.contains(target)) {
-                                    methods.add(target);
-                                    workingSet.add(target);
-                                }
-                            });
+            Set<MethodDeclaration> calledMethods = analysis.methodCallGraph.get(current);
+            if (calledMethods != null) {
+                for (MethodDeclaration target : calledMethods) {
+                    if (!processed.contains(target) && !methods.contains(target)) {
+                        methods.add(target);
+                        workingSet.add(target);
+                    }
                 }
-            });
+            }
         }
     }
 
@@ -202,59 +251,38 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         return Optional.empty();
     }
 
-    private Set<MethodDeclaration> findMethodsUsing(ClassOrInterfaceDeclaration clazz, String fieldName) {
-        return clazz.getMethods().stream()
-                .filter(m -> methodUsesField(m, fieldName))
-                .collect(Collectors.toSet());
-    }
 
-    private boolean methodUsesField(MethodDeclaration method, String fieldName) {
-        if (method.getBody().isEmpty())
-            return false;
+    private Set<String> collectFieldsToMove(Set<MethodDeclaration> extractedMethods, String dependencyFieldName, ClassAnalysis analysis) {
+        Set<String> safeFields = new HashSet<>();
+        Set<String> checkedFields = new HashSet<>();
 
-        List<MethodCallExpr> methodCalls = method.findAll(MethodCallExpr.class);
-        for (MethodCallExpr mce : methodCalls) {
-            if (isMethodCallOnField(mce, fieldName)) {
-                return true;
+        for (MethodDeclaration method : extractedMethods) {
+            Set<String> fields = analysis.methodUsedFields.get(method);
+            if (fields != null) {
+                for (String field : fields) {
+                    if (field.equals(dependencyFieldName) || checkedFields.contains(field)) {
+                        continue;
+                    }
+                    checkedFields.add(field);
+
+                    if (isFieldSafeToMove(field, extractedMethods, analysis)) {
+                        safeFields.add(field);
+                    }
+                }
             }
         }
-        
-        // Check simple name usage
-        boolean nameUsed = method.findAll(NameExpr.class).stream()
-                .anyMatch(n -> n.getNameAsString().equals(fieldName));
-        
-        if (nameUsed) return true;
-
-        // Check field access (this.fieldName)
-        return method.findAll(FieldAccessExpr.class).stream()
-                .anyMatch(fa -> fa.getScope().isThisExpr() && fa.getNameAsString().equals(fieldName));
+        return safeFields;
     }
 
-    private Set<String> collectUsedFields(ClassOrInterfaceDeclaration clazz, Set<MethodDeclaration> methods, String dependencyFieldName) {
-        Set<String> usedFields = new HashSet<>();
-        for (MethodDeclaration method : methods) {
-            method.findAll(NameExpr.class).forEach(n -> {
-                String name = n.getNameAsString();
-                if (!name.equals(dependencyFieldName) && clazz.getFieldByName(name).isPresent()) {
-                    usedFields.add(name);
-                }
-            });
-            method.findAll(FieldAccessExpr.class).forEach(fa -> {
-                 if (fa.getScope().isThisExpr() && !fa.getNameAsString().equals(dependencyFieldName)) {
-                     if (clazz.getFieldByName(fa.getNameAsString()).isPresent()) {
-                         usedFields.add(fa.getNameAsString());
-                     }
-                 }
-            });
+    private boolean isFieldSafeToMove(String fieldName, Set<MethodDeclaration> extractedMethods, ClassAnalysis analysis) {
+        Set<MethodDeclaration> users = analysis.fieldUsers.get(fieldName);
+        if (users == null) return true;
+        for (MethodDeclaration user : users) {
+            if (!extractedMethods.contains(user)) {
+                return false;
+            }
         }
-        return usedFields;
-    }
-
-    private boolean isFieldSafeToMove(ClassOrInterfaceDeclaration clazz, String fieldName, Set<MethodDeclaration> extractedMethods) {
-        // Check if any non-extracted method uses this field
-        return clazz.getMethods().stream()
-                .filter(m -> !extractedMethods.contains(m))
-                .noneMatch(m -> methodUsesField(m, fieldName));
+        return true;
     }
 
     private void createMediatorClass(String packageName, String mediatorName, List<ExtractionCandidate> candidates) {
@@ -273,6 +301,7 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         cu.addImport("org.springframework.context.annotation.Lazy");
 
         Set<String> addedFields = new HashSet<>();
+        Set<String> addedMethods = new HashSet<>();
 
         for (ExtractionCandidate cand : candidates) {
             // Add imports from source
@@ -280,52 +309,62 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
                 sourceCu.getImports().forEach(cu::addImport)
             );
 
-            // Add dependency field if not exists
-            String depStruct = getSimpleClassName(cand.dependencyBeanName); // Type
-
-            if (!addedFields.contains(cand.dependencyFieldName)) {
-                FieldDeclaration fd = mediator.addField(depStruct, cand.dependencyFieldName, Modifier.Keyword.PRIVATE);
-                fd.addAnnotation("Autowired");
-                fd.addAnnotation("Lazy");
-                addedFields.add(cand.dependencyFieldName);
-            }
-
-            // Move other used fields
-            for (String fieldToMove : cand.fieldsToMove) {
-                if (!addedFields.contains(fieldToMove)) {
-                     cand.sourceClass.getFieldByName(fieldToMove).ifPresent(f -> {
-                         FieldDeclaration newField = f.clone();
-                         mediator.addMember(newField);
-                         addedFields.add(fieldToMove);
-                     });
-                }
-            }
-
-            // Move methods
-            for (MethodDeclaration method : cand.methods) {
-                // Avoid duplicates using signature check
-                boolean exists = mediator.getMethods().stream().anyMatch(m -> 
-                    m.getNameAsString().equals(method.getNameAsString()) &&
-                    m.getParameters().toString().equals(method.getParameters().toString())
-                );
-                
-                if (exists) continue;
-
-                MethodDeclaration newMethod = method.clone();
-                
-                // Qualify inner class types
-                qualifyInnerTypes(newMethod, cand.sourceClass);
-                
-                mediator.addMember(newMethod);
-
-                if (newMethod.isPrivate()) {
-                    newMethod.setPrivate(false);
-                    newMethod.setPublic(true);
-                }
-            }
+            addDependencyField(mediator, cand, addedFields);
+            moveFields(mediator, cand, addedFields);
+            moveMethods(mediator, cand, addedMethods);
         }
 
-        // Post-process mediator methods to fix calls to other moved methods
+        fixMethodCalls(mediator, candidates);
+
+        String fqn = packageName.isEmpty() ? mediatorName : packageName + "." + mediatorName;
+        generatedMediators.put(fqn, cu);
+        modifiedCUs.add(cu);
+        Graph.getDependencies().put(fqn, cu);
+    }
+
+    private void addDependencyField(ClassOrInterfaceDeclaration mediator, ExtractionCandidate cand, Set<String> addedFields) {
+        if (!addedFields.contains(cand.dependencyFieldName)) {
+            String depStruct = getSimpleClassName(cand.dependencyBeanName); // Type
+            FieldDeclaration fd = mediator.addField(depStruct, cand.dependencyFieldName, Modifier.Keyword.PRIVATE);
+            fd.addAnnotation("Autowired");
+            fd.addAnnotation("Lazy");
+            addedFields.add(cand.dependencyFieldName);
+        }
+    }
+
+    private void moveFields(ClassOrInterfaceDeclaration mediator, ExtractionCandidate cand, Set<String> addedFields) {
+        for (String fieldToMove : cand.fieldsToMove) {
+            if (!addedFields.contains(fieldToMove)) {
+                 cand.sourceClass.getFieldByName(fieldToMove).ifPresent(f -> {
+                     FieldDeclaration newField = f.clone();
+                     mediator.addMember(newField);
+                     addedFields.add(fieldToMove);
+                 });
+            }
+        }
+    }
+
+    private void moveMethods(ClassOrInterfaceDeclaration mediator, ExtractionCandidate cand, Set<String> addedMethods) {
+        for (MethodDeclaration method : cand.methods) {
+            String signature = method.getSignature().toString();
+            if (addedMethods.contains(signature)) continue;
+
+            MethodDeclaration newMethod = method.clone();
+            
+            // Qualify inner class types
+            qualifyInnerTypes(newMethod, cand.sourceClass);
+            
+            mediator.addMember(newMethod);
+            addedMethods.add(signature);
+
+            if (newMethod.isPrivate()) {
+                newMethod.setPrivate(false);
+                newMethod.setPublic(true);
+            }
+        }
+    }
+
+    private void fixMethodCalls(ClassOrInterfaceDeclaration mediator, List<ExtractionCandidate> candidates) {
         Set<String> allMovedMethods = new HashSet<>();
         for (ExtractionCandidate cand : candidates) {
             cand.methods.forEach(m -> allMovedMethods.add(m.getNameAsString()));
@@ -340,11 +379,6 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
                 }
             });
         }
-
-        String fqn = packageName.isEmpty() ? mediatorName : packageName + "." + mediatorName;
-        generatedMediators.put(fqn, cu);
-        modifiedCUs.add(cu);
-        Graph.getDependencies().put(fqn, cu);
     }
 
     private void refactorOriginalClass(ClassOrInterfaceDeclaration clazz, Set<MethodDeclaration> extractedMethods,

@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.parser.converter;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.raditha.hql.model.MetaData;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -75,10 +77,10 @@ class HQLParseAdapterTest extends TestHelper {
     @MethodSource("spelPreprocessingProvider")
     void testPreprocessSpELExpressions(String query, String spelKey, String expectedMapping) {
         HQLParserAdapter.SpELPreprocessingResult result = adapter.preprocessSpELExpressions(query);
-        assertEquals("SELECT u FROM User u WHERE u.id = :userId", result.preprocessedQuery);
-        assertEquals(1, result.spelMapping.size());
-        assertTrue(result.spelMapping.containsKey(spelKey));
-        assertEquals(expectedMapping, result.spelMapping.get(spelKey));
+        assertEquals("SELECT u FROM User u WHERE u.id = :userId", result.preprocessedQuery());
+        assertEquals(1, result.spelMapping().size());
+        assertTrue(result.spelMapping().containsKey(spelKey));
+        assertEquals(expectedMapping, result.spelMapping().get(spelKey));
     }
 
     @Test
@@ -86,10 +88,10 @@ class HQLParseAdapterTest extends TestHelper {
         String query = "SELECT u FROM User u WHERE u.id = :#{#model.userId} AND u.name = :#{#model.userName}";
         HQLParserAdapter.SpELPreprocessingResult result = adapter.preprocessSpELExpressions(query);
 
-        assertEquals("SELECT u FROM User u WHERE u.id = :userId AND u.name = :userName", result.preprocessedQuery);
-        assertEquals(2, result.spelMapping.size());
-        assertTrue(result.spelMapping.containsKey(":#{#model.userId}"));
-        assertTrue(result.spelMapping.containsKey(":#{#model.userName}"));
+        assertEquals("SELECT u FROM User u WHERE u.id = :userId AND u.name = :userName", result.preprocessedQuery());
+        assertEquals(2, result.spelMapping().size());
+        assertTrue(result.spelMapping().containsKey(":#{#model.userId}"));
+        assertTrue(result.spelMapping().containsKey(":#{#model.userName}"));
     }
 
     @Test
@@ -100,17 +102,17 @@ class HQLParseAdapterTest extends TestHelper {
                 "(:#{#inPatientPhrSearchModel.getPayerGroupId()} IS NOT NULL))";
         HQLParserAdapter.SpELPreprocessingResult result = adapter.preprocessSpELExpressions(query);
 
-        assertTrue(result.preprocessedQuery.contains(":admissionId"));
-        assertTrue(result.preprocessedQuery.contains(":patientId"));
-        assertTrue(result.preprocessedQuery.contains(":payerGroupId"));
+        assertTrue(result.preprocessedQuery().contains(":admissionId"));
+        assertTrue(result.preprocessedQuery().contains(":patientId"));
+        assertTrue(result.preprocessedQuery().contains(":payerGroupId"));
         // Note: The same SpEL expression appears twice, but the mapping only stores
         // unique expressions
         // So we have 3 unique SpEL expressions: admissionId, patientId, and
         // getPayerGroupId()
-        assertEquals(3, result.spelMapping.size());
-        assertTrue(result.spelMapping.containsKey(":#{#inPatientPhrSearchModel.admissionId}"));
-        assertTrue(result.spelMapping.containsKey(":#{#inPatientPhrSearchModel.patientId}"));
-        assertTrue(result.spelMapping.containsKey(":#{#inPatientPhrSearchModel.getPayerGroupId()}"));
+        assertEquals(3, result.spelMapping().size());
+        assertTrue(result.spelMapping().containsKey(":#{#inPatientPhrSearchModel.admissionId}"));
+        assertTrue(result.spelMapping().containsKey(":#{#inPatientPhrSearchModel.patientId}"));
+        assertTrue(result.spelMapping().containsKey(":#{#inPatientPhrSearchModel.getPayerGroupId()}"));
     }
 
     @Test
@@ -118,8 +120,8 @@ class HQLParseAdapterTest extends TestHelper {
         String query = "SELECT u FROM User u WHERE u.id = :userId";
         HQLParserAdapter.SpELPreprocessingResult result = adapter.preprocessSpELExpressions(query);
 
-        assertEquals(query, result.preprocessedQuery);
-        assertEquals(0, result.spelMapping.size());
+        assertEquals(query, result.preprocessedQuery());
+        assertEquals(0, result.spelMapping().size());
     }
 
     @Test
@@ -165,6 +167,65 @@ class HQLParseAdapterTest extends TestHelper {
         String result = adapter.postprocessSpELExpressions(sql, Map.of());
 
         assertEquals(sql, result);
+    }
+
+    // ========== LIKE Wildcard Preprocessing Tests ==========
+
+    @Test
+    void testPreprocessLikeWildcards_BothWildcards() {
+        String query = "SELECT c FROM Crop c WHERE c.variety LIKE %:searchTerm%";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT c FROM Crop c WHERE c.variety LIKE CONCAT('%', :searchTerm, '%')", result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_PrefixWildcard() {
+        String query = "SELECT c FROM Crop c WHERE c.variety LIKE %:searchTerm";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT c FROM Crop c WHERE c.variety LIKE CONCAT('%', :searchTerm)", result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_SuffixWildcard() {
+        String query = "SELECT c FROM Crop c WHERE c.variety LIKE :searchTerm%";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT c FROM Crop c WHERE c.variety LIKE CONCAT(:searchTerm, '%')", result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_WithSpEL() {
+        String query = "SELECT c FROM Crop c WHERE c.variety LIKE %:#{#search.term}%";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT c FROM Crop c WHERE c.variety LIKE CONCAT('%', :#{#search.term}, '%')", result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_MultipleConditions() {
+        String query = "SELECT f FROM Field f WHERE (f.fieldName LIKE %:term% OR f.soilType LIKE %:term%)";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT f FROM Field f WHERE (f.fieldName LIKE CONCAT('%', :term, '%') OR f.soilType LIKE CONCAT('%', :term, '%'))", result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_NoWildcards() {
+        String query = "SELECT c FROM Crop c WHERE c.variety LIKE :searchTerm";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        // No change expected
+        assertEquals(query, result);
+    }
+
+    @Test
+    void testPreprocessLikeWildcards_CaseInsensitive() {
+        String query = "SELECT c FROM Crop c WHERE c.variety like %:searchTerm%";
+        String result = adapter.preprocessLikeWildcards(query);
+
+        assertEquals("SELECT c FROM Crop c WHERE c.variety like CONCAT('%', :searchTerm, '%')", result);
     }
 
     @Test
@@ -235,5 +296,125 @@ class HQLParseAdapterTest extends TestHelper {
 
         String expected = "SELECT NEW com.example.DTO(CAST(SUM(amount) AS DECIMAL), CAST(COUNT(id) AS Long)) FROM Order o";
         assertEquals(expected, result);
+    }
+
+    // ========== Join Path Entity Resolution Tests ==========
+
+    @Test
+    void testConvertToNativeSQL_WithJoin() throws Exception {
+        // Test basic join - User has @OneToMany to Vehicle
+        String query = "SELECT u.username, v.manufacturer FROM User u JOIN u.vehicles v";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        assertNotNull(result.getNativeSql());
+        // The SQL should reference both tables
+        assertTrue(result.getReferencedTables().contains("users"));
+    }
+
+    @Test
+    void testConvertToNativeSQL_EntityResolutionThroughJoinPath() throws Exception {
+        // This tests that Vehicle is resolved through the join path u.vehicles
+        // even though Vehicle is not directly specified in the FROM clause
+        String query = "SELECT v.manufacturer FROM User u JOIN u.vehicles v WHERE v.year > 2020";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        assertNotNull(result.getNativeSql());
+        // Should contain vehicle table reference
+        String sql = result.getNativeSql().toLowerCase();
+        assertTrue(sql.contains("vehicle") || sql.contains("vehicles"));
+    }
+
+    @Test
+    void testConvertToNativeSQL_MultipleJoinLevels() throws Exception {
+        // Test that entity resolution works for entities accessed through join chains
+        // User -> Vehicle (through u.vehicles)
+        String query = "SELECT u.username, v.color FROM User u " +
+                "LEFT JOIN u.vehicles v " +
+                "WHERE u.active = true AND v.year >= 2020";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        assertNotNull(result.getNativeSql());
+    }
+
+    @Test
+    void testConvertToNativeSQL_FieldsFromJoinedEntity() throws Exception {
+        // Test that field references to joined entities work correctly
+        String query = "SELECT u.firstName, u.lastName, v.manufacturer, v.color " +
+                "FROM User u JOIN u.vehicles v";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        String sql = result.getNativeSql();
+        // Should have converted camelCase field names to snake_case columns
+        assertTrue(sql.contains("first_name") || sql.contains("firstName"));
+    }
+
+    @Test
+    void testConvertToNativeSQL_WithWhereOnJoinedEntity() throws Exception {
+        String query = "SELECT u FROM User u JOIN u.vehicles v WHERE v.manufacturer = :make";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        assertNotNull(result.getParameterMappings());
+        // Should have the :make parameter
+        assertTrue(result.getParameterMappings().stream()
+                .anyMatch(p -> p.originalName().contains("make")));
+    }
+
+    @Test
+    void testConvertToNativeSQL_CountWithJoin() throws Exception {
+        String query = "SELECT COUNT(v) FROM User u JOIN u.vehicles v WHERE u.active = true";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+
+        assertNotNull(result);
+        assertNotNull(result.getNativeSql());
+        assertTrue(result.getNativeSql().toUpperCase().contains("COUNT"));
+    }
+
+    // ========== Direct Unit Tests for resolveEntityFromJoinPaths ==========
+
+    @Test
+    void resolveEntityFromJoinPaths_resolvesTargetFromJoinMetadata() throws Exception {
+        String query = "SELECT v FROM User u JOIN u.vehicles v";
+        ConversionResult result = adapter.convertToNativeSQL(query);
+        MetaData analysis = result.getMetaData();
+
+        assertNotNull(analysis, "MetaData should be present");
+        assertFalse(analysis.getJoinPaths().isEmpty(), "Join paths should be collected");
+
+        Map<String, EntityMetadata> resolvedEntities = new HashMap<>();
+        for (String entityName : analysis.getEntityNames()) {
+            String fqn = adapter.getEntiyNameForEntity(entityName);
+            if (fqn == null) {
+                fqn = entityName;
+            }
+            AntikytheraRunTime.getTypeDeclaration(fqn).ifPresent(typeDecl -> {
+                EntityMetadata meta = EntityMappingResolver.buildOnTheFly(new TypeWrapper(typeDecl));
+                resolvedEntities.put(entityName, meta);
+            });
+        }
+
+        MetaData.JoinPathInfo joinPath = analysis.getJoinPaths().values().iterator().next();
+        EntityMetadata target = adapter.resolveEntityFromJoinPaths(joinPath.targetEntity(), analysis, resolvedEntities);
+
+        assertNotNull(target, "Expected target entity to be resolved via join path");
+        assertEquals("vehicles", target.tableName(), "Vehicle table should be resolved");
+    }
+
+    @Test
+    void resolveEntityFromJoinPaths_returnsNullWhenSourceNotResolved() throws Exception {
+        String query = "SELECT v FROM User u JOIN u.vehicles v";
+        MetaData analysis = adapter.convertToNativeSQL(query).getMetaData();
+
+        assertNotNull(analysis);
+        assertFalse(analysis.getJoinPaths().isEmpty());
+
+        MetaData.JoinPathInfo joinPath = analysis.getJoinPaths().values().iterator().next();
+        EntityMetadata target = adapter.resolveEntityFromJoinPaths(joinPath.targetEntity(), analysis, Map.of());
+
+        assertNull(target, "Should return null when source entity has not been resolved");
     }
 }

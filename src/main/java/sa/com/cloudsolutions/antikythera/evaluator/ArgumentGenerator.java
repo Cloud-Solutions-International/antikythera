@@ -40,24 +40,22 @@ public abstract class ArgumentGenerator {
             }
             b.append(");");
             return b.toString();
-        } else {
-            return className + " " + instanceName + " = new " + className + "();";
         }
+        return className + " " + instanceName + " = new " + className + "();";
     }
 
     private static String resolveNestedName(TypeDeclaration<?> type) {
         StringBuilder name = new StringBuilder(type.getNameAsString());
         TypeDeclaration<?> current = type;
         while (current.isNestedType()) {
-            if (current.getParentNode().isEmpty()) {
-                break;
+            if (current.getParentNode().isPresent()) {
+                Node parentNode = current.getParentNode().get();
+                if (!(parentNode instanceof TypeDeclaration<?> parent)) {
+                    break;
+                }
+                name.insert(0, parent.getNameAsString() + ".");
+                current = parent;
             }
-            Node parentNode = current.getParentNode().get();
-            if (!(parentNode instanceof TypeDeclaration<?> parent)) {
-                break;
-            }
-            name.insert(0, parent.getNameAsString() + ".");
-            current = parent;
         }
         return name.toString();
     }
