@@ -1,7 +1,6 @@
 package sa.com.cloudsolutions.antikythera.parser.converter;
 
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.FieldDeclaration;
 import com.raditha.hql.parser.HQLParser;
 import com.raditha.hql.parser.ParseException;
 import com.raditha.hql.model.MetaData;
@@ -10,7 +9,6 @@ import com.raditha.hql.converter.ConversionException;
 import com.raditha.hql.converter.JoinMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -532,7 +530,7 @@ public class HQLParserAdapter {
                     }
 
                     // Try to resolve by searching resolved types
-                    Optional<EntityMetadata> resolvedMeta = EntityMappingResolver.resolveBySuffix(actualTargetEntity);
+                    Optional<EntityMetadata> resolvedMeta = EntityMappingResolver.resolveEntity(actualTargetEntity);
                     if (resolvedMeta.isPresent()) {
                         return resolvedMeta.get();
                     }
@@ -562,51 +560,8 @@ public class HQLParserAdapter {
     }
 
     String getEntiyNameForEntity(String name) {
-        // Check 1: Is it the primary entity?
-        if (name.equals(entity.getName()) || name.equals(entity.getFullyQualifiedName())) {
-            return entity.getFullyQualifiedName();
-        }
-
-        // Check 2: Is it already registered in EntityMappingResolver?
-        Optional<String> n = EntityMappingResolver.getFullNamesForEntity(name).stream().findFirst();
-        if (n.isPresent()) {
-            return n.get();
-        }
-
-        // Check 3: Search in the entity's fields (relationships)
-        if (entity.getClazz() == null && entity.getType() != null) {
-            for (FieldDeclaration f : entity.getType().getFields()) {
-                for (TypeWrapper tw : AbstractCompiler.findTypesInVariable(f.getVariable(0))) {
-                    if (tw.getFullyQualifiedName() != null &&
-                            (tw.getFullyQualifiedName().equals(name) || tw.getName().equals(name))) {
-                        return tw.getFullyQualifiedName();
-                    }
-                }
-            }
-        } else if (entity.getClazz() != null && entity.getClazz().getName().equals(name)) {
-            return entity.getFullyQualifiedName();
-        }
-
-        // Check 4: Try same package as the primary entity
-        String entityFqn = entity.getFullyQualifiedName();
-        if (entityFqn != null && entityFqn.contains(".")) {
-            String packageName = entityFqn.substring(0, entityFqn.lastIndexOf('.'));
-            String samePackageFqn = packageName + "." + name;
-
-            // Check if this FQN exists in resolved types
-            TypeWrapper resolved = AntikytheraRunTime.getResolvedTypes().get(samePackageFqn);
-            if (resolved != null) {
-                // Build metadata on-the-fly if needed
-                EntityMappingResolver.buildOnTheFly(resolved);
-                return samePackageFqn;
-            }
-        }
-
-        return EntityMappingResolver.resolveBySuffix(name)
-                .map(meta -> meta.entity().getFullyQualifiedName())
-                .orElse(null);
+        return EntityMappingResolver.resolveRelatedEntity(entity, name);
     }
-
 
 
     /**

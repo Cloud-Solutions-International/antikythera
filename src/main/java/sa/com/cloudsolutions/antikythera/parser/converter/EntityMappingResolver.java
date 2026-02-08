@@ -29,6 +29,7 @@ public class EntityMappingResolver {
     private static final Map<String, EntityMetadata> mapping = new HashMap<>();
     private static final Map<String, Set<String>> shortNames = new HashMap<>();
     public static final String DTYPE = "dtype";
+    public static final String ENTITY = "Entity";
 
     /**
      * Private constructor to prevent instantiation.
@@ -78,7 +79,7 @@ public class EntityMappingResolver {
         shortNames.computeIfAbsent(name, k -> new HashSet<>()).add(fullyQualifiedName);
 
         EntityMetadata meta = null;
-        if (typeDecl != null && typeDecl.getAnnotationByName("Entity").isPresent()) {
+        if (typeDecl != null && typeDecl.getAnnotationByName(ENTITY).isPresent()) {
             meta = buildMetadataFromSources(typeDecl);
         } else if (type.getClazz() != null && type.getClazz().isAnnotationPresent(Entity.class)) {
             meta = buildEntityMetadata(type.getClazz());
@@ -368,7 +369,7 @@ public class EntityMappingResolver {
      * @return Entity name
      */
     public static String getEntityName(TypeDeclaration<?> typeDecl) {
-        Optional<AnnotationExpr> entityAnn = typeDecl.getAnnotationByName("Entity");
+        Optional<AnnotationExpr> entityAnn = typeDecl.getAnnotationByName(ENTITY);
 
         if (entityAnn.isPresent()) {
             Optional<String> s = getAnnotationValue(entityAnn.get(), "name");
@@ -658,10 +659,81 @@ public class EntityMappingResolver {
      */
     public static boolean isEntity(TypeWrapper tw) {
         if (tw.getType() != null) {
-            return tw.getType().getAnnotationByName("Entity").isPresent();
+            return tw.getType().getAnnotationByName(ENTITY).isPresent();
         } else if (tw.getClazz() != null) {
             return tw.getClazz().isAnnotationPresent(javax.persistence.Entity.class);
         }
         return false;
+    }
+
+    /**
+     * Attempts to resolve an entity by its name, checking full names mapping first,
+     * then falling back to suffix search.
+     *
+     * @param name The entity name or suffix
+     * @return Optional containing EntityMetadata if found
+     */
+    public static Optional<EntityMetadata> resolveEntity(String name) {
+        Optional<String> n = getFullNamesForEntity(name).stream().findFirst();
+        if (n.isPresent()) {
+            EntityMetadata meta = mapping.get(n.get());
+            return Optional.ofNullable(meta);
+        }
+        return resolveBySuffix(name);
+    }
+
+    /**
+     * Resolves an entity name within the context of another entity (e.g. the primary
+     * entity of a query).
+     * This handles cases where the entity might be:
+     * 1. The context entity itself
+     * 2. A related entity (field) of the context entity
+     * 3. In the same package as the context entity
+     *
+     * @param context The context entity (e.g. FROM User)
+     * @param name    The name to resolve
+     * @return The fully qualified name of the resolved entity, or null if not found
+     */
+    public static String resolveRelatedEntity(TypeWrapper context, String name) {
+        // Check 1: Is it the context entity?
+        if (name.equals(context.getName()) || name.equals(context.getFullyQualifiedName())) {
+            return context.getFullyQualifiedName();
+        }
+
+        // Check 2: Global resolution
+        Optional<EntityMetadata> global = resolveEntity(name);
+        if (global.isPresent()) {
+            return global.get().entity().getFullyQualifiedName();
+        }
+
+        // Check 3: Search in the context entity's fields (relationships)
+        if (context.getClazz() == null && context.getType() != null) {
+            for (FieldDeclaration f : context.getType().getFields()) {
+                for (TypeWrapper tw : AbstractCompiler.findTypesInVariable(f.getVariable(0))) {
+                    if (tw.getFullyQualifiedName() != null &&
+                            (tw.getFullyQualifiedName().equals(name) || tw.getName().equals(name))) {
+                        return tw.getFullyQualifiedName();
+                    }
+                }
+            }
+        } else if (context.getClazz() != null && context.getClazz().getName().equals(name)) {
+            return context.getFullyQualifiedName();
+        }
+
+        // Check 4: Try same package
+        String contextFqn = context.getFullyQualifiedName();
+        if (contextFqn != null && contextFqn.contains(".")) {
+            String packageName = contextFqn.substring(0, contextFqn.lastIndexOf('.'));
+            String samePackageFqn = packageName + "." + name;
+
+            TypeWrapper resolved = AntikytheraRunTime.getResolvedTypes().get(samePackageFqn);
+            if (resolved != null) {
+                // Build metadata on-the-fly if needed
+                buildOnTheFly(resolved);
+                return samePackageFqn;
+            }
+        }
+
+        return null;
     }
 }
