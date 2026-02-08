@@ -560,6 +560,11 @@ public class HQLParserAdapter {
     }
 
     String getEntiyNameForEntity(String name) {
+        // Check 1: Is it the context entity?
+        if (name.equals(entity.getName()) || name.equals(entity.getFullyQualifiedName())) {
+            return entity.getFullyQualifiedName();
+        }
+
         return EntityMappingResolver.resolveRelatedEntity(entity, name);
     }
 

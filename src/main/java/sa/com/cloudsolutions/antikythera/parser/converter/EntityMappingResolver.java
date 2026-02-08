@@ -682,6 +682,26 @@ public class EntityMappingResolver {
         return resolveBySuffix(name);
     }
 
+    private static String getNameFromContext(TypeWrapper context, String name) {
+        if (context.getType() != null) {
+            for (FieldDeclaration f : context.getType().getFields()) {
+                for (TypeWrapper tw : AbstractCompiler.findTypesInVariable(f.getVariable(0))) {
+                    if (name.equals(tw.getFullyQualifiedName()) || name.equals(tw.getName())) {
+                        return tw.getFullyQualifiedName();
+                    }
+                }
+            }
+        }
+        for (Field field : getAllFields(context.getClazz())) {
+            Class<?> targetClass = getTargetEntityClass(field);
+            if (targetClass != null && (name.equals(targetClass.getName()) || name.equals(targetClass.getSimpleName()))) {
+                return targetClass.getName();
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Resolves an entity name within the context of another entity (e.g. the primary
      * entity of a query).
@@ -695,32 +715,18 @@ public class EntityMappingResolver {
      * @return The fully qualified name of the resolved entity, or null if not found
      */
     public static String resolveRelatedEntity(TypeWrapper context, String name) {
-        // Check 1: Is it the context entity?
-        if (name.equals(context.getName()) || name.equals(context.getFullyQualifiedName())) {
-            return context.getFullyQualifiedName();
-        }
-
         // Check 2: Global resolution
         Optional<EntityMetadata> global = resolveEntity(name);
         if (global.isPresent()) {
             return global.get().entity().getFullyQualifiedName();
         }
 
-        // Check 3: Search in the context entity's fields (relationships)
-        if (context.getClazz() == null && context.getType() != null) {
-            for (FieldDeclaration f : context.getType().getFields()) {
-                for (TypeWrapper tw : AbstractCompiler.findTypesInVariable(f.getVariable(0))) {
-                    if (tw.getFullyQualifiedName() != null &&
-                            (tw.getFullyQualifiedName().equals(name) || tw.getName().equals(name))) {
-                        return tw.getFullyQualifiedName();
-                    }
-                }
-            }
-        } else if (context.getClazz() != null && context.getClazz().getName().equals(name)) {
-            return context.getFullyQualifiedName();
+        String fqn = getNameFromContext(context, name);
+        if (fqn != null)
+        {
+            return fqn;
         }
 
-        // Check 4: Try same package
         String contextFqn = context.getFullyQualifiedName();
         if (contextFqn != null && contextFqn.contains(".")) {
             String packageName = contextFqn.substring(0, contextFqn.lastIndexOf('.'));
