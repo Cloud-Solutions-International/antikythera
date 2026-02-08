@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Strategy for breaking circular dependencies by extracting methods into a new
@@ -301,6 +302,7 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         cu.addImport("org.springframework.context.annotation.Lazy");
 
         Set<String> addedFields = new HashSet<>();
+        Set<String> addedMethods = new HashSet<>();
 
         for (ExtractionCandidate cand : candidates) {
             // Add imports from source
@@ -308,52 +310,62 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
                 sourceCu.getImports().forEach(cu::addImport)
             );
 
-            // Add dependency field if not exists
-            String depStruct = getSimpleClassName(cand.dependencyBeanName); // Type
-
-            if (!addedFields.contains(cand.dependencyFieldName)) {
-                FieldDeclaration fd = mediator.addField(depStruct, cand.dependencyFieldName, Modifier.Keyword.PRIVATE);
-                fd.addAnnotation("Autowired");
-                fd.addAnnotation("Lazy");
-                addedFields.add(cand.dependencyFieldName);
-            }
-
-            // Move other used fields
-            for (String fieldToMove : cand.fieldsToMove) {
-                if (!addedFields.contains(fieldToMove)) {
-                     cand.sourceClass.getFieldByName(fieldToMove).ifPresent(f -> {
-                         FieldDeclaration newField = f.clone();
-                         mediator.addMember(newField);
-                         addedFields.add(fieldToMove);
-                     });
-                }
-            }
-
-            // Move methods
-            for (MethodDeclaration method : cand.methods) {
-                // Avoid duplicates using signature check
-                boolean exists = mediator.getMethods().stream().anyMatch(m -> 
-                    m.getNameAsString().equals(method.getNameAsString()) &&
-                    m.getParameters().toString().equals(method.getParameters().toString())
-                );
-                
-                if (exists) continue;
-
-                MethodDeclaration newMethod = method.clone();
-                
-                // Qualify inner class types
-                qualifyInnerTypes(newMethod, cand.sourceClass);
-                
-                mediator.addMember(newMethod);
-
-                if (newMethod.isPrivate()) {
-                    newMethod.setPrivate(false);
-                    newMethod.setPublic(true);
-                }
-            }
+            addDependencyField(mediator, cand, addedFields);
+            moveFields(mediator, cand, addedFields);
+            moveMethods(mediator, cand, addedMethods);
         }
 
-        // Post-process mediator methods to fix calls to other moved methods
+        fixMethodCalls(mediator, candidates);
+
+        String fqn = packageName.isEmpty() ? mediatorName : packageName + "." + mediatorName;
+        generatedMediators.put(fqn, cu);
+        modifiedCUs.add(cu);
+        Graph.getDependencies().put(fqn, cu);
+    }
+
+    private void addDependencyField(ClassOrInterfaceDeclaration mediator, ExtractionCandidate cand, Set<String> addedFields) {
+        if (!addedFields.contains(cand.dependencyFieldName)) {
+            String depStruct = getSimpleClassName(cand.dependencyBeanName); // Type
+            FieldDeclaration fd = mediator.addField(depStruct, cand.dependencyFieldName, Modifier.Keyword.PRIVATE);
+            fd.addAnnotation("Autowired");
+            fd.addAnnotation("Lazy");
+            addedFields.add(cand.dependencyFieldName);
+        }
+    }
+
+    private void moveFields(ClassOrInterfaceDeclaration mediator, ExtractionCandidate cand, Set<String> addedFields) {
+        for (String fieldToMove : cand.fieldsToMove) {
+            if (!addedFields.contains(fieldToMove)) {
+                 cand.sourceClass.getFieldByName(fieldToMove).ifPresent(f -> {
+                     FieldDeclaration newField = f.clone();
+                     mediator.addMember(newField);
+                     addedFields.add(fieldToMove);
+                 });
+            }
+        }
+    }
+
+    private void moveMethods(ClassOrInterfaceDeclaration mediator, ExtractionCandidate cand, Set<String> addedMethods) {
+        for (MethodDeclaration method : cand.methods) {
+            String signature = method.getSignature().toString();
+            if (addedMethods.contains(signature)) continue;
+
+            MethodDeclaration newMethod = method.clone();
+            
+            // Qualify inner class types
+            qualifyInnerTypes(newMethod, cand.sourceClass);
+            
+            mediator.addMember(newMethod);
+            addedMethods.add(signature);
+
+            if (newMethod.isPrivate()) {
+                newMethod.setPrivate(false);
+                newMethod.setPublic(true);
+            }
+        }
+    }
+
+    private void fixMethodCalls(ClassOrInterfaceDeclaration mediator, List<ExtractionCandidate> candidates) {
         Set<String> allMovedMethods = new HashSet<>();
         for (ExtractionCandidate cand : candidates) {
             cand.methods.forEach(m -> allMovedMethods.add(m.getNameAsString()));
@@ -361,16 +373,13 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
 
         for (MethodDeclaration method : mediator.getMethods()) {
             method.findAll(MethodCallExpr.class).forEach(mce -> {
-                if (allMovedMethods.contains(mce.getNameAsString()) && mce.getScope().isPresent()) {
-                    mce.removeScope();
+                if (allMovedMethods.contains(mce.getNameAsString())) {
+                    if (mce.getScope().isPresent()) {
+                         mce.removeScope();
+                    }
                 }
             });
         }
-
-        String fqn = packageName.isEmpty() ? mediatorName : packageName + "." + mediatorName;
-        generatedMediators.put(fqn, cu);
-        modifiedCUs.add(cu);
-        Graph.getDependencies().put(fqn, cu);
     }
 
     private void refactorOriginalClass(ClassOrInterfaceDeclaration clazz, Set<MethodDeclaration> extractedMethods,
