@@ -532,14 +532,9 @@ public class HQLParserAdapter {
                     }
 
                     // Try to resolve by searching resolved types
-                    for (Map.Entry<String, TypeWrapper> entry : AntikytheraRunTime.getResolvedTypes().entrySet()) {
-                        String fqn = entry.getKey();
-                        if (fqn.endsWith("." + actualTargetEntity)) {
-                            TypeWrapper tw = entry.getValue();
-                            if (isEntity(tw)) {
-                                return EntityMappingResolver.buildOnTheFly(tw);
-                            }
-                        }
+                    Optional<EntityMetadata> resolvedMeta = EntityMappingResolver.resolveBySuffix(actualTargetEntity);
+                    if (resolvedMeta.isPresent()) {
+                        return resolvedMeta.get();
                     }
                 }
             }
@@ -607,37 +602,12 @@ public class HQLParserAdapter {
             }
         }
 
-        return broadSearchEntityName(name);
+        return EntityMappingResolver.resolveBySuffix(name)
+                .map(meta -> meta.entity().getFullyQualifiedName())
+                .orElse(null);
     }
 
-    private String broadSearchEntityName(String name) {
-        for (Map.Entry<String, TypeWrapper> entry : AntikytheraRunTime.getResolvedTypes().entrySet()) {
-            String fqn = entry.getKey();
-            if (fqn.endsWith("." + name)) {
-                TypeWrapper tw = entry.getValue();
-                // Verify it's an entity (has @Entity annotation)
-                if (isEntity(tw)) {
-                    // Build metadata on-the-fly if needed
-                    EntityMappingResolver.buildOnTheFly(tw);
-                    return fqn;
-                }
-            }
-        }
 
-        return null;
-    }
-
-    /**
-     * Checks if a TypeWrapper represents a JPA entity.
-     */
-    private boolean isEntity(TypeWrapper tw) {
-        if (tw.getType() != null) {
-            return tw.getType().getAnnotationByName("Entity").isPresent();
-        } else if (tw.getClazz() != null) {
-            return tw.getClazz().isAnnotationPresent(javax.persistence.Entity.class);
-        }
-        return false;
-    }
 
     /**
      * Extracts parameter mappings from the query analysis.

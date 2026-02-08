@@ -629,4 +629,39 @@ public class EntityMappingResolver {
         }
         return meta.tableName();
     }
+
+    /**
+     * Attempts to resolve an entity by its simple name or suffix.
+     * Iterates through all resolved types to find a match.
+     *
+     * @param suffix The simple name or suffix of the entity class
+     * @return Optional containing EntityMetadata if found, empty otherwise
+     */
+    public static Optional<EntityMetadata> resolveBySuffix(String suffix) {
+        for (Map.Entry<String, TypeWrapper> entry : AntikytheraRunTime.getResolvedTypes().entrySet()) {
+            String fqn = entry.getKey();
+            if (fqn.endsWith("." + suffix)) {
+                TypeWrapper tw = entry.getValue();
+                if (isEntity(tw)) {
+                    return Optional.ofNullable(buildOnTheFly(tw));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Checks if a TypeWrapper represents a JPA entity.
+     *
+     * @param tw The TypeWrapper to check
+     * @return true if the type is annotated with @Entity, false otherwise
+     */
+    public static boolean isEntity(TypeWrapper tw) {
+        if (tw.getType() != null) {
+            return tw.getType().getAnnotationByName("Entity").isPresent();
+        } else if (tw.getClazz() != null) {
+            return tw.getClazz().isAnnotationPresent(javax.persistence.Entity.class);
+        }
+        return false;
+    }
 }
