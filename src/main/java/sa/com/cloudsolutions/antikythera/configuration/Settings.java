@@ -56,6 +56,12 @@ public class Settings {
     public static final String SKIP_VOID_NO_SIDE_EFFECTS = "skip_void_no_side_effects";
     public static final String GENERATE_CONSTRUCTOR_TESTS = "generate_constructor_tests";
     /**
+     * When enabled, type resolution failures during dynamic class generation will throw exceptions
+     * instead of falling back to Object.class. This is useful for debugging type resolution issues
+     * but may cause generation to fail for classes with complex or unresolved dependencies.
+     */
+    public static final String STRICT_TYPE_RESOLUTION = "strict_type_resolution";
+    /**
      * HashMap to store the configurations.
      */
     protected static HashMap<String, Object> props;
