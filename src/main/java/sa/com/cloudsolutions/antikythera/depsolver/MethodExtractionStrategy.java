@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Strategy for breaking circular dependencies by extracting methods into a new
@@ -84,11 +83,7 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         @Override
         public void visit(NameExpr n, MethodDeclaration currentMethod) {
             if (currentMethod != null) {
-                String name = n.getNameAsString();
-                if (clazz.getFieldByName(name).isPresent()) {
-                    analysis.fieldUsers.computeIfAbsent(name, k -> new HashSet<>()).add(currentMethod);
-                    analysis.methodUsedFields.computeIfAbsent(currentMethod, k -> new HashSet<>()).add(name);
-                }
+                recordFieldUsage(n.getNameAsString(), currentMethod);
             }
             super.visit(n, currentMethod);
         }
@@ -96,13 +91,16 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         @Override
         public void visit(FieldAccessExpr n, MethodDeclaration currentMethod) {
             if (currentMethod != null && n.getScope().isThisExpr()) {
-                String name = n.getNameAsString();
-                if (clazz.getFieldByName(name).isPresent()) {
-                    analysis.fieldUsers.computeIfAbsent(name, k -> new HashSet<>()).add(currentMethod);
-                    analysis.methodUsedFields.computeIfAbsent(currentMethod, k -> new HashSet<>()).add(name);
-                }
+                recordFieldUsage(n.getNameAsString(), currentMethod);
             }
             super.visit(n, currentMethod);
+        }
+
+        private void recordFieldUsage(String name, MethodDeclaration currentMethod) {
+            if (clazz.getFieldByName(name).isPresent()) {
+                analysis.fieldUsers.computeIfAbsent(name, k -> new HashSet<>()).add(currentMethod);
+                analysis.methodUsedFields.computeIfAbsent(currentMethod, k -> new HashSet<>()).add(name);
+            }
         }
 
         @Override
@@ -196,15 +194,8 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
                         candidate.dependencyFieldName = fieldName;
 
                         // Identify other fields used by extracted methods that should be moved
-                        Set<String> usedFields = collectUsedFields(methods, fieldName, analysis);
-                        for (String usedField : usedFields) {
-                            if (isFieldSafeToMove(usedField, methods, analysis)) {
-                                candidate.fieldsToMove.add(usedField);
-                            } else {
-                                logger.warn("Field '{}' is used by both extracted and non-extracted methods. " +
-                                        "It cannot be safely moved, which may cause compilation errors.", usedField);
-                            }
-                        }
+                        Set<String> fieldsToMove = collectFieldsToMove(methods, fieldName, analysis);
+                        candidate.fieldsToMove.addAll(fieldsToMove);
 
                         candidates.add(candidate);
                     }
@@ -261,19 +252,26 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
     }
 
 
-    private Set<String> collectUsedFields(Set<MethodDeclaration> methods, String dependencyFieldName, ClassAnalysis analysis) {
-        Set<String> usedFields = new HashSet<>();
-        for (MethodDeclaration method : methods) {
+    private Set<String> collectFieldsToMove(Set<MethodDeclaration> extractedMethods, String dependencyFieldName, ClassAnalysis analysis) {
+        Set<String> safeFields = new HashSet<>();
+        Set<String> checkedFields = new HashSet<>();
+
+        for (MethodDeclaration method : extractedMethods) {
             Set<String> fields = analysis.methodUsedFields.get(method);
             if (fields != null) {
                 for (String field : fields) {
-                     if (!field.equals(dependencyFieldName)) {
-                         usedFields.add(field);
-                     }
+                    if (field.equals(dependencyFieldName) || checkedFields.contains(field)) {
+                        continue;
+                    }
+                    checkedFields.add(field);
+
+                    if (isFieldSafeToMove(field, extractedMethods, analysis)) {
+                        safeFields.add(field);
+                    }
                 }
             }
         }
-        return usedFields;
+        return safeFields;
     }
 
     private boolean isFieldSafeToMove(String fieldName, Set<MethodDeclaration> extractedMethods, ClassAnalysis analysis) {
@@ -363,10 +361,8 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
 
         for (MethodDeclaration method : mediator.getMethods()) {
             method.findAll(MethodCallExpr.class).forEach(mce -> {
-                if (allMovedMethods.contains(mce.getNameAsString())) {
-                    if (mce.getScope().isPresent()) {
-                         mce.removeScope();
-                    }
+                if (allMovedMethods.contains(mce.getNameAsString()) && mce.getScope().isPresent()) {
+                    mce.removeScope();
                 }
             });
         }
