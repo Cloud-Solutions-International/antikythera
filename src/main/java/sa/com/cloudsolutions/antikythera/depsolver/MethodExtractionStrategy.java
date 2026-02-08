@@ -12,6 +12,7 @@ import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ThisExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithName;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +58,65 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         String dependencyBeanName;
         String dependencyFieldName;
         Set<String> fieldsToMove = new HashSet<>();
+    }
+
+    private static class ClassAnalysis {
+        Map<String, Set<MethodDeclaration>> fieldUsers = new HashMap<>();
+        Map<MethodDeclaration, Set<String>> methodUsedFields = new HashMap<>();
+        Map<MethodDeclaration, Set<MethodDeclaration>> methodCallGraph = new HashMap<>();
+    }
+
+    private class ClassAnalysisVisitor extends VoidVisitorAdapter<MethodDeclaration> {
+        private final ClassAnalysis analysis;
+        private final ClassOrInterfaceDeclaration clazz;
+
+        ClassAnalysisVisitor(ClassAnalysis analysis, ClassOrInterfaceDeclaration clazz) {
+            this.analysis = analysis;
+            this.clazz = clazz;
+        }
+
+        @Override
+        public void visit(MethodDeclaration md, MethodDeclaration arg) {
+            // Traverse the method body
+            super.visit(md, md);
+        }
+
+        @Override
+        public void visit(NameExpr n, MethodDeclaration currentMethod) {
+            if (currentMethod != null) {
+                String name = n.getNameAsString();
+                if (clazz.getFieldByName(name).isPresent()) {
+                    analysis.fieldUsers.computeIfAbsent(name, k -> new HashSet<>()).add(currentMethod);
+                    analysis.methodUsedFields.computeIfAbsent(currentMethod, k -> new HashSet<>()).add(name);
+                }
+            }
+            super.visit(n, currentMethod);
+        }
+
+        @Override
+        public void visit(FieldAccessExpr n, MethodDeclaration currentMethod) {
+            if (currentMethod != null && n.getScope().isThisExpr()) {
+                String name = n.getNameAsString();
+                if (clazz.getFieldByName(name).isPresent()) {
+                    analysis.fieldUsers.computeIfAbsent(name, k -> new HashSet<>()).add(currentMethod);
+                    analysis.methodUsedFields.computeIfAbsent(currentMethod, k -> new HashSet<>()).add(name);
+                }
+            }
+            super.visit(n, currentMethod);
+        }
+
+        @Override
+        public void visit(MethodCallExpr n, MethodDeclaration currentMethod) {
+            if (currentMethod != null && isLocalMethodCall(n)) {
+                clazz.getMethodsByName(n.getNameAsString()).stream()
+                        .filter(m -> m.getParameters().size() == n.getArguments().size())
+                        .findFirst()
+                        .ifPresent(target -> 
+                            analysis.methodCallGraph.computeIfAbsent(currentMethod, k -> new HashSet<>()).add(target)
+                        );
+            }
+            super.visit(n, currentMethod);
+        }
     }
 
     /**
@@ -114,6 +174,9 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
                 continue;
             }
 
+            ClassAnalysis analysis = new ClassAnalysis();
+            new ClassAnalysisVisitor(analysis, beanClass).visit(beanClass, null);
+
             for (String otherBean : cycle) {
                 if (beanName.equals(otherBean))
                     continue;
@@ -121,10 +184,10 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
                 Optional<FieldDeclaration> depField = findDependencyField(beanClass, otherBean);
                 if (depField.isPresent()) {
                     String fieldName = depField.get().getVariable(0).getNameAsString();
-                    Set<MethodDeclaration> methods = findMethodsUsing(beanClass, fieldName);
+                    Set<MethodDeclaration> methods = new HashSet<>(analysis.fieldUsers.getOrDefault(fieldName, new HashSet<>()));
 
                     if (!methods.isEmpty()) {
-                        collectTransitiveDependencies(beanClass, methods);
+                        collectTransitiveDependencies(methods, analysis);
 
                         ExtractionCandidate candidate = new ExtractionCandidate();
                         candidate.sourceClass = beanClass;
@@ -133,9 +196,9 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
                         candidate.dependencyFieldName = fieldName;
 
                         // Identify other fields used by extracted methods that should be moved
-                        Set<String> usedFields = collectUsedFields(beanClass, methods, fieldName);
+                        Set<String> usedFields = collectUsedFields(methods, fieldName, analysis);
                         for (String usedField : usedFields) {
-                            if (isFieldSafeToMove(beanClass, usedField, methods)) {
+                            if (isFieldSafeToMove(usedField, methods, analysis)) {
                                 candidate.fieldsToMove.add(usedField);
                             } else {
                                 logger.warn("Field '{}' is used by both extracted and non-extracted methods. " +
@@ -160,8 +223,7 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         return sb.toString();
     }
 
-    private void collectTransitiveDependencies(ClassOrInterfaceDeclaration clazz,
-                                               Set<MethodDeclaration> methods) {
+    private void collectTransitiveDependencies(Set<MethodDeclaration> methods, ClassAnalysis analysis) {
 
         Set<MethodDeclaration> workingSet = new HashSet<>(methods);
         Set<MethodDeclaration> processed = new HashSet<>();
@@ -171,19 +233,15 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
             workingSet.remove(current);
             processed.add(current);
 
-            current.findAll(MethodCallExpr.class).forEach(mce -> {
-                if (isLocalMethodCall(mce)) {
-                    clazz.getMethodsByName(mce.getNameAsString()).stream()
-                            .filter(m -> m.getParameters().size() == mce.getArguments().size())
-                            .findFirst()
-                            .ifPresent(target -> {
-                                if (!processed.contains(target) && !methods.contains(target)) {
-                                    methods.add(target);
-                                    workingSet.add(target);
-                                }
-                            });
+            Set<MethodDeclaration> calledMethods = analysis.methodCallGraph.get(current);
+            if (calledMethods != null) {
+                for (MethodDeclaration target : calledMethods) {
+                    if (!processed.contains(target) && !methods.contains(target)) {
+                        methods.add(target);
+                        workingSet.add(target);
+                    }
                 }
-            });
+            }
         }
     }
 
@@ -202,59 +260,31 @@ public class MethodExtractionStrategy extends AbstractExtractionStrategy {
         return Optional.empty();
     }
 
-    private Set<MethodDeclaration> findMethodsUsing(ClassOrInterfaceDeclaration clazz, String fieldName) {
-        return clazz.getMethods().stream()
-                .filter(m -> methodUsesField(m, fieldName))
-                .collect(Collectors.toSet());
-    }
 
-    private boolean methodUsesField(MethodDeclaration method, String fieldName) {
-        if (method.getBody().isEmpty())
-            return false;
-
-        List<MethodCallExpr> methodCalls = method.findAll(MethodCallExpr.class);
-        for (MethodCallExpr mce : methodCalls) {
-            if (isMethodCallOnField(mce, fieldName)) {
-                return true;
-            }
-        }
-        
-        // Check simple name usage
-        boolean nameUsed = method.findAll(NameExpr.class).stream()
-                .anyMatch(n -> n.getNameAsString().equals(fieldName));
-        
-        if (nameUsed) return true;
-
-        // Check field access (this.fieldName)
-        return method.findAll(FieldAccessExpr.class).stream()
-                .anyMatch(fa -> fa.getScope().isThisExpr() && fa.getNameAsString().equals(fieldName));
-    }
-
-    private Set<String> collectUsedFields(ClassOrInterfaceDeclaration clazz, Set<MethodDeclaration> methods, String dependencyFieldName) {
+    private Set<String> collectUsedFields(Set<MethodDeclaration> methods, String dependencyFieldName, ClassAnalysis analysis) {
         Set<String> usedFields = new HashSet<>();
         for (MethodDeclaration method : methods) {
-            method.findAll(NameExpr.class).forEach(n -> {
-                String name = n.getNameAsString();
-                if (!name.equals(dependencyFieldName) && clazz.getFieldByName(name).isPresent()) {
-                    usedFields.add(name);
-                }
-            });
-            method.findAll(FieldAccessExpr.class).forEach(fa -> {
-                 if (fa.getScope().isThisExpr() && !fa.getNameAsString().equals(dependencyFieldName)) {
-                     if (clazz.getFieldByName(fa.getNameAsString()).isPresent()) {
-                         usedFields.add(fa.getNameAsString());
+            Set<String> fields = analysis.methodUsedFields.get(method);
+            if (fields != null) {
+                for (String field : fields) {
+                     if (!field.equals(dependencyFieldName)) {
+                         usedFields.add(field);
                      }
-                 }
-            });
+                }
+            }
         }
         return usedFields;
     }
 
-    private boolean isFieldSafeToMove(ClassOrInterfaceDeclaration clazz, String fieldName, Set<MethodDeclaration> extractedMethods) {
-        // Check if any non-extracted method uses this field
-        return clazz.getMethods().stream()
-                .filter(m -> !extractedMethods.contains(m))
-                .noneMatch(m -> methodUsesField(m, fieldName));
+    private boolean isFieldSafeToMove(String fieldName, Set<MethodDeclaration> extractedMethods, ClassAnalysis analysis) {
+        Set<MethodDeclaration> users = analysis.fieldUsers.get(fieldName);
+        if (users == null) return true;
+        for (MethodDeclaration user : users) {
+            if (!extractedMethods.contains(user)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void createMediatorClass(String packageName, String mediatorName, List<ExtractionCandidate> candidates) {

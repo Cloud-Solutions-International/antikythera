@@ -4,7 +4,6 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -16,6 +15,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.TypeParameter;
 import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -24,7 +24,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Strategy for breaking circular dependencies by extracting an interface.
@@ -102,7 +101,7 @@ public class InterfaceExtractionStrategy extends AbstractExtractionStrategy {
         }
 
         // Step 3: Generate interface or update existing one
-        String interfaceName = INTERFACE_PREFIX + getSimpleClassName(edge.targetBean());
+        String interfaceName = INTERFACE_PREFIX + AbstractCompiler.fullyQualifiedToShortName(edge.targetBean());
         String targetPackage = getPackageName(edge.targetBean());
         
         CompilationUnit interfaceCU;
@@ -296,14 +295,6 @@ public class InterfaceExtractionStrategy extends AbstractExtractionStrategy {
                 }
             }
         }
-    }
-
-    /**
-     * Get simple class name from fully qualified name.
-     */
-    private String getSimpleClassName(String fqn) {
-        int lastDot = fqn.lastIndexOf('.');
-        return lastDot >= 0 ? fqn.substring(lastDot + 1) : fqn;
     }
 
     /**
