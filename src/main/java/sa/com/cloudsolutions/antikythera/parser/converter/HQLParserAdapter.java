@@ -608,7 +608,6 @@ public class HQLParserAdapter {
     }
 
     private String broadSearchEntityName(String name) {
-        // Check 5: Search all resolved types for matching simple name
         for (Map.Entry<String, TypeWrapper> entry : AntikytheraRunTime.getResolvedTypes().entrySet()) {
             String fqn = entry.getKey();
             if (fqn.endsWith("." + name)) {

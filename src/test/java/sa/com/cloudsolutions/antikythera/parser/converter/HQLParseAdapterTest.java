@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.parser.converter;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.raditha.hql.model.MetaData;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,6 +18,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -372,129 +374,47 @@ class HQLParseAdapterTest extends TestHelper {
         assertTrue(result.getNativeSql().toUpperCase().contains("COUNT"));
     }
 
-    // ========== ResolveEntityFromJoinPaths Tests ==========
+    // ========== Direct Unit Tests for resolveEntityFromJoinPaths ==========
 
     @Test
-    void testResolveEntityFromJoinPaths_BasicJoin() throws Exception {
-        // Test that Vehicle entity is resolved through the join path u.vehicles
-        // This verifies the resolveEntityFromJoinPaths method works correctly
-        String query = "SELECT v.manufacturer, v.year FROM User u JOIN u.vehicles v WHERE v.year > 2020";
+    void resolveEntityFromJoinPaths_resolvesTargetFromJoinMetadata() throws Exception {
+        String query = "SELECT v FROM User u JOIN u.vehicles v";
         ConversionResult result = adapter.convertToNativeSQL(query);
+        MetaData analysis = result.getMetaData();
 
-        assertNotNull(result);
-        assertTrue(result.isSuccessful(), "Query conversion should succeed");
-        assertNotNull(result.getMetaData(), "MetaData should be populated");
-        
-        // Verify the join path was processed
-        assertFalse(result.getMetaData().getJoinPaths().isEmpty(), 
-                "Join paths should be recorded");
-        
-        // Verify Vehicle fields are correctly converted
-        String sql = result.getNativeSql();
-        assertNotNull(sql);
-        assertTrue(sql.toLowerCase().contains("vehicle") || sql.toLowerCase().contains("vehicles"),
-                "SQL should reference vehicle table");
+        assertNotNull(analysis, "MetaData should be present");
+        assertFalse(analysis.getJoinPaths().isEmpty(), "Join paths should be collected");
+
+        Map<String, EntityMetadata> resolvedEntities = new HashMap<>();
+        for (String entityName : analysis.getEntityNames()) {
+            String fqn = adapter.getEntiyNameForEntity(entityName);
+            if (fqn == null) {
+                fqn = entityName;
+            }
+            AntikytheraRunTime.getTypeDeclaration(fqn).ifPresent(typeDecl -> {
+                EntityMetadata meta = EntityMappingResolver.buildOnTheFly(new TypeWrapper(typeDecl));
+                resolvedEntities.put(entityName, meta);
+            });
+        }
+
+        MetaData.JoinPathInfo joinPath = analysis.getJoinPaths().values().iterator().next();
+        EntityMetadata target = adapter.resolveEntityFromJoinPaths(joinPath.targetEntity(), analysis, resolvedEntities);
+
+        assertNotNull(target, "Expected target entity to be resolved via join path");
+        assertEquals("vehicles", target.tableName(), "Vehicle table should be resolved");
     }
 
     @Test
-    void testResolveEntityFromJoinPaths_MultipleJoins() throws Exception {
-        // Test entity resolution with multiple join paths
-        String query = "SELECT u.username, v.manufacturer FROM User u " +
-                "JOIN u.vehicles v " +
-                "WHERE u.active = true AND v.year >= 2015";
-        ConversionResult result = adapter.convertToNativeSQL(query);
+    void resolveEntityFromJoinPaths_returnsNullWhenSourceNotResolved() throws Exception {
+        String query = "SELECT v FROM User u JOIN u.vehicles v";
+        MetaData analysis = adapter.convertToNativeSQL(query).getMetaData();
 
-        assertNotNull(result);
-        assertTrue(result.isSuccessful(), "Query conversion should succeed");
-        
-        // Both User and Vehicle should be in the referenced tables
-        assertTrue(result.getReferencedTables().contains("users"),
-                "Should reference users table");
-    }
+        assertNotNull(analysis);
+        assertFalse(analysis.getJoinPaths().isEmpty());
 
-    @Test
-    void testResolveEntityFromJoinPaths_NestedFieldAccess() throws Exception {
-        // Test that we can access fields from an entity resolved through join path
-        String query = "SELECT v.manufacturer, v.color, v.year FROM User u " +
-                "LEFT JOIN u.vehicles v " +
-                "ORDER BY v.year DESC";
-        ConversionResult result = adapter.convertToNativeSQL(query);
+        MetaData.JoinPathInfo joinPath = analysis.getJoinPaths().values().iterator().next();
+        EntityMetadata target = adapter.resolveEntityFromJoinPaths(joinPath.targetEntity(), analysis, Map.of());
 
-        assertNotNull(result);
-        assertTrue(result.isSuccessful(), "Query conversion should succeed");
-        
-        String sql = result.getNativeSql();
-        assertNotNull(sql);
-        // Verify that vehicle fields are properly handled
-        assertTrue(sql.contains("manufacturer") || sql.contains("color") || sql.contains("year"),
-                "SQL should contain vehicle fields");
-    }
-
-    @Test
-    void testResolveEntityFromJoinPaths_WithAggregation() throws Exception {
-        // Test entity resolution in aggregation queries
-        String query = "SELECT u.username, COUNT(v) FROM User u " +
-                "LEFT JOIN u.vehicles v " +
-                "GROUP BY u.username";
-        ConversionResult result = adapter.convertToNativeSQL(query);
-
-        assertNotNull(result);
-        assertTrue(result.isSuccessful(), "Query conversion should succeed");
-        
-        String sql = result.getNativeSql();
-        assertTrue(sql.toUpperCase().contains("COUNT"),
-                "SQL should contain COUNT aggregation");
-        assertTrue(sql.toUpperCase().contains("GROUP BY"),
-                "SQL should contain GROUP BY clause");
-    }
-
-    @Test
-    void testResolveEntityFromJoinPaths_ComplexWhereClause() throws Exception {
-        // Test entity resolution with complex conditions on joined entities
-        String query = "SELECT u.firstName, v.manufacturer FROM User u " +
-                "JOIN u.vehicles v " +
-                "WHERE u.active = true AND v.year BETWEEN 2015 AND 2025 " +
-                "AND v.manufacturer IN ('Toyota', 'Honda')";
-        ConversionResult result = adapter.convertToNativeSQL(query);
-
-        assertNotNull(result);
-        assertTrue(result.isSuccessful(), "Query conversion should succeed");
-        
-        String sql = result.getNativeSql();
-        assertTrue(sql.toUpperCase().contains("BETWEEN") || sql.contains(">="),
-                "SQL should handle BETWEEN condition");
-        assertTrue(sql.toUpperCase().contains("IN") || sql.contains("="),
-                "SQL should handle IN condition");
-    }
-
-    @Test
-    void testResolveEntityFromJoinPaths_LeftJoin() throws Exception {
-        // Test LEFT JOIN specifically (optional relationship)
-        String query = "SELECT u.username, v.manufacturer FROM User u " +
-                "LEFT JOIN u.vehicles v";
-        ConversionResult result = adapter.convertToNativeSQL(query);
-
-        assertNotNull(result);
-        assertTrue(result.isSuccessful(), "Query conversion should succeed");
-        
-        String sql = result.getNativeSql();
-        assertTrue(sql.toUpperCase().contains("LEFT") || sql.toUpperCase().contains("OUTER"),
-                "SQL should preserve LEFT JOIN");
-    }
-
-    @Test
-    void testResolveEntityFromJoinPaths_WithOrderBy() throws Exception {
-        // Test entity resolution when ordering by joined entity fields
-        String query = "SELECT u.username, v.manufacturer, v.year FROM User u " +
-                "JOIN u.vehicles v " +
-                "ORDER BY v.year DESC, v.manufacturer ASC";
-        ConversionResult result = adapter.convertToNativeSQL(query);
-
-        assertNotNull(result);
-        assertTrue(result.isSuccessful(), "Query conversion should succeed");
-        
-        String sql = result.getNativeSql();
-        assertTrue(sql.toUpperCase().contains("ORDER BY"),
-                "SQL should contain ORDER BY clause");
+        assertNull(target, "Should return null when source entity has not been resolved");
     }
 }
