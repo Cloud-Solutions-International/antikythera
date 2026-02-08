@@ -476,6 +476,24 @@ public class HQLParserAdapter {
         return meta;
     }
 
+    private EntityMetadata findEntityMetaForJoinEnty(String targetEntityName, MetaData analysis,Map<String, EntityMetadata> resolvedEntities,
+                                                     MetaData.JoinPathInfo joinPath) {
+        // Check if this join path targets the entity we're trying to resolve
+        if (!targetEntityName.equals(joinPath.targetEntity())) {
+            return null;
+        }
+
+        // Get the source alias and find its entity
+        String sourceAlias = joinPath.sourceAlias();
+        String sourceEntityName = analysis.getEntityForAlias(sourceAlias);
+        if (sourceEntityName == null) {
+            return null;
+        }
+
+        // Check if we've already resolved the source entity
+        return  resolvedEntities.get(sourceEntityName);
+    }
+
     /**
      * Attempts to resolve an entity by following join paths from already-resolved entities.
      * For example, if we have "join rt.criterions rtc" and rt is resolved to ResourceScheduleTemplate,
@@ -487,20 +505,7 @@ public class HQLParserAdapter {
         for (var joinEntry : analysis.getJoinPaths().entrySet()) {
             MetaData.JoinPathInfo joinPath = joinEntry.getValue();
 
-            // Check if this join path targets the entity we're trying to resolve
-            if (!targetEntityName.equals(joinPath.targetEntity())) {
-                continue;
-            }
-
-            // Get the source alias and find its entity
-            String sourceAlias = joinPath.sourceAlias();
-            String sourceEntityName = analysis.getEntityForAlias(sourceAlias);
-            if (sourceEntityName == null) {
-                continue;
-            }
-
-            // Check if we've already resolved the source entity
-            EntityMetadata sourceMetadata = resolvedEntities.get(sourceEntityName);
+            EntityMetadata sourceMetadata = findEntityMetaForJoinEnty(targetEntityName, analysis, resolvedEntities, joinPath);
             if (sourceMetadata == null) {
                 continue;
             }
@@ -516,8 +521,6 @@ public class HQLParserAdapter {
                 if (joinMapping != null) {
                     // Found the actual target entity name from the relationship mapping
                     String actualTargetEntity = joinMapping.targetEntity();
-                    logger.debug("Resolved entity {} through join path {} -> field {} -> {}",
-                            targetEntityName, sourceEntityName, fieldName, actualTargetEntity);
 
                     // Try to find metadata for the actual target entity
                     Set<String> fullNames = EntityMappingResolver.getFullNamesForEntity(actualTargetEntity);
@@ -649,16 +652,7 @@ public class HQLParserAdapter {
         Set<String> parameters = analysis.getParameters();
 
         // Build reverse lookup: replacement parameter -> original SpEL
-        Map<String, String> replacementToOriginal = new HashMap<>();
-        if (spelMapping != null) {
-            for (Map.Entry<String, String> entry : spelMapping.entrySet()) {
-                String original = entry.getKey(); // e.g., :#{#inPatientPhrSearchModel.admissionId}
-                String replacement = entry.getValue(); // e.g., :admissionId
-                // Remove the leading colon for lookup
-                String replacementKey = replacement.startsWith(":") ? replacement.substring(1) : replacement;
-                replacementToOriginal.put(replacementKey, original);
-            }
-        }
+        Map<String, String> replacementToOriginal = getSPELReplacements(spelMapping);
 
         int position = 1;
         for (String paramName : parameters) {
@@ -671,5 +665,19 @@ public class HQLParserAdapter {
         }
 
         return mappings;
+    }
+
+    private static Map<String, String> getSPELReplacements(Map<String, String> spelMapping) {
+        Map<String, String> replacementToOriginal = new HashMap<>();
+        if (spelMapping != null) {
+            for (Map.Entry<String, String> entry : spelMapping.entrySet()) {
+                String original = entry.getKey(); // e.g., :#{#inPatientPhrSearchModel.admissionId}
+                String replacement = entry.getValue(); // e.g., :admissionId
+                // Remove the leading colon for lookup
+                String replacementKey = replacement.startsWith(":") ? replacement.substring(1) : replacement;
+                replacementToOriginal.put(replacementKey, original);
+            }
+        }
+        return replacementToOriginal;
     }
 }
