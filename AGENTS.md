@@ -148,3 +148,4 @@ database:
 | **Get Entity Info** | `parser.converter` | `EntityMappingResolver` |
 
 **Rule of Thumb**: Always check `AntikytheraRunTime` caches before doing heavy lifting.
+

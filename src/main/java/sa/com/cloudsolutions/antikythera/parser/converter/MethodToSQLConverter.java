@@ -186,6 +186,13 @@ public final class MethodToSQLConverter {
             }
             else {
                 if (isAlwaysKeyword(keyword) || isValidOperatorBoundary(methodName, keyword, keywordEnd)) {
+                    // findAllById is a built-in CrudRepository method with no additional
+                    // predicates. Only match when it's the complete method name. When followed
+                    // by more characters (e.g., findAllById_HospitalIdAndId_TenantId for
+                    // embedded IDs), let findAllBy match instead.
+                    if (FIND_ALL_BY_ID.equals(keyword) && keywordEnd < methodName.length()) {
+                        continue;
+                    }
                     return keyword;
                 }
             }
@@ -606,7 +613,7 @@ public final class MethodToSQLConverter {
      */
     @SuppressWarnings("java:S1066")
     private static void appendDefaultComponent(StringBuilder sql, String component, String next, boolean ordering) {
-        sql.append(BaseRepositoryParser.camelToSnake(component));
+        sql.append(resolveColumnName(component));
         if (!ordering) {
             if (shouldAppendEquals(next)) {
                 sql.append(" = ? ");
@@ -620,6 +627,32 @@ public final class MethodToSQLConverter {
         } else {
             appendCommaOrSpace(next, sql);
         }
+    }
+
+    /**
+     * Resolves a field component to its SQL column name.
+     * Handles Spring Data's underscore property traversal by using the
+     * final property in the path.
+     *
+     * In Spring Data JPA, underscore followed by an uppercase letter in
+     * method names indicates nested property access (e.g., Id_HospitalId
+     * means id.hospitalId for an @EmbeddedId). The SQL column name comes
+     * from the final property in the traversal path.
+     *
+     * @param component the field component from the method name
+     * @return the resolved SQL column name in snake_case
+     */
+    static String resolveColumnName(String component) {
+        int lastTraversal = -1;
+        for (int i = 0; i < component.length() - 1; i++) {
+            if (component.charAt(i) == '_' && Character.isUpperCase(component.charAt(i + 1))) {
+                lastTraversal = i;
+            }
+        }
+        if (lastTraversal >= 0) {
+            return BaseRepositoryParser.camelToSnake(component.substring(lastTraversal + 1));
+        }
+        return BaseRepositoryParser.camelToSnake(component);
     }
 
     /**

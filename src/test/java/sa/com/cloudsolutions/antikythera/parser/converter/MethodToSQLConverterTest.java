@@ -515,4 +515,104 @@ class MethodToSQLConverterTest {
         assertEquals(List.of("findBy", "FarmId", "OrderBy", "PlantingDate", "Desc"), components,
                 "OrderBy should be preserved when normalizing subject");
     }
+
+    // ========== findAllById Scenarios ==========
+    // In Spring Data JPA, findAllById is a built-in CrudRepository method that takes
+    // Iterable<ID> and returns all entities with matching IDs (WHERE id IN (?)).
+    // It should ONLY match as a keyword when it's the complete method name.
+    // When followed by additional characters, the "Id" is part of a field name.
+
+    @Test
+    void testExtractComponents_FindAllById_Standalone() {
+        // Standalone findAllById is the CrudRepository method
+        List<String> components = MethodToSQLConverter.extractComponents("findAllById");
+        assertEquals(List.of("findAllById"), components,
+                "Standalone findAllById should be a single keyword");
+    }
+
+    @Test
+    void testExtractComponents_FindAllByIdAndName() {
+        // findAllByIdAndName is a derived query: findAllBy + Id + And + Name
+        // NOT findAllById + And + Name
+        List<String> components = MethodToSQLConverter.extractComponents("findAllByIdAndName");
+        assertEquals(List.of("findAllBy", "Id", "And", "Name"), components,
+                "findAllByIdAndName should parse as findAllBy + Id + And + Name");
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_FindAllByIdAndName() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findAllBy", "Id", "And", "Name");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE id = ?  AND name = ? ", sql.toString());
+    }
+
+    @Test
+    void testExtractComponents_FindAllByIdIn() {
+        // findAllByIdIn is a derived query: findAllBy + Id + In
+        List<String> components = MethodToSQLConverter.extractComponents("findAllByIdIn");
+        assertEquals(List.of("findAllBy", "Id", "In"), components,
+                "findAllByIdIn should parse as findAllBy + Id + In");
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_FindAllByIdIn() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findAllBy", "Id", "In");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE id  IN (?) ", sql.toString());
+    }
+
+    @Test
+    void testExtractComponents_FindAllByIdOrderByName() {
+        // findAllByIdOrderByName is a derived query with ordering
+        List<String> components = MethodToSQLConverter.extractComponents("findAllByIdOrderByName");
+        assertEquals(List.of("findAllBy", "Id", "OrderBy", "Name"), components,
+                "findAllByIdOrderByName should parse as findAllBy + Id + OrderBy + Name");
+    }
+
+    // ========== Embedded ID Property Traversal with _ ==========
+    // Spring Data JPA uses _ in method names for nested property traversal.
+    // For entities with @EmbeddedId, Id_HospitalId means id.hospitalId,
+    // and the SQL column name comes from the final property (hospitalId -> hospital_id).
+
+    @Test
+    void testExtractComponents_EmbeddedIdPropertyTraversal() {
+        // findAllById_HospitalIdAndId_TenantId uses _ for embedded ID traversal:
+        // Id_HospitalId -> id.hospitalId (column: hospital_id)
+        // Id_TenantId -> id.tenantId (column: tenant_id)
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "findAllById_HospitalIdAndId_TenantId");
+        assertEquals(List.of("findAllBy", "Id_HospitalId", "And", "Id_TenantId"), components,
+                "Embedded ID traversal should parse as findAllBy + Id_HospitalId + And + Id_TenantId");
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_EmbeddedIdPropertyTraversal() {
+        // The _ in field components indicates property traversal.
+        // Id_HospitalId means id.hospitalId -> column hospital_id
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findAllBy", "Id_HospitalId", "And", "Id_TenantId");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "rmmsd_hospital_ward");
+        assertEquals("SELECT * FROM rmmsd_hospital_ward WHERE hospital_id = ?  AND tenant_id = ? ",
+                sql.toString(),
+                "Embedded ID fields should resolve to the final property's column name");
+    }
+
+    @Test
+    void testExtractComponents_EmbeddedIdSingleField() {
+        // findByIdHospitalId (without underscore) - standard derived query
+        List<String> components = MethodToSQLConverter.extractComponents("findById_HospitalId");
+        assertEquals(List.of("findBy", "Id_HospitalId"), components,
+                "Embedded ID single field should parse correctly");
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_EmbeddedIdSingleField() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "Id_HospitalId");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "rmmsd_hospital_ward");
+        assertEquals("SELECT * FROM rmmsd_hospital_ward WHERE hospital_id = ? ", sql.toString(),
+                "Single embedded ID field should resolve to column name");
+    }
 }
