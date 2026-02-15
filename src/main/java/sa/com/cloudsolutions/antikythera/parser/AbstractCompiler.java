@@ -152,37 +152,7 @@ public class AbstractCompiler {
         String basePath = Settings.getBasePath();
         combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
 
-        // Add source roots from Maven POM if available
-        sourceDirectories.clear();
-        try {
-            MavenHelper mavenHelper = new MavenHelper();
-            Model pomModel = mavenHelper.getPomModel();
-            Path projectRoot = mavenHelper.getPomPath().getParent();
-
-            String mainSource = "src/main/java";
-            String testSource = "src/test/java";
-            if (pomModel.getBuild() != null) {
-                if (pomModel.getBuild().getSourceDirectory() != null) {
-                    mainSource = pomModel.getBuild().getSourceDirectory();
-                }
-                if (pomModel.getBuild().getTestSourceDirectory() != null) {
-                    testSource = pomModel.getBuild().getTestSourceDirectory();
-                }
-            }
-
-            Path mainJava = projectRoot.resolve(mainSource);
-            if (Files.isDirectory(mainJava)) {
-                combinedTypeSolver.add(new JavaParserTypeSolver(mainJava.toFile()));
-                sourceDirectories.add(mainJava);
-            }
-            Path testJava = projectRoot.resolve(testSource);
-            if (Files.isDirectory(testJava)) {
-                combinedTypeSolver.add(new JavaParserTypeSolver(testJava.toFile()));
-                sourceDirectories.add(testJava);
-            }
-        } catch (Exception e) {
-            logger.debug("Could not read Maven source directories: {}", e.getMessage());
-        }
+        setupSourcePaths();
         jarSolvers = new ArrayList<>();
 
         Set<String> jarFiles = new HashSet<>();
@@ -216,6 +186,40 @@ public class AbstractCompiler {
                 .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21);
         javaParser = new JavaParser(parserConfiguration);
         StaticJavaParser.setConfiguration(parserConfiguration);
+    }
+
+    private static void setupSourcePaths() {
+        // Add source roots from Maven POM if available
+        sourceDirectories.clear();
+        try {
+            MavenHelper mavenHelper = new MavenHelper();
+            Model pomModel = mavenHelper.getPomModel();
+            Path projectRoot = mavenHelper.getPomPath().getParent();
+
+            String mainSource = "src/main/java";
+            String testSource = "src/test/java";
+            if (pomModel.getBuild() != null) {
+                if (pomModel.getBuild().getSourceDirectory() != null) {
+                    mainSource = pomModel.getBuild().getSourceDirectory();
+                }
+                if (pomModel.getBuild().getTestSourceDirectory() != null) {
+                    testSource = pomModel.getBuild().getTestSourceDirectory();
+                }
+            }
+
+            Path mainJava = projectRoot.resolve(mainSource);
+            if (Files.isDirectory(mainJava)) {
+                combinedTypeSolver.add(new JavaParserTypeSolver(mainJava.toFile()));
+                sourceDirectories.add(mainJava);
+            }
+            Path testJava = projectRoot.resolve(testSource);
+            if (Files.isDirectory(testJava)) {
+                combinedTypeSolver.add(new JavaParserTypeSolver(testJava.toFile()));
+                sourceDirectories.add(testJava);
+            }
+        } catch (Exception e) {
+            logger.debug("Could not read Maven source directories: {}", e.getMessage());
+        }
     }
 
     /**
