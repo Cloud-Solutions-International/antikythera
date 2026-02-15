@@ -38,6 +38,7 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
+import org.apache.maven.model.Model;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,6 +96,7 @@ public class AbstractCompiler {
     protected static CombinedTypeSolver combinedTypeSolver;
     protected static ArrayList<JarTypeSolver> jarSolvers;
     protected static ClassLoader loader;
+    private static final List<Path> sourceDirectories = new ArrayList<>();
     protected CompilationUnit cu;
     protected String className;
 
@@ -149,15 +151,37 @@ public class AbstractCompiler {
         combinedTypeSolver.add(new ReflectionTypeSolver());
         String basePath = Settings.getBasePath();
         combinedTypeSolver.add(new JavaParserTypeSolver(basePath));
-        
-        // Add standard source roots if they exist
-        java.nio.file.Path mainJava = java.nio.file.Paths.get(basePath, "src", "main", "java");
-        if (java.nio.file.Files.exists(mainJava)) {
-            combinedTypeSolver.add(new JavaParserTypeSolver(mainJava.toFile()));
-        }
-        java.nio.file.Path testJava = java.nio.file.Paths.get(basePath, "src", "test", "java");
-        if (java.nio.file.Files.exists(testJava)) {
-            combinedTypeSolver.add(new JavaParserTypeSolver(testJava.toFile()));
+
+        // Add source roots from Maven POM if available
+        sourceDirectories.clear();
+        try {
+            MavenHelper mavenHelper = new MavenHelper();
+            Model pomModel = mavenHelper.getPomModel();
+            Path projectRoot = mavenHelper.getPomPath().getParent();
+
+            String mainSource = "src/main/java";
+            String testSource = "src/test/java";
+            if (pomModel.getBuild() != null) {
+                if (pomModel.getBuild().getSourceDirectory() != null) {
+                    mainSource = pomModel.getBuild().getSourceDirectory();
+                }
+                if (pomModel.getBuild().getTestSourceDirectory() != null) {
+                    testSource = pomModel.getBuild().getTestSourceDirectory();
+                }
+            }
+
+            Path mainJava = projectRoot.resolve(mainSource);
+            if (Files.isDirectory(mainJava)) {
+                combinedTypeSolver.add(new JavaParserTypeSolver(mainJava.toFile()));
+                sourceDirectories.add(mainJava);
+            }
+            Path testJava = projectRoot.resolve(testSource);
+            if (Files.isDirectory(testJava)) {
+                combinedTypeSolver.add(new JavaParserTypeSolver(testJava.toFile()));
+                sourceDirectories.add(testJava);
+            }
+        } catch (Exception e) {
+            logger.debug("Could not read Maven source directories: {}", e.getMessage());
         }
         jarSolvers = new ArrayList<>();
 
@@ -1224,17 +1248,26 @@ public class AbstractCompiler {
      * @throws IOException when the files cannot be precompiled.
      */
     public static void preProcess() throws IOException {
-        try (var paths = Files.walk(Paths.get(Settings.getBasePath()))) {
-            List<File> javaFiles = paths
-                    .filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(SUFFIX))
-                    .map(Path::toFile)
-                    .toList();
+        Path basePath = Paths.get(Settings.getBasePath()).toAbsolutePath().normalize();
+        List<Path> dirs = sourceDirectories.isEmpty() ? List.of(basePath)
+                : sourceDirectories.stream().filter(d -> d.startsWith(basePath)).toList();
+        if (dirs.isEmpty()) {
+            dirs = List.of(basePath);
+        }
 
-            for (File javaFile : javaFiles) {
-                AbstractCompiler compiler = new AbstractCompiler();
-                compiler.compileAndSolveInterfaces(
-                        Paths.get(Settings.getBasePath()).relativize(javaFile.toPath()).toString());
+        for (Path sourceDir : dirs) {
+            try (var paths = Files.walk(sourceDir)) {
+                List<File> javaFiles = paths
+                        .filter(Files::isRegularFile)
+                        .filter(path -> path.toString().endsWith(SUFFIX))
+                        .map(Path::toFile)
+                        .toList();
+
+                for (File javaFile : javaFiles) {
+                    AbstractCompiler compiler = new AbstractCompiler();
+                    compiler.compileAndSolveInterfaces(
+                            basePath.relativize(javaFile.toPath()).toString());
+                }
             }
         }
     }
