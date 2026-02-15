@@ -398,11 +398,14 @@ public class AbstractCompiler {
             // Check if a compilation unit already exists for this FQN
             CompilationUnit existingCu = AntikytheraRunTime.getCompilationUnit(name);
             if (existingCu != null && existingCu != cu) {
+                String existingPath = existingCu.getStorage()
+                        .map(storage -> storage.getPath().toString())
+                        .orElse("<unknown>");
+                String currentPath = cu.getStorage()
+                        .map(storage -> storage.getPath().toString())
+                        .orElse("<unknown>");
                 throw new IllegalStateException(
-                        String.format("Duplicate class definition detected: Class '%s' is defined in multiple files. " +
-                                "This violates Java's one-class-per-file rule. " +
-                                "The class was already loaded from another compilation unit.",
-                                name));
+                        String.format("Duplicate class '%s' in %s and %s.", name, existingPath, currentPath));
             }
             AntikytheraRunTime.addType(name, typeWrapper);
             AntikytheraRunTime.addCompilationUnit(name, cu);
