@@ -421,6 +421,89 @@ public class MavenHelper {
         return pomModel;
     }
 
+    /**
+     * Extracts the Java source version from the POM model.
+     * Checks the following properties in order:
+     * <ol>
+     *   <li>{@code maven.compiler.source}</li>
+     *   <li>{@code maven.compiler.target}</li>
+     *   <li>{@code java.version}</li>
+     * </ol>
+     * Property references (e.g., {@code ${java.version}}) are resolved automatically.
+     * The legacy {@code 1.x} format (e.g., {@code 1.8}) is normalized to just the minor
+     * version number (e.g., {@code 8}).
+     *
+     * @return the Java version as an integer (e.g., 8, 11, 17, 21), or 21 if not found
+     */
+    public int getJavaVersion() {
+        if (pomModel == null) {
+            return 21;
+        }
+
+        Properties properties = pomModel.getProperties();
+        if (properties == null) {
+            return 21;
+        }
+
+        String[] propertyNames = {
+            "maven.compiler.source",
+            "maven.compiler.target",
+            "java.version"
+        };
+
+        for (String propertyName : propertyNames) {
+            String value = properties.getProperty(propertyName);
+            if (value != null && !value.isEmpty()) {
+                value = resolveProperty(value, properties);
+                if (value != null) {
+                    int version = parseJavaVersion(value);
+                    if (version > 0) {
+                        return version;
+                    }
+                }
+            }
+        }
+
+        return 21;
+    }
+
+    /**
+     * Resolves a property value that may be a reference to another property.
+     * For example, {@code ${java.version}} will be resolved to its actual value.
+     */
+    private static String resolveProperty(String value, Properties properties) {
+        if (value != null && value.startsWith("${") && value.endsWith("}")) {
+            String propertyName = value.substring(2, value.length() - 1);
+            String resolved = properties.getProperty(propertyName);
+            if (resolved != null && !resolved.isEmpty()) {
+                return resolveProperty(resolved, properties);
+            }
+            return null;
+        }
+        return value;
+    }
+
+    /**
+     * Parses a Java version string into an integer.
+     * Handles both modern format (e.g., "17") and legacy format (e.g., "1.8").
+     *
+     * @param version the version string
+     * @return the version as an integer, or -1 if parsing fails
+     */
+    static int parseJavaVersion(String version) {
+        if (version == null || version.isEmpty()) {
+            return -1;
+        }
+        try {
+            if (version.startsWith("1.")) {
+                return Integer.parseInt(version.substring(2));
+            }
+            return Integer.parseInt(version);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
     static class Artifact {
         String name;
         String version;
