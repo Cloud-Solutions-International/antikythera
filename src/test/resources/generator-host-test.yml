@@ -1,0 +1,7 @@
+variables:
+  projects_folder: /tmp
+
+base_path: /tmp/src/main/java
+base_package: com.example
+application.host: http://localhost:8080
+application.version: 1.0.0

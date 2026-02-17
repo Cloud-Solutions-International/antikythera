@@ -1,0 +1,27 @@
+variables:
+  projects_folder: /tmp/test-projects
+  m2_folder: ${HOME}/.m2/repository
+
+base_path: ${projects_folder}/sample/src/main/java
+base_package: sa.com.cloudsolutions
+controllers: sa.com.cloudsolutions.controller
+output_path: /tmp/antikythera-test
+services:
+  - sa.com.cloudsolutions.service.UserService
+  - sa.com.cloudsolutions.service.OrderService
+
+dependencies:
+  artifact_ids:
+    - com.example:lib-a:1.0
+    - com.example:lib-b:2.0
+  jar_files:
+    - /tmp/lib-a.jar
+    - /tmp/lib-b.jar
+  on_error: log
+
+database:
+  url: jdbc:oracle:thin:@//host:1521/service_name
+  user: testuser
+  password: testpass
+
+log_level: DEBUG
