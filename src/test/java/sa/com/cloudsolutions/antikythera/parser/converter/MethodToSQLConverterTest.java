@@ -69,6 +69,24 @@ class MethodToSQLConverterTest {
     }
 
     @Test
+    void testExtractComponents_FindTop10By() {
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "findTop10ByUserIdInAndCategoryIdAndRegionIdAndGroupIdOrderByCreatedDateDesc");
+        assertEquals("findTopBy", components.get(0));
+        assertEquals("UserId", components.get(1));
+        assertEquals("In", components.get(2));
+    }
+
+    @Test
+    void testExtractTopLimit() {
+        assertEquals(10, MethodToSQLConverter.extractTopLimit("findTop10ByUserIdIn"));
+        assertEquals(5, MethodToSQLConverter.extractTopLimit("findFirst5ByName"));
+        assertEquals(1, MethodToSQLConverter.extractTopLimit("findTopByName"));
+        assertEquals(1, MethodToSQLConverter.extractTopLimit("findFirstByName"));
+        assertEquals(1, MethodToSQLConverter.extractTopLimit("findByName"));
+    }
+
+    @Test
     void testBuildSelectAndWhereClauses_FindDistinctBy() {
         StringBuilder sql = new StringBuilder();
         MethodToSQLConverter.buildSelectAndWhereClauses(List.of("findDistinctBy", "Name"), sql, "users");

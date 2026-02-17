@@ -286,6 +286,9 @@ public final class MethodToSQLConverter {
      * Handles all query verbs: find, exists, count, delete, read, query, search, stream, remove.
      */
     private static String normalizeFindSubject(String methodName) {
+        // Handle findTop<N>By and findFirst<N>By patterns (e.g., findTop10ByName -> findTopByName)
+        methodName = stripTopFirstNumber(methodName);
+
         // Try to normalize each query verb type
         // IMPORTANT: Check longer prefixes first (e.g., existsAll before exists)
         // to avoid incorrect matches
@@ -388,6 +391,48 @@ public final class MethodToSQLConverter {
                                      methodName.startsWith("findFirst") ||
                                      methodName.startsWith("findTop") ||
                                      methodName.startsWith("findDistinct")));
+    }
+
+    /**
+     * Strips the numeric part from findTop&lt;N&gt;By or findFirst&lt;N&gt;By patterns.
+     * For example, "findTop10ByName" becomes "findTopByName".
+     * Returns the method name unchanged if no numeric part is found.
+     */
+    private static String stripTopFirstNumber(String methodName) {
+        for (String prefix : new String[]{"findTop", "findFirst"}) {
+            if (methodName.startsWith(prefix)) {
+                int i = prefix.length();
+                // Skip digits
+                while (i < methodName.length() && Character.isDigit(methodName.charAt(i))) {
+                    i++;
+                }
+                // Only strip if we found at least one digit and "By" follows
+                if (i > prefix.length() && methodName.startsWith("By", i)) {
+                    return prefix + methodName.substring(i);
+                }
+            }
+        }
+        return methodName;
+    }
+
+    /**
+     * Extracts the numeric limit from a findTop&lt;N&gt;By or findFirst&lt;N&gt;By method name.
+     * Returns 1 if no number is specified (e.g., findTopBy) or the method doesn't match.
+     */
+    public static int extractTopLimit(String methodName) {
+        for (String prefix : new String[]{"findTop", "findFirst"}) {
+            if (methodName.startsWith(prefix)) {
+                int start = prefix.length();
+                int end = start;
+                while (end < methodName.length() && Character.isDigit(methodName.charAt(end))) {
+                    end++;
+                }
+                if (end > start && methodName.startsWith("By", end)) {
+                    return Integer.parseInt(methodName.substring(start, end));
+                }
+            }
+        }
+        return 1;
     }
 
     /**
