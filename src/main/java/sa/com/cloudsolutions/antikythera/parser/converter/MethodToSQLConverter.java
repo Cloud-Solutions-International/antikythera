@@ -370,9 +370,16 @@ public final class MethodToSQLConverter {
                     return methodName;
                 }
             }
-            // Convert things like existsSomethingByXxx... -> existsByXxx...
-            // Use the first recognized prefix as the normalized form
-            String normalizedPrefix = recognizedPrefixes.length > 0 ? recognizedPrefixes[0] : verb + "By";
+            // Convert things like findDistinctMedicationByXxx -> findDistinctByXxx
+            // Find the longest recognized prefix whose base matches the method start
+            String normalizedPrefix = verb + "By";
+            for (String prefix : recognizedPrefixes) {
+                if (prefix.endsWith("By")
+                        && methodName.startsWith(prefix.substring(0, prefix.length() - 2))
+                        && prefix.length() > normalizedPrefix.length()) {
+                    normalizedPrefix = prefix;
+                }
+            }
             return normalizedPrefix + methodName.substring(byIdx + 2);
         }
         return methodName;
@@ -383,14 +390,14 @@ public final class MethodToSQLConverter {
      * For example, if checking "exists" verb, returns true if method starts with "existsAll".
      */
     private static boolean methodStartsWithLongerVerb(String methodName, String verb) {
-        // Map of shorter verbs to their longer variants
+        // Map of shorter verbs to their longer variants that are handled
+        // by separate tryNormalizeVerb calls (e.g., "existsAll" vs "exists").
+        // Note: find variants (findFirst, findTop, findDistinct) are NOT listed here
+        // because they are all handled in the same tryNormalizeVerb("find", ...) call
+        // and need normalization when a subject appears (e.g., findDistinctMedicationBy).
         if ("exists".equals(verb) && methodName.startsWith("existsAll")) return true;
         if ("count".equals(verb) && methodName.startsWith("countAll")) return true;
-        if ("delete".equals(verb) && methodName.startsWith("deleteAll")) return true;
-        return ("find".equals(verb) && (methodName.startsWith(FIND_ALL) ||
-                                     methodName.startsWith("findFirst") ||
-                                     methodName.startsWith("findTop") ||
-                                     methodName.startsWith("findDistinct")));
+        return ("delete".equals(verb) && methodName.startsWith("deleteAll"));
     }
 
     /**

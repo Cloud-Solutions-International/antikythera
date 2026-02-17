@@ -87,6 +87,17 @@ class MethodToSQLConverterTest {
     }
 
     @Test
+    void testExtractComponents_FindDistinctWithSubject() {
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "findDistinctItemByCodeInAndTypeAndRegionIdAndGroupId");
+        assertEquals("findDistinctBy", components.get(0));
+        assertEquals("Code", components.get(1));
+        assertEquals("In", components.get(2));
+        assertEquals("And", components.get(3));
+        assertEquals("Type", components.get(4));
+    }
+
+    @Test
     void testBuildSelectAndWhereClauses_FindDistinctBy() {
         StringBuilder sql = new StringBuilder();
         MethodToSQLConverter.buildSelectAndWhereClauses(List.of("findDistinctBy", "Name"), sql, "users");
