@@ -49,7 +49,7 @@ import java.util.Optional;
  */
 public class Resolver {
 
-    public static record ScopedResolution(Type type, ImportWrapper importWrapper, TypeDeclaration<?> resolvedTypeDecl) {
+    public record ScopedResolution(Type type, ImportWrapper importWrapper, TypeDeclaration<?> resolvedTypeDecl) {
 
         public boolean hasType() {
             return type != null;
@@ -197,8 +197,44 @@ public class Resolver {
             } else if (value.isClassExpr()) {
                 ClassOrInterfaceType ct = value.asClassExpr().getType().asClassOrInterfaceType();
                 ImportUtils.addImport(node, ct.getName().toString());
+            } else if (value.isStringLiteralExpr() && "qualifiedByName".equals(pair.getNameAsString())) {
+                resolveNamedMethod(node, value.asStringLiteralExpr().asString());
             }
         }
+    }
+
+    /**
+     * Resolves a MapStruct {@code qualifiedByName} reference by finding the method
+     * annotated with {@code @Named(value)} in the enclosing type and adding it to
+     * the dependency graph.
+     *
+     * @param node       the graph node representing the current context
+     * @param methodName the value from {@code qualifiedByName}, which matches a
+     *                   {@code @Named} annotation value
+     */
+    private static void resolveNamedMethod(GraphNode node, String methodName) {
+        node.getEnclosingType().getMethods().forEach(method -> {
+            for (AnnotationExpr ann : method.getAnnotations()) {
+                if (ann.getNameAsString().equals("Named")) {
+                    String annValue = null;
+                    if (ann.isSingleMemberAnnotationExpr()) {
+                        Expression memberValue = ann.asSingleMemberAnnotationExpr().getMemberValue();
+                        if (memberValue.isStringLiteralExpr()) {
+                            annValue = memberValue.asStringLiteralExpr().asString();
+                        }
+                    } else if (ann.isNormalAnnotationExpr()) {
+                        for (MemberValuePair p : ann.asNormalAnnotationExpr().getPairs()) {
+                            if ("value".equals(p.getNameAsString()) && p.getValue().isStringLiteralExpr()) {
+                                annValue = p.getValue().asStringLiteralExpr().asString();
+                            }
+                        }
+                    }
+                    if (methodName.equals(annValue)) {
+                        Graph.createGraphNode(method);
+                    }
+                }
+            }
+        });
     }
 
     /**

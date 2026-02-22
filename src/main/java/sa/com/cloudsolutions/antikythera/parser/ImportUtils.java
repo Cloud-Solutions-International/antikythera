@@ -83,7 +83,15 @@ public class ImportUtils {
             } else if (imp.getImport().isAsterisk() && !imp.isExternal()) {
                 CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(imp.getImport().getNameAsString());
                 if (cu != null) {
-                    AbstractCompiler.getMatchingType(cu, name).ifPresent(Graph::createGraphNode);
+                    Optional<TypeDeclaration<?>> match = AbstractCompiler.getMatchingType(cu, name);
+                    if (match.isPresent()) {
+                        Graph.createGraphNode(match.get());
+                    } else if (imp.getImport().isStatic()) {
+                        // Static wildcard import (e.g., import static com.example.SomeEnum.*)
+                        // The name is an enum constant or static member, not a type.
+                        // Add the containing class itself as a dependency.
+                        cu.getTypes().forEach(Graph::createGraphNode);
+                    }
                 }
             }
         } else {
