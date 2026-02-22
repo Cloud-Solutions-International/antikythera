@@ -122,8 +122,9 @@ public class Graph {
             if (cdecl.isAnnotationDeclaration()) {
                 target = g.getDestination().addAnnotationDeclaration(cdecl.getNameAsString());
             } else if (cdecl.isEnumDeclaration()) {
-                target = g.getDestination().addEnum(cdecl.getNameAsString());
-                target.setModifiers(cdecl.getModifiers());
+                EnumDeclaration cloned = cdecl.asEnumDeclaration().clone();
+                g.getDestination().getTypes().add(cloned);
+                target = cloned;
             } else {
                 target = g.getDestination().addClass(cdecl.getNameAsString());
                 target.setModifiers(cdecl.getModifiers());
