@@ -750,4 +750,152 @@ class MethodToSQLConverterTest {
             MethodToSQLConverter.FIND_FIRST_BY);
         assertEquals("findFirstByName", result);
     }
+
+    @Test
+    void testFindNextKeyword_AlwaysKeyword() {
+        // Query types should always be matched
+        List<String> keywords = List.of("findBy", "countBy", "deleteBy");
+        String result = MethodToSQLConverter.findNextKeyword("findByName", 0, keywords, false);
+        assertEquals("findBy", result);
+
+        result = MethodToSQLConverter.findNextKeyword("countByAge", 0, keywords, false);
+        assertEquals("countBy", result);
+    }
+
+    @Test
+    void testFindNextKeyword_OperatorBoundary() {
+        // Operators should match when followed by uppercase
+        List<String> keywords = List.of("And", "Or", "In", "Not");
+
+        String result = MethodToSQLConverter.findNextKeyword("nameAndAge", 4, keywords, false);
+        assertEquals("And", result, "And should match when followed by uppercase");
+
+        result = MethodToSQLConverter.findNextKeyword("statusOrType", 6, keywords, false);
+        assertEquals("Or", result, "Or should match when followed by uppercase");
+
+        result = MethodToSQLConverter.findNextKeyword("idInList", 2, keywords, false);
+        assertEquals("In", result, "In should match when followed by uppercase");
+    }
+
+    @Test
+    void testFindNextKeyword_OperatorNotMatched() {
+        // Operators should NOT match when followed by lowercase (part of field name)
+        List<String> keywords = List.of("And", "Or", "In");
+
+        String result = MethodToSQLConverter.findNextKeyword("mandatory", 1, keywords, false);
+        assertNull(result, "And should not match in 'mandatory'");
+
+        result = MethodToSQLConverter.findNextKeyword("information", 3, keywords, false);
+        assertNull(result, "or should not match in 'information'");
+
+        result = MethodToSQLConverter.findNextKeyword("index", 0, keywords, false);
+        assertNull(result, "In should not match in 'index'");
+    }
+
+    @Test
+    void testFindNextKeyword_DescAscInOrderByContext() {
+        // DESC/ASC should only match in ORDER BY context
+        List<String> keywords = List.of("Desc", "Asc", "OrderBy");
+
+        // Not in ORDER BY context - should not match
+        String result = MethodToSQLConverter.findNextKeyword("Description", 0, keywords, false);
+        assertNull(result, "Desc should not match in 'Description' outside ORDER BY context");
+
+        result = MethodToSQLConverter.findNextKeyword("Ascending", 0, keywords, false);
+        assertNull(result, "Asc should not match in 'Ascending' outside ORDER BY context");
+
+        // In ORDER BY context - should match
+        result = MethodToSQLConverter.findNextKeyword("nameDesc", 4, keywords, true);
+        assertEquals("Desc", result, "Desc should match in ORDER BY context");
+
+        result = MethodToSQLConverter.findNextKeyword("ageAsc", 3, keywords, true);
+        assertEquals("Asc", result, "Asc should match in ORDER BY context");
+    }
+
+    @Test
+    void testFindNextKeyword_SyntacticSugarValidPosition() {
+        // "Is" should only match when followed by valid suffixes
+        List<String> keywords = List.of("Is", "True", "False", "Null", "Not", "And");
+
+        String result = MethodToSQLConverter.findNextKeyword("IsTrue", 0, keywords, false);
+        assertEquals("Is", result, "Is should match when followed by True");
+
+        result = MethodToSQLConverter.findNextKeyword("IsFalse", 0, keywords, false);
+        assertEquals("Is", result, "Is should match when followed by False");
+
+        result = MethodToSQLConverter.findNextKeyword("IsNull", 0, keywords, false);
+        assertEquals("Is", result, "Is should match when followed by Null");
+
+        result = MethodToSQLConverter.findNextKeyword("IsNot", 0, keywords, false);
+        assertEquals("Is", result, "Is should match when followed by Not");
+
+        result = MethodToSQLConverter.findNextKeyword("IsAnd", 0, keywords, false);
+        assertEquals("Is", result, "Is should match when followed by And");
+    }
+
+    @Test
+    void testFindNextKeyword_SyntacticSugarInvalidPosition() {
+        // "Is" should NOT match when followed by field name
+        List<String> keywords = List.of("Is", "And");
+
+        String result = MethodToSQLConverter.findNextKeyword("IsActive", 0, keywords, false);
+        assertNull(result, "Is should not match in 'IsActive' (field name)");
+
+        result = MethodToSQLConverter.findNextKeyword("IsEnabled", 0, keywords, false);
+        assertNull(result, "Is should not match in 'IsEnabled' (field name)");
+    }
+
+    @Test
+    void testFindNextKeyword_FindAllByIdSpecialCase() {
+        // findAllById should only match when it's the complete method name
+        List<String> keywords = List.of("findAllById", "findAllBy");
+
+        String result = MethodToSQLConverter.findNextKeyword("findAllById", 0, keywords, false);
+        assertEquals("findAllById", result, "findAllById should match when complete");
+
+        // When followed by more characters, should not match findAllById
+        result = MethodToSQLConverter.findNextKeyword("findAllById_HospitalId", 0, keywords, false);
+        assertEquals("findAllBy", result, "findAllBy should match instead when findAllById has suffix");
+    }
+
+    @Test
+    void testFindNextKeyword_NoMatchAtIndex() {
+        List<String> keywords = List.of("findBy", "And", "Or");
+
+        String result = MethodToSQLConverter.findNextKeyword("countByName", 0, keywords, false);
+        assertNull(result, "No keyword should match at index 0 in 'countByName'");
+
+        result = MethodToSQLConverter.findNextKeyword("name", 0, keywords, false);
+        assertNull(result, "No keyword should match in 'name'");
+    }
+
+    @Test
+    void testFindNextKeyword_LongestMatchFirst() {
+        // Keywords should be sorted by length descending for longest match
+        List<String> keywords = List.of("GreaterThanEqual", "GreaterThan", "Greater");
+
+        String result = MethodToSQLConverter.findNextKeyword("ageGreaterThanEqual", 3, keywords, false);
+        assertEquals("GreaterThanEqual", result, "Should match longest keyword first");
+    }
+
+    @Test
+    void testFindNextKeyword_AtEndOfString() {
+        List<String> keywords = List.of("Is", "True");
+
+        // "Is" at end of string should match (valid position)
+        String result = MethodToSQLConverter.findNextKeyword("activeIs", 6, keywords, false);
+        assertEquals("Is", result, "Is should match at end of string");
+    }
+
+    @Test
+    void testFindNextKeyword_ModifierKeywords() {
+        // Modifiers like OrderBy, IgnoreCase should always match
+        List<String> keywords = List.of("OrderBy", "IgnoreCase", "AllIgnoreCase");
+
+        String result = MethodToSQLConverter.findNextKeyword("findByNameOrderBy", 10, keywords, false);
+        assertEquals("OrderBy", result, "OrderBy should match as always keyword");
+
+        result = MethodToSQLConverter.findNextKeyword("findByNameIgnoreCase", 10, keywords, false);
+        assertEquals("IgnoreCase", result, "IgnoreCase should match as always keyword");
+    }
 }

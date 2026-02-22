@@ -172,31 +172,45 @@ public final class MethodToSQLConverter {
     // used previously; otherwise null.
     static String findNextKeyword(String methodName, int index, List<String> keywords, boolean inOrderByContext) {
         for (String keyword : keywords) {
-            if (!methodName.startsWith(keyword, index)) {
-                continue;
-            }
+            if (methodName.startsWith(keyword, index)) {
 
-            int keywordEnd = index + keyword.length();
+                int keywordEnd = index + keyword.length();
 
-            // DESC/ASC are only keywords in ORDER BY context
-            if (ORDER_BY_ONLY_KEYWORDS.contains(keyword)) {
-                if (inOrderByContext && isGeneralOperatorBoundary(methodName, keywordEnd)) {
+                // Check if this keyword is valid at this position
+                if (isKeywordValidAtPosition(methodName, keyword, keywordEnd, inOrderByContext)) {
                     return keyword;
-                }
-            }
-            else {
-                if (isAlwaysKeyword(keyword) || isValidOperatorBoundary(methodName, keyword, keywordEnd)) {
-                    // findAllById is a built-in CrudRepository method with no additional
-                    // predicates. Only match when it's the complete method name. When followed
-                    // by more characters (e.g., findAllById_HospitalIdAndId_TenantId for
-                    // embedded IDs), let findAllBy match instead.
-                    if (!(FIND_ALL_BY_ID.equals(keyword) && keywordEnd < methodName.length())) {
-                        return keyword;
-                    }
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * Checks if a keyword is valid at the given position in the method name.
+     */
+    private static boolean isKeywordValidAtPosition(String methodName, String keyword, int keywordEnd, boolean inOrderByContext) {
+        // DESC/ASC are only keywords in ORDER BY context
+        if (ORDER_BY_ONLY_KEYWORDS.contains(keyword)) {
+            return inOrderByContext && isGeneralOperatorBoundary(methodName, keywordEnd);
+        }
+
+        // Other keywords need to be always-keywords or have valid boundaries
+        if (!isAlwaysKeyword(keyword) && !isValidOperatorBoundary(methodName, keyword, keywordEnd)) {
+            return false;
+        }
+
+        // Special case: findAllById should only match when it's the complete method name
+        return !isFindAllByIdWithSuffix(keyword, keywordEnd, methodName);
+    }
+
+    /**
+     * Checks if this is findAllById followed by additional characters.
+     * findAllById is a built-in CrudRepository method with no additional predicates.
+     * When followed by more characters (e.g., findAllById_HospitalIdAndId_TenantId for
+     * embedded IDs), we should let findAllBy match instead.
+     */
+    private static boolean isFindAllByIdWithSuffix(String keyword, int keywordEnd, String methodName) {
+        return FIND_ALL_BY_ID.equals(keyword) && keywordEnd < methodName.length();
     }
 
     private static boolean isValidOperatorBoundary(String methodName, String keyword, int keywordEnd) {
