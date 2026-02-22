@@ -125,6 +125,9 @@ public class Graph {
                 EnumDeclaration cloned = cdecl.asEnumDeclaration().clone();
                 g.getDestination().getTypes().add(cloned);
                 target = cloned;
+                cdecl.findCompilationUnit().ifPresent(sourceCu ->
+                        sourceCu.getImports().forEach(imp -> g.getDestination().addImport(imp.clone()))
+                );
             } else {
                 target = g.getDestination().addClass(cdecl.getNameAsString());
                 target.setModifiers(cdecl.getModifiers());

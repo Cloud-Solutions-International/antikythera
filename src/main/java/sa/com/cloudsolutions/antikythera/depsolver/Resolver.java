@@ -884,6 +884,10 @@ public class Resolver {
                 }
             }
         }
+        // Fallback: when overload resolution fails but methods with this name exist, add all overloads
+        if (md.isEmpty() && mceWrapper.getMethodName() != null) {
+            cdecl.getMethodsByName(mceWrapper.getMethodName()).forEach(Graph::createGraphNode);
+        }
         return null;
     }
 
@@ -900,6 +904,9 @@ public class Resolver {
                 AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false)
                         .ifPresent(overRides -> Graph.createGraphNode(overRides.getCallableDeclaration()));
             }
+        }
+        if (method.findCompilationUnit().isEmpty()) {
+            return null;
         }
         return Graph.createGraphNode(method);
     }
