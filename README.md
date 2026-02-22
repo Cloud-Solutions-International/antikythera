@@ -100,6 +100,41 @@ See the [documentation](WARP.md) for detailed usage and configuration.
 
 ---
 
+## Executables
+
+The Antikythera core framework includes several standalone executables:
+
+### Antikythera
+Main test generation tool that generates both unit tests and API tests.
+```bash
+mvn exec:java -Dexec.mainClass="sa.com.cloudsolutions.antikythera.generator.Antikythera"
+```
+Generates comprehensive test coverage for your codebase.
+
+### DepSolver
+Dependency analysis and extraction tool for microservice migration and code isolation.
+```bash
+mvn exec:java -Dexec.mainClass="sa.com.cloudsolutions.antikythera.depsolver.DepSolver"
+```
+Requires `depsolver.yml` configuration file. Extracts minimal compilable codebases with all dependencies.
+
+### RepositoryParser
+JPA Repository query analyzer and executor for visualization purposes.
+```bash
+mvn exec:java -Dexec.mainClass="sa.com.cloudsolutions.antikythera.parser.RepositoryParser" \
+  -Dexec.args="com.example.repository.UserRepository"
+```
+Parses and executes queries from JPA repositories.
+
+### TruthTable
+Utility for generating truth tables from boolean expressions (testing/debugging tool).
+```bash
+mvn exec:java -Dexec.mainClass="sa.com.cloudsolutions.antikythera.generator.TruthTable"
+```
+Useful for understanding complex boolean logic in conditions.
+
+---
+
 ## Tools & Examples
 
 The **antikythera-examples** module includes ready-to-use tools for:

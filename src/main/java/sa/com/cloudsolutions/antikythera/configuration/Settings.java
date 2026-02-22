@@ -61,6 +61,7 @@ public class Settings {
      * but may cause generation to fail for classes with complex or unresolved dependencies.
      */
     public static final String STRICT_TYPE_RESOLUTION = "strict_type_resolution";
+    public static final String APPLICATION_VERSION = "application.version";
     /**
      * HashMap to store the configurations.
      */
@@ -114,22 +115,23 @@ public class Settings {
         loadYamlConfig(new ObjectMapper(new YAMLFactory()), inputStream);
     }
 
+    @SuppressWarnings("unchecked")
     private static void loadYamlConfig(ObjectMapper mapper, Object source) throws IOException {
         mapper.registerModule(new com.fasterxml.jackson.databind.module.SimpleModule()
                 .addDeserializer(Map.class, new LinkedHashMapDeserializer()));
 
-        Map<String, Object> yamlProps;
-        if (source instanceof File file) {
-            yamlProps = mapper.readValue(file, new TypeReference<>() {});
-        } else {
-            yamlProps = mapper.readValue((java.io.InputStream) source, new TypeReference<>() {});
-        }
+        Map<String, Object> yamlProps = switch (source) {
+            case File file -> mapper.readValue(file, new TypeReference<>() {});
+            case java.io.InputStream is -> mapper.readValue(is, new TypeReference<>() {});
+            default -> throw new IllegalArgumentException("Unsupported source type: " + source.getClass());
+        };
 
-        Map<String, Object> variables = (Map<String, Object>) yamlProps.getOrDefault(VARIABLES, new HashMap<>());
-        props.put(VARIABLES, variables);
-
-        if (variables != null) {
+        if (yamlProps.get(VARIABLES) instanceof Map<?, ?> vars) {
+            Map<String, Object> variables = (Map<String, Object>) vars;
+            props.put(VARIABLES, variables);
             variables.replaceAll((k, value) -> replaceEnvVariables((String) value));
+        } else {
+            props.put(VARIABLES, new HashMap<>());
         }
 
         replaceVariables(yamlProps, props);
@@ -138,7 +140,7 @@ public class Settings {
     }
 
     private static void hostInfo(Map<String, Object> yamlProps) throws IOException {
-        if (yamlProps.get(APPLICATION_HOST) != null || yamlProps.get("application.version") != null) {
+        if (yamlProps.get(APPLICATION_HOST) != null || yamlProps.get(APPLICATION_VERSION) != null) {
             Path path = Paths.get("src", "test", "resources", "testdata", "qa").resolve("Url.properties");
             File urlFile = path.toFile();
             if (urlFile.exists()) {
@@ -150,9 +152,9 @@ public class Settings {
                         sb.append(APPLICATION_HOST).append("=")
                                 .append(yamlProps.get(APPLICATION_HOST) == null ? "" : yamlProps.get(APPLICATION_HOST))
                                 .append("\n");
-                    } else if (line.startsWith("application.version")) {
+                    } else if (line.startsWith(APPLICATION_VERSION)) {
                         sb.append("application.version=")
-                                .append(yamlProps.get("application.version") == null ? ""
+                                .append(yamlProps.get(APPLICATION_VERSION) == null ? ""
                                         : yamlProps.get(APPLICATION_HOST))
                                 .append("\n");
                     } else {
@@ -179,31 +181,36 @@ public class Settings {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static void replaceVariable(Map<String, Object> target, Map.Entry<String, Object> entry, String userDir) {
         String key = entry.getKey();
         Object value = entry.getValue();
-        if (value != null && !key.equals(VARIABLES)) {
-            if (value instanceof Map) {
+        if (value == null || key.equals(VARIABLES)) {
+            return;
+        }
+        switch (value) {
+            case Map<?, ?> map -> {
                 Map<String, Object> nestedMap = new HashMap<>();
-                replaceVariables((Map<String, Object>) value, nestedMap);
+                replaceVariables((Map<String, Object>) map, nestedMap);
                 target.put(key, nestedMap);
-            } else if (value instanceof List) {
+            }
+            case List<?> list -> {
                 List<String> result = new ArrayList<>();
-                for (String s : (List<String>) value) {
-                    if (s != null) {
+                for (Object item : list) {
+                    if (item instanceof String s) {
                         s = s.replace("${USERDIR}", userDir);
                         s = replaceYamlVariables(s);
                         result.add(s);
                     }
                 }
                 target.put(key, result);
-            } else if (value instanceof String v) {
-                v = v.replace("${USERDIR}", userDir);
-                v = replaceYamlVariables(v);
-                target.put(key, replaceEnvVariables(v));
-            } else {
-                target.put(key, value);
             }
+            case String s -> {
+                s = s.replace("${USERDIR}", userDir);
+                s = replaceYamlVariables(s);
+                target.put(key, replaceEnvVariables(s));
+            }
+            default -> target.put(key, value);
         }
     }
 
@@ -214,27 +221,24 @@ public class Settings {
      * @return the updated value
      */
     private static String replaceYamlVariables(String value) {
-        Map<String, Object> variablesMap = (Map<String, Object>) props.get(VARIABLES);
-        for (Map.Entry<String, Object> variable : variablesMap.entrySet()) {
-            String key = "${" + variable.getKey() + "}";
-            String varValue = (String) variable.getValue();
-            value = value.replace(key, varValue);
+        if (props.get(VARIABLES) instanceof Map<?, ?> variablesMap) {
+            for (Map.Entry<?, ?> variable : variablesMap.entrySet()) {
+                String key = "${" + variable.getKey() + "}";
+                if (variable.getValue() instanceof String varValue) {
+                    value = value.replace(key, varValue);
+                }
+            }
         }
         return value;
     }
 
     public static Map<String, String> loadCustomMethodNames(String className, String fieldName) {
         Map<String, String> methodNames = new HashMap<>();
-        Map<String, Object> dtoConfig = (Map<String, Object>) Settings.getProperty("DTO");
-        if (dtoConfig != null) {
-            Map<String, Object> classConfig = (Map<String, Object>) dtoConfig.get(className);
-            if (classConfig != null) {
-                Map<String, String> fieldConfig = (Map<String, String>) classConfig.get(fieldName);
-                if (fieldConfig != null) {
-                    methodNames.put("getter", fieldConfig.get("getter"));
-                    methodNames.put("setter", fieldConfig.get("setter"));
-                }
-            }
+        if (Settings.getProperty("DTO") instanceof Map<?, ?> dtoConfig
+                && dtoConfig.get(className) instanceof Map<?, ?> classConfig
+                && classConfig.get(fieldName) instanceof Map<?, ?> fieldConfig) {
+            methodNames.put("getter", (String) fieldConfig.get("getter"));
+            methodNames.put("setter", (String) fieldConfig.get("setter"));
         }
         return methodNames;
     }
@@ -338,21 +342,23 @@ public class Settings {
         return getDependencies(ARTIFACT_IDS);
     }
 
+    @SuppressWarnings("unchecked")
     private static String[] getDependencies(String artifactIds) {
         Object deps = props.getOrDefault(Settings.DEPENDENCIES, new HashMap<>());
-        if (deps instanceof String s) {
-            return s.split(",");
-        }
-        Map<String, Object> dependencies = (Map<String, Object>) deps;
-        if (dependencies == null) {
-            return new String[] {};
-        }
-
-        Object artifacts = dependencies.get(artifactIds);
-        if (artifacts == null) {
-            return new String[] {};
-        }
-        return ((List<String>) artifacts).toArray(new String[0]);
+        return switch (deps) {
+            case String s -> s.split(",");
+            case Map<?, ?> dependencies -> {
+                Object artifacts = dependencies.get(artifactIds);
+                if (artifacts instanceof List<?> list) {
+                    yield list.stream()
+                            .filter(String.class::isInstance)
+                            .map(String.class::cast)
+                            .toArray(String[]::new);
+                }
+                yield new String[] {};
+            }
+            default -> new String[] {};
+        };
     }
 
     public static String[] getJarFiles() {

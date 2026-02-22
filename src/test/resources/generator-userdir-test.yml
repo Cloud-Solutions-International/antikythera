@@ -1,0 +1,13 @@
+variables:
+  myvar: replaced_value
+
+base_path: ${USERDIR}/projects/src/main/java
+base_package: com.example
+output_path: ${USERDIR}/output
+some_list:
+  - ${USERDIR}/item1
+  - ${myvar}/item2
+  - ~
+nested_map:
+  key1: ${USERDIR}/nested_value
+  key2: ${myvar}/nested_var

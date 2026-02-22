@@ -53,7 +53,7 @@ public class TypeWrapper {
     public String getFullyQualifiedName() {
         if (clazz == null) {
             if (type != null) {
-                return type.getFullyQualifiedName().orElseThrow();
+                return type.getFullyQualifiedName().orElse(null);
             }
         } else {
             return clazz.getName();

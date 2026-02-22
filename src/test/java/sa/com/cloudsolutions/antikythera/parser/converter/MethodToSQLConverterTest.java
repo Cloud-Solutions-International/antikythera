@@ -69,6 +69,35 @@ class MethodToSQLConverterTest {
     }
 
     @Test
+    void testExtractComponents_FindTop10By() {
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "findTop10ByUserIdInAndCategoryIdAndRegionIdAndGroupIdOrderByCreatedDateDesc");
+        assertEquals("findTopBy", components.get(0));
+        assertEquals("UserId", components.get(1));
+        assertEquals("In", components.get(2));
+    }
+
+    @Test
+    void testExtractTopLimit() {
+        assertEquals(10, MethodToSQLConverter.extractTopLimit("findTop10ByUserIdIn"));
+        assertEquals(5, MethodToSQLConverter.extractTopLimit("findFirst5ByName"));
+        assertEquals(1, MethodToSQLConverter.extractTopLimit("findTopByName"));
+        assertEquals(1, MethodToSQLConverter.extractTopLimit("findFirstByName"));
+        assertEquals(1, MethodToSQLConverter.extractTopLimit("findByName"));
+    }
+
+    @Test
+    void testExtractComponents_FindDistinctWithSubject() {
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "findDistinctItemByCodeInAndTypeAndRegionIdAndGroupId");
+        assertEquals("findDistinctBy", components.get(0));
+        assertEquals("Code", components.get(1));
+        assertEquals("In", components.get(2));
+        assertEquals("And", components.get(3));
+        assertEquals("Type", components.get(4));
+    }
+
+    @Test
     void testBuildSelectAndWhereClauses_FindDistinctBy() {
         StringBuilder sql = new StringBuilder();
         MethodToSQLConverter.buildSelectAndWhereClauses(List.of("findDistinctBy", "Name"), sql, "users");
@@ -514,5 +543,359 @@ class MethodToSQLConverterTest {
                 "findCropsByFarmIdOrderByPlantingDateDesc");
         assertEquals(List.of("findBy", "FarmId", "OrderBy", "PlantingDate", "Desc"), components,
                 "OrderBy should be preserved when normalizing subject");
+    }
+
+    // ========== findAllById Scenarios ==========
+    // In Spring Data JPA, findAllById is a built-in CrudRepository method that takes
+    // Iterable<ID> and returns all entities with matching IDs (WHERE id IN (?)).
+    // It should ONLY match as a keyword when it's the complete method name.
+    // When followed by additional characters, the "Id" is part of a field name.
+
+    @Test
+    void testExtractComponents_FindAllById_Standalone() {
+        // Standalone findAllById is the CrudRepository method
+        List<String> components = MethodToSQLConverter.extractComponents("findAllById");
+        assertEquals(List.of("findAllById"), components,
+                "Standalone findAllById should be a single keyword");
+    }
+
+    @Test
+    void testExtractComponents_FindAllByIdAndName() {
+        // findAllByIdAndName is a derived query: findAllBy + Id + And + Name
+        // NOT findAllById + And + Name
+        List<String> components = MethodToSQLConverter.extractComponents("findAllByIdAndName");
+        assertEquals(List.of("findAllBy", "Id", "And", "Name"), components,
+                "findAllByIdAndName should parse as findAllBy + Id + And + Name");
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_FindAllByIdAndName() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findAllBy", "Id", "And", "Name");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE id = ?  AND name = ? ", sql.toString());
+    }
+
+    @Test
+    void testExtractComponents_FindAllByIdIn() {
+        // findAllByIdIn is a derived query: findAllBy + Id + In
+        List<String> components = MethodToSQLConverter.extractComponents("findAllByIdIn");
+        assertEquals(List.of("findAllBy", "Id", "In"), components,
+                "findAllByIdIn should parse as findAllBy + Id + In");
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_FindAllByIdIn() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findAllBy", "Id", "In");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE id  IN (?) ", sql.toString());
+    }
+
+    @Test
+    void testExtractComponents_FindAllByIdOrderByName() {
+        // findAllByIdOrderByName is a derived query with ordering
+        List<String> components = MethodToSQLConverter.extractComponents("findAllByIdOrderByName");
+        assertEquals(List.of("findAllBy", "Id", "OrderBy", "Name"), components,
+                "findAllByIdOrderByName should parse as findAllBy + Id + OrderBy + Name");
+    }
+
+    // ========== Embedded ID Property Traversal with _ ==========
+    // Spring Data JPA uses _ in method names for nested property traversal.
+    // For entities with @EmbeddedId, Id_HospitalId means id.hospitalId,
+    // and the SQL column name comes from the final property (hospitalId -> hospital_id).
+
+    @Test
+    void testExtractComponents_EmbeddedIdPropertyTraversal() {
+        // findAllById_HospitalIdAndId_TenantId uses _ for embedded ID traversal:
+        // Id_HospitalId -> id.hospitalId (column: hospital_id)
+        // Id_TenantId -> id.tenantId (column: tenant_id)
+        List<String> components = MethodToSQLConverter.extractComponents(
+                "findAllById_HospitalIdAndId_TenantId");
+        assertEquals(List.of("findAllBy", "Id_HospitalId", "And", "Id_TenantId"), components,
+                "Embedded ID traversal should parse as findAllBy + Id_HospitalId + And + Id_TenantId");
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_EmbeddedIdPropertyTraversal() {
+        // The _ in field components indicates property traversal.
+        // Id_HospitalId means id.hospitalId -> column hospital_id
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findAllBy", "Id_HospitalId", "And", "Id_TenantId");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "rmmsd_hospital_ward");
+        assertEquals("SELECT * FROM rmmsd_hospital_ward WHERE hospital_id = ?  AND tenant_id = ? ",
+                sql.toString(),
+                "Embedded ID fields should resolve to the final property's column name");
+    }
+
+    @Test
+    void testExtractComponents_EmbeddedIdSingleField() {
+        // findByIdHospitalId (without underscore) - standard derived query
+        List<String> components = MethodToSQLConverter.extractComponents("findById_HospitalId");
+        assertEquals(List.of("findBy", "Id_HospitalId"), components,
+                "Embedded ID single field should parse correctly");
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_EmbeddedIdSingleField() {
+        StringBuilder sql = new StringBuilder();
+        List<String> components = List.of("findBy", "Id_HospitalId");
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "rmmsd_hospital_ward");
+        assertEquals("SELECT * FROM rmmsd_hospital_ward WHERE hospital_id = ? ", sql.toString(),
+                "Single embedded ID field should resolve to column name");
+    }
+
+    @Test
+    void testTryNormalizeVerb_FindWithSubject() {
+        // findUserByEmail -> findByEmail
+        String result = MethodToSQLConverter.tryNormalizeVerb("findUserByEmail", "find",
+            MethodToSQLConverter.FIND_BY, MethodToSQLConverter.FIND_ALL);
+        assertEquals("findByEmail", result);
+
+        // findDistinctMedicationByCode -> findDistinctByCode
+        result = MethodToSQLConverter.tryNormalizeVerb("findDistinctMedicationByCode", "find",
+            MethodToSQLConverter.FIND_BY, MethodToSQLConverter.FIND_DISTINCT_BY);
+        assertEquals("findDistinctByCode", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_ExistsWithSubject() {
+        // existsUserByEmail -> existsByEmail
+        String result = MethodToSQLConverter.tryNormalizeVerb("existsUserByEmail", "exists",
+            MethodToSQLConverter.EXISTS_BY);
+        assertEquals("existsByEmail", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_CountWithSubject() {
+        // countUserByStatus -> countByStatus
+        String result = MethodToSQLConverter.tryNormalizeVerb("countUserByStatus", "count",
+            MethodToSQLConverter.COUNT_BY);
+        assertEquals("countByStatus", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_DeleteWithSubject() {
+        // deleteUserById -> deleteById
+        String result = MethodToSQLConverter.tryNormalizeVerb("deleteUserById", "delete",
+            MethodToSQLConverter.DELETE_BY);
+        assertEquals("deleteById", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_AlreadyNormalized() {
+        // findByEmail should remain unchanged (already normalized)
+        String result = MethodToSQLConverter.tryNormalizeVerb("findByEmail", "find",
+            MethodToSQLConverter.FIND_BY);
+        assertEquals("findByEmail", result);
+
+        // existsByEmail should remain unchanged
+        result = MethodToSQLConverter.tryNormalizeVerb("existsByEmail", "exists",
+            MethodToSQLConverter.EXISTS_BY);
+        assertEquals("existsByEmail", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_NoByKeyword() {
+        // Methods without "By" should remain unchanged
+        String result = MethodToSQLConverter.tryNormalizeVerb("findAll", "find",
+            MethodToSQLConverter.FIND_ALL);
+        assertEquals("findAll", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_PreservesOrderBy() {
+        // findUserOrderByName should remain unchanged (OrderBy should not be normalized)
+        String result = MethodToSQLConverter.tryNormalizeVerb("findUserOrderByName", "find",
+            MethodToSQLConverter.FIND_BY);
+        assertEquals("findUserOrderByName", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_WrongVerb() {
+        // Method not starting with specified verb should remain unchanged
+        String result = MethodToSQLConverter.tryNormalizeVerb("deleteByEmail", "find",
+            MethodToSQLConverter.FIND_BY);
+        assertEquals("deleteByEmail", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_LongerVerbVariant() {
+        // existsAll... should not be normalized when checking "exists" verb
+        // This should be handled by methodStartsWithLongerVerb
+        String result = MethodToSQLConverter.tryNormalizeVerb("existsAllUserByEmail", "exists",
+            MethodToSQLConverter.EXISTS_BY);
+        assertEquals("existsAllUserByEmail", result, "Should skip normalization for longer verb variant");
+
+        // countAll... should not be normalized when checking "count" verb
+        result = MethodToSQLConverter.tryNormalizeVerb("countAllUserByStatus", "count",
+            MethodToSQLConverter.COUNT_BY);
+        assertEquals("countAllUserByStatus", result, "Should skip normalization for longer verb variant");
+
+        // deleteAll... should not be normalized when checking "delete" verb
+        result = MethodToSQLConverter.tryNormalizeVerb("deleteAllUserById", "delete",
+            MethodToSQLConverter.DELETE_BY);
+        assertEquals("deleteAllUserById", result, "Should skip normalization for longer verb variant");
+    }
+
+    @Test
+    void testTryNormalizeVerb_RecognizedPrefix() {
+        // findAllByStatus should remain unchanged (recognized prefix)
+        String result = MethodToSQLConverter.tryNormalizeVerb("findAllByStatus", "find",
+            MethodToSQLConverter.FIND_ALL_BY);
+        assertEquals("findAllByStatus", result);
+
+        // findFirstByName should remain unchanged (recognized prefix)
+        result = MethodToSQLConverter.tryNormalizeVerb("findFirstByName", "find",
+            MethodToSQLConverter.FIND_FIRST_BY);
+        assertEquals("findFirstByName", result);
+    }
+
+    @Test
+    void testFindNextKeyword_AlwaysKeyword() {
+        // Query types should always be matched
+        List<String> keywords = List.of("findBy", "countBy", "deleteBy");
+        String result = MethodToSQLConverter.findNextKeyword("findByName", 0, keywords, false);
+        assertEquals("findBy", result);
+
+        result = MethodToSQLConverter.findNextKeyword("countByAge", 0, keywords, false);
+        assertEquals("countBy", result);
+    }
+
+    @Test
+    void testFindNextKeyword_OperatorBoundary() {
+        // Operators should match when followed by uppercase
+        List<String> keywords = List.of("And", "Or", "In", "Not");
+
+        String result = MethodToSQLConverter.findNextKeyword("nameAndAge", 4, keywords, false);
+        assertEquals("And", result, "And should match when followed by uppercase");
+
+        result = MethodToSQLConverter.findNextKeyword("statusOrType", 6, keywords, false);
+        assertEquals("Or", result, "Or should match when followed by uppercase");
+
+        result = MethodToSQLConverter.findNextKeyword("idInList", 2, keywords, false);
+        assertEquals("In", result, "In should match when followed by uppercase");
+    }
+
+    @Test
+    void testFindNextKeyword_OperatorNotMatched() {
+        // Operators should NOT match when followed by lowercase (part of field name)
+        List<String> keywords = List.of("And", "Or", "In");
+
+        String result = MethodToSQLConverter.findNextKeyword("mandatory", 1, keywords, false);
+        assertNull(result, "And should not match in 'mandatory'");
+
+        result = MethodToSQLConverter.findNextKeyword("information", 3, keywords, false);
+        assertNull(result, "or should not match in 'information'");
+
+        result = MethodToSQLConverter.findNextKeyword("index", 0, keywords, false);
+        assertNull(result, "In should not match in 'index'");
+    }
+
+    @Test
+    void testFindNextKeyword_DescAscInOrderByContext() {
+        // DESC/ASC should only match in ORDER BY context
+        List<String> keywords = List.of("Desc", "Asc", "OrderBy");
+
+        // Not in ORDER BY context - should not match
+        String result = MethodToSQLConverter.findNextKeyword("Description", 0, keywords, false);
+        assertNull(result, "Desc should not match in 'Description' outside ORDER BY context");
+
+        result = MethodToSQLConverter.findNextKeyword("Ascending", 0, keywords, false);
+        assertNull(result, "Asc should not match in 'Ascending' outside ORDER BY context");
+
+        // In ORDER BY context - should match
+        result = MethodToSQLConverter.findNextKeyword("nameDesc", 4, keywords, true);
+        assertEquals("Desc", result, "Desc should match in ORDER BY context");
+
+        result = MethodToSQLConverter.findNextKeyword("ageAsc", 3, keywords, true);
+        assertEquals("Asc", result, "Asc should match in ORDER BY context");
+    }
+
+    @Test
+    void testFindNextKeyword_SyntacticSugarValidPosition() {
+        // "Is" should only match when followed by valid suffixes
+        List<String> keywords = List.of("Is", "True", "False", "Null", "Not", "And");
+
+        String result = MethodToSQLConverter.findNextKeyword("IsTrue", 0, keywords, false);
+        assertEquals("Is", result, "Is should match when followed by True");
+
+        result = MethodToSQLConverter.findNextKeyword("IsFalse", 0, keywords, false);
+        assertEquals("Is", result, "Is should match when followed by False");
+
+        result = MethodToSQLConverter.findNextKeyword("IsNull", 0, keywords, false);
+        assertEquals("Is", result, "Is should match when followed by Null");
+
+        result = MethodToSQLConverter.findNextKeyword("IsNot", 0, keywords, false);
+        assertEquals("Is", result, "Is should match when followed by Not");
+
+        result = MethodToSQLConverter.findNextKeyword("IsAnd", 0, keywords, false);
+        assertEquals("Is", result, "Is should match when followed by And");
+    }
+
+    @Test
+    void testFindNextKeyword_SyntacticSugarInvalidPosition() {
+        // "Is" should NOT match when followed by field name
+        List<String> keywords = List.of("Is", "And");
+
+        String result = MethodToSQLConverter.findNextKeyword("IsActive", 0, keywords, false);
+        assertNull(result, "Is should not match in 'IsActive' (field name)");
+
+        result = MethodToSQLConverter.findNextKeyword("IsEnabled", 0, keywords, false);
+        assertNull(result, "Is should not match in 'IsEnabled' (field name)");
+    }
+
+    @Test
+    void testFindNextKeyword_FindAllByIdSpecialCase() {
+        // findAllById should only match when it's the complete method name
+        List<String> keywords = List.of("findAllById", "findAllBy");
+
+        String result = MethodToSQLConverter.findNextKeyword("findAllById", 0, keywords, false);
+        assertEquals("findAllById", result, "findAllById should match when complete");
+
+        // When followed by more characters, should not match findAllById
+        result = MethodToSQLConverter.findNextKeyword("findAllById_HospitalId", 0, keywords, false);
+        assertEquals("findAllBy", result, "findAllBy should match instead when findAllById has suffix");
+    }
+
+    @Test
+    void testFindNextKeyword_NoMatchAtIndex() {
+        List<String> keywords = List.of("findBy", "And", "Or");
+
+        String result = MethodToSQLConverter.findNextKeyword("countByName", 0, keywords, false);
+        assertNull(result, "No keyword should match at index 0 in 'countByName'");
+
+        result = MethodToSQLConverter.findNextKeyword("name", 0, keywords, false);
+        assertNull(result, "No keyword should match in 'name'");
+    }
+
+    @Test
+    void testFindNextKeyword_LongestMatchFirst() {
+        // Keywords should be sorted by length descending for longest match
+        List<String> keywords = List.of("GreaterThanEqual", "GreaterThan", "Greater");
+
+        String result = MethodToSQLConverter.findNextKeyword("ageGreaterThanEqual", 3, keywords, false);
+        assertEquals("GreaterThanEqual", result, "Should match longest keyword first");
+    }
+
+    @Test
+    void testFindNextKeyword_AtEndOfString() {
+        List<String> keywords = List.of("Is", "True");
+
+        // "Is" at end of string should match (valid position)
+        String result = MethodToSQLConverter.findNextKeyword("activeIs", 6, keywords, false);
+        assertEquals("Is", result, "Is should match at end of string");
+    }
+
+    @Test
+    void testFindNextKeyword_ModifierKeywords() {
+        // Modifiers like OrderBy, IgnoreCase should always match
+        List<String> keywords = List.of("OrderBy", "IgnoreCase", "AllIgnoreCase");
+
+        String result = MethodToSQLConverter.findNextKeyword("findByNameOrderBy", 10, keywords, false);
+        assertEquals("OrderBy", result, "OrderBy should match as always keyword");
+
+        result = MethodToSQLConverter.findNextKeyword("findByNameIgnoreCase", 10, keywords, false);
+        assertEquals("IgnoreCase", result, "IgnoreCase should match as always keyword");
     }
 }

@@ -1,0 +1,9 @@
+variables:
+  projects_folder: /tmp
+
+base_path: /tmp/src/main/java
+base_package: com.example
+# This uses an env variable that almost certainly doesn't exist
+missing_env: ${ANTIKYTHERA_NONEXISTENT_VAR_XYZ123}
+# This has a malformed variable reference with no closing brace
+malformed_env: ${NO_CLOSE_BRACE

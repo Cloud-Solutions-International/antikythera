@@ -550,7 +550,8 @@ public class BaseRepositoryParser extends AbstractCompiler {
             logger.warn("Table name cannot be null for entity");
         }
         if (top) {
-            applyTopLimit(sql);
+            int limit = MethodToSQLConverter.extractTopLimit(methodName);
+            applyTopLimit(sql, limit);
         }
 
         // Close the EXISTS subquery if needed (closes both the inner SELECT and the EXISTS function)
@@ -564,8 +565,10 @@ public class BaseRepositoryParser extends AbstractCompiler {
 
     /**
      * Apply dialect-specific top limit (FIRST/TOP semantics)
+     * @param sql the SQL being built
+     * @param limit the maximum number of rows to return
      */
-    private void applyTopLimit(StringBuilder sql) {
+    private void applyTopLimit(StringBuilder sql, int limit) {
         String built = sql.toString();
         String trimmedUpper = built.trim().toUpperCase();
         boolean trailingWhere = trimmedUpper.endsWith(WHERE);
@@ -581,13 +584,13 @@ public class BaseRepositoryParser extends AbstractCompiler {
         if (dialect == DatabaseDialect.ORACLE) {
             // Oracle needs WHERE clause for ROWNUM
             if (!built.toUpperCase().contains(WHERE)) {
-                built = built + " WHERE ROWNUM = 1";
+                built = built + " WHERE ROWNUM <= " + limit;
             } else {
-                built = dialect.applyLimitClause(built, 1);
+                built = dialect.applyLimitClause(built, limit);
             }
         } else {
             // PostgreSQL and others use LIMIT which doesn't need WHERE
-            built = dialect.applyLimitClause(built, 1);
+            built = dialect.applyLimitClause(built, limit);
         }
 
         sql.setLength(0);

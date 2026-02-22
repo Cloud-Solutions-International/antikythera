@@ -170,27 +170,47 @@ public final class MethodToSQLConverter {
 
     // Returns a keyword that starts at 'index' and forms a valid boundary per rules
     // used previously; otherwise null.
-    private static String findNextKeyword(String methodName, int index, List<String> keywords, boolean inOrderByContext) {
+    static String findNextKeyword(String methodName, int index, List<String> keywords, boolean inOrderByContext) {
         for (String keyword : keywords) {
-            if (!methodName.startsWith(keyword, index)) {
-                continue;
-            }
+            if (methodName.startsWith(keyword, index)) {
 
-            int keywordEnd = index + keyword.length();
+                int keywordEnd = index + keyword.length();
 
-            // DESC/ASC are only keywords in ORDER BY context
-            if (ORDER_BY_ONLY_KEYWORDS.contains(keyword)) {
-                if (inOrderByContext && isGeneralOperatorBoundary(methodName, keywordEnd)) {
-                    return keyword;
-                }
-            }
-            else {
-                if (isAlwaysKeyword(keyword) || isValidOperatorBoundary(methodName, keyword, keywordEnd)) {
+                // Check if this keyword is valid at this position
+                if (isKeywordValidAtPosition(methodName, keyword, keywordEnd, inOrderByContext)) {
                     return keyword;
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * Checks if a keyword is valid at the given position in the method name.
+     */
+    private static boolean isKeywordValidAtPosition(String methodName, String keyword, int keywordEnd, boolean inOrderByContext) {
+        // DESC/ASC are only keywords in ORDER BY context
+        if (ORDER_BY_ONLY_KEYWORDS.contains(keyword)) {
+            return inOrderByContext && isGeneralOperatorBoundary(methodName, keywordEnd);
+        }
+
+        // Other keywords need to be always-keywords or have valid boundaries
+        if (!isAlwaysKeyword(keyword) && !isValidOperatorBoundary(methodName, keyword, keywordEnd)) {
+            return false;
+        }
+
+        // Special case: findAllById should only match when it's the complete method name
+        return !isFindAllByIdWithSuffix(keyword, keywordEnd, methodName);
+    }
+
+    /**
+     * Checks if this is findAllById followed by additional characters.
+     * findAllById is a built-in CrudRepository method with no additional predicates.
+     * When followed by more characters (e.g., findAllById_HospitalIdAndId_TenantId for
+     * embedded IDs), we should let findAllBy match instead.
+     */
+    private static boolean isFindAllByIdWithSuffix(String keyword, int keywordEnd, String methodName) {
+        return FIND_ALL_BY_ID.equals(keyword) && keywordEnd < methodName.length();
     }
 
     private static boolean isValidOperatorBoundary(String methodName, String keyword, int keywordEnd) {
@@ -279,6 +299,9 @@ public final class MethodToSQLConverter {
      * Handles all query verbs: find, exists, count, delete, read, query, search, stream, remove.
      */
     private static String normalizeFindSubject(String methodName) {
+        // Handle findTop<N>By and findFirst<N>By patterns (e.g., findTop10ByName -> findTopByName)
+        methodName = stripTopFirstNumber(methodName);
+
         // Try to normalize each query verb type
         // IMPORTANT: Check longer prefixes first (e.g., existsAll before exists)
         // to avoid incorrect matches
@@ -331,7 +354,8 @@ public final class MethodToSQLConverter {
      * @param recognizedPrefixes the already-recognized prefixes that should not be normalized
      * @return the normalized method name, or the original if no normalization was needed
      */
-    private static String tryNormalizeVerb(String methodName, String verb, String... recognizedPrefixes) {
+     static String tryNormalizeVerb(String methodName, String verb, String... recognizedPrefixes) {
+        // Early exit if method doesn't start with the verb
         if (!methodName.startsWith(verb)) {
             return methodName;
         }
@@ -343,29 +367,50 @@ public final class MethodToSQLConverter {
             }
         }
 
-        // Check if this method would match a longer verb (e.g., "existsAll" vs "exists")
-        // If so, skip this verb and let the longer one handle it
+        // Skip if this is a longer verb variant (e.g., "existsAll" when checking "exists")
         if (methodStartsWithLongerVerb(methodName, verb)) {
             return methodName;
         }
 
         // Look for "By" after the verb
         int byIdx = methodName.indexOf("By", verb.length());
-        if (byIdx > 0) {
-            // If this By is part of OrderBy, skip normalization to preserve ordering clause
-            int orderStart = byIdx - "Order".length();
-            if (orderStart >= 0) {
-                String maybeOrder = methodName.substring(orderStart, byIdx);
-                if ("Order".equals(maybeOrder)) {
-                    return methodName;
-                }
-            }
-            // Convert things like existsSomethingByXxx... -> existsByXxx...
-            // Use the first recognized prefix as the normalized form
-            String normalizedPrefix = recognizedPrefixes.length > 0 ? recognizedPrefixes[0] : verb + "By";
-            return normalizedPrefix + methodName.substring(byIdx + 2);
+        if (byIdx <= 0) {
+            return methodName;
         }
-        return methodName;
+
+        // Skip if "By" is part of "OrderBy"
+        if (isOrderBy(methodName, byIdx)) {
+            return methodName;
+        }
+
+        // Convert things like findDistinctMedicationByXxx -> findDistinctByXxx
+        // Find the longest recognized prefix whose base matches the method start
+        String normalizedPrefix = findBestMatchingPrefix(methodName, verb, recognizedPrefixes);
+        return normalizedPrefix + methodName.substring(byIdx + 2);
+    }
+
+    /**
+     * Checks if "By" at the given index is part of "OrderBy".
+     */
+    private static boolean isOrderBy(String methodName, int byIdx) {
+        int orderStart = byIdx - "Order".length();
+        return orderStart >= 0 && "Order".equals(methodName.substring(orderStart, byIdx));
+    }
+
+    /**
+     * Finds the longest recognized prefix whose base matches the method start.
+     * Returns verb + "By" if no better match is found.
+     */
+    private static String findBestMatchingPrefix(String methodName, String verb, String... recognizedPrefixes) {
+        String normalizedPrefix = verb + "By";
+        for (String prefix : recognizedPrefixes) {
+            if (prefix.endsWith("By")
+                    && methodName.startsWith(prefix.substring(0, prefix.length() - 2))
+                    && prefix.length() > normalizedPrefix.length()) {
+                normalizedPrefix = prefix;
+            }
+        }
+        return normalizedPrefix;
     }
 
     /**
@@ -373,14 +418,59 @@ public final class MethodToSQLConverter {
      * For example, if checking "exists" verb, returns true if method starts with "existsAll".
      */
     private static boolean methodStartsWithLongerVerb(String methodName, String verb) {
-        // Map of shorter verbs to their longer variants
-        if ("exists".equals(verb) && methodName.startsWith("existsAll")) return true;
-        if ("count".equals(verb) && methodName.startsWith("countAll")) return true;
-        if ("delete".equals(verb) && methodName.startsWith("deleteAll")) return true;
-        return ("find".equals(verb) && (methodName.startsWith(FIND_ALL) ||
-                                     methodName.startsWith("findFirst") ||
-                                     methodName.startsWith("findTop") ||
-                                     methodName.startsWith("findDistinct")));
+        // Map of shorter verbs to their longer variants that are handled
+        // by separate tryNormalizeVerb calls (e.g., "existsAll" vs "exists").
+        // Note: find variants (findFirst, findTop, findDistinct) are NOT listed here
+        // because they are all handled in the same tryNormalizeVerb("find", ...) call
+        // and need normalization when a subject appears (e.g., findDistinctMedicationBy).
+        return switch (verb) {
+            case "exists" -> methodName.startsWith("existsAll");
+            case "count" -> methodName.startsWith("countAll");
+            case "delete" -> methodName.startsWith("deleteAll");
+            default -> false;
+        };
+    }
+
+    /**
+     * Strips the numeric part from findTop&lt;N&gt;By or findFirst&lt;N&gt;By patterns.
+     * For example, "findTop10ByName" becomes "findTopByName".
+     * Returns the method name unchanged if no numeric part is found.
+     */
+    private static String stripTopFirstNumber(String methodName) {
+        for (String prefix : new String[]{"findTop", "findFirst"}) {
+            if (methodName.startsWith(prefix)) {
+                int i = prefix.length();
+                // Skip digits
+                while (i < methodName.length() && Character.isDigit(methodName.charAt(i))) {
+                    i++;
+                }
+                // Only strip if we found at least one digit and "By" follows
+                if (i > prefix.length() && methodName.startsWith("By", i)) {
+                    return prefix + methodName.substring(i);
+                }
+            }
+        }
+        return methodName;
+    }
+
+    /**
+     * Extracts the numeric limit from a findTop&lt;N&gt;By or findFirst&lt;N&gt;By method name.
+     * Returns 1 if no number is specified (e.g., findTopBy) or the method doesn't match.
+     */
+    public static int extractTopLimit(String methodName) {
+        for (String prefix : new String[]{"findTop", "findFirst"}) {
+            if (methodName.startsWith(prefix)) {
+                int start = prefix.length();
+                int end = start;
+                while (end < methodName.length() && Character.isDigit(methodName.charAt(end))) {
+                    end++;
+                }
+                if (end > start && methodName.startsWith("By", end)) {
+                    return Integer.parseInt(methodName.substring(start, end));
+                }
+            }
+        }
+        return 1;
     }
 
     /**
@@ -606,7 +696,7 @@ public final class MethodToSQLConverter {
      */
     @SuppressWarnings("java:S1066")
     private static void appendDefaultComponent(StringBuilder sql, String component, String next, boolean ordering) {
-        sql.append(BaseRepositoryParser.camelToSnake(component));
+        sql.append(resolveColumnName(component));
         if (!ordering) {
             if (shouldAppendEquals(next)) {
                 sql.append(" = ? ");
@@ -620,6 +710,32 @@ public final class MethodToSQLConverter {
         } else {
             appendCommaOrSpace(next, sql);
         }
+    }
+
+    /**
+     * Resolves a field component to its SQL column name.
+     * Handles Spring Data's underscore property traversal by using the
+     * final property in the path.
+     *
+     * In Spring Data JPA, underscore followed by an uppercase letter in
+     * method names indicates nested property access (e.g., Id_HospitalId
+     * means id.hospitalId for an @EmbeddedId). The SQL column name comes
+     * from the final property in the traversal path.
+     *
+     * @param component the field component from the method name
+     * @return the resolved SQL column name in snake_case
+     */
+    static String resolveColumnName(String component) {
+        int lastTraversal = -1;
+        for (int i = 0; i < component.length() - 1; i++) {
+            if (component.charAt(i) == '_' && Character.isUpperCase(component.charAt(i + 1))) {
+                lastTraversal = i;
+            }
+        }
+        if (lastTraversal >= 0) {
+            return BaseRepositoryParser.camelToSnake(component.substring(lastTraversal + 1));
+        }
+        return BaseRepositoryParser.camelToSnake(component);
     }
 
     /**
