@@ -213,28 +213,29 @@ public class Resolver {
      *                   {@code @Named} annotation value
      */
     private static void resolveNamedMethod(GraphNode node, String methodName) {
-        node.getEnclosingType().getMethods().forEach(method -> {
-            for (AnnotationExpr ann : method.getAnnotations()) {
-                if (ann.getNameAsString().equals("Named")) {
-                    String annValue = null;
-                    if (ann.isSingleMemberAnnotationExpr()) {
-                        Expression memberValue = ann.asSingleMemberAnnotationExpr().getMemberValue();
-                        if (memberValue.isStringLiteralExpr()) {
-                            annValue = memberValue.asStringLiteralExpr().asString();
-                        }
-                    } else if (ann.isNormalAnnotationExpr()) {
-                        for (MemberValuePair p : ann.asNormalAnnotationExpr().getPairs()) {
-                            if ("value".equals(p.getNameAsString()) && p.getValue().isStringLiteralExpr()) {
-                                annValue = p.getValue().asStringLiteralExpr().asString();
-                            }
-                        }
-                    }
-                    if (methodName.equals(annValue)) {
-                        Graph.createGraphNode(method);
-                    }
-                }
+        node.getEnclosingType().getMethods().stream()
+                .filter(method -> methodName.equals(namedAnnotationValue(method)))
+                .forEach(Graph::createGraphNode);
+    }
+
+    /**
+     * Returns the string value of a {@code @Named} annotation on the method, or
+     * {@code null} if the annotation is absent or its value cannot be determined.
+     */
+    private static String namedAnnotationValue(MethodDeclaration method) {
+        return method.getAnnotationByName("Named").map(ann -> {
+            if (ann.isSingleMemberAnnotationExpr()) {
+                Expression v = ann.asSingleMemberAnnotationExpr().getMemberValue();
+                return v.isStringLiteralExpr() ? v.asStringLiteralExpr().asString() : null;
             }
-        });
+            if (ann.isNormalAnnotationExpr()) {
+                return ann.asNormalAnnotationExpr().getPairs().stream()
+                        .filter(p -> "value".equals(p.getNameAsString()) && p.getValue().isStringLiteralExpr())
+                        .map(p -> p.getValue().asStringLiteralExpr().asString())
+                        .findFirst().orElse(null);
+            }
+            return null;
+        }).orElse(null);
     }
 
     /**
