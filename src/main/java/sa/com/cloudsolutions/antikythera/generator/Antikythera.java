@@ -256,11 +256,8 @@ public class Antikythera {
         logger.info("Processing service {}", servicePath);
 
         ServicesParser processor = new ServicesParser(servicePath);
-        if (parts.length == 2) {
-            processor.start(parts[1]);
-        } else {
-            processor.start();
-        }
+        String entry = parts.length == 2 ? servicePath + "#" + parts[1] : servicePath;
+        processor.processEntry(entry);
         processor.writeFiles();
     }
 }

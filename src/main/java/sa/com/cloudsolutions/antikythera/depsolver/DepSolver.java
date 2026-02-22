@@ -156,32 +156,41 @@ public class DepSolver extends DependencyAnalyzer {
 
     /**
      * Main entry point for the dependency solver.
-     * 
+     *
      * @throws IOException if files could not be read
      */
     private void solve() throws IOException {
         AbstractCompiler.preProcess();
         for (String method : Settings.getPropertyList("methods", String.class)) {
-            processMethod(method);
+            processEntry(method);
+        }
+        for (String target : Settings.getPropertyList("target_class", String.class)) {
+            processEntry(target);
         }
     }
 
     /**
-     * Process the dependencies of a method that was declared in the application
-     * configuration.
-     * 
-     * @param s the method name
+     * Process a configuration entry of the form {@code className} or {@code className#methodName}.
+     * When only a class name is given all non-private methods are added to the graph.
+     *
+     * @param s the entry to process
      */
-    public void processMethod(String s) {
+    public void processEntry(String s) {
         String[] parts = s.split("#");
-
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(parts[0]);
         if (cu != null) {
-            cu.findAll(MethodDeclaration.class, m -> m.getNameAsString().equals(parts[1]))
-                    .forEach(Graph::createGraphNode);
+            if (parts.length == 2) {
+                String methodName = parts[1];
+                cu.findAll(MethodDeclaration.class, m -> m.getNameAsString().equals(methodName))
+                        .forEach(Graph::createGraphNode);
+            } else {
+                cu.findAll(MethodDeclaration.class, m -> !m.isPrivate())
+                        .forEach(Graph::createGraphNode);
+            }
             dfs();
         }
     }
+
 
     /**
      * Write generated files to disk.

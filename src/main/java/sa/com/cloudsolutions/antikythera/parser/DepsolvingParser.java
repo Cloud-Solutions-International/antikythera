@@ -68,6 +68,23 @@ public abstract class DepsolvingParser {
 
     public abstract void evaluateMethod(MethodDeclaration md, ArgumentGenerator gen);
 
+    /**
+     * Process a configuration entry of the form {@code className} or {@code className#methodName}.
+     * Delegates to {@link #start(String)} when a method name is present, or {@link #start()}
+     * when only a class name is given.
+     *
+     * @param entry the configuration entry to process
+     * @throws IOException if underlying start methods fail
+     */
+    public void processEntry(String entry) throws IOException {
+        String[] parts = entry.split("#");
+        if (parts.length == 2) {
+            start(parts[1]);
+        } else {
+            start();
+        }
+    }
+
     protected void evaluateCallable(CallableDeclaration<?> md, ArgumentGenerator gen) {
         evaluator.setArgumentGenerator(gen);
         evaluator.reset();
