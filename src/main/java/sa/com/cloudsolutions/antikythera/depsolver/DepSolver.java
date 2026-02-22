@@ -292,6 +292,7 @@ public class DepSolver extends DependencyAnalyzer {
     public static void main(String[] args) throws IOException {
         File yamlFile = new File(Settings.class.getClassLoader().getResource("depsolver.yml").getFile());
         Settings.loadConfigMap(yamlFile);
+        AbstractCompiler.loadDependencies();
         DepSolver depSolver = DepSolver.createSolver();
         depSolver.solve();
 
