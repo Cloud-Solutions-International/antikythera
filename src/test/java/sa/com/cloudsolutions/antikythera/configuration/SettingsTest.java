@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -51,7 +50,6 @@ class SettingsTest {
     @Test
     void testLoadConfigMapIdempotent() throws IOException {
         Settings.loadConfigMap();
-        String basePkg = Settings.getBasePackage();
         // Calling again should not reload (props != null guard)
         Settings.setProperty("base_package", "modified");
         Settings.loadConfigMap();
@@ -66,10 +64,6 @@ class SettingsTest {
         assertEquals("/tmp/test-projects/sample/src/main/java", Settings.getBasePath());
         assertEquals("/tmp/antikythera-test", Settings.getOutputPath());
     }
-
-    // -------------------------------------------------------------------------
-    // Variable replacement tests
-    // -------------------------------------------------------------------------
 
     @Test
     void testVariablesAreReplaced() throws IOException {
@@ -86,11 +80,9 @@ class SettingsTest {
         Settings.loadConfigMap(f);
         String userDir = System.getProperty("user.home");
 
-        // String property with ${USERDIR}
         assertEquals(userDir + "/projects/src/main/java", Settings.getBasePath());
         assertEquals(userDir + "/output", Settings.getOutputPath());
 
-        // List property with ${USERDIR} and yaml variable
         @SuppressWarnings("unchecked")
         List<String> list = (List<String>) Settings.getProperty("some_list");
         assertNotNull(list);
@@ -153,7 +145,7 @@ class SettingsTest {
     }
 
     @Test
-    void testGetPropertyDotNotationNonMap() throws IOException {
+    void testGetPropertyDotNotationNonMap() {
         Settings.props = new HashMap<>();
         Settings.setProperty("simple", "value");
         // "simple.sub" - simple is not a Map, so should return null
@@ -161,14 +153,14 @@ class SettingsTest {
     }
 
     @Test
-    void testGetPropertyReturnsNullForMissing() throws IOException {
+    void testGetPropertyReturnsNullForMissing()  {
         Settings.props = new HashMap<>();
         assertNull(Settings.getProperty("nonexistent"));
         assertNull(Settings.getProperty("nonexistent.nested"));
     }
 
     @Test
-    void testGetPropertyWithClass() throws IOException {
+    void testGetPropertyWithClass() {
         Settings.props = new HashMap<>();
         Settings.setProperty("my_string", "hello");
         Optional<String> result = Settings.getProperty("my_string", String.class);
@@ -177,7 +169,7 @@ class SettingsTest {
     }
 
     @Test
-    void testGetPropertyWithClassEmpty() throws IOException {
+    void testGetPropertyWithClassEmpty() {
         Settings.props = new HashMap<>();
         Optional<String> result = Settings.getProperty("nonexistent", String.class);
         assertFalse(result.isPresent());
@@ -188,7 +180,7 @@ class SettingsTest {
     // -------------------------------------------------------------------------
 
     @Test
-    void testGetPropertyListWithCollection() throws IOException {
+    void testGetPropertyListWithCollection() {
         Settings.props = new HashMap<>();
         Settings.setProperty("items", List.of("a", "b", "c"));
         Collection<String> result = Settings.getPropertyList("items", String.class);
@@ -199,7 +191,7 @@ class SettingsTest {
     }
 
     @Test
-    void testGetPropertyListWithSingleValue() throws IOException {
+    void testGetPropertyListWithSingleValue() {
         Settings.props = new HashMap<>();
         Settings.setProperty("single", "only_one");
         Collection<String> result = Settings.getPropertyList("single", String.class);
@@ -208,7 +200,7 @@ class SettingsTest {
     }
 
     @Test
-    void testGetPropertyListWithNull() throws IOException {
+    void testGetPropertyListWithNull() {
         Settings.props = new HashMap<>();
         Collection<String> result = Settings.getPropertyList("missing", String.class);
         assertTrue(result.isEmpty());
@@ -435,7 +427,7 @@ class SettingsTest {
     }
 
     @Test
-    void testGetPropertyDirectHitSkipsDotNotation() throws IOException {
+    void testGetPropertyDirectHitSkipsDotNotation() {
         Settings.props = new HashMap<>();
         // Key with a dot that is stored directly
         Settings.setProperty("dotted.key", "direct_value");
@@ -464,7 +456,7 @@ class SettingsTest {
     }
 
     @Test
-    void testNullValueInSourceMapSkipped() throws IOException {
+    void testNullValueInSourceMapSkipped()  {
         // When a value in the yaml is null, it should be skipped by replaceVariable
         Settings.props = new HashMap<>();
         Map<String, Object> source = new HashMap<>();

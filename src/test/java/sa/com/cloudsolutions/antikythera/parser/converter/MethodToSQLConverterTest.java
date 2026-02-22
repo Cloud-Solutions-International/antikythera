@@ -644,4 +644,110 @@ class MethodToSQLConverterTest {
         assertEquals("SELECT * FROM rmmsd_hospital_ward WHERE hospital_id = ? ", sql.toString(),
                 "Single embedded ID field should resolve to column name");
     }
+
+    @Test
+    void testTryNormalizeVerb_FindWithSubject() {
+        // findUserByEmail -> findByEmail
+        String result = MethodToSQLConverter.tryNormalizeVerb("findUserByEmail", "find",
+            MethodToSQLConverter.FIND_BY, MethodToSQLConverter.FIND_ALL);
+        assertEquals("findByEmail", result);
+
+        // findDistinctMedicationByCode -> findDistinctByCode
+        result = MethodToSQLConverter.tryNormalizeVerb("findDistinctMedicationByCode", "find",
+            MethodToSQLConverter.FIND_BY, MethodToSQLConverter.FIND_DISTINCT_BY);
+        assertEquals("findDistinctByCode", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_ExistsWithSubject() {
+        // existsUserByEmail -> existsByEmail
+        String result = MethodToSQLConverter.tryNormalizeVerb("existsUserByEmail", "exists",
+            MethodToSQLConverter.EXISTS_BY);
+        assertEquals("existsByEmail", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_CountWithSubject() {
+        // countUserByStatus -> countByStatus
+        String result = MethodToSQLConverter.tryNormalizeVerb("countUserByStatus", "count",
+            MethodToSQLConverter.COUNT_BY);
+        assertEquals("countByStatus", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_DeleteWithSubject() {
+        // deleteUserById -> deleteById
+        String result = MethodToSQLConverter.tryNormalizeVerb("deleteUserById", "delete",
+            MethodToSQLConverter.DELETE_BY);
+        assertEquals("deleteById", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_AlreadyNormalized() {
+        // findByEmail should remain unchanged (already normalized)
+        String result = MethodToSQLConverter.tryNormalizeVerb("findByEmail", "find",
+            MethodToSQLConverter.FIND_BY);
+        assertEquals("findByEmail", result);
+
+        // existsByEmail should remain unchanged
+        result = MethodToSQLConverter.tryNormalizeVerb("existsByEmail", "exists",
+            MethodToSQLConverter.EXISTS_BY);
+        assertEquals("existsByEmail", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_NoByKeyword() {
+        // Methods without "By" should remain unchanged
+        String result = MethodToSQLConverter.tryNormalizeVerb("findAll", "find",
+            MethodToSQLConverter.FIND_ALL);
+        assertEquals("findAll", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_PreservesOrderBy() {
+        // findUserOrderByName should remain unchanged (OrderBy should not be normalized)
+        String result = MethodToSQLConverter.tryNormalizeVerb("findUserOrderByName", "find",
+            MethodToSQLConverter.FIND_BY);
+        assertEquals("findUserOrderByName", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_WrongVerb() {
+        // Method not starting with specified verb should remain unchanged
+        String result = MethodToSQLConverter.tryNormalizeVerb("deleteByEmail", "find",
+            MethodToSQLConverter.FIND_BY);
+        assertEquals("deleteByEmail", result);
+    }
+
+    @Test
+    void testTryNormalizeVerb_LongerVerbVariant() {
+        // existsAll... should not be normalized when checking "exists" verb
+        // This should be handled by methodStartsWithLongerVerb
+        String result = MethodToSQLConverter.tryNormalizeVerb("existsAllUserByEmail", "exists",
+            MethodToSQLConverter.EXISTS_BY);
+        assertEquals("existsAllUserByEmail", result, "Should skip normalization for longer verb variant");
+
+        // countAll... should not be normalized when checking "count" verb
+        result = MethodToSQLConverter.tryNormalizeVerb("countAllUserByStatus", "count",
+            MethodToSQLConverter.COUNT_BY);
+        assertEquals("countAllUserByStatus", result, "Should skip normalization for longer verb variant");
+
+        // deleteAll... should not be normalized when checking "delete" verb
+        result = MethodToSQLConverter.tryNormalizeVerb("deleteAllUserById", "delete",
+            MethodToSQLConverter.DELETE_BY);
+        assertEquals("deleteAllUserById", result, "Should skip normalization for longer verb variant");
+    }
+
+    @Test
+    void testTryNormalizeVerb_RecognizedPrefix() {
+        // findAllByStatus should remain unchanged (recognized prefix)
+        String result = MethodToSQLConverter.tryNormalizeVerb("findAllByStatus", "find",
+            MethodToSQLConverter.FIND_ALL_BY);
+        assertEquals("findAllByStatus", result);
+
+        // findFirstByName should remain unchanged (recognized prefix)
+        result = MethodToSQLConverter.tryNormalizeVerb("findFirstByName", "find",
+            MethodToSQLConverter.FIND_FIRST_BY);
+        assertEquals("findFirstByName", result);
+    }
 }

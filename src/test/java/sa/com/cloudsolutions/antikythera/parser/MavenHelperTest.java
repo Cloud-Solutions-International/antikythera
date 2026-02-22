@@ -1,6 +1,5 @@
 package sa.com.cloudsolutions.antikythera.parser;
 
-import org.apache.maven.model.Model;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -8,7 +7,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.FileWriter;
 import java.nio.file.Path;
-import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
 

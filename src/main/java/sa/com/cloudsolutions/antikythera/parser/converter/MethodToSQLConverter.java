@@ -170,7 +170,7 @@ public final class MethodToSQLConverter {
 
     // Returns a keyword that starts at 'index' and forms a valid boundary per rules
     // used previously; otherwise null.
-    private static String findNextKeyword(String methodName, int index, List<String> keywords, boolean inOrderByContext) {
+    static String findNextKeyword(String methodName, int index, List<String> keywords, boolean inOrderByContext) {
         for (String keyword : keywords) {
             if (!methodName.startsWith(keyword, index)) {
                 continue;
@@ -190,10 +190,9 @@ public final class MethodToSQLConverter {
                     // predicates. Only match when it's the complete method name. When followed
                     // by more characters (e.g., findAllById_HospitalIdAndId_TenantId for
                     // embedded IDs), let findAllBy match instead.
-                    if (FIND_ALL_BY_ID.equals(keyword) && keywordEnd < methodName.length()) {
-                        continue;
+                    if (!(FIND_ALL_BY_ID.equals(keyword) && keywordEnd < methodName.length())) {
+                        return keyword;
                     }
-                    return keyword;
                 }
             }
         }
@@ -341,7 +340,8 @@ public final class MethodToSQLConverter {
      * @param recognizedPrefixes the already-recognized prefixes that should not be normalized
      * @return the normalized method name, or the original if no normalization was needed
      */
-    private static String tryNormalizeVerb(String methodName, String verb, String... recognizedPrefixes) {
+     static String tryNormalizeVerb(String methodName, String verb, String... recognizedPrefixes) {
+        // Early exit if method doesn't start with the verb
         if (!methodName.startsWith(verb)) {
             return methodName;
         }
@@ -353,36 +353,50 @@ public final class MethodToSQLConverter {
             }
         }
 
-        // Check if this method would match a longer verb (e.g., "existsAll" vs "exists")
-        // If so, skip this verb and let the longer one handle it
+        // Skip if this is a longer verb variant (e.g., "existsAll" when checking "exists")
         if (methodStartsWithLongerVerb(methodName, verb)) {
             return methodName;
         }
 
         // Look for "By" after the verb
         int byIdx = methodName.indexOf("By", verb.length());
-        if (byIdx > 0) {
-            // If this By is part of OrderBy, skip normalization to preserve ordering clause
-            int orderStart = byIdx - "Order".length();
-            if (orderStart >= 0) {
-                String maybeOrder = methodName.substring(orderStart, byIdx);
-                if ("Order".equals(maybeOrder)) {
-                    return methodName;
-                }
-            }
-            // Convert things like findDistinctMedicationByXxx -> findDistinctByXxx
-            // Find the longest recognized prefix whose base matches the method start
-            String normalizedPrefix = verb + "By";
-            for (String prefix : recognizedPrefixes) {
-                if (prefix.endsWith("By")
-                        && methodName.startsWith(prefix.substring(0, prefix.length() - 2))
-                        && prefix.length() > normalizedPrefix.length()) {
-                    normalizedPrefix = prefix;
-                }
-            }
-            return normalizedPrefix + methodName.substring(byIdx + 2);
+        if (byIdx <= 0) {
+            return methodName;
         }
-        return methodName;
+
+        // Skip if "By" is part of "OrderBy"
+        if (isOrderBy(methodName, byIdx)) {
+            return methodName;
+        }
+
+        // Convert things like findDistinctMedicationByXxx -> findDistinctByXxx
+        // Find the longest recognized prefix whose base matches the method start
+        String normalizedPrefix = findBestMatchingPrefix(methodName, verb, recognizedPrefixes);
+        return normalizedPrefix + methodName.substring(byIdx + 2);
+    }
+
+    /**
+     * Checks if "By" at the given index is part of "OrderBy".
+     */
+    private static boolean isOrderBy(String methodName, int byIdx) {
+        int orderStart = byIdx - "Order".length();
+        return orderStart >= 0 && "Order".equals(methodName.substring(orderStart, byIdx));
+    }
+
+    /**
+     * Finds the longest recognized prefix whose base matches the method start.
+     * Returns verb + "By" if no better match is found.
+     */
+    private static String findBestMatchingPrefix(String methodName, String verb, String... recognizedPrefixes) {
+        String normalizedPrefix = verb + "By";
+        for (String prefix : recognizedPrefixes) {
+            if (prefix.endsWith("By")
+                    && methodName.startsWith(prefix.substring(0, prefix.length() - 2))
+                    && prefix.length() > normalizedPrefix.length()) {
+                normalizedPrefix = prefix;
+            }
+        }
+        return normalizedPrefix;
     }
 
     /**
@@ -395,9 +409,12 @@ public final class MethodToSQLConverter {
         // Note: find variants (findFirst, findTop, findDistinct) are NOT listed here
         // because they are all handled in the same tryNormalizeVerb("find", ...) call
         // and need normalization when a subject appears (e.g., findDistinctMedicationBy).
-        if ("exists".equals(verb) && methodName.startsWith("existsAll")) return true;
-        if ("count".equals(verb) && methodName.startsWith("countAll")) return true;
-        return ("delete".equals(verb) && methodName.startsWith("deleteAll"));
+        return switch (verb) {
+            case "exists" -> methodName.startsWith("existsAll");
+            case "count" -> methodName.startsWith("countAll");
+            case "delete" -> methodName.startsWith("deleteAll");
+            default -> false;
+        };
     }
 
     /**
