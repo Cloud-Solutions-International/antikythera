@@ -166,6 +166,9 @@ public class Resolver {
                 }
             } else if (expr.isFieldAccessExpr()) {
                 Resolver.resolveField(node, expr.asFieldAccessExpr());
+            } else if (expr.isClassExpr()) {
+                ClassOrInterfaceType ct = expr.asClassExpr().getType().asClassOrInterfaceType();
+                ImportUtils.addImport(node, ct.getName().toString());
             }
         }
     }
