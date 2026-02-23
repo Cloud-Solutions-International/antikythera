@@ -1252,10 +1252,18 @@ public class AbstractCompiler {
      */
     public static void preProcess() throws IOException {
         Path basePath = Paths.get(Settings.getBasePath()).toAbsolutePath().normalize();
-        List<Path> dirs = sourceDirectories.isEmpty() ? List.of(basePath)
-                : sourceDirectories.stream().filter(d -> d.startsWith(basePath)).toList();
-        if (dirs.isEmpty()) {
-            dirs = List.of(basePath);
+        List<Path> dirs;
+        if (sourceDirectories.isEmpty()) {
+            // setupSourcePaths() may have failed silently; fall back to src/main/java
+            // rather than the entire project root, which would include test sources
+            Path mainJava = basePath.resolve("src/main/java");
+            dirs = Files.isDirectory(mainJava) ? List.of(mainJava) : List.of(basePath);
+        } else {
+            dirs = sourceDirectories.stream().filter(d -> d.startsWith(basePath)).toList();
+            if (dirs.isEmpty()) {
+                Path mainJava = basePath.resolve("src/main/java");
+                dirs = Files.isDirectory(mainJava) ? List.of(mainJava) : List.of(basePath);
+            }
         }
 
         for (Path sourceDir : dirs) {
