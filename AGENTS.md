@@ -53,9 +53,11 @@ graph TD
 *   **`AKBuddy`**: Creates dynamic proxies (`ByteBuddy`) so the Evaluator can intercept method calls on real objects.
 
 ### 3. The Dependency & Solver Layer (`depsolver/`)
-**Goal**: Understand connections.
-*   **`DepSolver`**: Builds directed graphs of class/method usage. Used for extracting slice-able code (e.g., "Extract this Service to a generated library").
-*   **`Graph`**: Cyclic graph detection and resolution.
+**Goal**: Extract the minimal set of code needed to compile and run a target method or class.
+*   **`DependencyAnalyzer`**: The base analysis engine. Performs depth-first traversal of the dependency graph, discovering all field and method dependencies transitively. Can be used standalone for pure analysis (no code generation).
+*   **`DepSolver`**: Extends `DependencyAnalyzer` with code generation. As dependencies are discovered, it clones **only the required members** (fields, methods, constructors, inner classes) from each dependency into isolated destination `CompilationUnit`s — never copying an entire class wholesale. For example, if class `A` depends on class `B`, only the specific methods and fields of `B` that `A` actually uses are copied across.
+*   **`Graph`**: Static registry that maps fully-qualified class names to their generated (destination) `CompilationUnit`s and caches `GraphNode` instances to prevent duplicate processing.
+*   **`GraphNode`**: Wraps an AST node (method, field, type) together with its source `CompilationUnit`, its enclosing type, and the destination `CompilationUnit` being built for it.
 
 ---
 
@@ -68,12 +70,12 @@ graph TD
 // 1. Configure the analyzer
 DependencyAnalyzer analyzer = new DependencyAnalyzer();
 
-// 2. Collect dependencies for a set of methods
+// 2. Collect dependencies for a set of methods (returns all transitively needed nodes)
 Set<GraphNode> functionalitySlice = analyzer.collectDependencies(targetMethods);
 
-// 3. Query the graph
-boolean hasCycle = analyzer.hasCycles(functionalitySlice);
-Set<GraphNode> externalDeps = analyzer.getCrossboundaryDependencies(functionalitySlice);
+// 3. Or collect with a filter (e.g. exclude certain classes from the traversal)
+Set<GraphNode> filtered = analyzer.collectDependencies(targetMethods,
+    node -> !node.toString().startsWith("com.example.excluded"));
 ```
 
 ### Use Case B: "I need to understand what a method returns"
@@ -143,7 +145,7 @@ database:
 | **Resolve Type** | `parser.AbstractCompiler` | `findType(cu, "Name")` |
 | **Parse File** | `parser.AbstractCompiler` | `compile(path)` |
 | **Execute Logic** | `evaluator.Evaluator` | `evaluateMethodCall(mce)` |
-| **Find Dependencies** | `depsolver.DepSolver` | `processMethod(signature)` |
+| **Find Dependencies** | `depsolver.DepSolver` | `processEntry(signature)` |
 | **Convert Query** | `parser.converter` | `MethodToSQLConverter` |
 | **Get Entity Info** | `parser.converter` | `EntityMappingResolver` |
 
