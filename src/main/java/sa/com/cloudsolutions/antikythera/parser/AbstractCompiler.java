@@ -215,7 +215,7 @@ public class AbstractCompiler {
             Path testJava = projectRoot.resolve(testSource);
             if (Files.isDirectory(testJava)) {
                 combinedTypeSolver.add(new JavaParserTypeSolver(testJava.toFile()));
-                sourceDirectories.add(testJava);
+                // Do NOT add to sourceDirectories: test sources should not be extracted
             }
         } catch (Exception e) {
             logger.debug("Could not read Maven source directories: {}", e.getMessage());

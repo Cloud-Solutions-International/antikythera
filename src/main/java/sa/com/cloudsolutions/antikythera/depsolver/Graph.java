@@ -115,6 +115,9 @@ public class Graph {
             target = parentClass.addMember(innerClass);
             target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
             g.setTypeDeclaration(innerClass);
+            cdecl.findCompilationUnit().ifPresent(sourceCu ->
+                    sourceCu.getImports().forEach(imp -> g.getDestination().addImport(imp.clone()))
+            );
 
         }
         else {

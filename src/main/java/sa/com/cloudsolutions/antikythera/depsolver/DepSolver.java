@@ -18,6 +18,9 @@ import sa.com.cloudsolutions.antikythera.generator.CopyUtils;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -45,6 +48,7 @@ import java.util.Map;
  * </p>
  */
 public class DepSolver extends DependencyAnalyzer {
+    private static final Logger logger = LoggerFactory.getLogger(DepSolver.class);
 
     /**
      * Static singleton instance for backward compatibility.
@@ -176,6 +180,7 @@ public class DepSolver extends DependencyAnalyzer {
      * @param s the entry to process
      */
     public void processEntry(String s) {
+        logger.info("Processing entry: {}", s);
         String[] parts = s.split("#");
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(parts[0]);
         if (cu != null) {

@@ -162,14 +162,14 @@ public class GraphNode {
         /*
          * If the class is an entity, we will need to preserve all the fields.
          */
-        if (enclosingType.getFields().isEmpty() &&
-                (enclosingType.getAnnotationByName("Entity").isPresent()) ||
+        if (typeDeclaration.getFields().isEmpty() &&
+                (enclosingType.getAnnotationByName("Entity").isPresent() ||
                 enclosingType.getAnnotationByName("AllArgsConstructor").isPresent() ||
                 enclosingType.getAnnotationByName("JsonInclude").isPresent() ||
                 enclosingType.getAnnotationByName("MappedSuperclass").isPresent() ||
                 enclosingType.getAnnotationByName("Data").isPresent() ||
                 (enclosingType.getAnnotationByName("Setter").isPresent()
-                        && enclosingType.getAnnotationByName("Getter").isPresent())) {
+                        && enclosingType.getAnnotationByName("Getter").isPresent()))) {
 
             copyFields();
 
@@ -257,7 +257,8 @@ public class GraphNode {
     }
 
     private void copyFields()  {
-        for(FieldDeclaration field : enclosingType.asClassOrInterfaceDeclaration().getFields()) {
+
+        for(FieldDeclaration field : enclosingType.getFields()) {
 
             for (VariableDeclarator declarator : field.getVariables()) {
                 Type type = declarator.getType();
