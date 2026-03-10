@@ -30,6 +30,16 @@ class MethodToSQLConverterTest {
     }
 
     @Test
+    void testExtractComponents_GetById() {
+        List<String> components = MethodToSQLConverter.extractComponents("getById");
+        assertEquals(List.of("get", "Id"), components);
+
+        StringBuilder sql = new StringBuilder();
+        MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, "users");
+        assertEquals("SELECT * FROM users WHERE id = ? ", sql.toString());
+    }
+
+    @Test
     void testBuildSelectAndWhereClauses_CountBy() {
         StringBuilder sql = new StringBuilder();
         MethodToSQLConverter.buildSelectAndWhereClauses(List.of("countBy", "Active"), sql, "users");
@@ -634,6 +644,13 @@ class MethodToSQLConverterTest {
         List<String> components = MethodToSQLConverter.extractComponents("findById_HospitalId");
         assertEquals(List.of("findBy", "Id_HospitalId"), components,
                 "Embedded ID single field should parse correctly");
+    }
+
+    @Test
+    void testExtractComponents_NestedPropertyTraversalWithUnderscore() {
+        List<String> components = MethodToSQLConverter.extractComponents("findByAddress_ZipCode");
+        assertEquals(List.of("findBy", "Address_ZipCode"), components,
+                "Underscore should preserve nested property traversal as a single property token");
     }
 
     @Test

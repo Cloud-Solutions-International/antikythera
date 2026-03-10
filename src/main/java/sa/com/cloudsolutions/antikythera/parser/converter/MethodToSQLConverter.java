@@ -112,37 +112,7 @@ public final class MethodToSQLConverter {
      * @return A list of components.
      */
     public static List<String> extractComponents(String methodName) {
-        // Normalize 'find...By' subjects to 'findBy' to align with Spring Data
-        // semantics
-        methodName = normalizeFindSubject(methodName);
-
-        List<String> components = new ArrayList<>();
-        List<String> keywords = getKeywordsByLengthDesc();
-        int i = 0;
-        boolean inOrderByContext = false;
-
-        while (i < methodName.length()) {
-            // 1) Try to match a known keyword at the current index
-            String matchedKeyword = tryMatchKeyword(methodName, i, keywords, inOrderByContext);
-            if (matchedKeyword != null) {
-                components.add(matchedKeyword);
-                i += matchedKeyword.length();
-                // Track when we enter ORDER BY context
-                if (BaseRepositoryParser.ORDER_BY.equals(matchedKeyword)) {
-                    inOrderByContext = true;
-                }
-                continue;
-            }
-
-            // 2) Otherwise scan a field token until the next valid keyword boundary
-            ScanResult scan = scanField(methodName, i, keywords, inOrderByContext);
-            i = scan.nextIndex;
-            if (!scan.fieldToken.isEmpty()) {
-                components.add(scan.fieldToken);
-            }
-        }
-
-        return components;
+        return RepositoryMethodParser.parse(methodName).toComponents();
     }
 
     // Attempts to match a keyword at position 'index' using the same boundary rules
@@ -458,19 +428,61 @@ public final class MethodToSQLConverter {
      * Returns 1 if no number is specified (e.g., findTopBy) or the method doesn't match.
      */
     public static int extractTopLimit(String methodName) {
-        for (String prefix : new String[]{"findTop", "findFirst"}) {
-            if (methodName.startsWith(prefix)) {
-                int start = prefix.length();
-                int end = start;
-                while (end < methodName.length() && Character.isDigit(methodName.charAt(end))) {
-                    end++;
-                }
-                if (end > start && methodName.startsWith("By", end)) {
-                    return Integer.parseInt(methodName.substring(start, end));
+        return RepositoryMethodParser.parse(methodName).getMaxResultsOrDefault(1);
+    }
+
+    /**
+     * Builds SELECT/WHERE/ORDER BY clauses directly from the parsed method tree.
+     * This is used by {@link sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser}
+     * so derived query parsing no longer depends on the legacy token list model.
+     *
+     * @param parsedMethod the parsed repository method
+     * @param sql the SQL builder to append to
+     * @param tableName the primary table name
+     * @return true if a TOP/FIRST subject was detected
+     */
+    public static boolean buildSelectAndWhereClauses(RepositoryMethodParser.ParsedMethod parsedMethod,
+                                                     StringBuilder sql,
+                                                     String tableName) {
+        if (parsedMethod == null || !parsedMethod.isRecognized()) {
+            return false;
+        }
+
+        String tableNameClean = tableName.replace("\"", "");
+        RepositoryMethodParser.Subject subject = parsedMethod.subject();
+
+        switch (subject.action()) {
+            case SELECT -> {
+                if (subject.distinct()) {
+                    sql.append("SELECT DISTINCT * FROM ").append(tableNameClean);
+                } else {
+                    sql.append(BaseRepositoryParser.SELECT_STAR).append(tableNameClean);
                 }
             }
+            case COUNT -> sql.append("SELECT COUNT(*) FROM ").append(tableNameClean);
+            case EXISTS -> sql.append("SELECT EXISTS (SELECT 1 FROM ").append(tableNameClean);
+            case DELETE -> sql.append("DELETE FROM ").append(tableNameClean);
+            case INSERT_DEFAULT -> sql.append("INSERT INTO ").append(tableNameClean).append(" DEFAULT VALUES");
+            case UNKNOWN -> {
+                return false;
+            }
         }
-        return 1;
+
+        if (parsedMethod.hasPredicate()) {
+            sql.append(" ").append(BaseRepositoryParser.WHERE).append(" ");
+            appendPredicate(sql, parsedMethod.predicate());
+        }
+
+        if (parsedMethod.hasOrderBy() && subject.action() != RepositoryMethodParser.QueryAction.INSERT_DEFAULT) {
+            sql.append(" ORDER BY ");
+            appendOrderBy(sql, parsedMethod.orderBy());
+        }
+
+        if (subject.action() == RepositoryMethodParser.QueryAction.EXISTS) {
+            sql.append(")");
+        }
+
+        return parsedMethod.isLimiting();
     }
 
     /**
@@ -507,6 +519,59 @@ public final class MethodToSQLConverter {
             }
         }
         return top;
+    }
+
+    private static void appendPredicate(StringBuilder sql, RepositoryMethodParser.Predicate predicate) {
+        List<RepositoryMethodParser.OrPart> orParts = predicate.orParts();
+        for (int i = 0; i < orParts.size(); i++) {
+            if (i > 0) {
+                sql.append(" OR ");
+            }
+
+            List<RepositoryMethodParser.PredicatePart> andParts = orParts.get(i).parts();
+            for (int j = 0; j < andParts.size(); j++) {
+                if (j > 0) {
+                    sql.append(" AND ");
+                }
+                appendPredicatePart(sql, andParts.get(j));
+            }
+        }
+    }
+
+    private static void appendPredicatePart(StringBuilder sql, RepositoryMethodParser.PredicatePart part) {
+        sql.append(resolveColumnName(part.property()));
+        switch (part.type()) {
+            case BETWEEN -> sql.append(" BETWEEN ? AND ? ");
+            case IS_NOT_NULL -> sql.append(" IS NOT NULL ");
+            case IS_NULL -> sql.append(" IS NULL ");
+            case LESS_THAN, BEFORE -> sql.append(" < ? ");
+            case LESS_THAN_EQUAL -> sql.append(" <= ? ");
+            case GREATER_THAN, AFTER -> sql.append(" > ? ");
+            case GREATER_THAN_EQUAL -> sql.append(" >= ? ");
+            case NOT_LIKE, NOT_CONTAINING -> sql.append(" NOT LIKE ? ");
+            case LIKE, CONTAINING, STARTING_WITH, ENDING_WITH -> sql.append(" LIKE ? ");
+            case NOT_IN -> sql.append(" NOT IN (?) ");
+            case IN -> sql.append(" IN (?) ");
+            case TRUE -> sql.append(" = true ");
+            case FALSE -> sql.append(" = false ");
+            case NEGATING_SIMPLE_PROPERTY -> sql.append(" != ? ");
+            case SIMPLE_PROPERTY -> sql.append(" = ? ");
+        }
+    }
+
+    private static void appendOrderBy(StringBuilder sql, List<RepositoryMethodParser.SortOrder> orderBy) {
+        for (int i = 0; i < orderBy.size(); i++) {
+            RepositoryMethodParser.SortOrder sortOrder = orderBy.get(i);
+            sql.append(resolveColumnName(sortOrder.property()));
+            if (sortOrder.direction() != null) {
+                sql.append(' ').append(sortOrder.direction().name());
+            }
+            if (i < orderBy.size() - 1) {
+                sql.append(", ");
+            } else {
+                sql.append(' ');
+            }
+        }
     }
 
     /**
