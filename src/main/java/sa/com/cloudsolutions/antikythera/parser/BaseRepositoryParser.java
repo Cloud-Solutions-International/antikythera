@@ -23,6 +23,7 @@ import sa.com.cloudsolutions.antikythera.parser.converter.ConversionResult;
 import sa.com.cloudsolutions.antikythera.parser.converter.DatabaseDialect;
 import sa.com.cloudsolutions.antikythera.parser.converter.HQLParserAdapter;
 import sa.com.cloudsolutions.antikythera.parser.converter.MethodToSQLConverter;
+import sa.com.cloudsolutions.antikythera.parser.converter.RepositoryMethodParser;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
@@ -531,10 +532,11 @@ public class BaseRepositoryParser extends AbstractCompiler {
     @SuppressWarnings("java:S127")
     RepositoryQuery parseNonAnnotatedMethod(Callable md) {
         String methodName = md.getNameAsString();
-        List<String> components = MethodToSQLConverter.extractComponents(methodName);
+        RepositoryMethodParser.ParsedMethod parsedMethod = RepositoryMethodParser.parse(methodName);
+        List<String> components = parsedMethod.toComponents();
 
         // Validate that we have components to work with
-        if (components.isEmpty()) {
+        if (components.isEmpty() || !parsedMethod.isRecognized()) {
             logger.warn("Method name '{}' did not produce any recognizable JPA query components", methodName);
             // Return a basic query as fallback
             return queryBuilder(SELECT_STAR + findTableName(entity), QueryType.DERIVED, md);
@@ -543,20 +545,14 @@ public class BaseRepositoryParser extends AbstractCompiler {
         StringBuilder sql = new StringBuilder();
         String tableName = findTableName(entity);
         boolean top = false;
-        boolean isExistsQuery = components.contains("existsBy") || components.contains("existsAllBy");
         if (tableName != null) {
-            top = MethodToSQLConverter.buildSelectAndWhereClauses(components, sql, tableName);
+            top = MethodToSQLConverter.buildSelectAndWhereClauses(parsedMethod, sql, tableName);
         } else {
             logger.warn("Table name cannot be null for entity");
         }
         if (top) {
-            int limit = MethodToSQLConverter.extractTopLimit(methodName);
+            int limit = parsedMethod.getMaxResultsOrDefault(1);
             applyTopLimit(sql, limit);
-        }
-
-        // Close the EXISTS subquery if needed (closes both the inner SELECT and the EXISTS function)
-        if (isExistsQuery) {
-            sql.append(")");
         }
 
         String finalSql = numberPlaceholders(sql.toString());
