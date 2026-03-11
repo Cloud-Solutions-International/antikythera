@@ -38,6 +38,9 @@ jobs:
       - name: Build antikythera-agent
         run: cd ../antikythera-agent && MAVEN_OPTS="--add-opens java.base/java.util.stream=ALL-UNNAMED --add-exports java.base/java.util.stream=ALL-UNNAMED" mvn clean install
 
+      - name: Resolve antikythera-test-helper dependencies
+        run: cd ../antikythera-test-helper && MAVEN_OPTS="--add-opens java.base/java.util.stream=ALL-UNNAMED --add-exports java.base/java.util.stream=ALL-UNNAMED" mvn -q -DskipTests dependency:go-offline
+
       - name: Build antikythera-sample-project
         run: cd ../antikythera-sample-project && MAVEN_OPTS="--add-opens java.base/java.util.stream=ALL-UNNAMED --add-exports java.base/java.util.stream=ALL-UNNAMED" mvn clean install
 
