@@ -168,6 +168,56 @@ class BaseRepositoryParserTest {
     }
 
     @Test
+    void testDeleteAllByIdStandaloneMethodParsing() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        String methodCode = "public interface TestRepo { void deleteAllById(java.lang.Iterable<Long> ids); }";
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+        assertNotNull(q);
+        assertEquals("DELETE FROM users WHERE id IN (?1)", q.getQuery());
+    }
+
+    @Test
+    void testGetOneStandaloneMethodParsing() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        String methodCode = "public interface TestRepo { User getOne(Long id); }";
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+        assertNotNull(q);
+        assertEquals("SELECT * FROM users WHERE id = ?1", q.getQuery());
+    }
+
+    @Test
+    void testSaveVariantsStandaloneMethodParsing() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        for (String methodName : List.of("saveAll", "saveAndFlush", "saveAllAndFlush")) {
+            String methodCode = "public interface TestRepo { Object " + methodName + "(Object value); }";
+            CompilationUnit cu = StaticJavaParser.parse(methodCode);
+            MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+            Callable callable = new Callable(md, null);
+
+            RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+            assertNotNull(q);
+            assertEquals("INSERT INTO users DEFAULT VALUES", q.getQuery(), methodName);
+        }
+    }
+
+    @Test
     void testGetByIdMethodParsing() throws IOException {
         CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
         BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);

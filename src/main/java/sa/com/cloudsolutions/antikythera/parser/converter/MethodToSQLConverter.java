@@ -50,11 +50,14 @@ public final class MethodToSQLConverter {
     public static final String COUNT_ALL_BY = "countAllBy";
     public static final String DELETE_BY = "deleteBy";
     public static final String DELETE_ALL_BY = "deleteAllBy";
+    public static final String DELETE_ALL_BY_ID = "deleteAllById";
+    public static final String DELETE_ALL_BY_ID_IN_BATCH = "deleteAllByIdInBatch";
     public static final String EXISTS_BY = "existsBy";
     public static final String EXISTS_ALL_BY = "existsAllBy";
     public static final String FIND_FIRST_BY = "findFirstBy";
     public static final String FIND_TOP_BY = "findTopBy";
     public static final String FIND_DISTINCT_BY = "findDistinctBy";
+    public static final String GET_ONE = "getOne";
     public static final String READ_BY = "readBy";
     public static final String QUERY_BY = "queryBy";
     public static final String SEARCH_BY = "searchBy";
@@ -62,6 +65,9 @@ public final class MethodToSQLConverter {
     public static final String REMOVE_BY = "removeBy";
     public static final String GET = "get";
     public static final String SAVE = "save";
+    public static final String SAVE_ALL = "saveAll";
+    public static final String SAVE_AND_FLUSH = "saveAndFlush";
+    public static final String SAVE_ALL_AND_FLUSH = "saveAllAndFlush";
 
     /**
      * Set of operators that do not require an equals sign to be appended.
@@ -127,6 +133,20 @@ public final class MethodToSQLConverter {
             sql.append(BaseRepositoryParser.SELECT_STAR)
                     .append(tableNameClean)
                     .append(" WHERE id IN (?)");
+            return parsedMethod.isLimiting();
+        }
+
+        if (DELETE_ALL_BY_ID.equals(subject.token()) || DELETE_ALL_BY_ID_IN_BATCH.equals(subject.token())) {
+            sql.append("DELETE FROM ")
+                    .append(tableNameClean)
+                    .append(" WHERE id IN (?)");
+            return parsedMethod.isLimiting();
+        }
+
+        if (GET_ONE.equals(subject.token())) {
+            sql.append(BaseRepositoryParser.SELECT_STAR)
+                    .append(tableNameClean)
+                    .append(" WHERE id = ? ");
             return parsedMethod.isLimiting();
         }
 

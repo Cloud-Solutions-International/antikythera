@@ -30,6 +30,36 @@ class MethodToSQLConverterTest {
     }
 
     @Test
+    void testBuildSelectAndWhereClauses_ParsedDeleteAllById() {
+        StringBuilder sql = new StringBuilder();
+        MethodToSQLConverter.buildSelectAndWhereClauses(RepositoryMethodParser.parse("deleteAllById"), sql, "users");
+        assertEquals("DELETE FROM users WHERE id IN (?)", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_ParsedDeleteAllByIdInBatch() {
+        StringBuilder sql = new StringBuilder();
+        MethodToSQLConverter.buildSelectAndWhereClauses(RepositoryMethodParser.parse("deleteAllByIdInBatch"), sql, "users");
+        assertEquals("DELETE FROM users WHERE id IN (?)", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_ParsedGetOne() {
+        StringBuilder sql = new StringBuilder();
+        MethodToSQLConverter.buildSelectAndWhereClauses(RepositoryMethodParser.parse("getOne"), sql, "users");
+        assertEquals("SELECT * FROM users WHERE id = ? ", sql.toString());
+    }
+
+    @Test
+    void testBuildSelectAndWhereClauses_ParsedSaveVariants() {
+        for (String methodName : List.of("saveAll", "saveAndFlush", "saveAllAndFlush")) {
+            StringBuilder sql = new StringBuilder();
+            MethodToSQLConverter.buildSelectAndWhereClauses(RepositoryMethodParser.parse(methodName), sql, "users");
+            assertEquals("INSERT INTO users DEFAULT VALUES", sql.toString(), methodName);
+        }
+    }
+
+    @Test
     void testBuildSelectAndWhereClauses_FindBy() {
         StringBuilder sql = new StringBuilder();
         MethodToSQLConverter.buildSelectAndWhereClauses(List.of("findBy", "Name"), sql, "users");

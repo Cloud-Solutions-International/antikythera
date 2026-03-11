@@ -279,6 +279,32 @@ public final class RepositoryMethodParser {
                         Predicate.empty(),
                         List.of());
             }
+            if (MethodToSQLConverter.DELETE_ALL_BY_ID.equals(source)) {
+                return new ParsedMethod(source,
+                        new Subject(MethodToSQLConverter.DELETE_ALL_BY_ID, QueryAction.DELETE, false, Optional.empty()),
+                        Predicate.empty(),
+                        List.of());
+            }
+            if (MethodToSQLConverter.DELETE_ALL_BY_ID_IN_BATCH.equals(source)) {
+                return new ParsedMethod(source,
+                        new Subject(MethodToSQLConverter.DELETE_ALL_BY_ID_IN_BATCH, QueryAction.DELETE, false, Optional.empty()),
+                        Predicate.empty(),
+                        List.of());
+            }
+            if (MethodToSQLConverter.GET_ONE.equals(source)) {
+                return new ParsedMethod(source,
+                        new Subject(MethodToSQLConverter.GET_ONE, QueryAction.SELECT, false, Optional.empty()),
+                        Predicate.empty(),
+                        List.of());
+            }
+            if (MethodToSQLConverter.SAVE_ALL.equals(source)
+                    || MethodToSQLConverter.SAVE_AND_FLUSH.equals(source)
+                    || MethodToSQLConverter.SAVE_ALL_AND_FLUSH.equals(source)) {
+                return new ParsedMethod(source,
+                        new Subject(source, QueryAction.INSERT_DEFAULT, false, Optional.empty()),
+                        Predicate.empty(),
+                        List.of());
+            }
 
             Subject subject = parseSubject();
             if (subject.action() == QueryAction.UNKNOWN) {
