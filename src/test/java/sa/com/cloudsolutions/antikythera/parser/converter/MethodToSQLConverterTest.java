@@ -23,6 +23,13 @@ class MethodToSQLConverterTest {
     }
 
     @Test
+    void testBuildSelectAndWhereClauses_ParsedFindAllById() {
+        StringBuilder sql = new StringBuilder();
+        MethodToSQLConverter.buildSelectAndWhereClauses(RepositoryMethodParser.parse("findAllById"), sql, "users");
+        assertEquals("SELECT * FROM users WHERE id IN (?)", sql.toString());
+    }
+
+    @Test
     void testBuildSelectAndWhereClauses_FindBy() {
         StringBuilder sql = new StringBuilder();
         MethodToSQLConverter.buildSelectAndWhereClauses(List.of("findBy", "Name"), sql, "users");

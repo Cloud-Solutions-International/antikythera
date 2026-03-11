@@ -152,6 +152,22 @@ class BaseRepositoryParserTest {
     }
 
     @Test
+    void testFindAllByIdStandaloneMethodParsing() throws IOException {
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        String methodCode = "public interface TestRepo { java.util.List<User> findAllById(java.lang.Iterable<Long> ids); }";
+        CompilationUnit cu = StaticJavaParser.parse(methodCode);
+        MethodDeclaration md = cu.findFirst(MethodDeclaration.class).orElseThrow();
+        Callable callable = new Callable(md, null);
+
+        RepositoryQuery q = parser.parseNonAnnotatedMethod(callable);
+        assertNotNull(q);
+        assertEquals("SELECT * FROM users WHERE id IN (?1)", q.getQuery());
+    }
+
+    @Test
     void testGetByIdMethodParsing() throws IOException {
         CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(USER_REPOSITORY);
         BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);

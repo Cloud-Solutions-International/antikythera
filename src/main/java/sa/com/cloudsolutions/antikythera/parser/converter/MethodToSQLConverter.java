@@ -123,6 +123,13 @@ public final class MethodToSQLConverter {
         String tableNameClean = tableName.replace("\"", "");
         RepositoryMethodParser.Subject subject = parsedMethod.subject();
 
+        if (FIND_ALL_BY_ID.equals(subject.token())) {
+            sql.append(BaseRepositoryParser.SELECT_STAR)
+                    .append(tableNameClean)
+                    .append(" WHERE id IN (?)");
+            return parsedMethod.isLimiting();
+        }
+
         switch (subject.action()) {
             case SELECT -> {
                 if (subject.distinct()) {
