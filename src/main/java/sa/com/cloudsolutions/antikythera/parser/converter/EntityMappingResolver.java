@@ -208,22 +208,6 @@ public class EntityMappingResolver {
         return joinMapping;
     }
 
-    private static String extractConstraintNameFromAST(FieldDeclaration field) {
-        Optional<AnnotationExpr> joinColumnAnn = field.getAnnotationByName("JoinColumn");
-        if (joinColumnAnn.isPresent()) {
-            Map<String, Expression> attrs = AbstractCompiler.extractAnnotationAttributes(joinColumnAnn.get());
-            Expression foreignKeyExpr = attrs.get("foreignKey");
-            if (foreignKeyExpr != null && foreignKeyExpr.isAnnotationExpr()) {
-                Map<String, Expression> fkAttrs = AbstractCompiler.extractAnnotationAttributes(foreignKeyExpr.asAnnotationExpr());
-                Expression nameExpr = fkAttrs.get("name");
-                if (nameExpr != null) {
-                    return nameExpr.toString().replace("\"", "");
-                }
-            }
-        }
-        return null;
-    }
-
     private static TypeWrapper getTargetTypeFromAST(FieldDeclaration field, VariableDeclarator variable) {
         List<TypeWrapper> types = AbstractCompiler.findTypesInVariable(variable);
         if (types.isEmpty()) {
