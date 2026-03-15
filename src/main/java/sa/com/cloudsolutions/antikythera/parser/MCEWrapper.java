@@ -74,7 +74,7 @@ public class MCEWrapper {
                     classes[i] = wrapper.getClazz();
                 }
                 else {
-                    MockingEvaluator eval = EvaluatorFactory.create(wrapper.getType().getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
+                    MockingEvaluator eval = EvaluatorFactory.createLazily(wrapper.getType().getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
                     try {
                         Class<?> cls = AKBuddy.createDynamicClass(new MethodInterceptor(eval));
                         classes[i] = cls;
@@ -82,7 +82,11 @@ public class MCEWrapper {
                         classes[i] = Object.class;
                     }
                 }
+            } else {
+                classes[i] = Object.class;
             }
+        } else {
+            classes[i] = Object.class;
         }
     }
 

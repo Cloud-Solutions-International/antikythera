@@ -25,7 +25,7 @@ Currently supports Maven projects with Gradle support coming soon.
 ### 🔍 Intelligent Dependency Analysis
 Extract exactly what you need from complex codebases:
 
-- **Isolated Code Migration**: Identify and extract all dependencies for a specific class or method
+- **Isolated Code Migration**: Extract all dependencies for a target method or class at field and method granularity — only the code actually needed is copied, not entire classes
 - **Microservice Extraction**: Pull out minimal, compilable codebases perfect for microservice architectures
 - **Inheritance & Interface Tracking**: Automatically follow inheritance hierarchies, interface implementations, and method overrides
 - **Clean Output**: Generate properly organized code with sorted members and optimized imports
@@ -92,8 +92,8 @@ antk.generateUnitTests();
 
 // Or extract dependencies for a specific method
 DepSolver solver = DepSolver.createSolver();
-solver.processMethod("com.example.UserService#createUser");
-solver.dfs();
+solver.processEntry("com.example.UserService#createUser");
+// dfs() is called internally by processEntry
 ```
 
 See the [documentation](WARP.md) for detailed usage and configuration.
@@ -116,7 +116,7 @@ Dependency analysis and extraction tool for microservice migration and code isol
 ```bash
 mvn exec:java -Dexec.mainClass="sa.com.cloudsolutions.antikythera.depsolver.DepSolver"
 ```
-Requires `depsolver.yml` configuration file. Extracts minimal compilable codebases with all dependencies.
+Requires `depsolver.yml` configuration file. Given a target method or class, DepSolver resolves its full transitive dependency closure and generates a minimal compilable codebase. Crucially, dependencies are resolved at the **field and method level**: rather than copying entire classes, only the specific methods, fields, and inner classes that are actually required are extracted. For example, if `ClassA` uses `ClassB.doSomething()`, only that method (and its own dependencies) is copied — not all of `ClassB`.
 
 ### RepositoryParser
 JPA Repository query analyzer and executor for visualization purposes.

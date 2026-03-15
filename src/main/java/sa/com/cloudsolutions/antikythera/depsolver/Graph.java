@@ -115,6 +115,9 @@ public class Graph {
             target = parentClass.addMember(innerClass);
             target.asClassOrInterfaceDeclaration().setTypeParameters(cdecl.asClassOrInterfaceDeclaration().getTypeParameters());
             g.setTypeDeclaration(innerClass);
+            cdecl.findCompilationUnit().ifPresent(sourceCu ->
+                    sourceCu.getImports().forEach(imp -> g.getDestination().addImport(imp.clone()))
+            );
 
         }
         else {
@@ -122,8 +125,12 @@ public class Graph {
             if (cdecl.isAnnotationDeclaration()) {
                 target = g.getDestination().addAnnotationDeclaration(cdecl.getNameAsString());
             } else if (cdecl.isEnumDeclaration()) {
-                target = g.getDestination().addEnum(cdecl.getNameAsString());
-                target.setModifiers(cdecl.getModifiers());
+                EnumDeclaration cloned = cdecl.asEnumDeclaration().clone();
+                g.getDestination().getTypes().add(cloned);
+                target = cloned;
+                cdecl.findCompilationUnit().ifPresent(sourceCu ->
+                        sourceCu.getImports().forEach(imp -> g.getDestination().addImport(imp.clone()))
+                );
             } else {
                 target = g.getDestination().addClass(cdecl.getNameAsString());
                 target.setModifiers(cdecl.getModifiers());

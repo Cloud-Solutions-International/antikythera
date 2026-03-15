@@ -197,15 +197,15 @@ public class EntityMappingResolver {
         String targetEntityName = targetType.getName();
         String targetTableName = resolveTargetTableName(targetEntityName);
         String[] joinColumnInfo = extractJoinColumnInfoFromAST(field, propertyName);
-
-        return new JoinMapping(
+        JoinMapping joinMapping = new JoinMapping(
                 propertyName,
-                targetEntityName,
                 joinColumnInfo[0],
-                joinColumnInfo[1],
-                determineJoinTypeFromAST(field),
                 sourceTableName,
                 targetTableName);
+        joinMapping.setTargetEntity(targetEntityName);
+        joinMapping.setReferencedColumn(joinColumnInfo[1]);
+        joinMapping.setJoinType(determineJoinTypeFromAST(field));
+        return joinMapping;
     }
 
     private static TypeWrapper getTargetTypeFromAST(FieldDeclaration field, VariableDeclarator variable) {
@@ -514,7 +514,6 @@ public class EntityMappingResolver {
         JoinColumn joinColumn = field.getAnnotation(JoinColumn.class);
         String joinColumnName;
         String referencedColumnName = "id"; // Default assumption
-
         if (joinColumn != null) {
             joinColumnName = joinColumn.name().isEmpty() ? AbstractCompiler.camelToSnakeCase(propertyName) + "_id"
                     : joinColumn.name();
@@ -526,14 +525,15 @@ public class EntityMappingResolver {
 
         JoinType joinType = determineJoinType(field);
 
-        return new JoinMapping(
+        JoinMapping joinMapping = new JoinMapping(
                 propertyName,
-                targetEntityName,
                 joinColumnName,
-                referencedColumnName,
-                joinType,
                 sourceTableMapping.tableName(),
                 targetTableName);
+        joinMapping.setTargetEntity(targetEntityName);
+        joinMapping.setReferencedColumn(referencedColumnName);
+        joinMapping.setJoinType(joinType);
+        return joinMapping;
     }
 
     private static Class<?> getTargetEntityClass(Field field) {

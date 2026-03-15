@@ -923,7 +923,7 @@ public class Evaluator implements EvaluationEngine {
         MethodCallExpr methodCall = chain.getExpression().asMethodCallExpr();
 
         Variable variable = evaluateScopeChain(chain);
-        if (variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
+        if (variable != null && variable.getValue() instanceof Optional<?> optional && optional.isEmpty()) {
             Variable o = handleOptionalEmpties(chain);
             if (o != null) {
                 return o;

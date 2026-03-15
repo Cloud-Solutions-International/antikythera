@@ -49,7 +49,7 @@ import java.util.Optional;
  */
 public class Resolver {
 
-    public static record ScopedResolution(Type type, ImportWrapper importWrapper, TypeDeclaration<?> resolvedTypeDecl) {
+    public record ScopedResolution(Type type, ImportWrapper importWrapper, TypeDeclaration<?> resolvedTypeDecl) {
 
         public boolean hasType() {
             return type != null;
@@ -166,6 +166,12 @@ public class Resolver {
                 }
             } else if (expr.isFieldAccessExpr()) {
                 Resolver.resolveField(node, expr.asFieldAccessExpr());
+            } else if (expr.isNameExpr()) {
+                resolveNameExpression(node, expr);
+            } else if (expr.isBinaryExpr()) {
+                resolveBinaryExpr(node, expr);
+            } else if (expr.isClassExpr()) {
+                ImportUtils.addImport(node, expr.asClassExpr().getType());
             }
         }
     }
@@ -195,10 +201,46 @@ public class Resolver {
             } else if (value.isArrayInitializerExpr()) {
                 Resolver.resolveArrayExpr(node, value);
             } else if (value.isClassExpr()) {
-                ClassOrInterfaceType ct = value.asClassExpr().getType().asClassOrInterfaceType();
-                ImportUtils.addImport(node, ct.getName().toString());
+                ImportUtils.addImport(node, value.asClassExpr().getType());
+            } else if (value.isStringLiteralExpr() && "qualifiedByName".equals(pair.getNameAsString())) {
+                resolveNamedMethod(node, value.asStringLiteralExpr().asString());
             }
         }
+    }
+
+    /**
+     * Resolves a MapStruct {@code qualifiedByName} reference by finding the method
+     * annotated with {@code @Named(value)} in the enclosing type and adding it to
+     * the dependency graph.
+     *
+     * @param node       the graph node representing the current context
+     * @param methodName the value from {@code qualifiedByName}, which matches a
+     *                   {@code @Named} annotation value
+     */
+    private static void resolveNamedMethod(GraphNode node, String methodName) {
+        node.getEnclosingType().getMethods().stream()
+                .filter(method -> methodName.equals(namedAnnotationValue(method)))
+                .forEach(Graph::createGraphNode);
+    }
+
+    /**
+     * Returns the string value of a {@code @Named} annotation on the method, or
+     * {@code null} if the annotation is absent or its value cannot be determined.
+     */
+    private static String namedAnnotationValue(MethodDeclaration method) {
+        return method.getAnnotationByName("Named").map(ann -> {
+            if (ann.isSingleMemberAnnotationExpr()) {
+                Expression v = ann.asSingleMemberAnnotationExpr().getMemberValue();
+                return v.isStringLiteralExpr() ? v.asStringLiteralExpr().asString() : null;
+            }
+            if (ann.isNormalAnnotationExpr()) {
+                return ann.asNormalAnnotationExpr().getPairs().stream()
+                        .filter(p -> "value".equals(p.getNameAsString()) && p.getValue().isStringLiteralExpr())
+                        .map(p -> p.getValue().asStringLiteralExpr().asString())
+                        .findFirst().orElse(null);
+            }
+            return null;
+        }).orElse(null);
     }
 
     /**
@@ -847,6 +889,10 @@ public class Resolver {
                 }
             }
         }
+        // Fallback: when overload resolution fails but methods with this name exist, add all overloads
+        if (md.isEmpty() && mceWrapper.getMethodName() != null) {
+            cdecl.getMethodsByName(mceWrapper.getMethodName()).forEach(Graph::createGraphNode);
+        }
         return null;
     }
 
@@ -863,6 +909,9 @@ public class Resolver {
                 AbstractCompiler.findMethodDeclaration(mceWrapper, cdecl, false)
                         .ifPresent(overRides -> Graph.createGraphNode(overRides.getCallableDeclaration()));
             }
+        }
+        if (method.findCompilationUnit().isEmpty()) {
+            return null;
         }
         return Graph.createGraphNode(method);
     }

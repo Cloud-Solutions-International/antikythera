@@ -755,7 +755,8 @@ public class Reflect {
         }
         Class<?> parameterType = parameterTypes[i];
 
-        if (arguments[i] == null || parameterType.isAssignableFrom(argumentTypes[i])
+        if (arguments[i] == null || argumentTypes[i] == null
+                || parameterType.isAssignableFrom(argumentTypes[i])
                 || parameterType.equals(argumentTypes[i])) {
             return true;
         }

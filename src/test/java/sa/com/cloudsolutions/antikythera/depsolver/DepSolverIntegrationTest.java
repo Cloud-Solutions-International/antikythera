@@ -30,7 +30,7 @@ class DepSolverIntegrationTest {
     @Test
     void testEmployee() throws AntikytheraException {
         DepSolver depSolver = DepSolver.createSolver();
-        depSolver.processMethod("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee#simpleAccess");
+        depSolver.processEntry("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee#simpleAccess");
 
         Map<String, CompilationUnit> dependencies = Graph.getDependencies();
         assertFalse(dependencies.isEmpty());
@@ -43,7 +43,7 @@ class DepSolverIntegrationTest {
     @Test
     void testThisPerson() throws AntikytheraException {
         DepSolver depSolver = DepSolver.createSolver();
-        depSolver.processMethod("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee#thisAccess");
+        depSolver.processEntry("sa.com.cloudsolutions.antikythera.testhelper.evaluator.Employee#thisAccess");
 
         Map<String, CompilationUnit> dependencies = Graph.getDependencies();
         assertFalse(dependencies.isEmpty());
