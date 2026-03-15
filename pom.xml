@@ -23,6 +23,14 @@
         <antikythera.agent.path>${settings.localRepository}/com/github/Cloud-Solutions-International/antikythera-agent/1.0.0.2/antikythera-agent-1.0.0.2.jar</antikythera.agent.path>
     </properties>
 
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/Cloud-Solutions-International/antikythera</url>
+        </repository>
+    </distributionManagement>
+
     <repositories>
         <repository>
             <id>maven-central</id>

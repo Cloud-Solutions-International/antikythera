@@ -84,7 +84,7 @@ public class SpringTestGenerator extends  TestGenerator {
 
     /**
      * Create tests based on the method declaration and return type
-     * @param md the descriptor of the method for which we are about to write tests.
+     * @param cd the descriptor of the method for which we are about to write tests.
      * @param controllerResponse the ControllerResponse instance, inside that we will find the
      *                           ResponseEntity as well as the body of the ResponseEntity.
      */
