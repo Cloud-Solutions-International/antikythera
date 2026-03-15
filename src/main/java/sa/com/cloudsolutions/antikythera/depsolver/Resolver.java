@@ -166,9 +166,12 @@ public class Resolver {
                 }
             } else if (expr.isFieldAccessExpr()) {
                 Resolver.resolveField(node, expr.asFieldAccessExpr());
+            } else if (expr.isNameExpr()) {
+                resolveNameExpression(node, expr);
+            } else if (expr.isBinaryExpr()) {
+                resolveBinaryExpr(node, expr);
             } else if (expr.isClassExpr()) {
-                ClassOrInterfaceType ct = expr.asClassExpr().getType().asClassOrInterfaceType();
-                ImportUtils.addImport(node, ct.getName().toString());
+                ImportUtils.addImport(node, expr.asClassExpr().getType());
             }
         }
     }
@@ -198,8 +201,7 @@ public class Resolver {
             } else if (value.isArrayInitializerExpr()) {
                 Resolver.resolveArrayExpr(node, value);
             } else if (value.isClassExpr()) {
-                ClassOrInterfaceType ct = value.asClassExpr().getType().asClassOrInterfaceType();
-                ImportUtils.addImport(node, ct.getName().toString());
+                ImportUtils.addImport(node, value.asClassExpr().getType());
             } else if (value.isStringLiteralExpr() && "qualifiedByName".equals(pair.getNameAsString())) {
                 resolveNamedMethod(node, value.asStringLiteralExpr().asString());
             }
