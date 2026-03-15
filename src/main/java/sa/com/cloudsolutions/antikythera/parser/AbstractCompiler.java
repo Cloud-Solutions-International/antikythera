@@ -90,6 +90,7 @@ public class AbstractCompiler {
      */
     public static final String SUFFIX = ".java";
     private static final Logger logger = LoggerFactory.getLogger(AbstractCompiler.class);
+    public static final String MAVEN_SRC_JAVA = "src/main/java";
 
     private static JavaParser javaParser;
     protected static JavaSymbolSolver symbolResolver;
@@ -196,7 +197,7 @@ public class AbstractCompiler {
             Model pomModel = mavenHelper.getPomModel();
             Path projectRoot = mavenHelper.getPomPath().getParent();
 
-            String mainSource = "src/main/java";
+            String mainSource = MAVEN_SRC_JAVA;
             String testSource = "src/test/java";
             if (pomModel.getBuild() != null) {
                 if (pomModel.getBuild().getSourceDirectory() != null) {
@@ -1251,17 +1252,21 @@ public class AbstractCompiler {
      * @throws IOException when the files cannot be precompiled.
      */
     public static void preProcess() throws IOException {
+        preProcessSourceFiles();
+    }
+
+    public static void preProcessSourceFiles() throws IOException {
         Path basePath = Paths.get(Settings.getBasePath()).toAbsolutePath().normalize();
         List<Path> dirs;
         if (sourceDirectories.isEmpty()) {
             // setupSourcePaths() may have failed silently; fall back to src/main/java
             // rather than the entire project root, which would include test sources
-            Path mainJava = basePath.resolve("src/main/java");
+            Path mainJava = basePath.resolve(MAVEN_SRC_JAVA);
             dirs = Files.isDirectory(mainJava) ? List.of(mainJava) : List.of(basePath);
         } else {
             dirs = sourceDirectories.stream().filter(d -> d.startsWith(basePath)).toList();
             if (dirs.isEmpty()) {
-                Path mainJava = basePath.resolve("src/main/java");
+                Path mainJava = basePath.resolve(MAVEN_SRC_JAVA);
                 dirs = Files.isDirectory(mainJava) ? List.of(mainJava) : List.of(basePath);
             }
         }
@@ -1303,6 +1308,26 @@ public class AbstractCompiler {
             }
         }
         return b;
+    }
+
+    public static void preProcessTestSources() throws IOException {
+        Path basePath = Paths.get(Settings.getBasePath()).toAbsolutePath().normalize();
+        Path testJava = basePath.resolve("src/test/java");
+        if (Files.isDirectory(testJava)) {
+            try (var paths = Files.walk(testJava)) {
+                List<File> javaFiles = paths
+                        .filter(Files::isRegularFile)
+                        .filter(path -> path.toString().endsWith(SUFFIX))
+                        .map(Path::toFile)
+                        .toList();
+
+                for (File javaFile : javaFiles) {
+                    AbstractCompiler compiler = new AbstractCompiler();
+                    compiler.compileAndSolveInterfaces(
+                            basePath.relativize(javaFile.toPath()).toString());
+                }
+            }
+        }
     }
 
     private void solveExtends(ClassOrInterfaceDeclaration cdecl) {

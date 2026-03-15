@@ -197,6 +197,7 @@ public class EntityMappingResolver {
         String targetEntityName = targetType.getName();
         String targetTableName = resolveTargetTableName(targetEntityName);
         String[] joinColumnInfo = extractJoinColumnInfoFromAST(field, propertyName);
+        String constraintName = extractConstraintNameFromAST(field);
 
         return new JoinMapping(
                 propertyName,
@@ -205,7 +206,24 @@ public class EntityMappingResolver {
                 joinColumnInfo[1],
                 determineJoinTypeFromAST(field),
                 sourceTableName,
-                targetTableName);
+                targetTableName,
+                constraintName);
+    }
+
+    private static String extractConstraintNameFromAST(FieldDeclaration field) {
+        Optional<AnnotationExpr> joinColumnAnn = field.getAnnotationByName("JoinColumn");
+        if (joinColumnAnn.isPresent()) {
+            Map<String, Expression> attrs = AbstractCompiler.extractAnnotationAttributes(joinColumnAnn.get());
+            Expression foreignKeyExpr = attrs.get("foreignKey");
+            if (foreignKeyExpr != null && foreignKeyExpr.isAnnotationExpr()) {
+                Map<String, Expression> fkAttrs = AbstractCompiler.extractAnnotationAttributes(foreignKeyExpr.asAnnotationExpr());
+                Expression nameExpr = fkAttrs.get("name");
+                if (nameExpr != null) {
+                    return nameExpr.toString().replace("\"", "");
+                }
+            }
+        }
+        return null;
     }
 
     private static TypeWrapper getTargetTypeFromAST(FieldDeclaration field, VariableDeclarator variable) {
@@ -514,12 +532,17 @@ public class EntityMappingResolver {
         JoinColumn joinColumn = field.getAnnotation(JoinColumn.class);
         String joinColumnName;
         String referencedColumnName = "id"; // Default assumption
+        String constraintName = null;
 
         if (joinColumn != null) {
             joinColumnName = joinColumn.name().isEmpty() ? AbstractCompiler.camelToSnakeCase(propertyName) + "_id"
                     : joinColumn.name();
             referencedColumnName = joinColumn.referencedColumnName().isEmpty() ? "id"
                     : joinColumn.referencedColumnName();
+            ForeignKey fk = joinColumn.foreignKey();
+            if (fk != null && !fk.name().isEmpty()) {
+                constraintName = fk.name();
+            }
         } else {
             joinColumnName = AbstractCompiler.camelToSnakeCase(propertyName) + "_id";
         }
@@ -533,7 +556,8 @@ public class EntityMappingResolver {
                 referencedColumnName,
                 joinType,
                 sourceTableMapping.tableName(),
-                targetTableName);
+                targetTableName,
+                constraintName);
     }
 
     private static Class<?> getTargetEntityClass(Field field) {
