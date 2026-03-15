@@ -25,8 +25,25 @@
 
     <repositories>
         <repository>
+            <id>maven-central</id>
+            <name>Maven Central</name>
+            <url>https://repo.maven.apache.org/maven2</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <repository>
             <id>jitpack.io</id>
             <url>https://jitpack.io</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
         </repository>
     </repositories>
 
@@ -98,9 +115,10 @@
 
         <!-- HQL/JPQL Parser with ANTLR4 -->
         <dependency>
-            <groupId>com.github.e4c5</groupId>
+            <groupId>com.raditha</groupId>
             <artifactId>hql-parser</artifactId>
-            <version>0.0.16</version>
+            <version>1.0.0</version>
+            <scope>compile</scope>
         </dependency>
         
         <!-- Explicitly declare ANTLR 4 runtime to ensure IDE classpath includes it -->

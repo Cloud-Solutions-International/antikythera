@@ -197,17 +197,15 @@ public class EntityMappingResolver {
         String targetEntityName = targetType.getName();
         String targetTableName = resolveTargetTableName(targetEntityName);
         String[] joinColumnInfo = extractJoinColumnInfoFromAST(field, propertyName);
-        String constraintName = extractConstraintNameFromAST(field);
-
-        return new JoinMapping(
+        JoinMapping joinMapping = new JoinMapping(
                 propertyName,
-                targetEntityName,
                 joinColumnInfo[0],
-                joinColumnInfo[1],
-                determineJoinTypeFromAST(field),
                 sourceTableName,
-                targetTableName,
-                constraintName);
+                targetTableName);
+        joinMapping.setTargetEntity(targetEntityName);
+        joinMapping.setReferencedColumn(joinColumnInfo[1]);
+        joinMapping.setJoinType(determineJoinTypeFromAST(field));
+        return joinMapping;
     }
 
     private static String extractConstraintNameFromAST(FieldDeclaration field) {
@@ -532,32 +530,26 @@ public class EntityMappingResolver {
         JoinColumn joinColumn = field.getAnnotation(JoinColumn.class);
         String joinColumnName;
         String referencedColumnName = "id"; // Default assumption
-        String constraintName = null;
-
         if (joinColumn != null) {
             joinColumnName = joinColumn.name().isEmpty() ? AbstractCompiler.camelToSnakeCase(propertyName) + "_id"
                     : joinColumn.name();
             referencedColumnName = joinColumn.referencedColumnName().isEmpty() ? "id"
                     : joinColumn.referencedColumnName();
-            ForeignKey fk = joinColumn.foreignKey();
-            if (fk != null && !fk.name().isEmpty()) {
-                constraintName = fk.name();
-            }
         } else {
             joinColumnName = AbstractCompiler.camelToSnakeCase(propertyName) + "_id";
         }
 
         JoinType joinType = determineJoinType(field);
 
-        return new JoinMapping(
+        JoinMapping joinMapping = new JoinMapping(
                 propertyName,
-                targetEntityName,
                 joinColumnName,
-                referencedColumnName,
-                joinType,
                 sourceTableMapping.tableName(),
-                targetTableName,
-                constraintName);
+                targetTableName);
+        joinMapping.setTargetEntity(targetEntityName);
+        joinMapping.setReferencedColumn(referencedColumnName);
+        joinMapping.setJoinType(joinType);
+        return joinMapping;
     }
 
     private static Class<?> getTargetEntityClass(Field field) {
