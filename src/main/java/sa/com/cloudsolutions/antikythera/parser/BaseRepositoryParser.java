@@ -144,16 +144,54 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 return getNameFromType(entity, table);
             } else if (entity.getClazz() != null) {
                 Class<?> cls = entity.getClazz();
-                for (Annotation ann : cls.getAnnotations()) {
-                    if (ann instanceof jakarta.persistence.Table t) {
-                        table = t.name();
-                    }
-                }
+                table = findTableNameFromClass(cls);
             }
         } else {
             logger.warn("Compilation unit is null");
         }
         return table;
+    }
+
+    /**
+     * Finds the table name from a Class using reflection.
+     * Supports both javax.persistence (Spring Boot 2.x) and jakarta.persistence (Spring Boot 3.x).
+     *
+     * @param cls The class to extract table name from
+     * @return The table name, or null if not found
+     */
+    private static String findTableNameFromClass(Class<?> cls) {
+        // Try jakarta.persistence.Table first (Spring Boot 3.x)
+        try {
+            Class<?> jakartaTable = Class.forName("jakarta.persistence.Table");
+            for (Annotation ann : cls.getAnnotations()) {
+                if (jakartaTable.isInstance(ann)) {
+                    // Use reflection to get the name() method value
+                    String name = (String) jakartaTable.getMethod("name").invoke(ann);
+                    if (name != null && !name.isEmpty()) {
+                        return name;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // jakarta.persistence not available or reflection failed
+        }
+
+        // Try javax.persistence.Table (Spring Boot 2.x)
+        try {
+            Class<?> javaxTable = Class.forName("javax.persistence.Table");
+            for (Annotation ann : cls.getAnnotations()) {
+                if (javaxTable.isInstance(ann)) {
+                    String name = (String) javaxTable.getMethod("name").invoke(ann);
+                    if (name != null && !name.isEmpty()) {
+                        return name;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // javax.persistence not available or reflection failed
+        }
+
+        return null;
     }
 
     static String getNameFromType(TypeWrapper entity, String table) {
