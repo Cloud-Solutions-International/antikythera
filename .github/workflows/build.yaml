@@ -51,12 +51,13 @@ jobs:
         run: mvn jacoco:report
 
       - name: Upload coverage to Codecov
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         uses: codecov/codecov-action@v5
         with:
           files: target/site/jacoco/jacoco.xml
           flags: unittests
           name: codecov-umbrella
-          fail_ci_if_error: false
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
   publish:
