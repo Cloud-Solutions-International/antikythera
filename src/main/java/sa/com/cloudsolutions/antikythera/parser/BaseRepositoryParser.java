@@ -145,7 +145,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
             } else if (entity.getClazz() != null) {
                 Class<?> cls = entity.getClazz();
                 for (Annotation ann : cls.getAnnotations()) {
-                    if (ann instanceof javax.persistence.Table t) {
+                    if (ann instanceof jakarta.persistence.Table t) {
                         table = t.name();
                     }
                 }

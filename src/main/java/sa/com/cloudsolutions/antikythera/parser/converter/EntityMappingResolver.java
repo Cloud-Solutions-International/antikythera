@@ -13,7 +13,7 @@ import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import com.raditha.hql.converter.JoinType;
 import com.raditha.hql.converter.JoinMapping;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 import java.lang.reflect.Field;
 import java.util.*;
 
@@ -677,7 +677,7 @@ public class EntityMappingResolver {
         if (tw.getType() != null) {
             return tw.getType().getAnnotationByName(ENTITY).isPresent();
         } else if (tw.getClazz() != null) {
-            return tw.getClazz().isAnnotationPresent(javax.persistence.Entity.class);
+            return tw.getClazz().isAnnotationPresent(jakarta.persistence.Entity.class);
         }
         return false;
     }
