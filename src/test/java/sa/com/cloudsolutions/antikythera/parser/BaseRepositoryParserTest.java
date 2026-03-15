@@ -648,4 +648,30 @@ class BaseRepositoryParserTest {
         assertFalse(BaseRepositoryParser.isJpaRepository(type),
                 "ReactiveMongoRepository should not be considered a JPA repository");
     }
+
+
+    @Test
+    void testFindTableName_WithNullEntity() {
+        String tableName = BaseRepositoryParser.findTableName(null);
+        assertNull(tableName, "Should return null for null entity");
+    }
+
+    @Test
+    void testFindTableName_WithClassWithoutTableAnnotation() {
+        // Test with a class that has no @Table annotation
+        TypeWrapper tw = new TypeWrapper(String.class);
+        String tableName = BaseRepositoryParser.findTableName(tw);
+        assertNull(tableName, "Should return null when no @Table annotation present");
+    }
+
+    @Test
+    void testFindTableNameFromClass_WithNullResult() throws Exception {
+        // Test the private findTableNameFromClass method with a non-entity class
+        java.lang.reflect.Method method = BaseRepositoryParser.class
+            .getDeclaredMethod("findTableNameFromClass", Class.class);
+        method.setAccessible(true);
+
+        String nullResult = (String) method.invoke(null, String.class);
+        assertNull(nullResult, "Should return null for class without @Table");
+    }
 }

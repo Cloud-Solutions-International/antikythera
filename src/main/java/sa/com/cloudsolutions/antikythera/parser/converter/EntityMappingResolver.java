@@ -13,7 +13,7 @@ import sa.com.cloudsolutions.antikythera.parser.BaseRepositoryParser;
 import com.raditha.hql.converter.JoinType;
 import com.raditha.hql.converter.JoinMapping;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 import java.lang.reflect.Field;
 import java.util.*;
 
@@ -81,7 +81,7 @@ public class EntityMappingResolver {
         EntityMetadata meta = null;
         if (typeDecl != null && typeDecl.getAnnotationByName(ENTITY).isPresent()) {
             meta = buildMetadataFromSources(typeDecl);
-        } else if (type.getClazz() != null && type.getClazz().isAnnotationPresent(Entity.class)) {
+        } else if (type.getClazz() != null && isEntityReflection(type.getClazz())) {
             meta = buildEntityMetadata(type.getClazz());
         }
 
@@ -661,8 +661,50 @@ public class EntityMappingResolver {
         if (tw.getType() != null) {
             return tw.getType().getAnnotationByName(ENTITY).isPresent();
         } else if (tw.getClazz() != null) {
-            return tw.getClazz().isAnnotationPresent(javax.persistence.Entity.class);
+            return isEntityReflection(tw.getClazz());
         }
+        return false;
+    }
+
+    /**
+     * Checks if a class is a JPA entity using reflection.
+     * Supports both javax.persistence (Spring Boot 2.x) and jakarta.persistence (Spring Boot 3.x).
+     *
+     * <p>This dual-check approach is necessary because:
+     * <ul>
+     *   <li>Spring Boot 3.x uses jakarta.persistence.* namespace</li>
+     *   <li>Spring Boot 2.x uses javax.persistence.* namespace</li>
+     *   <li>External JARs may have been compiled with either version</li>
+     *   <li>Using Class.forName() avoids compile-time dependency on either package</li>
+     * </ul>
+     *
+     * <p>This ensures QueryOptimizer can analyze entities from any dependency,
+     * regardless of which JPA version was used during compilation. Without this,
+     * entities from external JARs would be silently ignored, causing incomplete
+     * query optimization and missing relationship metadata.
+     *
+     * @param clazz The class to check
+     * @return true if the class is annotated with @Entity (either javax or jakarta), false otherwise
+     */
+    private static boolean isEntityReflection(Class<?> clazz) {
+        // Check jakarta.persistence (Spring Boot 3.x)
+        try {
+            Class<?> jakartaEntity = Class.forName("jakarta.persistence.Entity");
+            if (clazz.isAnnotationPresent((Class<? extends java.lang.annotation.Annotation>) jakartaEntity)) {
+                return true;
+            }
+        } catch (ClassNotFoundException ignored) {
+            // jakarta.persistence not available
+        }
+
+        // Check javax.persistence (Spring Boot 2.x)
+        try {
+            Class<?> javaxEntity = Class.forName("javax.persistence.Entity");
+            return clazz.isAnnotationPresent((Class<? extends java.lang.annotation.Annotation>) javaxEntity);
+        } catch (ClassNotFoundException ignored) {
+            // javax.persistence not available
+        }
+
         return false;
     }
 
