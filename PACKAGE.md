@@ -89,12 +89,17 @@ gpr.user=YOUR_GITHUB_USERNAME
 gpr.key=YOUR_GITHUB_TOKEN
 ```
 
-## Main Classes
+## Key Classes
 
-- **Main class**: `sa.com.cloudsolutions.antikythera.generator.Antikythera`
-- **Parser**: `sa.com.cloudsolutions.antikythera.parser.AbstractCompiler`
-- **Evaluator**: `sa.com.cloudsolutions.antikythera.evaluator.Evaluator`
-- **Test Generator**: `sa.com.cloudsolutions.antikythera.generator.TestGenerator`
+- **Parser / type resolver**: `sa.com.cloudsolutions.antikythera.parser.AbstractCompiler`
+- **Runtime cache**: `sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime`
+- **Symbolic evaluator**: `sa.com.cloudsolutions.antikythera.evaluator.Evaluator`
+- **Spring-aware evaluator**: `sa.com.cloudsolutions.antikythera.evaluator.SpringEvaluator`
+- **Dependency solver**: `sa.com.cloudsolutions.antikythera.depsolver.DepSolver`
+- **Test generator interface**: `sa.com.cloudsolutions.antikythera.evaluator.ITestGenerator`
+
+> The test generation CLI (`Antikythera`) and concrete generators (`TestGenerator`, `UnitTestGenerator`,
+> `SpringTestGenerator`) live in the companion module `antikythera-test-generator`.
 
 ## Requirements
 

@@ -1,26 +1,17 @@
 Antikythera
 ===========
 
-**Automated Test Generation, Code Refactoring, and Intelligent Analysis for Java Applications**
+**Java AST Manipulation, Expression Evaluation, and Intelligent Code Analysis**
 
-Antikythera is a powerful framework that automatically generates tests, analyzes dependencies, and enables large-scale refactoring of Java codebases.
-Whether you're working on legacy code modernization, microservice extraction, or simply need comprehensive test coverage,
-Antikythera accelerates your development workflow.
+Antikythera is a core library that parses, evaluates, and transforms Java codebases.
+It provides the AST parsing, symbolic execution, dependency solving, and query analysis
+engine that powers tools built on top of it — including
+[antikythera-test-generator](../antikythera-test-generator/README.md) for automated
+test generation.
 
 ---
 
 ## What Antikythera Can Do
-
-### 🧪 Automated Test Generation
-Generate comprehensive unit tests and API tests with minimal effort:
-
-- **Unit Tests**: Automatically generate JUnit tests for your service classes with proper assertions, mocks, and preconditions
-- **API Tests**: Create RESTAssured tests for your REST controllers and endpoints
-- **Smart Assertions**: Generate meaningful assertions based on return values, side effects, and logging statements
-- **Branch Coverage**: Automatically explore all code paths and generate tests for each branch
-- **Full Precondition Setup**: Tests include all necessary mocks, fixtures, and setup code
-
-Currently supports Maven projects with Gradle support coming soon.
 
 ### 🔍 Intelligent Dependency Analysis
 Extract exactly what you need from complex codebases:
@@ -58,13 +49,22 @@ Antikythera uses a sophisticated three-phase approach:
 2. **Analyze**: Evaluates expressions, builds dependency graphs, and tracks code paths using depth-first search algorithms
 3. **Generate**: Creates tests, extracts dependencies, or performs refactoring based on the analysis
 
-The expression evaluation engine uses reflection to execute code paths and discover all branches, ensuring comprehensive coverage.
+The expression evaluation engine uses reflection to execute code paths and discover all branches.
+
+---
+
+## Companion Modules
+
+| Module | Purpose |
+| :--- | :--- |
+| [antikythera-test-generator](../antikythera-test-generator/README.md) | Automated unit, integration, and API test generation for Spring projects |
+| [antikythera-examples](../antikythera-examples/) | Ready-to-use tools: schema normalisation, query analysis, framework migration utilities |
 
 ---
 
 ## Real-World Applications
 
-**Legacy Modernization**: Generate tests for untested code before refactoring
+**Legacy Modernization**: Analyse untested code and generate tests via `antikythera-test-generator`
 
 **Microservice Migration**: Extract specific functionality with all dependencies into new services
 
@@ -79,21 +79,24 @@ The expression evaluation engine uses reflection to execute code paths and disco
 ## Getting Started
 
 ### Requirements
-- Java 11 or higher
+- Java 21 or higher
 - Maven (Gradle support coming soon)
 - VM argument: `--add-opens java.base/java.util.stream=ALL-UNNAMED`
 
 ### Quick Example
 ```java
-// Generate tests for a service class
-Antikythera antk = Antikythera.getInstance();
-antk.preProcess();
-antk.generateUnitTests();
-
-// Or extract dependencies for a specific method
+// Extract dependencies for a specific method
 DepSolver solver = DepSolver.createSolver();
 solver.processEntry("com.example.UserService#createUser");
 // dfs() is called internally by processEntry
+
+// Or symbolically execute a method to observe its behaviour
+Evaluator eval = EvaluatorFactory.create("com.example.PricingService", SpringEvaluator.class);
+Variable result = eval.executeMethod(methodNode);
+System.out.println(result.getValue());
+
+// To generate tests, use antikythera-test-generator:
+// Antikythera.getInstance().generateUnitTests();
 ```
 
 See the [documentation](WARP.md) for detailed usage and configuration.
@@ -103,13 +106,6 @@ See the [documentation](WARP.md) for detailed usage and configuration.
 ## Executables
 
 The Antikythera core framework includes several standalone executables:
-
-### Antikythera
-Main test generation tool that generates both unit tests and API tests.
-```bash
-mvn exec:java -Dexec.mainClass="sa.com.cloudsolutions.antikythera.generator.Antikythera"
-```
-Generates comprehensive test coverage for your codebase.
 
 ### DepSolver
 Dependency analysis and extraction tool for microservice migration and code isolation.
@@ -141,14 +137,18 @@ The **antikythera-examples** module includes ready-to-use tools for:
 - Query performance analysis and optimization
 - Code duplication detection
 - Framework migration utilities (Spring Boot 2.x → 3.x, JUnit 4 → 5)
+- Schema normalisation and DDL generation
 - Usage pattern analysis
 - And more...
+
+The **antikythera-test-generator** module provides the test generation CLI and generators.
+See [antikythera-test-generator/README.md](../antikythera-test-generator/README.md).
 
 ---
 
 ## Development & Testing
 
-Antikythera itself is thoroughly tested with 660+ unit and integration tests. To run the test suite:
+The core library is thoroughly tested with 786+ unit and integration tests. To run the test suite:
 
 1. Clone the required test repositories:
    - https://github.com/Cloud-Solutions-International/antikythera-sample-project
