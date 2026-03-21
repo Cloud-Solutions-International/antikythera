@@ -39,10 +39,11 @@ import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.evaluator.GeneratorState;
+import sa.com.cloudsolutions.antikythera.evaluator.ITestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.MethodResponse;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
-import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -83,7 +84,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * tests can be created. They can be unit tests, integration tests, api tests and end-to-end
      * tests.
      */
-    private final List<TestGenerator> generators = new ArrayList<>();
+    private final List<ITestGenerator> generators = new ArrayList<>();
     /**
      * The method currently being analyzed
      */
@@ -300,7 +301,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 startOutputCapture();
             }
             Evaluator.clearLastException();
-            TestGenerator.clearWhenThen();
+            GeneratorState.clearWhenThen();
             if (cd instanceof MethodDeclaration md) {
                 executeMethod(md);
             } else if (cd instanceof ConstructorDeclaration constructorDeclaration) {
@@ -327,7 +328,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         boolean skipNoSideEffects = Settings.getProperty(Settings.SKIP_VOID_NO_SIDE_EFFECTS, Boolean.class).orElse(true);
         boolean hasSideEffects = (output != null && !output.isEmpty())
-                || !TestGenerator.getWhenThen().isEmpty()
+                || !GeneratorState.getWhenThen().isEmpty()
                 || !Branching.getApplicableConditions(cd).isEmpty()
                 || Evaluator.getLastException() != null
                 || sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder.hasLogs();
@@ -586,7 +587,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      */
     Variable createTests(MethodResponse response) {
         if (response != null) {
-            for (TestGenerator generator : generators) {
+            for (ITestGenerator generator : generators) {
                 generator.setPreConditions(Branching.getApplicableConditions(currentCallable));
                 generator.createTests(currentCallable, response);
             }
@@ -595,7 +596,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
-    public void addGenerator(TestGenerator generator) {
+    public void addGenerator(ITestGenerator generator) {
         generators.add(generator);
     }
 
@@ -1025,7 +1026,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     public void setArgumentGenerator(ArgumentGenerator argumentGenerator) {
         SpringEvaluator.argumentGenerator = argumentGenerator;
-        for (TestGenerator gen : generators) {
+        for (ITestGenerator gen : generators) {
             gen.setArgumentGenerator(argumentGenerator);
         }
     }

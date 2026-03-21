@@ -29,7 +29,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.MockReturnValueHandler;
 import sa.com.cloudsolutions.antikythera.evaluator.MockingEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
-import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.GeneratorState;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
@@ -119,7 +119,7 @@ public class MockingRegistry {
                 continue;
             }
             String fqn = wrapper.getFullyQualifiedName();
-            TestGenerator.addImport(new ImportDeclaration(fqn, false, false));
+            GeneratorState.addImport(new ImportDeclaration(fqn, false, false));
             Variable v;
             if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
                 if (resolvedTypes.size() == 1) {
@@ -227,7 +227,7 @@ public class MockingRegistry {
 
         MethodCallExpr thenReturn = new MethodCallExpr(mockitoWhen, "thenReturn")
                 .setArguments(new NodeList<>(returnValue));
-        TestGenerator.addWhenThen(thenReturn);
+        GeneratorState.addWhenThen(thenReturn);
 
         return methodCall;
     }
@@ -269,42 +269,42 @@ public class MockingRegistry {
 
         return switch (qualifiedName) {
             case "List", "java.util.List", "java.util.ArrayList" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("ArrayList<>"))
                         .setArguments(new NodeList<>());
             }
 
             case "Map", "java.util.Map", "java.util.HashMap" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.HashMap", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.HashMap", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("HashMap"))
                         .setArguments(new NodeList<>());
             }
 
             case "java.util.TreeMap" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.TreeMap", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.TreeMap", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("TreeMap"))
                         .setArguments(new NodeList<>());
             }
 
             case "Set", "java.util.Set", "java.util.HashSet" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.HashSet", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.HashSet", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("HashSet"))
                         .setArguments(new NodeList<>());
             }
 
             case "java.util.TreeSet" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.TreeSet", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.TreeSet", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("TreeSet"))
                         .setArguments(new NodeList<>());
             }
 
             case Reflect.JAVA_UTIL_OPTIONAL -> {
-                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
+                GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
                 yield new MethodCallExpr(
                         new NameExpr("Optional"),
                         "empty"
@@ -370,7 +370,7 @@ public class MockingRegistry {
 
     public static Expression createMockitoArgument(String typeName) {
         MethodCallExpr mce = generateAnyExpression(typeName);
-        TestGenerator.addImport(new ImportDeclaration(MOCKITO, false, false));
+        GeneratorState.addImport(new ImportDeclaration(MOCKITO, false, false));
         // If it's a generic Mockito.any() call, add casting
         if (mce.getNameAsString().equals("any") && !typeName.equals("Object") && !typeName.equals("Type")) {
             return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);

@@ -21,7 +21,7 @@ import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.GeneratorState;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
@@ -391,7 +391,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                         Evaluator typeEval = EvaluatorFactory.create(typeName, Evaluator.class);
                         typeEval.setupFields();
                         typeEval.initializeFields();
-                        TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
+                        GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
                         return new Variable(Optional.of(typeEval));
                     }
                     Variable v = optionalByteBuddy(ciType.getNameAsString());
@@ -408,7 +408,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         TypeWrapper wrapper = AbstractCompiler.findType(cu, typeName);
         if (wrapper != null) {
             Class<?> clazz = wrapper.getClazz();
-            TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
+            GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
             if (clazz != null) {
                 MethodInterceptor interceptor = new MethodInterceptor(clazz);
                 Class<?> dynamicClass = AKBuddy.createDynamicClass(interceptor);
@@ -487,7 +487,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         if (v != null && v.getInitializer().getFirst() instanceof ObjectCreationExpr oce) {
             String typeName = oce.getTypeAsString();
             if (typeName.endsWith("ArrayList") || typeName.endsWith("LinkedList") || typeName.endsWith("List")) {
-                TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.List", false, false));
                 v.setInitializer(
                         List.of(new MethodCallExpr("of").setScope(new NameExpr("List"))));
             }
