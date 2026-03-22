@@ -21,6 +21,7 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ParseProblemException;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -447,7 +448,11 @@ public class ControlFlowEvaluator extends Evaluator {
                 createSetterFromGetter(entry, setter);
             }
             if (setter.getArguments().isEmpty()) {
-                setter.addArgument(entry.getValue().toString());
+                try {
+                    setter.addArgument(entry.getValue().toString());
+                } catch (ParseProblemException e) {
+                    logger.debug("Skipping unparseable setter argument '{}': {}", entry.getValue(), e.getMessage());
+                }
             }
         }
         addPreCondition(stmt, setter);

@@ -18,7 +18,10 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.mockito.Mockito;
+import org.mockito.exceptions.base.MockitoException;
 import org.mockito.quality.Strictness;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AKBuddy;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -49,6 +52,7 @@ import static org.mockito.Mockito.withSettings;
  * Also supports the when/then type of mocking that you find in frameworks like mockito.
  */
 public class MockingRegistry {
+    private static final Logger logger = LoggerFactory.getLogger(MockingRegistry.class);
     private static final Map<String, Map<Callable, MockingCall>> mockedFields = new HashMap<>();
     private static Map<String, List<Expression>> customMockExpressions = new HashMap<>();
 
@@ -164,14 +168,22 @@ public class MockingRegistry {
     }
 
     public static Variable createMockitoMockInstance(Class<?> cls) {
-        Variable v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
-        v.setClazz(cls);
-        // Set initializer so test generator knows to use Mockito.mock()
-        v.setInitializer(List.of(new MethodCallExpr(
-            new NameExpr(MOCKITO), "mock",
-            new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
-        )));
-        return v;
+        try {
+            Variable v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
+            v.setClazz(cls);
+            // Set initializer so test generator knows to use Mockito.mock()
+            v.setInitializer(List.of(new MethodCallExpr(
+                new NameExpr(MOCKITO), "mock",
+                new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
+            )));
+            return v;
+        } catch (MockitoException e) {
+            logger.warn("Cannot create Mockito mock for {} ({}), substituting null — tests involving this type may be incomplete",
+                    cls.getName(), e.getMessage().lines().findFirst().orElse(""));
+            Variable v = new Variable(null);
+            v.setClazz(cls);
+            return v;
+        }
     }
 
     public static Variable createByteBuddyMockInstance(String className) throws ReflectiveOperationException {

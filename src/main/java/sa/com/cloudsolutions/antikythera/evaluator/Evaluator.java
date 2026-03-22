@@ -1386,6 +1386,10 @@ public class Evaluator implements EvaluationEngine {
             if (old == null) {
                 field = "is" + methodName.replace("set", "");
             }
+            if (AntikytheraRunTime.stack.isEmpty()) {
+                logger.debug("Skipping Lombok setter '{}': no argument on stack", methodName);
+                return new Variable(null);
+            }
             Variable va = AntikytheraRunTime.pop();
             fields.put(field, va);
             return new Variable(null);
