@@ -1,11 +1,15 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.ClassExpr;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
@@ -188,6 +192,22 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                     return mockVar;
                 }
             }
+            if (typeDecl.isEnumDeclaration()) {
+                EnumDeclaration enumDecl = typeDecl.asEnumDeclaration();
+                if (!enumDecl.getEntries().isEmpty()) {
+                    EnumConstantDeclaration firstConst = enumDecl.getEntries().get(0);
+                    FieldAccessExpr fae = new FieldAccessExpr(
+                            new NameExpr(enumDecl.getNameAsString()), firstConst.getNameAsString());
+                    Variable ev = new Variable(null);
+                    ev.setInitializer(List.of(fae));
+                    return ev;
+                }
+                return new Variable(null);
+            }
+            if (typeDecl.findAll(ConstructorDeclaration.class).isEmpty()) {
+                // No explicit constructors (e.g. Lombok-generated); fall back to Mockito
+                return null;
+            }
             v = createObjectWithSimplestConstructor(typeDecl, param.getNameAsString());
         }
 
@@ -195,6 +215,10 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
     }
 
     public static Variable createObjectWithSimplestConstructor(TypeDeclaration<?> cdecl, String name) {
+        if (cdecl.getConstructors().isEmpty()) {
+            // No explicit constructors (e.g. Lombok @Value/@Data); return null so callers can fall back
+            return null;
+        }
         Evaluator o = EvaluatorFactory.create(cdecl.getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
         Variable v = new Variable(o);
         String init = ArgumentGenerator.instantiateClass(
@@ -217,6 +241,20 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         if (clazz.isInterface()) {
             /* this is an interface so no point in looking for a constructor  */
             return MockingRegistry.createMockitoMockInstance(clazz);
+        }
+
+        if (clazz.isEnum()) {
+            // Enums cannot be created via reflection; use the first constant
+            Object[] constants = clazz.getEnumConstants();
+            if (constants != null && constants.length > 0) {
+                Enum<?> firstConst = (Enum<?>) constants[0];
+                FieldAccessExpr fae = new FieldAccessExpr(
+                        new NameExpr(clazz.getSimpleName()), firstConst.name());
+                Variable ev = new Variable(firstConst);
+                ev.setInitializer(List.of(fae));
+                return ev;
+            }
+            return new Variable((Object) null);
         }
 
         // Try to find a no-arg constructor first

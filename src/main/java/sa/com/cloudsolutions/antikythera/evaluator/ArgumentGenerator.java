@@ -22,7 +22,7 @@ public abstract class ArgumentGenerator {
         ConstructorDeclaration matched = null;
         String className = resolveNestedName(classUnderTest);
 
-        for (ConstructorDeclaration cd : classUnderTest.findAll(ConstructorDeclaration.class)) {
+        for (ConstructorDeclaration cd : classUnderTest.getConstructors()) {
             if (matched == null) {
                 matched = cd;
             }

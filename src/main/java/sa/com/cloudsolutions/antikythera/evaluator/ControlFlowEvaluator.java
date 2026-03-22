@@ -19,6 +19,7 @@ import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
+import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ParseProblemException;
@@ -207,7 +208,9 @@ public class ControlFlowEvaluator extends Evaluator {
         VariableDeclarator vdecl = new VariableDeclarator(primaryType, name.getNameAsString());
         try {
             Variable member = resolveVariableDeclaration(vdecl);
-            if (member.getValue() == null
+            if (member == null) {
+                member = recreateVariable(primaryType);
+            } else if (member.getValue() == null
                     && (Reflect.isPrimitiveOrBoxed(member.getType().asString()) || member.getType().asString().equals("String"))) {
                 member = Reflect.variableFactory(member.getType().asString());
             } else if (member.getValue() instanceof Evaluator eval) {
@@ -226,8 +229,27 @@ public class ControlFlowEvaluator extends Evaluator {
         TypeWrapper wrapper = AbstractCompiler.findType(cu, type);
         if (wrapper != null) {
             if (wrapper.getType() != null) {
-               return DummyArgumentGenerator.createObjectWithSimplestConstructor(
-                       wrapper.getType().asClassOrInterfaceDeclaration(),  "nomatter");
+                if (wrapper.getType().isEnumDeclaration()) {
+                    var enumDecl = wrapper.getType().asEnumDeclaration();
+                    if (!enumDecl.getEntries().isEmpty()) {
+                        var firstConst = enumDecl.getEntries().get(0);
+                        FieldAccessExpr fae = new FieldAccessExpr(
+                                new NameExpr(enumDecl.getNameAsString()), firstConst.getNameAsString());
+                        Variable ev = new Variable(null);
+                        ev.setInitializer(List.of(fae));
+                        return ev;
+                    }
+                }
+                if (wrapper.getType().isClassOrInterfaceDeclaration()) {
+                    Variable v = DummyArgumentGenerator.createObjectWithSimplestConstructor(
+                            wrapper.getType().asClassOrInterfaceDeclaration(), "nomatter");
+                    if (v != null) {
+                        return v;
+                    }
+                }
+                // Fallback: Mockito.mock() for Lombok classes or missing constructors
+                String typeName = wrapper.getType().getNameAsString();
+                return createMockitoVariable(typeName);
             }
             else {
                 Constructor<?> constructor = DummyArgumentGenerator.findSimplestConstructor(wrapper.getClazz());
@@ -241,6 +263,16 @@ public class ControlFlowEvaluator extends Evaluator {
             }
         }
         throw new AntikytheraException("Could not find constructor for " + type);
+    }
+
+    private static Variable createMockitoVariable(String typeName) {
+        Variable v = new Variable(null);
+        MethodCallExpr mockExpr = new MethodCallExpr(
+                new NameExpr("Mockito"), "mock",
+                new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, typeName)))
+        );
+        v.setInitializer(List.of(mockExpr));
+        return v;
     }
 
     private static NodeList<Type> getTypeArgs(Type type) {
@@ -267,9 +299,15 @@ public class ControlFlowEvaluator extends Evaluator {
         else {
             List<Expression> mocks = new ArrayList<>();
             String instanceName = Variable.generateVariableName(pimaryType);
-            Expression expr = StaticJavaParser.parseStatement(
-                    String.format("%s %s = new %s();", pimaryType, instanceName, pimaryType)
-            ).asExpressionStmt().getExpression();
+            // Use the proper constructor if available, else fall back to Mockito.mock()
+            String instantiation;
+            TypeWrapper tw = AbstractCompiler.findType(cu, pimaryType);
+            if (tw != null && tw.getType() != null && tw.getType().isClassOrInterfaceDeclaration()) {
+                instantiation = ArgumentGenerator.instantiateClass(tw.getType().asClassOrInterfaceDeclaration(), instanceName);
+            } else {
+                instantiation = String.format("%s %s = Mockito.mock(%s.class);", pimaryType, instanceName, pimaryType);
+            }
+            Expression expr = StaticJavaParser.parseStatement(instantiation).asExpressionStmt().getExpression();
             GeneratorState.addImport(new ImportDeclaration(eval.getClassName(), false, false));
             mocks.add(expr);
             for (Expression e : fieldIntializers) {
@@ -429,8 +467,10 @@ public class ControlFlowEvaluator extends Evaluator {
         String name = entry.getKey().asMethodCallExpr().getNameAsString();
         if (name.startsWith("is")) {
             setter.setName("set" + name.substring(2));
-        } else {
+        } else if (name.startsWith("get")) {
             setter.setName("set" + name.substring(3));
+        } else {
+            return;
         }
         if ( scope instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
             setter.setScope(mce.getScope().orElseThrow().clone());
@@ -452,6 +492,7 @@ public class ControlFlowEvaluator extends Evaluator {
                     setter.addArgument(entry.getValue().toString());
                 } catch (ParseProblemException e) {
                     logger.debug("Skipping unparseable setter argument '{}': {}", entry.getValue(), e.getMessage());
+                    return;
                 }
             }
         }
@@ -745,6 +786,9 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     void parameterAssignment(AssignExpr assignExpr, Symbol va) {
+        if (va == null || va.getClazz() == null) {
+            return;
+        }
         Expression value = assignExpr.getValue();
         Object result = switch (va.getClazz().getSimpleName()) {
             case "Integer" -> {

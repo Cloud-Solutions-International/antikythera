@@ -95,6 +95,14 @@ public class MockingRegistry {
     }
 
     /**
+     * Clears only the mocked fields tracking map, preserving custom mock expressions.
+     * Use this between service generations to avoid cross-service state leakage.
+     */
+    public static void clearMockedFields() {
+        mockedFields.clear();
+    }
+
+    /**
      * Creates a 'Mockito.when().then()' style setup.
      * This may or may not translate to a real Mockito call. That depends on the mocking framework
      * being used.
@@ -363,10 +371,12 @@ public class MockingRegistry {
             simpleName = simpleName.replace('$', '.');
             return createMockExpression(simpleName);
         } catch (ClassNotFoundException e) {
-            // Fallback to object creation
-            return new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName(qualifiedName))
-                    .setArguments(new NodeList<>());
+            // Class not in classpath; use Mockito.mock() as fallback to avoid no-arg constructor issues
+            String simpleName = qualifiedName.contains(".")
+                    ? qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1)
+                    : qualifiedName;
+            simpleName = simpleName.replace('$', '.');
+            return createMockExpression(simpleName);
         }
     }
 

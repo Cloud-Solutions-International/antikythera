@@ -413,7 +413,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     private void applyPreconditions(Parameter p, Symbol va) throws ReflectiveOperationException {
-
+        if (va == null) {
+            return;
+        }
         for (Precondition cond : currentConditional.getPreconditions()) {
             if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
                 if (mce.getScope().orElseThrow() instanceof NameExpr ne
@@ -427,7 +429,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     assignExpr.getTarget().toString().equals(p.getNameAsString())) {
 
                 parameterAssignment(assignExpr, va);
-                va.setInitializer(List.of(assignExpr));
+                // Only update the initializer if the value is compatible with the type.
+                // Avoid setting a StringLiteralExpr as initializer for a non-String type.
+                Expression assignValue = assignExpr.getValue();
+                boolean isStringForNonString = assignValue instanceof com.github.javaparser.ast.expr.StringLiteralExpr
+                        && !(va.getType() instanceof com.github.javaparser.ast.type.PrimitiveType)
+                        && (va.getClazz() == null || !va.getClazz().equals(String.class));
+                if (!isStringForNonString) {
+                    va.setInitializer(List.of(assignExpr));
+                }
             } else if (cond.getExpression() instanceof ObjectCreationExpr oce) {
                 va.setValue(createObject(oce).getValue());
                 va.setInitializer(List.of(oce));
@@ -852,6 +862,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         methodCall.getScope().ifPresent(scope -> {
             if (scope instanceof NameExpr nameExpr) {
                 TypeWrapper scopeType = AbstractCompiler.findType(cu, nameExpr.getNameAsString());
+                if (!entry.getKey().isNameExpr()) {
+                    return;
+                }
                 TypeWrapper keyType = AbstractCompiler.findType(cu, entry.getKey().asNameExpr().getNameAsString());
 
                 if (scopeType != null && scopeType.getEnumConstant() != null) {
