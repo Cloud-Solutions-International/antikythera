@@ -287,6 +287,12 @@ public class MockingRegistry {
             return new NullLiteralExpr();
         }
 
+        // Check custom mock expressions first (project-specific overrides)
+        List<Expression> customExprs = getCustomMockExpressions(qualifiedName);
+        if (!customExprs.isEmpty()) {
+            return customExprs.get(0);
+        }
+
         return switch (qualifiedName) {
             case "List", "java.util.List", "java.util.ArrayList" -> {
                 GeneratorState.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
@@ -331,7 +337,7 @@ public class MockingRegistry {
                 );
             }
 
-            case "Boolean", Reflect.PRIMITIVE_BOOLEAN -> new BooleanLiteralExpr(false);
+            case "Boolean", "java.lang.Boolean", Reflect.PRIMITIVE_BOOLEAN -> new BooleanLiteralExpr(false);
 
             case Reflect.PRIMITIVE_FLOAT, Reflect.FLOAT, Reflect.PRIMITIVE_DOUBLE, Reflect.DOUBLE ->
                     new DoubleLiteralExpr("0.0");

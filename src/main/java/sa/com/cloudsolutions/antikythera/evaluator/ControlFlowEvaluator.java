@@ -163,8 +163,8 @@ public class ControlFlowEvaluator extends Evaluator {
     private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, List<?> list, Symbol v) {
         if (list.isEmpty()) {
             if (v.getValue() instanceof List<?>) {
-                GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
-                return List.of(StaticJavaParser.parseExpression("List.of()"));
+                GeneratorState.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
+                return List.of(StaticJavaParser.parseExpression("new ArrayList<>()"));
             } else if (v.getValue() instanceof Set<?>) {
                 GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_SET, false, false));
                 return List.of(StaticJavaParser.parseExpression("Set.of()"));
@@ -342,7 +342,8 @@ public class ControlFlowEvaluator extends Evaluator {
         }
         if (wrappedCollection.getValue() instanceof List<?>) {
             addToList(member, wrappedCollection);
-            return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer.getFirst()));
+            GeneratorState.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
+            return StaticJavaParser.parseExpression(String.format("new ArrayList<>(List.of(%s))", initializer.getFirst()));
         }
         if (wrappedCollection.getValue() instanceof Set<?> set) {
             addToSet(member, set);

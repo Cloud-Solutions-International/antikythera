@@ -487,9 +487,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         if (v != null && v.getInitializer().getFirst() instanceof ObjectCreationExpr oce) {
             String typeName = oce.getTypeAsString();
             if (typeName.endsWith("ArrayList") || typeName.endsWith("LinkedList") || typeName.endsWith("List")) {
-                GeneratorState.addImport(new ImportDeclaration("java.util.List", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
                 v.setInitializer(
-                        List.of(new MethodCallExpr("of").setScope(new NameExpr("List"))));
+                        List.of(new ObjectCreationExpr().setType("ArrayList<>").setArguments(new com.github.javaparser.ast.NodeList<>())));
             }
         }
         return v;
