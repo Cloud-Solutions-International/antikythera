@@ -28,8 +28,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {
+    private static final Logger logger = LoggerFactory.getLogger(DummyArgumentGenerator.class);
 
     public DummyArgumentGenerator() {
         super();
@@ -41,7 +44,6 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         if (v.getValue() == null) {
             v = mockNonPrimitiveParameter(param);
         }
-
         /*
          * Pushed to be popped later in the callee
          */
@@ -52,7 +54,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
     @SuppressWarnings("unchecked")
     private Variable mockNonPrimitiveParameter(Parameter param) throws ReflectiveOperationException {
         final Variable vx = mockNonPrimitiveParameterHelper(param);
-        if (vx == null) {
+        if (vx == null || (vx.getValue() == null && vx.getInitializer().isEmpty())) {
             return mockNonPrimitiveUsingMockito(param);
         }
         if (vx.getValue() instanceof Evaluator eval) {
@@ -79,6 +81,16 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                     if (wrapper != null && wrapper.getClazz() != null) {
                         return MockingRegistry.createMockitoMockInstance(wrapper.getClazz());
                     }
+                    // Class not loadable: create a synthetic mock variable with a non-null sentinel
+                    // value so the evaluator can traverse null-checks, plus a Mockito.mock() initializer
+                    // so the generated test code uses a proper mock.
+                    String typeName = t.asClassOrInterfaceType().getNameAsString();
+                    Variable mockVar = new Variable(new Object());
+                    mockVar.setInitializer(List.of(new MethodCallExpr(
+                        new NameExpr(MockingRegistry.MOCKITO), "mock",
+                        new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, typeName)))
+                    )));
+                    return mockVar;
                 }
             } catch (Exception e) {
                 // If we can't create a mock, return a Variable with null
@@ -198,11 +210,20 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                     EnumConstantDeclaration firstConst = enumDecl.getEntries().get(0);
                     FieldAccessExpr fae = new FieldAccessExpr(
                             new NameExpr(enumDecl.getNameAsString()), firstConst.getNameAsString());
-                    Variable ev = new Variable(null);
+                    Variable ev;
+                    try {
+                        Class<?> enumClass = AbstractCompiler.loadClass(fullClassName);
+                        Object[] constants = enumClass.getEnumConstants();
+                        ev = (constants != null && constants.length > 0)
+                                ? new Variable(constants[0])
+                                : new Variable((Object) null);
+                    } catch (ClassNotFoundException e) {
+                        ev = new Variable((Object) null);
+                    }
                     ev.setInitializer(List.of(fae));
                     return ev;
                 }
-                return new Variable(null);
+                return new Variable((Object) null);
             }
             if (typeDecl.findAll(ConstructorDeclaration.class).isEmpty()) {
                 // No explicit constructors (e.g. Lombok-generated); fall back to Mockito

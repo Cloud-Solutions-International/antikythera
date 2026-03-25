@@ -175,10 +175,16 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         }
         if (!t.isPrimitiveType() && !t.isVoidType()) {
             List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
-            ImportWrapper imp = imports.getLast();
-            String s = imp.getNameAsString();
-            if (collectionTypes.contains(s)) {
-                return handleRepositoryCollectionHelper(sc, s);
+            if (!imports.isEmpty()) {
+                ImportWrapper imp = imports.getLast();
+                String s = imp.getNameAsString();
+                if (collectionTypes.contains(s)) {
+                    return handleRepositoryCollectionHelper(sc, s);
+                }
+                // Single-entity return: record a stub so the generated test doesn't get null
+                if (t.isClassOrInterfaceType() && !t.asClassOrInterfaceType().isBoxedType()) {
+                    return handleRepositorySingleEntityReturn(sc, md, t, imp);
+                }
             }
         }
         return super.executeCallable(sc, callable);
@@ -196,8 +202,38 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         if (returnType.equals(Reflect.JAVA_UTIL_OPTIONAL)) {
             return handleOptionals(sc);
         }
-        return mockFromTypeArguments(
+        Variable v = mockFromTypeArguments(
                 typeDeclaration.asClassOrInterfaceDeclaration().getExtendedTypes(0), method);
+        if (v != null && v.getValue() instanceof Evaluator eval
+                && method.getReturnType() != void.class && method.getReturnType() != Void.class) {
+            MethodCallExpr methodCall = sc.getScopedMethodCall();
+            Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
+            LineOfCode l = Branching.get(stmt.hashCode());
+            if (l == null) {
+                // First iteration: return null without a stub so the null-path test is generated.
+                l = new LineOfCode(stmt);
+                Branching.registerBranch(l);
+                for (int i = 0; i < methodCall.getArguments().size(); i++) {
+                    AntikytheraRunTime.pop();
+                }
+                return new Variable((Object) null);
+            }
+            // Second iteration: return a non-null entity with a stub.
+            String entityClassName = eval.getClassName();
+            int dotIdx = entityClassName.lastIndexOf('.');
+            String shortName = dotIdx >= 0 ? entityClassName.substring(dotIdx + 1) : entityClassName;
+            // Use a lazy evaluator so assertions are not generated from stale evaluator state
+            Evaluator lazyEval = EvaluatorFactory.createLazily(entityClassName, MockingEvaluator.class);
+            v = new Variable(lazyEval);
+            ObjectCreationExpr oce = new ObjectCreationExpr(null,
+                    new ClassOrInterfaceType(null, shortName), new NodeList<>());
+            v.setInitializer(java.util.List.of(oce));
+            GeneratorState.addImport(new ImportDeclaration(entityClassName, false, false));
+            MethodCallExpr when = createWhenExpression(methodCall);
+            MockingCall then = createThenExpression(sc, v, when);
+            MockingRegistry.when(className, then);
+        }
+        return v;
     }
 
     private Variable mockRepositorySave(Callable callable, Method method) {
@@ -291,9 +327,15 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         setupParameters(md);
         if (methodName.startsWith("get") && body.isPresent() && body.get().getStatements().size() == 1) {
-            Variable f = getField(AbstractCompiler.classToInstanceName(methodName.substring(3)));
+            String fieldName = AbstractCompiler.classToInstanceName(methodName.substring(3));
+            Variable f = getField(fieldName);
             if (f != null) {
                 return f;
+            }
+            // Field not found (e.g. lazy evaluator with no initialized fields):
+            // return null to match the default Java field value (e.g. null for Long).
+            if (fields.isEmpty()) {
+                return new Variable((Object) null);
             }
         }
 
@@ -477,7 +519,8 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         for (int i = 0 ;  i < methodCall.getArguments().size() ; i++) {
             Variable v = AntikytheraRunTime.pop();
-            mce.addArgument(MockingRegistry.createMockitoArgument(v.getType().asString()));
+            String typeName = (v != null && v.getType() != null) ? v.getType().asString() : "Object";
+            mce.addArgument(MockingRegistry.createMockitoArgument(typeName));
         }
         return mce;
     }
@@ -541,6 +584,48 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                 v.setInitializer(expressions);
             }
         }
+        return v;
+    }
+
+    private Variable handleRepositorySingleEntityReturn(Scope sc, MethodDeclaration md, Type t, ImportWrapper imp)
+            throws ReflectiveOperationException {
+        MethodCallExpr methodCall = sc.getScopedMethodCall();
+        Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
+        LineOfCode l = Branching.get(stmt.hashCode());
+
+        if (l == null) {
+            // First iteration: return null so the null-path (e.g. NPE) test is generated.
+            // No stub is recorded so the Mockito mock returns null by default.
+            l = new LineOfCode(stmt);
+            Branching.registerBranch(l);
+            // Still need to pop the method call's arguments from the stack
+            for (int i = 0; i < methodCall.getArguments().size(); i++) {
+                AntikytheraRunTime.pop();
+            }
+            return new Variable((Object) null);
+        }
+
+        // Second iteration: return a non-null entity with a stub.
+        String entityShortName = t.asClassOrInterfaceType().getNameAsString();
+        String entityFullName = imp.getNameAsString() != null ? imp.getNameAsString() : entityShortName;
+        Variable v;
+        Optional<com.github.javaparser.ast.body.TypeDeclaration<?>> tdOpt = AntikytheraRunTime.getTypeDeclaration(entityFullName);
+        if (tdOpt.isPresent()) {
+            // Use createLazily so the evaluator has no initialized fields — this prevents
+            // the asserter from capturing stale field values from previous evaluation runs.
+            Evaluator eval = EvaluatorFactory.createLazily(entityFullName, MockingEvaluator.class);
+            v = new Variable(eval);
+        } else {
+            v = new Variable((Object) null);
+        }
+        // Set initializer to new EntityClass() for the stub thenReturn value
+        ObjectCreationExpr oce = new ObjectCreationExpr(null,
+                new ClassOrInterfaceType(null, entityShortName), new NodeList<>());
+        v.setInitializer(java.util.List.of(oce));
+        GeneratorState.addImport(new ImportDeclaration(entityFullName, false, false));
+        MethodCallExpr when = createWhenExpression(methodCall);
+        MockingCall then = createThenExpression(sc, v, when);
+        MockingRegistry.when(className, then);
         return v;
     }
 

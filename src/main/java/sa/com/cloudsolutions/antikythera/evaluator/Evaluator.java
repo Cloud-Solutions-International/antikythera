@@ -1230,7 +1230,7 @@ public class Evaluator implements EvaluationEngine {
     void invoke(Method method, Object[] finalArgs, Variable v) throws InvocationTargetException, IllegalAccessException {
         Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
         returnValue = new Variable(method.invoke(target, finalArgs));
-        if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+        if (returnValue.getClazz() == null) {
             returnValue.setClazz(method.getReturnType());
         }
     }
@@ -1636,7 +1636,6 @@ public class Evaluator implements EvaluationEngine {
      */
     public Variable executeMethod(CallableDeclaration<?> cd) throws ReflectiveOperationException {
         if (cd instanceof MethodDeclaration md) {
-
             returnFrom = null;
             returnValue = null;
 
@@ -2118,7 +2117,7 @@ public class Evaluator implements EvaluationEngine {
                 }
             }
         } catch (UnsolvedSymbolException e) {
-            logger.debug("ignore {}", variableDeclarator);
+            logger.warn("setupField UNSOLVED: {}.{} ({})", getClassName(), variableDeclarator.getNameAsString(), e.getMessage());
 
         } catch (ReflectiveOperationException e) {
             throw new GeneratorException(e);
@@ -2258,7 +2257,8 @@ public class Evaluator implements EvaluationEngine {
             super.visit(field, arg);
             for (var variable : field.getVariables()) {
                 field.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cdecl -> {
-                    if (cdecl.getFullyQualifiedName().isPresent() && cdecl.getFullyQualifiedName().get().equals(matchingClass)) {
+                    String fqn = cdecl.getFullyQualifiedName().orElse("(no fqn)");
+                    if (fqn.equals(matchingClass)) {
                         setupField(field, variable);
                     }
                 });

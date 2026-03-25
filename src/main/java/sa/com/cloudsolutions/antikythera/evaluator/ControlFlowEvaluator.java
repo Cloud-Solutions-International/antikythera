@@ -835,7 +835,10 @@ public class ControlFlowEvaluator extends Evaluator {
             }
             default -> {
                 try {
-                    yield evaluateExpression(value).getValue();
+                    Variable res = evaluateExpression(value);
+                    Object v = res != null ? res.getValue() : va.getValue();
+                    System.err.println("DEBUG parameterAssignment default: assigning " + value + " -> " + (v == null ? "null" : v.getClass().getSimpleName() + "@" + System.identityHashCode(v)));
+                    yield v;
                 } catch (ReflectiveOperationException e) {
                     throw new AntikytheraException(e);
                 }

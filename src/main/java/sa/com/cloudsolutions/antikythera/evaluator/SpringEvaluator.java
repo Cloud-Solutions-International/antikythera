@@ -284,6 +284,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
         } catch (AUTException aex) {
             logger.warn("This has probably been handled {}", aex.getMessage());
+        } catch (AntikytheraException | ReflectiveOperationException e) {
+            // If evaluation failed mid-way, any stubs already accumulated are still useful.
+            // Save them so a partial test can be generated before re-throwing.
+            maybeRecordVoidResponse(cd, null);
+            throw e;
         }
     }
 
@@ -428,19 +433,28 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             } else if (cond.getExpression() instanceof AssignExpr assignExpr &&
                     assignExpr.getTarget().toString().equals(p.getNameAsString())) {
 
-                parameterAssignment(assignExpr, va);
-                // Only update the initializer if the value is compatible with the type.
-                // Avoid setting a StringLiteralExpr as initializer for a non-String type.
+                // Determine type compatibility BEFORE calling parameterAssignment, which may
+                // change va.getClazz() (e.g. to String when sentinel value "T" is assigned).
+                // Use the declared parameter type to decide if a StringLiteralExpr is valid.
                 Expression assignValue = assignExpr.getValue();
+                com.github.javaparser.ast.type.Type paramType = p.getType();
+                boolean paramIsString = paramType.isClassOrInterfaceType() &&
+                        (paramType.asClassOrInterfaceType().getNameAsString().equals("String") ||
+                         paramType.asClassOrInterfaceType().getNameAsString().equals("java.lang.String"));
                 boolean isStringForNonString = assignValue instanceof com.github.javaparser.ast.expr.StringLiteralExpr
-                        && !(va.getType() instanceof com.github.javaparser.ast.type.PrimitiveType)
-                        && (va.getClazz() == null || !va.getClazz().equals(String.class));
+                        && !paramType.isPrimitiveType()
+                        && !paramIsString;
+
+                parameterAssignment(assignExpr, va);
                 if (!isStringForNonString) {
                     va.setInitializer(List.of(assignExpr));
                 }
             } else if (cond.getExpression() instanceof ObjectCreationExpr oce) {
-                va.setValue(createObject(oce).getValue());
-                va.setInitializer(List.of(oce));
+                Variable obj = createObject(oce);
+                if (obj != null) {
+                    va.setValue(obj.getValue());
+                    va.setInitializer(List.of(oce));
+                }
             }
         }
     }
@@ -784,6 +798,16 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             adjustForEnumConstantComparison(node, combination, entry, result);
         } else if (node instanceof MethodCallExpr methodCall) {
             adjustForEnumMethodCall(methodCall, entry, result);
+        } else if (node instanceof BinaryExpr binaryExpr) {
+            // If the other side of the binary expression is an enum constant,
+            // skip putting this entry — the enum constant side will set the correct value.
+            Expression left = binaryExpr.getLeft();
+            Expression right = binaryExpr.getRight();
+            Expression otherSide = left.equals(key) ? right : left;
+            TypeWrapper otherType = resolveType(otherSide);
+            if (otherType == null || otherType.getEnumConstant() == null) {
+                result.put(key, entry.getValue());
+            }
         } else {
             result.put(key, entry.getValue());
         }
@@ -1032,6 +1056,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
             return new Variable(response);
+        }
+        if (v == null) {
+            return null;
         }
         v.setType(type);
         return v;

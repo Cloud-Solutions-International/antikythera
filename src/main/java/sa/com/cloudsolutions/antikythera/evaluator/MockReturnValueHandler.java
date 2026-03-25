@@ -34,8 +34,14 @@ public class MockReturnValueHandler implements Answer<Object> {
         }
 
         if (AntikytheraRunTime.getCompilationUnit(clsName) != null) {
-            result = EvaluatorFactory.create(clsName, Evaluator.class);
-        } else {
+            try {
+                result = EvaluatorFactory.create(clsName, Evaluator.class);
+            } catch (Exception e) {
+                logger.debug("EvaluatorFactory failed for {}, falling back to default/mock", clsName, e);
+            }
+        }
+
+        if (result == null) {
             result = Reflect.getDefault(returnType);
             if (result == null) {
                 Class<?> cls = AbstractCompiler.loadClass(clsName);

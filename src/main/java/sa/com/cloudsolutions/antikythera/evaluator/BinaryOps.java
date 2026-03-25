@@ -36,6 +36,8 @@ public class BinaryOps {
         Object leftVal = left.getValue();
         Object rightVal = right.getValue();
 
+        System.err.println("DEBUG checkEquality: left=" + (leftVal == null ? "null" : leftVal.getClass().getSimpleName() + "@" + System.identityHashCode(leftVal)) + " right=" + (rightVal == null ? "null" : rightVal.getClass().getSimpleName() + "@" + System.identityHashCode(rightVal)));
+
         if (leftVal == rightVal) {
             return new Variable(Boolean.TRUE);
         }
