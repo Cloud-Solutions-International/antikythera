@@ -204,10 +204,6 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                     return mockVar;
                 }
             }
-            if (typeDecl.findAll(ConstructorDeclaration.class).isEmpty()) {
-                // No explicit constructors (e.g. Lombok-generated); fall back to Mockito
-                return null;
-            }
             v = createObjectWithSimplestConstructor(typeDecl, param.getNameAsString());
         }
 
@@ -215,10 +211,6 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
     }
 
     public static Variable createObjectWithSimplestConstructor(TypeDeclaration<?> cdecl, String name) {
-        if (cdecl.getConstructors().isEmpty()) {
-            // No explicit constructors (e.g. Lombok @Value/@Data); return null so callers can fall back
-            return null;
-        }
         Evaluator o = EvaluatorFactory.create(cdecl.getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
         Variable v = new Variable(o);
         String init = ArgumentGenerator.instantiateClass(
