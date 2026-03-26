@@ -19,10 +19,8 @@ import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
-import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
-import com.github.javaparser.ParseProblemException;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -163,8 +161,8 @@ public class ControlFlowEvaluator extends Evaluator {
     private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, List<?> list, Symbol v) {
         if (list.isEmpty()) {
             if (v.getValue() instanceof List<?>) {
-                GeneratorState.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
-                return List.of(StaticJavaParser.parseExpression("new ArrayList<>()"));
+                GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
+                return List.of(StaticJavaParser.parseExpression("List.of()"));
             } else if (v.getValue() instanceof Set<?>) {
                 GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_SET, false, false));
                 return List.of(StaticJavaParser.parseExpression("Set.of()"));
@@ -208,9 +206,7 @@ public class ControlFlowEvaluator extends Evaluator {
         VariableDeclarator vdecl = new VariableDeclarator(primaryType, name.getNameAsString());
         try {
             Variable member = resolveVariableDeclaration(vdecl);
-            if (member == null) {
-                member = recreateVariable(primaryType);
-            } else if (member.getValue() == null
+            if (member.getValue() == null
                     && (Reflect.isPrimitiveOrBoxed(member.getType().asString()) || member.getType().asString().equals("String"))) {
                 member = Reflect.variableFactory(member.getType().asString());
             } else if (member.getValue() instanceof Evaluator eval) {
@@ -229,16 +225,8 @@ public class ControlFlowEvaluator extends Evaluator {
         TypeWrapper wrapper = AbstractCompiler.findType(cu, type);
         if (wrapper != null) {
             if (wrapper.getType() != null) {
-                if (wrapper.getType().isClassOrInterfaceDeclaration()) {
-                    Variable v = DummyArgumentGenerator.createObjectWithSimplestConstructor(
-                            wrapper.getType().asClassOrInterfaceDeclaration(), "nomatter");
-                    if (v != null) {
-                        return v;
-                    }
-                }
-                // Fallback: Mockito.mock() for Lombok classes or missing constructors
-                String typeName = wrapper.getType().getNameAsString();
-                return createMockitoVariable(typeName);
+               return DummyArgumentGenerator.createObjectWithSimplestConstructor(
+                       wrapper.getType().asClassOrInterfaceDeclaration(),  "nomatter");
             }
             else {
                 Constructor<?> constructor = DummyArgumentGenerator.findSimplestConstructor(wrapper.getClazz());
@@ -252,16 +240,6 @@ public class ControlFlowEvaluator extends Evaluator {
             }
         }
         throw new AntikytheraException("Could not find constructor for " + type);
-    }
-
-    private static Variable createMockitoVariable(String typeName) {
-        Variable v = new Variable(null);
-        MethodCallExpr mockExpr = new MethodCallExpr(
-                new NameExpr("Mockito"), "mock",
-                new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, typeName)))
-        );
-        v.setInitializer(List.of(mockExpr));
-        return v;
     }
 
     private static NodeList<Type> getTypeArgs(Type type) {
@@ -288,15 +266,9 @@ public class ControlFlowEvaluator extends Evaluator {
         else {
             List<Expression> mocks = new ArrayList<>();
             String instanceName = Variable.generateVariableName(pimaryType);
-            // Use the proper constructor if available, else fall back to Mockito.mock()
-            String instantiation;
-            TypeWrapper tw = AbstractCompiler.findType(cu, pimaryType);
-            if (tw != null && tw.getType() != null && tw.getType().isClassOrInterfaceDeclaration()) {
-                instantiation = ArgumentGenerator.instantiateClass(tw.getType().asClassOrInterfaceDeclaration(), instanceName);
-            } else {
-                instantiation = String.format("%s %s = Mockito.mock(%s.class);", pimaryType, instanceName, pimaryType);
-            }
-            Expression expr = StaticJavaParser.parseStatement(instantiation).asExpressionStmt().getExpression();
+            Expression expr = StaticJavaParser.parseStatement(
+                    String.format("%s %s = new %s();", pimaryType, instanceName, pimaryType)
+            ).asExpressionStmt().getExpression();
             GeneratorState.addImport(new ImportDeclaration(eval.getClassName(), false, false));
             mocks.add(expr);
             for (Expression e : fieldIntializers) {
@@ -331,8 +303,7 @@ public class ControlFlowEvaluator extends Evaluator {
         }
         if (wrappedCollection.getValue() instanceof List<?>) {
             addToList(member, wrappedCollection);
-            GeneratorState.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
-            return StaticJavaParser.parseExpression(String.format("new ArrayList<>(List.of(%s))", initializer.getFirst()));
+            return StaticJavaParser.parseExpression(String.format("List.of(%s)", initializer.getFirst()));
         }
         if (wrappedCollection.getValue() instanceof Set<?> set) {
             addToSet(member, set);
@@ -457,10 +428,8 @@ public class ControlFlowEvaluator extends Evaluator {
         String name = entry.getKey().asMethodCallExpr().getNameAsString();
         if (name.startsWith("is")) {
             setter.setName("set" + name.substring(2));
-        } else if (name.startsWith("get")) {
-            setter.setName("set" + name.substring(3));
         } else {
-            return;
+            setter.setName("set" + name.substring(3));
         }
         if ( scope instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
             setter.setScope(mce.getScope().orElseThrow().clone());
@@ -478,12 +447,7 @@ public class ControlFlowEvaluator extends Evaluator {
                 createSetterFromGetter(entry, setter);
             }
             if (setter.getArguments().isEmpty()) {
-                try {
-                    setter.addArgument(entry.getValue().toString());
-                } catch (ParseProblemException e) {
-                    logger.debug("Skipping unparseable setter argument '{}': {}", entry.getValue(), e.getMessage());
-                    return;
-                }
+                setter.addArgument(entry.getValue().toString());
             }
         }
         addPreCondition(stmt, setter);
@@ -776,9 +740,6 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     void parameterAssignment(AssignExpr assignExpr, Symbol va) {
-        if (va == null || va.getClazz() == null) {
-            return;
-        }
         Expression value = assignExpr.getValue();
         Object result = switch (va.getClazz().getSimpleName()) {
             case "Integer" -> {
@@ -824,10 +785,7 @@ public class ControlFlowEvaluator extends Evaluator {
             }
             default -> {
                 try {
-                    Variable res = evaluateExpression(value);
-                    Object v = res != null ? res.getValue() : va.getValue();
-                    System.err.println("DEBUG parameterAssignment default: assigning " + value + " -> " + (v == null ? "null" : v.getClass().getSimpleName() + "@" + System.identityHashCode(v)));
-                    yield v;
+                    yield evaluateExpression(value).getValue();
                 } catch (ReflectiveOperationException e) {
                     throw new AntikytheraException(e);
                 }

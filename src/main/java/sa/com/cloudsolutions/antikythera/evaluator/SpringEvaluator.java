@@ -770,7 +770,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 ? AbstractCompiler.findType(cu, fieldAccessExpr.getScope().toString())
                 : AbstractCompiler.findType(cu, key.toString());
 
-        if (keyType != null && (keyType.getEnumConstant() != null || (keyType.getType() != null && keyType.getType().isEnumDeclaration()))) {
+        if (keyType != null && (keyType.getEnumConstant() != null || keyType.getType().isEnumDeclaration())) {
             adjustForEnumConstantComparison(node, combination, entry, result);
         } else if (node instanceof MethodCallExpr methodCall) {
             adjustForEnumMethodCall(methodCall, entry, result);
