@@ -284,11 +284,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
         } catch (AUTException aex) {
             logger.warn("This has probably been handled {}", aex.getMessage());
-        } catch (AntikytheraException | ReflectiveOperationException e) {
-            // If evaluation failed mid-way, any stubs already accumulated are still useful.
-            // Save them so a partial test can be generated before re-throwing.
-            maybeRecordVoidResponse(cd, null);
-            throw e;
         }
     }
 
@@ -418,9 +413,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     private void applyPreconditions(Parameter p, Symbol va) throws ReflectiveOperationException {
-        if (va == null) {
-            return;
-        }
+
         for (Precondition cond : currentConditional.getPreconditions()) {
             if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
                 if (mce.getScope().orElseThrow() instanceof NameExpr ne
@@ -433,28 +426,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             } else if (cond.getExpression() instanceof AssignExpr assignExpr &&
                     assignExpr.getTarget().toString().equals(p.getNameAsString())) {
 
-                // Determine type compatibility BEFORE calling parameterAssignment, which may
-                // change va.getClazz() (e.g. to String when sentinel value "T" is assigned).
-                // Use the declared parameter type to decide if a StringLiteralExpr is valid.
-                Expression assignValue = assignExpr.getValue();
-                com.github.javaparser.ast.type.Type paramType = p.getType();
-                boolean paramIsString = paramType.isClassOrInterfaceType() &&
-                        (paramType.asClassOrInterfaceType().getNameAsString().equals("String") ||
-                         paramType.asClassOrInterfaceType().getNameAsString().equals("java.lang.String"));
-                boolean isStringForNonString = assignValue instanceof com.github.javaparser.ast.expr.StringLiteralExpr
-                        && !paramType.isPrimitiveType()
-                        && !paramIsString;
-
                 parameterAssignment(assignExpr, va);
-                if (!isStringForNonString) {
-                    va.setInitializer(List.of(assignExpr));
-                }
+                va.setInitializer(List.of(assignExpr));
             } else if (cond.getExpression() instanceof ObjectCreationExpr oce) {
-                Variable obj = createObject(oce);
-                if (obj != null) {
-                    va.setValue(obj.getValue());
-                    va.setInitializer(List.of(oce));
-                }
+                va.setValue(createObject(oce).getValue());
+                va.setInitializer(List.of(oce));
             }
         }
     }
@@ -798,16 +774,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             adjustForEnumConstantComparison(node, combination, entry, result);
         } else if (node instanceof MethodCallExpr methodCall) {
             adjustForEnumMethodCall(methodCall, entry, result);
-        } else if (node instanceof BinaryExpr binaryExpr) {
-            // If the other side of the binary expression is an enum constant,
-            // skip putting this entry — the enum constant side will set the correct value.
-            Expression left = binaryExpr.getLeft();
-            Expression right = binaryExpr.getRight();
-            Expression otherSide = left.equals(key) ? right : left;
-            TypeWrapper otherType = resolveType(otherSide);
-            if (otherType == null || otherType.getEnumConstant() == null) {
-                result.put(key, entry.getValue());
-            }
         } else {
             result.put(key, entry.getValue());
         }
@@ -886,9 +852,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         methodCall.getScope().ifPresent(scope -> {
             if (scope instanceof NameExpr nameExpr) {
                 TypeWrapper scopeType = AbstractCompiler.findType(cu, nameExpr.getNameAsString());
-                if (!entry.getKey().isNameExpr()) {
-                    return;
-                }
                 TypeWrapper keyType = AbstractCompiler.findType(cu, entry.getKey().asNameExpr().getNameAsString());
 
                 if (scopeType != null && scopeType.getEnumConstant() != null) {
@@ -1056,9 +1019,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
             return new Variable(response);
-        }
-        if (v == null) {
-            return null;
         }
         v.setType(type);
         return v;

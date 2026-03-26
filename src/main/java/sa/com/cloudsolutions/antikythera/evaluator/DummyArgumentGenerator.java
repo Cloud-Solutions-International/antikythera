@@ -204,27 +204,6 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                     return mockVar;
                 }
             }
-            if (typeDecl.isEnumDeclaration()) {
-                EnumDeclaration enumDecl = typeDecl.asEnumDeclaration();
-                if (!enumDecl.getEntries().isEmpty()) {
-                    EnumConstantDeclaration firstConst = enumDecl.getEntries().get(0);
-                    FieldAccessExpr fae = new FieldAccessExpr(
-                            new NameExpr(enumDecl.getNameAsString()), firstConst.getNameAsString());
-                    Variable ev;
-                    try {
-                        Class<?> enumClass = AbstractCompiler.loadClass(fullClassName);
-                        Object[] constants = enumClass.getEnumConstants();
-                        ev = (constants != null && constants.length > 0)
-                                ? new Variable(constants[0])
-                                : new Variable((Object) null);
-                    } catch (ClassNotFoundException e) {
-                        ev = new Variable((Object) null);
-                    }
-                    ev.setInitializer(List.of(fae));
-                    return ev;
-                }
-                return new Variable((Object) null);
-            }
             if (typeDecl.findAll(ConstructorDeclaration.class).isEmpty()) {
                 // No explicit constructors (e.g. Lombok-generated); fall back to Mockito
                 return null;

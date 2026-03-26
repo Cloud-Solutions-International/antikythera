@@ -229,17 +229,6 @@ public class ControlFlowEvaluator extends Evaluator {
         TypeWrapper wrapper = AbstractCompiler.findType(cu, type);
         if (wrapper != null) {
             if (wrapper.getType() != null) {
-                if (wrapper.getType().isEnumDeclaration()) {
-                    var enumDecl = wrapper.getType().asEnumDeclaration();
-                    if (!enumDecl.getEntries().isEmpty()) {
-                        var firstConst = enumDecl.getEntries().get(0);
-                        FieldAccessExpr fae = new FieldAccessExpr(
-                                new NameExpr(enumDecl.getNameAsString()), firstConst.getNameAsString());
-                        Variable ev = new Variable(null);
-                        ev.setInitializer(List.of(fae));
-                        return ev;
-                    }
-                }
                 if (wrapper.getType().isClassOrInterfaceDeclaration()) {
                     Variable v = DummyArgumentGenerator.createObjectWithSimplestConstructor(
                             wrapper.getType().asClassOrInterfaceDeclaration(), "nomatter");
