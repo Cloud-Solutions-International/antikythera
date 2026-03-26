@@ -21,7 +21,6 @@ import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.evaluator.GeneratorState;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
@@ -153,7 +152,29 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     private Variable mockRepositoryMethodDeclaration(Scope sc, Callable callable) throws ReflectiveOperationException {
         MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
         Type t = md.getType();
-        if (t.isClassOrInterfaceType() && t.asClassOrInterfaceType().isBoxedType()) {
+        if (t.isClassOrInterfaceType()) {
+            Variable v = createVariable(sc, t, md);
+            if (v != null) return v;
+        }
+        if (!t.isPrimitiveType() && !t.isVoidType()) {
+            List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
+            if (!imports.isEmpty()) {
+                ImportWrapper imp = imports.getLast();
+                String s = imp.getNameAsString();
+                if (collectionTypes.contains(s)) {
+                    return handleRepositoryCollectionHelper(sc, s);
+                }
+                // Single-entity return: record a stub so the generated test doesn't get null
+                if (t.isClassOrInterfaceType() && !t.asClassOrInterfaceType().isBoxedType()) {
+                    return handleRepositorySingleEntityReturn(sc, md, t, imp);
+                }
+            }
+        }
+        return super.executeCallable(sc, callable);
+    }
+
+    private Variable createVariable(Scope sc, Type t, MethodDeclaration md) {
+        if (t.asClassOrInterfaceType().isBoxedType()) {
             MethodCallExpr methodCall = sc.getScopedMethodCall();
             Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
             LineOfCode l = Branching.get(stmt.hashCode());
@@ -173,21 +194,14 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
             return v;
         }
-        if (!t.isPrimitiveType() && !t.isVoidType()) {
-            List<ImportWrapper> imports = AbstractCompiler.findImport(cu, t);
-            if (!imports.isEmpty()) {
-                ImportWrapper imp = imports.getLast();
-                String s = imp.getNameAsString();
-                if (collectionTypes.contains(s)) {
-                    return handleRepositoryCollectionHelper(sc, s);
-                }
-                // Single-entity return: record a stub so the generated test doesn't get null
-                if (t.isClassOrInterfaceType() && !t.asClassOrInterfaceType().isBoxedType()) {
-                    return handleRepositorySingleEntityReturn(sc, md, t, imp);
-                }
+        else {
+            ClassOrInterfaceType classType = t.asClassOrInterfaceType();
+            if (Reflect.OPTIONAL.equals(classType.getNameAsString())
+                    || Reflect.JAVA_UTIL_OPTIONAL.equals(classType.getNameAsString())) {
+                return handleRepositoryOptionalDeclaration(sc, md);
             }
         }
-        return super.executeCallable(sc, callable);
+        return null;
     }
 
     private Variable mockRepositoryMethod(Scope sc, Callable callable) throws ReflectiveOperationException {
@@ -469,6 +483,48 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     @Override
     Variable optionalEmptyPath(Scope sc, LineOfCode l) {
         return new Variable(Optional.empty());
+    }
+
+    private Variable handleRepositoryOptionalDeclaration(Scope sc, MethodDeclaration md) {
+        MethodCallExpr methodCall = sc.getScopedMethodCall();
+        Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
+        LineOfCode branch = Branching.get(stmt.hashCode());
+        Variable v;
+        if (branch == null) {
+            branch = new LineOfCode(stmt);
+            Branching.add(branch);
+            branch.setPathTaken(LineOfCode.TRUE_PATH);
+            v = createRepositoryOptionalDeclarationValue(md, true);
+        }
+        else if (branch.getPathTaken() == LineOfCode.TRUE_PATH) {
+            v = createRepositoryOptionalDeclarationValue(md, false);
+        }
+        else {
+            v = createRepositoryOptionalDeclarationValue(md, true);
+        }
+
+        MockingCall then = new MockingCall(sc.getMCEWrapper().getMatchingCallable(), v);
+        then.setVariableName(variableName);
+        MockingRegistry.when(className, then);
+        return v;
+    }
+
+    private Variable createRepositoryOptionalDeclarationValue(MethodDeclaration md, boolean present) {
+        ClassOrInterfaceType classType = md.getType().asClassOrInterfaceType();
+        Variable v = present
+                ? new Variable(Optional.ofNullable(createRepositoryOptionalPayload(classType)))
+                : new Variable(Optional.empty());
+        v.setType(classType);
+        return v;
+    }
+
+    private Object createRepositoryOptionalPayload(ClassOrInterfaceType classType) {
+        Type nestedType = classType.getTypeArguments().flatMap(args -> args.getFirst()).orElse(null);
+        if (nestedType == null) {
+            return 1;
+        }
+        Variable payload = Reflect.generateNonDefaultVariable(nestedType.asString());
+        return payload != null && payload.getValue() != null ? payload.getValue() : 1;
     }
 
     /**
