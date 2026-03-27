@@ -177,7 +177,9 @@ public class MockingRegistry {
 
     public static Variable createMockitoMockInstance(Class<?> cls) {
         try {
-            Variable v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
+            String mockName = cls.getSimpleName();
+            mockName = Character.toLowerCase(mockName.charAt(0)) + mockName.substring(1);
+            Variable v = new Variable(Mockito.mock(cls, withSettings().name(mockName).defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
             v.setClazz(cls);
             // Set initializer so test generator knows to use Mockito.mock()
             v.setInitializer(List.of(new MethodCallExpr(
@@ -253,7 +255,7 @@ public class MockingRegistry {
     }
 
     public static void addMockitoExpression(MethodDeclaration md, Object returnValue, String variableName) {
-        if (returnValue != null) {
+        if (returnValue != null && variableName != null) {
             MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(
                     md.getNameAsString(), returnValue.getClass().getName(), variableName);
             NodeList<Expression> args = fakeArguments(md);
@@ -285,6 +287,12 @@ public class MockingRegistry {
     public static Expression expressionFactory(String qualifiedName) {
         if (qualifiedName == null) {
             return new NullLiteralExpr();
+        }
+
+        // Check custom mock expressions first (project-specific overrides)
+        List<Expression> customExprs = getCustomMockExpressions(qualifiedName);
+        if (!customExprs.isEmpty()) {
+            return customExprs.get(0);
         }
 
         return switch (qualifiedName) {
@@ -331,7 +339,7 @@ public class MockingRegistry {
                 );
             }
 
-            case "Boolean", Reflect.PRIMITIVE_BOOLEAN -> new BooleanLiteralExpr(false);
+            case "Boolean", "java.lang.Boolean", Reflect.PRIMITIVE_BOOLEAN -> new BooleanLiteralExpr(false);
 
             case Reflect.PRIMITIVE_FLOAT, Reflect.FLOAT, Reflect.PRIMITIVE_DOUBLE, Reflect.DOUBLE ->
                     new DoubleLiteralExpr("0.0");
@@ -340,7 +348,7 @@ public class MockingRegistry {
 
             case "Long", "long", "java.lang.Long" -> new LongLiteralExpr("-100L");
 
-            case "String", "java.lang.String" -> new StringLiteralExpr("Ibuprofen");
+            case "String", "java.lang.String" -> new StringLiteralExpr("0");
 
             default -> createExpressionForUnknownType(qualifiedName);
         };

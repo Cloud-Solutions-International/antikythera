@@ -35,7 +35,6 @@ public class BinaryOps {
 
         Object leftVal = left.getValue();
         Object rightVal = right.getValue();
-
         if (leftVal == rightVal) {
             return new Variable(Boolean.TRUE);
         }
