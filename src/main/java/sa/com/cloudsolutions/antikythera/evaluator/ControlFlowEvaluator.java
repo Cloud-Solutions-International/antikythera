@@ -353,6 +353,7 @@ public class ControlFlowEvaluator extends Evaluator {
             ArrayList<?> list = new ArrayList<>();
             Method m = List.class.getMethod("add", Object.class);
             m.invoke(list, member.getValue());
+            GeneratorState.addImport(new ImportDeclaration("java.util.List", false, false));
             GeneratorState.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
             collection.setValue(list);
         }

@@ -2257,8 +2257,12 @@ public class Evaluator implements EvaluationEngine {
             super.visit(field, arg);
             for (var variable : field.getVariables()) {
                 field.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cdecl -> {
-                    String fqn = cdecl.getFullyQualifiedName().orElse("(no fqn)");
-                    if (fqn.equals(matchingClass)) {
+                    String resolvedFqn = cdecl.getFullyQualifiedName()
+                            .orElseGet(() -> AbstractCompiler.findFullyQualifiedName(cu, cdecl.getNameAsString()));
+                    boolean sameClass = matchingClass.equals(resolvedFqn)
+                            || (resolvedFqn == null && (matchingClass.equals(cdecl.getNameAsString())
+                            || matchingClass.endsWith("." + cdecl.getNameAsString())));
+                    if (sameClass) {
                         setupField(field, variable);
                     }
                 });
