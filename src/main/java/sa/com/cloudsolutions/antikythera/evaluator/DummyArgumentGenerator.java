@@ -6,6 +6,7 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.ClassExpr;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
@@ -26,7 +27,6 @@ import java.util.Optional;
 import java.util.Set;
 
 public class DummyArgumentGenerator extends ArgumentGenerator {
-
     public DummyArgumentGenerator() {
         super();
     }
@@ -37,7 +37,6 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         if (v.getValue() == null) {
             v = mockNonPrimitiveParameter(param);
         }
-
         /*
          * Pushed to be popped later in the callee
          */
@@ -48,7 +47,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
     @SuppressWarnings("unchecked")
     private Variable mockNonPrimitiveParameter(Parameter param) throws ReflectiveOperationException {
         final Variable vx = mockNonPrimitiveParameterHelper(param);
-        if (vx == null) {
+        if (vx == null || (vx.getValue() == null && vx.getInitializer().isEmpty())) {
             return mockNonPrimitiveUsingMockito(param);
         }
         if (vx.getValue() instanceof Evaluator eval) {
@@ -75,6 +74,16 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
                     if (wrapper != null && wrapper.getClazz() != null) {
                         return MockingRegistry.createMockitoMockInstance(wrapper.getClazz());
                     }
+                    // Class not loadable: create a synthetic mock variable with a non-null sentinel
+                    // value so the evaluator can traverse null-checks, plus a Mockito.mock() initializer
+                    // so the generated test code uses a proper mock.
+                    String typeName = t.asClassOrInterfaceType().getNameAsString();
+                    Variable mockVar = new Variable(new Object());
+                    mockVar.setInitializer(List.of(new MethodCallExpr(
+                        new NameExpr(MockingRegistry.MOCKITO), "mock",
+                        new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, typeName)))
+                    )));
+                    return mockVar;
                 }
             } catch (Exception e) {
                 // If we can't create a mock, return a Variable with null
@@ -217,6 +226,20 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         if (clazz.isInterface()) {
             /* this is an interface so no point in looking for a constructor  */
             return MockingRegistry.createMockitoMockInstance(clazz);
+        }
+
+        if (clazz.isEnum()) {
+            // Enums cannot be created via reflection; use the first constant
+            Object[] constants = clazz.getEnumConstants();
+            if (constants != null && constants.length > 0) {
+                Enum<?> firstConst = (Enum<?>) constants[0];
+                FieldAccessExpr fae = new FieldAccessExpr(
+                        new NameExpr(clazz.getSimpleName()), firstConst.name());
+                Variable ev = new Variable(firstConst);
+                ev.setInitializer(List.of(fae));
+                return ev;
+            }
+            return new Variable((Object) null);
         }
 
         // Try to find a no-arg constructor first

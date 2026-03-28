@@ -29,6 +29,15 @@ public class Branching {
         branches.putIfAbsent(lineOfCode.getStatement().hashCode(), lineOfCode);
     }
 
+    /**
+     * Register a LineOfCode only in the branches map (not in the conditionals queue).
+     * Use this for non-if-statement branch points (e.g. repository stubs) where
+     * we only need to track first-vs-second call but don't want extra loop iterations.
+     */
+    public static void registerBranch(LineOfCode lineOfCode) {
+        branches.putIfAbsent(lineOfCode.getStatement().hashCode(), lineOfCode);
+    }
+
     public static LineOfCode get(int hashCode) {
         return branches.get(hashCode);
     }

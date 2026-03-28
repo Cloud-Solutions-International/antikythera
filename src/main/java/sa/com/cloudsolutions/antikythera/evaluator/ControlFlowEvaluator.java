@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.GeneratorState;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -161,13 +161,13 @@ public class ControlFlowEvaluator extends Evaluator {
     private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, List<?> list, Symbol v) {
         if (list.isEmpty()) {
             if (v.getValue() instanceof List<?>) {
-                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
+                GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
                 return List.of(StaticJavaParser.parseExpression("List.of()"));
             } else if (v.getValue() instanceof Set<?>) {
-                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_SET, false, false));
+                GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_SET, false, false));
                 return List.of(StaticJavaParser.parseExpression("Set.of()"));
             } else if (v.getValue() instanceof Map<?,?>) {
-                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_MAP, false, false));
+                GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_MAP, false, false));
                 return List.of(StaticJavaParser.parseExpression("Map.of()"));
             }
         }
@@ -269,7 +269,7 @@ public class ControlFlowEvaluator extends Evaluator {
             Expression expr = StaticJavaParser.parseStatement(
                     String.format("%s %s = new %s();", pimaryType, instanceName, pimaryType)
             ).asExpressionStmt().getExpression();
-            TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
+            GeneratorState.addImport(new ImportDeclaration(eval.getClassName(), false, false));
             mocks.add(expr);
             for (Expression e : fieldIntializers) {
                 if (e.isMethodCallExpr()) {
@@ -299,7 +299,7 @@ public class ControlFlowEvaluator extends Evaluator {
         NodeList<Type> typeArgs = getTypeArgs(type);
         List<Expression> initializer = member.getInitializer();
         if (initializer.getFirst() instanceof ObjectCreationExpr && member.getValue() instanceof Evaluator eval) {
-            TestGenerator.addImport(new ImportDeclaration(eval.getClassName(), false, false));
+            GeneratorState.addImport(new ImportDeclaration(eval.getClassName(), false, false));
         }
         if (wrappedCollection.getValue() instanceof List<?>) {
             addToList(member, wrappedCollection);
@@ -334,13 +334,13 @@ public class ControlFlowEvaluator extends Evaluator {
     private static void addToSet(Symbol member, Set<?> set) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
         Method m = Set.class.getMethod("add", Object.class);
         m.invoke(set, member.getValue());
-        TestGenerator.addImport(new ImportDeclaration("java.util.Set", false, false));
+        GeneratorState.addImport(new ImportDeclaration("java.util.Set", false, false));
     }
 
     private static void addToMap(Symbol key, Variable value, Map<?,?> map) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
         Method m = Map.class.getMethod("put", Object.class, Object.class);
         m.invoke(map,  key.getValue(), value.getValue());
-        TestGenerator.addImport(new ImportDeclaration("java.util.Map", false, false));
+        GeneratorState.addImport(new ImportDeclaration("java.util.Map", false, false));
     }
 
     private static void addToList(Symbol member, Symbol collection) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
@@ -348,12 +348,13 @@ public class ControlFlowEvaluator extends Evaluator {
             List<?> list = (List<?>) collection.getValue();
             Method m = List.class.getMethod("add", Object.class);
             m.invoke(list, member.getValue());
-            TestGenerator.addImport(new ImportDeclaration("java.util.List", false, false));
+            GeneratorState.addImport(new ImportDeclaration("java.util.List", false, false));
         } catch (InvocationTargetException e) {
             ArrayList<?> list = new ArrayList<>();
             Method m = List.class.getMethod("add", Object.class);
             m.invoke(list, member.getValue());
-            TestGenerator.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
+            GeneratorState.addImport(new ImportDeclaration("java.util.List", false, false));
+            GeneratorState.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
             collection.setValue(list);
         }
     }

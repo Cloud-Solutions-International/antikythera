@@ -35,14 +35,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 import sa.com.cloudsolutions.antikythera.exception.AUTException;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.evaluator.GeneratorState;
+import sa.com.cloudsolutions.antikythera.evaluator.ITestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.MethodResponse;
 import sa.com.cloudsolutions.antikythera.generator.QueryMethodArgument;
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
-import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
 import sa.com.cloudsolutions.antikythera.generator.TruthTable;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -83,7 +85,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * tests can be created. They can be unit tests, integration tests, api tests and end-to-end
      * tests.
      */
-    private final List<TestGenerator> generators = new ArrayList<>();
+    private final List<ITestGenerator> generators = new ArrayList<>();
     /**
      * The method currently being analyzed
      */
@@ -300,7 +302,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 startOutputCapture();
             }
             Evaluator.clearLastException();
-            TestGenerator.clearWhenThen();
+            GeneratorState.clearWhenThen();
             if (cd instanceof MethodDeclaration md) {
                 executeMethod(md);
             } else if (cd instanceof ConstructorDeclaration constructorDeclaration) {
@@ -327,7 +329,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         boolean skipNoSideEffects = Settings.getProperty(Settings.SKIP_VOID_NO_SIDE_EFFECTS, Boolean.class).orElse(true);
         boolean hasSideEffects = (output != null && !output.isEmpty())
-                || !TestGenerator.getWhenThen().isEmpty()
+                || !GeneratorState.getWhenThen().isEmpty()
                 || !Branching.getApplicableConditions(cd).isEmpty()
                 || Evaluator.getLastException() != null
                 || sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder.hasLogs();
@@ -586,7 +588,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      */
     Variable createTests(MethodResponse response) {
         if (response != null) {
-            for (TestGenerator generator : generators) {
+            for (ITestGenerator generator : generators) {
                 generator.setPreConditions(Branching.getApplicableConditions(currentCallable));
                 generator.createTests(currentCallable, response);
             }
@@ -595,8 +597,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
-    public void addGenerator(TestGenerator generator) {
+    public void addGenerator(ITestGenerator generator) {
         generators.add(generator);
+        if (argumentGenerator != null) {
+            generator.setArgumentGenerator(argumentGenerator);
+        }
     }
 
     Variable autoWire(VariableDeclarator variable, List<TypeWrapper> resolvedTypes) {
@@ -645,6 +650,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             } else {
                 fields.put(variableDeclarator.getNameAsString(), v);
+                try {
+                    detectRepository(variableDeclarator);
+                } catch (IOException e) {
+                    throw new AntikytheraException(e);
+                }
                 return;
             }
         }
@@ -912,9 +922,76 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                                 AbstractCompiler.findExpressionStatement(methodCall).orElseThrow(), q.getResultSet());
                     }
                 }
+                Variable optionalFallback = fallbackRepositoryOptional(methodCall, rp, expression);
+                if (optionalFallback != null) {
+                    return optionalFallback;
+                }
             }
         }
         return super.executeSource(methodCall);
+    }
+
+    private Variable fallbackRepositoryOptional(MethodCallExpr methodCall, RepositoryParser repository, Expression expression)
+            throws ReflectiveOperationException {
+        MCEWrapper methodCallWrapper = wrapCallExpression(methodCall);
+        Optional<Callable> callable = AbstractCompiler.findCallableDeclaration(
+                methodCallWrapper, repository.getCompilationUnit().getType(0));
+        if (callable.isPresent() && callable.get().isMethodDeclaration()) {
+            MethodDeclaration md = callable.get().asMethodDeclaration();
+            String returnType = md.getType().asString();
+            if (returnType.startsWith(Reflect.OPTIONAL) || returnType.startsWith(Reflect.JAVA_UTIL_OPTIONAL)) {
+                methodCallWrapper.setMatchingCallable(callable.get());
+                return handleRepositoryOptional(methodCall, expression, methodCallWrapper, md);
+            }
+        }
+        return null;
+    }
+
+    private Variable handleRepositoryOptional(MethodCallExpr methodCall, Expression expression,
+                                              MCEWrapper methodCallWrapper, MethodDeclaration md) {
+        Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
+        Variable v = buildRepositoryOptionalVariable(stmt, md);
+        MockingCall then = new MockingCall(methodCallWrapper.getMatchingCallable(), v);
+        then.setVariableName(getFieldName(expression));
+        MockingRegistry.when(className, then);
+        return v;
+    }
+
+    private Variable buildRepositoryOptionalVariable(Statement stmt, MethodDeclaration md) {
+        ClassOrInterfaceType classType = md.getType().asClassOrInterfaceType();
+        LineOfCode branch = Branching.get(stmt.hashCode());
+        if (branch == null) {
+            branch = new LineOfCode(stmt);
+            Branching.registerBranch(branch);
+            branch.setPathTaken(LineOfCode.TRUE_PATH);
+            return createRepositoryOptionalValue(classType, true);
+        }
+        if (branch.getPathTaken() == LineOfCode.TRUE_PATH) {
+            branch.setPathTaken(LineOfCode.FALSE_PATH);
+            return createRepositoryOptionalValue(classType, false);
+        }
+        if (branch.getPathTaken() == LineOfCode.FALSE_PATH) {
+            branch.setPathTaken(LineOfCode.TRUE_PATH);
+            return createRepositoryOptionalValue(classType, true);
+        }
+        return createRepositoryOptionalValue(classType, false);
+    }
+
+    private Variable createRepositoryOptionalValue(ClassOrInterfaceType classType, boolean present) {
+        if (!present) {
+            return buildOptionalVariable(classType, false, null);
+        }
+
+        Type nestedType = classType.getTypeArguments()
+                .flatMap(NodeList::getFirst)
+                .orElse(null);
+        if (nestedType == null) {
+            return buildOptionalVariable(classType, false, null);
+        }
+
+        Variable candidate = Reflect.generateNonDefaultVariable(nestedType.asString());
+        Object value = candidate != null ? candidate.getValue() : null;
+        return buildOptionalVariable(classType, value != null, value);
     }
 
     private Variable processResult(ExpressionStmt stmt, ResultSet rs) throws AntikytheraException, ReflectiveOperationException {
@@ -924,6 +1001,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             Type elementType = vdecl.getElementType();
             if (elementType.isClassOrInterfaceType()) {
                 ClassOrInterfaceType classType = elementType.asClassOrInterfaceType();
+                if (Reflect.OPTIONAL.equals(classType.getNameAsString())
+                        || Reflect.JAVA_UTIL_OPTIONAL.equals(classType.getNameAsString())) {
+                    return processOptionalResult(stmt, classType, rs);
+                }
                 NodeList<Type> secondaryType = classType.getTypeArguments().orElse(null);
 
                 if (secondaryType != null) {
@@ -960,6 +1041,41 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
         }
         return null;
+    }
+
+    private Variable processOptionalResult(ExpressionStmt stmt, ClassOrInterfaceType classType, ResultSet rs) throws ReflectiveOperationException {
+        boolean hasRow = false;
+        Object value = null;
+        try {
+            hasRow = rs != null && rs.next();
+            if (hasRow) {
+                value = rs.getObject(1);
+            }
+        } catch (SQLException e) {
+            logger.warn(e.getMessage());
+        }
+
+        LineOfCode branch = Branching.get(stmt.hashCode());
+        if (branch == null) {
+            branch = new LineOfCode(stmt);
+            Branching.add(branch);
+            branch.setPathTaken(hasRow ? LineOfCode.TRUE_PATH : LineOfCode.FALSE_PATH);
+            return buildOptionalVariable(classType, hasRow, value);
+        }
+
+        if (branch.getPathTaken() == LineOfCode.TRUE_PATH) {
+            return buildOptionalVariable(classType, false, null);
+        }
+        if (branch.getPathTaken() == LineOfCode.FALSE_PATH) {
+            return buildOptionalVariable(classType, true, value);
+        }
+        return buildOptionalVariable(classType, hasRow, value);
+    }
+
+    private Variable buildOptionalVariable(ClassOrInterfaceType classType, boolean present, Object value) {
+        Variable v = new Variable(present ? Optional.ofNullable(value) : Optional.empty());
+        v.setType(classType);
+        return v;
     }
 
     String getFieldName(Expression expr) {
@@ -1025,7 +1141,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     public void setArgumentGenerator(ArgumentGenerator argumentGenerator) {
         SpringEvaluator.argumentGenerator = argumentGenerator;
-        for (TestGenerator gen : generators) {
+        for (ITestGenerator gen : generators) {
             gen.setArgumentGenerator(argumentGenerator);
         }
     }
@@ -1039,4 +1155,3 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         return repositories;
     }
 }
-

@@ -24,7 +24,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalConverter;
 import sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionalInvocationHandler;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
-import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.GeneratorState;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
@@ -438,7 +438,10 @@ public class Reflect {
                     expr.setArguments(NodeList.nodeList());
                 }
                 v.setInitializer(List.of(expr));
-                TestGenerator.addImport(new ImportDeclaration(typeName, false, false));
+                // Avoid malformed imports like `import List;` when callers pass simple names.
+                if (typeName != null && typeName.contains(".")) {
+                    GeneratorState.addImport(new ImportDeclaration(typeName, false, false));
+                }
             }
         }
         if (v.getType() == null) {

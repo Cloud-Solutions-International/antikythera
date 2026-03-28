@@ -1,155 +1,176 @@
+# Antikythera Core — Agent Guide
 
-# Antikythera - Java Code Intelligence Engine
+Guidance for AI coding agents working on the **antikythera** core library.
 
-**Current Version**: Agent Reference Guide
-**Purpose**: A versatile platform for **Static Analysis**, **Symbolic Execution**, and **Automated Refactoring** of Java applications.
+Antikythera is a Java code intelligence engine: AST parsing, symbolic expression evaluation,
+and dependency solving. Test generation is a **separate module** (`antikythera-test-generator`);
+do not add test-generation logic here.
 
 ---
 
-## 🚀 Core Capabilities
+## Build & Test Commands
 
-Antikythera is more than a test generator. It is a modular engine that understands, executes, and transforms Java code.
+```bash
+# Compile
+JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto mvn compile
 
-| Capability | Description | Modules |
+# Run tests
+JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto mvn test
+
+# Install locally (required before building antikythera-test-generator)
+JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto mvn install -Dmaven.test.skip=true
+
+# Single test class
+JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto mvn test -Dtest=TestEvaluator
+
+# Single test method
+JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto mvn test -Dtest=TestEvaluator#testReturnValue
+```
+
+> The system `/usr/bin/mvn` uses Java 8. Always prefix `mvn` with
+> `JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto` in shell sessions.
+
+---
+
+## ⚠️ Critical Rules
+
+1. **No test generation logic here.** `TestGenerator`, `UnitTestGenerator`, `SpringTestGenerator`,
+   `ServicesParser`, `RestControllerParser`, and `Antikythera` (CLI) live in `antikythera-test-generator`.
+   Do not add them back or duplicate them.
+
+2. **`generator/` is shared model types only.** The package contains `TypeWrapper`, `MethodResponse`,
+   `TruthTable`, `RepositoryQuery*`, `CopyUtils` and nothing else. Do not add new generator classes
+   that produce test code.
+
+3. **Do not move `TypeWrapper`.** It is referenced by 90+ files across `parser/`, `evaluator/`, and
+   `depsolver/`. Moving it would break all of those imports with no benefit.
+
+4. **`ITestGenerator` and `GeneratorState` are the module boundary.** `SpringEvaluator` communicates
+   with `antikythera-test-generator` only through these two types. Do not introduce direct imports of
+   concrete generator classes (`TestGenerator` etc.) into the core.
+
+5. **Always check `AntikytheraRunTime` before re-parsing.** All parsed `CompilationUnit`s are cached
+   there. Re-parsing an already-loaded file wastes time and can introduce duplicate state.
+
+6. **Thread safety.** `GeneratorState`, `AntikytheraRunTime`, and `Branching` hold static mutable state.
+   Tests run sequentially (`<parallel>none</parallel>`) — do not introduce parallel test execution.
+
+---
+
+## Architecture
+
+```
+parser/
+  AbstractCompiler       — parses .java files; smart classpath scanner and type resolver
+  AntikytheraRunTime     — static cache: CompilationUnit map, TypeWrapper map
+  MavenHelper            — reads pom.xml, resolves project dependencies onto classpath
+
+evaluator/
+  Evaluator              — symbolic VM: processes AST nodes, tracks Variable state, handles control flow
+  SpringEvaluator        — extends Evaluator; simulates @Autowired, @Value, Spring context
+  ControlFlowEvaluator   — handles if/else/switch/loop/try-catch
+  MockingEvaluator       — intercepts method calls; builds Mockito when/then chains
+  EvaluatorFactory       — creates SpringEvaluator (or subclass) for a given FQN
+  Branching              — priority queue of conditional statements; tracks TRUE/FALSE/BOTH paths
+  GeneratorState         — static holder for imports and when/then lists shared with test-generator
+  ITestGenerator         — interface; SpringEvaluator holds List<ITestGenerator>
+  AKBuddy                — ByteBuddy proxy factory for intercepting real object method calls
+  ArgumentGenerator      — generates mock argument values for method parameters
+  Variable               — wraps a value with its declared type
+
+depsolver/
+  DependencyAnalyzer     — depth-first traversal; collects transitive field/method dependencies
+  DepSolver              — extends DependencyAnalyzer; clones only required members into output CUs
+  Graph / GraphNode      — registry and node wrapper for the dependency graph
+
+generator/  (shared model types only)
+  TypeWrapper            — wraps a resolved Java type; generic parameter helpers
+  MethodResponse         — captures return value or exception from an evaluated method
+  TruthTable             — generates truth tables from boolean expressions
+  RepositoryQuery et al. — models for JPA repository query analysis
+  CopyUtils              — AST node copy helpers used by DepSolver
+
+finch/
+  Finch                  — plugin/hook mechanism; loaded by Evaluator at startup via ServiceLoader
+```
+
+---
+
+## Key Integration Points with antikythera-test-generator
+
+| Class | Package | Role |
 | :--- | :--- | :--- |
-| **🔎 Deep Analysis** | Parse source/bytecode, resolve complex types, and build dependency graphs. | `parser`, `depsolver` |
-| **🧠 Symbolic Execution** | Execute code paths abstractly to understand behavior without running the app. | `evaluator` |
-| **🔧 Transformation** | Refactor code, extract microservices, and convert queries (JPA/HQL → SQL). | `depsolver`, `generator` |
-| **🧪 Test Generation** | Auto-generate Unit & API tests using the intelligence above. | `generator` |
+| `ITestGenerator` | `evaluator` | Interface implemented by `TestGenerator` in test-generator |
+| `GeneratorState` | `evaluator` | Static state (imports, when/then) written by evaluators, read by generators |
+| `MethodResponse` | `generator` | Passed from `SpringEvaluator` to `ITestGenerator.createTests()` |
+| `ArgumentGenerator` | `evaluator` | Injected into generators via `ITestGenerator.setArgumentGenerator()` |
+| `Precondition` | `evaluator` | Passed via `ITestGenerator.setPreConditions()` |
+
+When `SpringEvaluator` reaches a method exit point it calls:
+```java
+for (ITestGenerator gen : generators) {
+    gen.createTests(md, response);
+}
+```
+The concrete implementation of that call lives entirely in `antikythera-test-generator`.
 
 ---
 
-## 🏗 Architecture: The "Engine" Concept
+## Common Patterns
 
-Think of Antikythera as a layered engine. You can invoke the lower layers directly for custom tasks.
-
-```mermaid
-graph TD
-    A[Java Source / Bytecode] --> B[Parser Layer]
-    B --> C{Core Intelligence}
-    C --> D[Evaluator]
-    C --> E[DepSolver]
-    C --> F[Type Resolver]
-    
-    D --> G[Applications]
-    E --> G
-    F --> G
-    
-    G --> H[Test Generator]
-    G --> I[Microservice Extractor]
-    G --> J[Query Optimizer]
-    G --> K[Custom Agent Tools]
+### Parse and cache a class
+```java
+AbstractCompiler.preProcess();   // loads all classes in base_path
+CompilationUnit cu = AntikytheraRunTime.getCompilationUnit("com.example.UserService");
 ```
 
-### 1. The Parser Layer (`parser/`)
-**Goal**: Turn code into a computable model.
-*   **`AbstractCompiler`**: The foundation. Parses files and resolves types using a smart classpath scanner.
-*   **`AntikytheraRunTime`**: Distributed cache for ASTs (`CompilationUnit`) and Type Metadata (`TypeWrapper`).
-
-### 2. The Evaluator Layer (`evaluator/`)
-**Goal**: "Run" the code safely to learn what it does.
-*   **`Evaluator`**: A symbolic VM. It processes AST nodes, tracks variable states, and handles control flow (branches, loops).
-*   **`SpringEvaluator`**: Aware of Spring Contexts. Can simulate `@Autowired` injection and `@Value` resolution.
-*   **`AKBuddy`**: Creates dynamic proxies (`ByteBuddy`) so the Evaluator can intercept method calls on real objects.
-
-### 3. The Dependency & Solver Layer (`depsolver/`)
-**Goal**: Extract the minimal set of code needed to compile and run a target method or class.
-*   **`DependencyAnalyzer`**: The base analysis engine. Performs depth-first traversal of the dependency graph, discovering all field and method dependencies transitively. Can be used standalone for pure analysis (no code generation).
-*   **`DepSolver`**: Extends `DependencyAnalyzer` with code generation. As dependencies are discovered, it clones **only the required members** (fields, methods, constructors, inner classes) from each dependency into isolated destination `CompilationUnit`s — never copying an entire class wholesale. For example, if class `A` depends on class `B`, only the specific methods and fields of `B` that `A` actually uses are copied across.
-*   **`Graph`**: Static registry that maps fully-qualified class names to their generated (destination) `CompilationUnit`s and caches `GraphNode` instances to prevent duplicate processing.
-*   **`GraphNode`**: Wraps an AST node (method, field, type) together with its source `CompilationUnit`, its enclosing type, and the destination `CompilationUnit` being built for it.
-
----
-
-## 🛠 versatile Use Cases & Entry Points
-
-### Use Case A: "I need to analyze code dependencies"
-*Don't run the test generator. Use the Solver directly.*
-
+### Symbolically execute a method
 ```java
-// 1. Configure the analyzer
-DependencyAnalyzer analyzer = new DependencyAnalyzer();
-
-// 2. Collect dependencies for a set of methods (returns all transitively needed nodes)
-Set<GraphNode> functionalitySlice = analyzer.collectDependencies(targetMethods);
-
-// 3. Or collect with a filter (e.g. exclude certain classes from the traversal)
-Set<GraphNode> filtered = analyzer.collectDependencies(targetMethods,
-    node -> !node.toString().startsWith("com.example.excluded"));
+Evaluator eval = EvaluatorFactory.create("com.example.UserService", SpringEvaluator.class);
+MethodDeclaration md = cu.findFirst(MethodDeclaration.class,
+    m -> m.getNameAsString().equals("getUser")).orElseThrow();
+Variable result = eval.executeMethod(md);
 ```
 
-### Use Case B: "I need to understand what a method returns"
-*Use the Evaluator to virtually execute the method.*
-
+### Resolve a type from within a CU
 ```java
-// 1. Create an Evaluator for the class
-Evaluator eval = EvaluatorFactory.create("com.example.PricingService", SpringEvaluator.class);
-
-// 2. Setup inputs (optional)
-eval.setField("basePrice", new Variable(100.0));
-
-// 3. Execute a method AST node
-Variable result = eval.executeMethod(calculateMethodNode);
-
-// 4. Inspect the result
-System.out.println("Returned: " + result.getValue()); // "120.0"
+TypeWrapper tw = AbstractCompiler.findType(cu, "UserDto");
 ```
 
-### Use Case C: "I need to translate JPA/HQL to SQL"
-*Use the Converter subsystem.*
-
+### Extract minimal dependency closure
 ```java
-// Method Name -> SQL
-List<String> parts = MethodToSQLConverter.extractComponents("findActiveUsersByRegion");
-// Output logic: WHERE status = 'ACTIVE' AND region = ?
-
-// HQL -> SQL
-HQLParserAdapter adapter = new HQLParserAdapter(cu, entityType);
-ConversionResult res = adapter.convertToNativeSQL("FROM User u WHERE u.id = :id");
-System.out.println(res.getNativeSql()); // "SELECT * FROM users WHERE id = ?"
-```
-
-### Use Case D: "I need to generate tests"
-*The classic use case.*
-
-```java
-Antikythera.getInstance().generateUnitTests();
+Settings.loadConfigMap(new File("depsolver.yml"));
+DepSolver solver = DepSolver.createSolver();
+solver.processEntry("com.example.UserService#getUser");
 ```
 
 ---
 
-## 🔧 Key Configuration (`generator.yml`)
+## Test Setup
 
-The engine is configured via YAML.
+Tests require two external repositories cloned at the same level as this project:
 
-```yaml
-base_path: /src/main/java       # Where to look for code
-output_path: /src/test/java     # Where to put artifacts
-database:
-  url: jdbc:postgres://...      # For live query analysis (optional)
-  run_queries: false            # Set true to execute queries during analysis
+- `antikythera-test-helper` — sample entities, services, controllers used as test fixtures
+- `antikythera-sample-project` — realistic Spring Boot project for integration tests
+
+VM argument required for tests (already set in `pom.xml`):
 ```
-
-## 🧩 Extending the Engine
-
-*   **New Language Feature?** Add a handler to `Evaluator.evaluateExpression`.
-*   **New Framework?** Extend `AbstractCompiler` (e.g., `QuarkusCompiler`).
-*   **New Output?** Implement a new Generator (e.g., `DocumentGenerator` using `DepSolver` data).
+--add-opens java.base/java.util.stream=ALL-UNNAMED
+```
 
 ---
 
-## 💡 Agent "Cheat Sheet"
+## Key Files
 
-| Task | Core Component | Method to Call |
-| :--- | :--- | :--- |
-| **Resolve Type** | `parser.AbstractCompiler` | `findType(cu, "Name")` |
-| **Parse File** | `parser.AbstractCompiler` | `compile(path)` |
-| **Execute Logic** | `evaluator.Evaluator` | `evaluateMethodCall(mce)` |
-| **Find Dependencies** | `depsolver.DepSolver` | `processEntry(signature)` |
-| **Convert Query** | `parser.converter` | `MethodToSQLConverter` |
-| **Get Entity Info** | `parser.converter` | `EntityMappingResolver` |
-
-**Rule of Thumb**: Always check `AntikytheraRunTime` caches before doing heavy lifting.
-
-
-
+| File | Purpose |
+| :--- | :--- |
+| `parser/AbstractCompiler.java` | Entry point for all parsing; extend here for new frameworks |
+| `evaluator/Evaluator.java` | Core symbolic VM; add new expression handlers here |
+| `evaluator/SpringEvaluator.java` | Spring-aware evaluation loop; branch-coverage driver |
+| `evaluator/ControlFlowEvaluator.java` | if/else/switch/loop/try handling |
+| `evaluator/MockingEvaluator.java` | Mock interception; writes to `GeneratorState` |
+| `evaluator/GeneratorState.java` | Shared static state — clear between method executions |
+| `evaluator/ITestGenerator.java` | Module boundary interface — keep minimal |
+| `depsolver/DepSolver.java` | Dependency extraction entry point |
+| `generator/TypeWrapper.java` | Do not move; imported everywhere |
+| `finch/Finch.java` | Plugin hook; must stay in core (Evaluator calls it directly) |

@@ -1230,7 +1230,7 @@ public class Evaluator implements EvaluationEngine {
     void invoke(Method method, Object[] finalArgs, Variable v) throws InvocationTargetException, IllegalAccessException {
         Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
         returnValue = new Variable(method.invoke(target, finalArgs));
-        if (returnValue.getValue() == null && returnValue.getClazz() == null) {
+        if (returnValue.getClazz() == null) {
             returnValue.setClazz(method.getReturnType());
         }
     }
@@ -1385,6 +1385,10 @@ public class Evaluator implements EvaluationEngine {
             Variable old = getField(field);
             if (old == null) {
                 field = "is" + methodName.replace("set", "");
+            }
+            if (AntikytheraRunTime.stack.isEmpty()) {
+                logger.debug("Skipping Lombok setter '{}': no argument on stack", methodName);
+                return new Variable(null);
             }
             Variable va = AntikytheraRunTime.pop();
             fields.put(field, va);
@@ -1632,7 +1636,6 @@ public class Evaluator implements EvaluationEngine {
      */
     public Variable executeMethod(CallableDeclaration<?> cd) throws ReflectiveOperationException {
         if (cd instanceof MethodDeclaration md) {
-
             returnFrom = null;
             returnValue = null;
 
@@ -2114,7 +2117,7 @@ public class Evaluator implements EvaluationEngine {
                 }
             }
         } catch (UnsolvedSymbolException e) {
-            logger.debug("ignore {}", variableDeclarator);
+            logger.warn("setupField UNSOLVED: {}.{} ({})", getClassName(), variableDeclarator.getNameAsString(), e.getMessage());
 
         } catch (ReflectiveOperationException e) {
             throw new GeneratorException(e);
@@ -2254,7 +2257,12 @@ public class Evaluator implements EvaluationEngine {
             super.visit(field, arg);
             for (var variable : field.getVariables()) {
                 field.findAncestor(ClassOrInterfaceDeclaration.class).ifPresent(cdecl -> {
-                    if (cdecl.getFullyQualifiedName().isPresent() && cdecl.getFullyQualifiedName().get().equals(matchingClass)) {
+                    String resolvedFqn = cdecl.getFullyQualifiedName()
+                            .orElseGet(() -> AbstractCompiler.findFullyQualifiedName(cu, cdecl.getNameAsString()));
+                    boolean sameClass = matchingClass.equals(resolvedFqn)
+                            || (resolvedFqn == null && (matchingClass.equals(cdecl.getNameAsString())
+                            || matchingClass.endsWith("." + cdecl.getNameAsString())));
+                    if (sameClass) {
                         setupField(field, variable);
                     }
                 });

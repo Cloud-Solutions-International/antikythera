@@ -18,7 +18,10 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import org.mockito.Mockito;
+import org.mockito.exceptions.base.MockitoException;
 import org.mockito.quality.Strictness;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.AKBuddy;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
@@ -29,7 +32,7 @@ import sa.com.cloudsolutions.antikythera.evaluator.MockReturnValueHandler;
 import sa.com.cloudsolutions.antikythera.evaluator.MockingEvaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.Reflect;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
-import sa.com.cloudsolutions.antikythera.generator.TestGenerator;
+import sa.com.cloudsolutions.antikythera.evaluator.GeneratorState;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
@@ -49,10 +52,12 @@ import static org.mockito.Mockito.withSettings;
  * Also supports the when/then type of mocking that you find in frameworks like mockito.
  */
 public class MockingRegistry {
+    private static final Logger logger = LoggerFactory.getLogger(MockingRegistry.class);
     private static final Map<String, Map<Callable, MockingCall>> mockedFields = new HashMap<>();
     private static Map<String, List<Expression>> customMockExpressions = new HashMap<>();
 
     public static final String MOCKITO = "Mockito";
+    public static final String MOCKITO_FQN = "org.mockito.Mockito";
 
     private MockingRegistry() {
 
@@ -91,6 +96,14 @@ public class MockingRegistry {
     }
 
     /**
+     * Clears only the mocked fields tracking map, preserving custom mock expressions.
+     * Use this between service generations to avoid cross-service state leakage.
+     */
+    public static void clearMockedFields() {
+        mockedFields.clear();
+    }
+
+    /**
      * Creates a 'Mockito.when().then()' style setup.
      * This may or may not translate to a real Mockito call. That depends on the mocking framework
      * being used.
@@ -119,7 +132,7 @@ public class MockingRegistry {
                 continue;
             }
             String fqn = wrapper.getFullyQualifiedName();
-            TestGenerator.addImport(new ImportDeclaration(fqn, false, false));
+            GeneratorState.addImport(new ImportDeclaration(fqn, false, false));
             Variable v;
             if (AntikytheraRunTime.getCompilationUnit(fqn) != null) {
                 if (resolvedTypes.size() == 1) {
@@ -164,14 +177,24 @@ public class MockingRegistry {
     }
 
     public static Variable createMockitoMockInstance(Class<?> cls) {
-        Variable v = new Variable(Mockito.mock(cls, withSettings().defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
-        v.setClazz(cls);
-        // Set initializer so test generator knows to use Mockito.mock()
-        v.setInitializer(List.of(new MethodCallExpr(
-            new NameExpr(MOCKITO), "mock",
-            new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
-        )));
-        return v;
+        try {
+            String mockName = cls.getSimpleName();
+            mockName = Character.toLowerCase(mockName.charAt(0)) + mockName.substring(1);
+            Variable v = new Variable(Mockito.mock(cls, withSettings().name(mockName).defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
+            v.setClazz(cls);
+            // Set initializer so test generator knows to use Mockito.mock()
+            v.setInitializer(List.of(new MethodCallExpr(
+                new NameExpr(MOCKITO), "mock",
+                new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
+            )));
+            return v;
+        } catch (MockitoException e) {
+            logger.warn("Cannot create Mockito mock for {} ({}), substituting null — tests involving this type may be incomplete",
+                    cls.getName(), e.getMessage().lines().findFirst().orElse(""));
+            Variable v = new Variable(null);
+            v.setClazz(cls);
+            return v;
+        }
     }
 
     public static Variable createByteBuddyMockInstance(String className) throws ReflectiveOperationException {
@@ -227,13 +250,13 @@ public class MockingRegistry {
 
         MethodCallExpr thenReturn = new MethodCallExpr(mockitoWhen, "thenReturn")
                 .setArguments(new NodeList<>(returnValue));
-        TestGenerator.addWhenThen(thenReturn);
+        GeneratorState.addWhenThen(thenReturn);
 
         return methodCall;
     }
 
     public static void addMockitoExpression(MethodDeclaration md, Object returnValue, String variableName) {
-        if (returnValue != null) {
+        if (returnValue != null && variableName != null) {
             MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(
                     md.getNameAsString(), returnValue.getClass().getName(), variableName);
             NodeList<Expression> args = fakeArguments(md);
@@ -267,51 +290,57 @@ public class MockingRegistry {
             return new NullLiteralExpr();
         }
 
+        // Check custom mock expressions first (project-specific overrides)
+        List<Expression> customExprs = getCustomMockExpressions(qualifiedName);
+        if (!customExprs.isEmpty()) {
+            return customExprs.get(0);
+        }
+
         return switch (qualifiedName) {
             case "List", "java.util.List", "java.util.ArrayList" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.ArrayList", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("ArrayList<>"))
                         .setArguments(new NodeList<>());
             }
 
             case "Map", "java.util.Map", "java.util.HashMap" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.HashMap", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.HashMap", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("HashMap"))
                         .setArguments(new NodeList<>());
             }
 
             case "java.util.TreeMap" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.TreeMap", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.TreeMap", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("TreeMap"))
                         .setArguments(new NodeList<>());
             }
 
             case "Set", "java.util.Set", "java.util.HashSet" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.HashSet", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.HashSet", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("HashSet"))
                         .setArguments(new NodeList<>());
             }
 
             case "java.util.TreeSet" -> {
-                TestGenerator.addImport(new ImportDeclaration("java.util.TreeSet", false, false));
+                GeneratorState.addImport(new ImportDeclaration("java.util.TreeSet", false, false));
                 yield new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("TreeSet"))
                         .setArguments(new NodeList<>());
             }
 
             case Reflect.JAVA_UTIL_OPTIONAL -> {
-                TestGenerator.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
+                GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_OPTIONAL, false, false));
                 yield new MethodCallExpr(
                         new NameExpr("Optional"),
                         "empty"
                 );
             }
 
-            case "Boolean", Reflect.PRIMITIVE_BOOLEAN -> new BooleanLiteralExpr(false);
+            case "Boolean", "java.lang.Boolean", Reflect.PRIMITIVE_BOOLEAN -> new BooleanLiteralExpr(false);
 
             case Reflect.PRIMITIVE_FLOAT, Reflect.FLOAT, Reflect.PRIMITIVE_DOUBLE, Reflect.DOUBLE ->
                     new DoubleLiteralExpr("0.0");
@@ -320,7 +349,7 @@ public class MockingRegistry {
 
             case "Long", "long", "java.lang.Long" -> new LongLiteralExpr("-100L");
 
-            case "String", "java.lang.String" -> new StringLiteralExpr("Ibuprofen");
+            case "String", "java.lang.String" -> new StringLiteralExpr("0");
 
             default -> createExpressionForUnknownType(qualifiedName);
         };
@@ -351,10 +380,12 @@ public class MockingRegistry {
             simpleName = simpleName.replace('$', '.');
             return createMockExpression(simpleName);
         } catch (ClassNotFoundException e) {
-            // Fallback to object creation
-            return new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName(qualifiedName))
-                    .setArguments(new NodeList<>());
+            // Class not in classpath; use Mockito.mock() as fallback to avoid no-arg constructor issues
+            String simpleName = qualifiedName.contains(".")
+                    ? qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1)
+                    : qualifiedName;
+            simpleName = simpleName.replace('$', '.');
+            return createMockExpression(simpleName);
         }
     }
 
@@ -370,7 +401,7 @@ public class MockingRegistry {
 
     public static Expression createMockitoArgument(String typeName) {
         MethodCallExpr mce = generateAnyExpression(typeName);
-        TestGenerator.addImport(new ImportDeclaration(MOCKITO, false, false));
+        GeneratorState.addImport(new ImportDeclaration(MOCKITO_FQN, false, false));
         // If it's a generic Mockito.any() call, add casting
         if (mce.getNameAsString().equals("any") && !typeName.equals("Object") && !typeName.equals("Type")) {
             return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);

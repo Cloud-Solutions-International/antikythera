@@ -22,7 +22,12 @@ public abstract class ArgumentGenerator {
         ConstructorDeclaration matched = null;
         String className = resolveNestedName(classUnderTest);
 
-        for (ConstructorDeclaration cd : classUnderTest.findAll(ConstructorDeclaration.class)) {
+        if (classUnderTest.isClassOrInterfaceDeclaration()
+                && classUnderTest.asClassOrInterfaceDeclaration().isInterface()) {
+            return className + " " + instanceName + " = null;";
+        }
+
+        for (ConstructorDeclaration cd : classUnderTest.getConstructors()) {
             if (matched == null) {
                 matched = cd;
             }

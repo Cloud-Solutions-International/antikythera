@@ -687,8 +687,18 @@ public class TruthTable {
         Object right = evaluateCondition(rightExpr, truthValues);
 
         return switch (binaryExpr.getOperator()) {
-            case AND -> ((Boolean) left) && (Boolean) right;
+            case AND -> {
+                if (left == null || right == null) yield null;
+                if (left instanceof Integer l) {
+                    left = l != 0;
+                }
+                if (right instanceof Integer r) {
+                    right = r != 0;
+                }
+                yield ((Boolean) left) && (Boolean) right;
+            }
             case OR -> {
+                if (left == null || right == null) yield null;
                 if (left instanceof Integer l) {
                     left = l != 0;
                 }
