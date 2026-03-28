@@ -6,7 +6,7 @@ Antikythera
 Antikythera is a core library that parses, evaluates, and transforms Java codebases.
 It provides the AST parsing, symbolic execution, dependency solving, and query analysis
 engine that powers tools built on top of it — including
-[antikythera-test-generator](../antikythera-test-generator/README.md) for automated
+[antikythera-test-generator](https://github.com/Cloud-Solutions-International/antikythera-test-generator) for automated
 test generation.
 
 ---
