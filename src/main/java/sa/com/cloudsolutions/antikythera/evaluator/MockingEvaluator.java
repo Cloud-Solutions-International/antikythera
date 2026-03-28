@@ -148,7 +148,6 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return mockRepositoryMethodDeclaration(sc, callable);
     }
 
-    @SuppressWarnings("unchecked")
     private Variable mockRepositoryMethodDeclaration(Scope sc, Callable callable) throws ReflectiveOperationException {
         MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
         Type t = md.getType();
@@ -166,7 +165,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                 }
                 // Single-entity return: record a stub so the generated test doesn't get null
                 if (t.isClassOrInterfaceType() && !t.asClassOrInterfaceType().isBoxedType()) {
-                    return handleRepositorySingleEntityReturn(sc, md, t, imp);
+                    return handleRepositorySingleEntityReturn(sc, t, imp);
                 }
             }
         }
@@ -319,7 +318,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         if (!(cd instanceof MethodDeclaration md)) {
             return null;
         }
-        Optional<BlockStmt> body = md.getBody();
+        BlockStmt body = md.getBody().orElse(null);
         String methodName = md.getNameAsString();
 
         Variable v = getIdField();
@@ -330,45 +329,76 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         Type returnType = md.getType();
         if (returnType.isVoidType()) {
-            if (methodName.startsWith("set") && body.isPresent() && body.get().getStatements().size() == 1) {
-                super.executeMethod(cd);
-            }
-            else {
-                setupParameters(md);
-            }
+            executeVoidMethod(cd, md, methodName, body);
             return null;
         }
 
         setupParameters(md);
-        if (methodName.startsWith("get") && body.isPresent() && body.get().getStatements().size() == 1) {
-            String fieldName = AbstractCompiler.classToInstanceName(methodName.substring(3));
-            Variable f = getField(fieldName);
-            if (f != null) {
-                return f;
-            }
-            // Field not found (e.g. lazy evaluator with no initialized fields):
-            // return null to match the default Java field value (e.g. null for Long).
-            if (fields.isEmpty()) {
-                return new Variable((Object) null);
-            }
+        Variable getterValue = resolveSimpleGetterReturn(methodName, body);
+        if (getterValue != null) {
+            return getterValue;
         }
 
-        Variable result ;
-        if (returnType.isClassOrInterfaceType()) {
-            result = Reflect.variableFactory(returnType.asClassOrInterfaceType().getNameAsString());
-            if (result != null) {
-                MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
-                return result;
-            }
+        Variable classResult = createClassReturnValue(md, returnType);
+        if (classResult != null) {
+            return classResult;
         }
 
-        if (returnType.isPrimitiveType()) {
-            result = Reflect.variableFactory(returnType.toString());
-            MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
-            return result;
+        Variable primitiveResult = createPrimitiveReturnValue(md, returnType);
+        if (primitiveResult != null) {
+            return primitiveResult;
         }
 
         return mockReturnFromCompilationUnit(cd, md, returnType);
+    }
+
+    private void executeVoidMethod(CallableDeclaration<?> cd, MethodDeclaration md, String methodName,
+                                   BlockStmt body) throws ReflectiveOperationException {
+        if (isSingleStatementAccessor(methodName, "set", body)) {
+            super.executeMethod(cd);
+            return;
+        }
+        setupParameters(md);
+    }
+
+    private Variable resolveSimpleGetterReturn(String methodName, BlockStmt body) {
+        if (!isSingleStatementAccessor(methodName, "get", body)) {
+            return null;
+        }
+        String fieldName = AbstractCompiler.classToInstanceName(methodName.substring(3));
+        Variable field = getField(fieldName);
+        if (field != null) {
+            return field;
+        }
+        // Lazy evaluators can have no initialized fields; mimic Java's default null field value.
+        if (fields.isEmpty()) {
+            return new Variable((Object) null);
+        }
+        return null;
+    }
+
+    private Variable createClassReturnValue(MethodDeclaration md, Type returnType) {
+        if (!returnType.isClassOrInterfaceType()) {
+            return null;
+        }
+        Variable result = Reflect.variableFactory(returnType.asClassOrInterfaceType().getNameAsString());
+        if (result != null) {
+            MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
+        }
+        return result;
+    }
+
+    private Variable createPrimitiveReturnValue(MethodDeclaration md, Type returnType) {
+        if (!returnType.isPrimitiveType()) {
+            return null;
+        }
+        Variable result = Reflect.variableFactory(returnType.toString());
+        MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
+        return result;
+    }
+
+    private boolean isSingleStatementAccessor(String methodName, String prefix, BlockStmt body) {
+        return methodName.startsWith(prefix) && body != null && body.getStatements().size() == 1;
     }
 
      Variable getIdField() {
@@ -643,8 +673,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return v;
     }
 
-    private Variable handleRepositorySingleEntityReturn(Scope sc, MethodDeclaration md, Type t, ImportWrapper imp)
-            throws ReflectiveOperationException {
+    private Variable handleRepositorySingleEntityReturn(Scope sc, Type t, ImportWrapper imp) {
         MethodCallExpr methodCall = sc.getScopedMethodCall();
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = Branching.get(stmt.hashCode());

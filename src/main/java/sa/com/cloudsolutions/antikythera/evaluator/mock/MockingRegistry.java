@@ -57,6 +57,7 @@ public class MockingRegistry {
     private static Map<String, List<Expression>> customMockExpressions = new HashMap<>();
 
     public static final String MOCKITO = "Mockito";
+    public static final String MOCKITO_FQN = "org.mockito.Mockito";
 
     private MockingRegistry() {
 
@@ -400,7 +401,7 @@ public class MockingRegistry {
 
     public static Expression createMockitoArgument(String typeName) {
         MethodCallExpr mce = generateAnyExpression(typeName);
-        GeneratorState.addImport(new ImportDeclaration(MOCKITO, false, false));
+        GeneratorState.addImport(new ImportDeclaration(MOCKITO_FQN, false, false));
         // If it's a generic Mockito.any() call, add casting
         if (mce.getNameAsString().equals("any") && !typeName.equals("Object") && !typeName.equals("Type")) {
             return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
