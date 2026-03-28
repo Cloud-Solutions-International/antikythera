@@ -219,32 +219,10 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                 typeDeclaration.asClassOrInterfaceDeclaration().getExtendedTypes(0), method);
         if (v != null && v.getValue() instanceof Evaluator eval
                 && method.getReturnType() != void.class && method.getReturnType() != Void.class) {
-            MethodCallExpr methodCall = sc.getScopedMethodCall();
-            Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
-            LineOfCode l = Branching.get(stmt.hashCode());
-            if (l == null) {
-                // First iteration: return null without a stub so the null-path test is generated.
-                l = new LineOfCode(stmt);
-                Branching.registerBranch(l);
-                for (int i = 0; i < methodCall.getArguments().size(); i++) {
-                    AntikytheraRunTime.pop();
-                }
-                return new Variable((Object) null);
-            }
-            // Second iteration: return a non-null entity with a stub.
             String entityClassName = eval.getClassName();
             int dotIdx = entityClassName.lastIndexOf('.');
             String shortName = dotIdx >= 0 ? entityClassName.substring(dotIdx + 1) : entityClassName;
-            // Use a lazy evaluator so assertions are not generated from stale evaluator state
-            Evaluator lazyEval = EvaluatorFactory.createLazily(entityClassName, MockingEvaluator.class);
-            v = new Variable(lazyEval);
-            ObjectCreationExpr oce = new ObjectCreationExpr(null,
-                    new ClassOrInterfaceType(null, shortName), new NodeList<>());
-            v.setInitializer(java.util.List.of(oce));
-            GeneratorState.addImport(new ImportDeclaration(entityClassName, false, false));
-            MethodCallExpr when = createWhenExpression(methodCall);
-            MockingCall then = createThenExpression(sc, v, when);
-            MockingRegistry.when(className, then);
+            v = stubEntityReturnWithBranching(sc, entityClassName, shortName);
         }
         return v;
     }
@@ -674,16 +652,36 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     }
 
     private Variable handleRepositorySingleEntityReturn(Scope sc, Type t, ImportWrapper imp) {
+        String entityShortName = t.asClassOrInterfaceType().getNameAsString();
+        String entityFullName = imp.getNameAsString() != null ? imp.getNameAsString() : entityShortName;
+        return stubEntityReturnWithBranching(sc, entityFullName, entityShortName);
+    }
+
+    /**
+     * Common branching + Mockito stub logic for repository methods that return a single entity.
+     * <p>
+     * First iteration (no existing {@link LineOfCode} branch): registers the branch, pops arguments
+     * from the stack and returns {@code null} so that the null-path test is generated.
+     * <br>
+     * Second iteration: creates a lazy evaluator for the entity, wraps it in a {@link Variable},
+     * sets an {@code ObjectCreationExpr} initializer, records the required import, and registers
+     * a Mockito when/thenReturn stub via {@link MockingRegistry}.
+     *
+     * @param sc              the current method-call scope
+     * @param entityFullName  fully-qualified class name of the entity
+     * @param entityShortName simple (unqualified) class name of the entity
+     * @return {@code null} on the first pass; a {@link Variable} wrapping the entity evaluator on
+     *         subsequent passes
+     */
+    private Variable stubEntityReturnWithBranching(Scope sc, String entityFullName, String entityShortName) {
         MethodCallExpr methodCall = sc.getScopedMethodCall();
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = Branching.get(stmt.hashCode());
 
         if (l == null) {
-            // First iteration: return null so the null-path (e.g. NPE) test is generated.
-            // No stub is recorded so the Mockito mock returns null by default.
+            // First iteration: return null so the null-path test is generated.
             l = new LineOfCode(stmt);
             Branching.registerBranch(l);
-            // Still need to pop the method call's arguments from the stack
             for (int i = 0; i < methodCall.getArguments().size(); i++) {
                 AntikytheraRunTime.pop();
             }
@@ -691,19 +689,15 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         }
 
         // Second iteration: return a non-null entity with a stub.
-        String entityShortName = t.asClassOrInterfaceType().getNameAsString();
-        String entityFullName = imp.getNameAsString() != null ? imp.getNameAsString() : entityShortName;
         Variable v;
         Optional<com.github.javaparser.ast.body.TypeDeclaration<?>> tdOpt = AntikytheraRunTime.getTypeDeclaration(entityFullName);
         if (tdOpt.isPresent()) {
-            // Use createLazily so the evaluator has no initialized fields — this prevents
-            // the asserter from capturing stale field values from previous evaluation runs.
+            // Use createLazily so the evaluator has no initialized fields — prevents stale state.
             Evaluator eval = EvaluatorFactory.createLazily(entityFullName, MockingEvaluator.class);
             v = new Variable(eval);
         } else {
             v = new Variable((Object) null);
         }
-        // Set initializer to new EntityClass() for the stub thenReturn value
         ObjectCreationExpr oce = new ObjectCreationExpr(null,
                 new ClassOrInterfaceType(null, entityShortName), new NodeList<>());
         v.setInitializer(java.util.List.of(oce));

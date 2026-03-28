@@ -438,7 +438,10 @@ public class Reflect {
                     expr.setArguments(NodeList.nodeList());
                 }
                 v.setInitializer(List.of(expr));
-                GeneratorState.addImport(new ImportDeclaration(typeName, false, false));
+                // Avoid malformed imports like `import List;` when callers pass simple names.
+                if (typeName != null && typeName.contains(".")) {
+                    GeneratorState.addImport(new ImportDeclaration(typeName, false, false));
+                }
             }
         }
         if (v.getType() == null) {

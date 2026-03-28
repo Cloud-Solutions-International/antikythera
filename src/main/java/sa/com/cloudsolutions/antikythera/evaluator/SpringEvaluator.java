@@ -599,6 +599,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     public void addGenerator(ITestGenerator generator) {
         generators.add(generator);
+        if (argumentGenerator != null) {
+            generator.setArgumentGenerator(argumentGenerator);
+        }
     }
 
     Variable autoWire(VariableDeclarator variable, List<TypeWrapper> resolvedTypes) {
@@ -980,15 +983,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
 
         Type nestedType = classType.getTypeArguments()
-                .flatMap(args -> args.getFirst())
+                .flatMap(NodeList::getFirst)
                 .orElse(null);
         if (nestedType == null) {
-            return buildOptionalVariable(classType, true, 1);
+            return buildOptionalVariable(classType, false, null);
         }
 
         Variable candidate = Reflect.generateNonDefaultVariable(nestedType.asString());
         Object value = candidate != null ? candidate.getValue() : null;
-        return buildOptionalVariable(classType, true, value != null ? value : 1);
+        return buildOptionalVariable(classType, value != null, value);
     }
 
     private Variable processResult(ExpressionStmt stmt, ResultSet rs) throws AntikytheraException, ReflectiveOperationException {
