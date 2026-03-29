@@ -10,8 +10,8 @@ explicitly to `Settings.loadConfigMap(File)`.
 | Property | Description |
 | :--- | :--- |
 | `base_package` | Base package of the application under test. Used to decide whether a class should be compiled and analysed or treated as an external dependency. |
-| `base_path` | Absolute path to the root of the source tree (e.g. `.../src/main/java`). |
-| `output_path` | Directory where generated files are written. |
+| `base_path` | Absolute path to the Java source root of the application under test (e.g. `.../src/main/java`). |
+| `output_path` | The `src/test/java` directory where generated test files are written. For unit test generation (`services` list) this must be the existing project's test source root. For API test generation (`controllers` list) this is the `src/test/java` of a standalone generated project; Antikythera automatically derives the project root by stripping the trailing `src/test/java` and places `pom.xml` and the Maven directory structure there. See the `antikythera-test-generator` configuration guide for full details. |
 
 ---
 

@@ -11,14 +11,10 @@ import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.channels.Channels;
-import java.nio.channels.FileChannel;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -212,25 +208,24 @@ public class MavenHelper {
     }
 
     /**
-     * Copy the pom.xml file to the specified path, injecting the dependencies as
-     * needed.
-     * <p>
-     * The configuration file needs to have a dependencies section that provides the list of
-     * `artifactids` that need to be included in the output pom file. If these dependencies
-     * require any variables, those are copied as well.
-     * <p>
-     * The primary source file is the file from the template folder. The dependencies are
-     * supposed to be listed in the pom file of the application under test.
+     * Copy the pom.xml template to the given destination directory, injecting any configured
+     * dependencies from the application-under-test's POM.
      *
+     * <p>The destination directory is explicit so callers can place the generated pom.xml at
+     * the correct project root rather than inside a java source tree.</p>
+     *
+     * @param destinationDir  the directory into which {@code pom.xml} will be written
      * @throws IOException            if the POM file cannot be copied
      * @throws XmlPullParserException if the POM file cannot be converted to an XML Tree
      */
-    public void copyPom() throws IOException, XmlPullParserException {
+    public void copyPom(Path destinationDir) throws IOException, XmlPullParserException {
+        Files.createDirectories(destinationDir);
         String[] dependencies = Settings.getArtifacts();
         if (dependencies.length == 0) {
-            copyTemplate(POM_XML);
+            sa.com.cloudsolutions.antikythera.generator.CopyUtils.copyTemplate(
+                    POM_XML, destinationDir.toString());
         } else {
-            Path destinationPath = Path.of(Settings.getOutputPath(), POM_XML);
+            Path destinationPath = destinationDir.resolve(POM_XML);
 
             MavenXpp3Reader reader = new MavenXpp3Reader();
             Model templateModel = reader.read(getClass().getClassLoader().getResourceAsStream("templates/pom.xml"));
@@ -251,29 +246,32 @@ public class MavenHelper {
     }
 
     /**
-     * Copy a template file to the specified path
+     * Copy the pom.xml template to {@code Settings.getOutputPath()}.
+     *
+     * @throws IOException            if the POM file cannot be copied
+     * @throws XmlPullParserException if the POM file cannot be converted to an XML Tree
+     * @deprecated Use {@link #copyPom(Path)} with an explicit destination directory so that
+     *             the generated pom.xml lands at the intended project root rather than
+     *             implicitly inside {@code output_path}.
+     */
+    @Deprecated
+    public void copyPom() throws IOException, XmlPullParserException {
+        copyPom(Path.of(Settings.getOutputPath()));
+    }
+
+    /**
+     * Copy a template file to the specified path.
      *
      * @param filename the name of the template file to copy
      * @param subPath  the path components
      * @throws IOException thrown if the copy operation failed
+     * @deprecated Use {@link sa.com.cloudsolutions.antikythera.generator.CopyUtils#copyTemplate(String, String, String...)}
+     *             instead. Template copying is not a Maven concern.
      */
+    @Deprecated
     public String copyTemplate(String filename, String... subPath) throws IOException {
-        String outputPath = Settings.getOutputPath();
-        if (outputPath != null) {
-            Path destinationPath = Path.of(outputPath, subPath);     // Path where template file should be copied into
-            Files.createDirectories(destinationPath);
-            String name = destinationPath + File.separator + filename;
-            try (InputStream sourceStream = getClass().getClassLoader().getResourceAsStream("templates/" + filename);
-                 FileOutputStream destStream = new FileOutputStream(name);
-                 FileChannel destChannel = destStream.getChannel()) {
-                if (sourceStream == null) {
-                    throw new IOException("Template file not found");
-                }
-                destChannel.transferFrom(Channels.newChannel(sourceStream), 0, Long.MAX_VALUE);
-            }
-            return name;
-        }
-        return null;
+        return sa.com.cloudsolutions.antikythera.generator.CopyUtils.copyTemplate(
+                filename, Settings.getOutputPath(), subPath);
     }
 
     /**
