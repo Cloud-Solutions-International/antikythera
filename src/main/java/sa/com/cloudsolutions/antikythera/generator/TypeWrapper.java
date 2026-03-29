@@ -93,6 +93,13 @@ public class TypeWrapper {
         this.isInterface = isInterface;
     }
 
+    public boolean isEnum() {
+        if (enumConstant != null) return true;
+        if (type != null) return type.isEnumDeclaration();
+        if (clazz != null) return clazz.isEnum();
+        return false;
+    }
+
     public EnumConstantDeclaration getEnumConstant() {
         return enumConstant;
     }
