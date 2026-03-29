@@ -160,14 +160,20 @@ public class ControlFlowEvaluator extends Evaluator {
 
     private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, List<?> list, Symbol v) {
         if (list.isEmpty()) {
+            // If this collection parameter is passed as an argument to a method call before the
+            // condition, it may be an output parameter that gets populated before the condition is
+            // checked (e.g., an error-accumulator list filled by a validateAndAddError helper).
+            // Forcing it to empty would produce a test variant that is unreachable at runtime, so
+            // we skip generating an override for this case.
+            String varName = extractVariableName(entry.getKey());
+            if (isPassedToMethodBeforeCondition(varName)) {
+                return List.of();
+            }
             if (v.getValue() instanceof List<?>) {
-                GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_LIST, false, false));
                 return List.of(StaticJavaParser.parseExpression("List.of()"));
             } else if (v.getValue() instanceof Set<?>) {
-                GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_SET, false, false));
                 return List.of(StaticJavaParser.parseExpression("Set.of()"));
             } else if (v.getValue() instanceof Map<?,?>) {
-                GeneratorState.addImport(new ImportDeclaration(Reflect.JAVA_UTIL_MAP, false, false));
                 return List.of(StaticJavaParser.parseExpression("Map.of()"));
             }
         }
@@ -541,6 +547,48 @@ public class ControlFlowEvaluator extends Evaluator {
             }
         }
         return value;
+    }
+
+    /**
+     * Extracts the variable name from a truth-table key expression.
+     * The key may be a plain NameExpr or a method call such as
+     * {@code CollectionUtils.isEmpty(varName)}.
+     */
+    private static String extractVariableName(Expression key) {
+        if (key instanceof NameExpr nameExpr) {
+            return nameExpr.getNameAsString();
+        }
+        if (key instanceof MethodCallExpr mce && !mce.getArguments().isEmpty()
+                && mce.getArgument(0).isNameExpr()) {
+            return mce.getArgument(0).asNameExpr().getNameAsString();
+        }
+        return null;
+    }
+
+    /**
+     * Returns {@code true} when the named variable appears as an argument (not as a scope)
+     * in any method-call statement that precedes the current conditional in the enclosing
+     * method body.  A positive result indicates the variable may be an output parameter
+     * (e.g. an error-accumulator list) that is populated before the condition is checked,
+     * making a "force-empty" override unreachable at runtime.
+     */
+    private boolean isPassedToMethodBeforeCondition(String varName) {
+        if (varName == null || currentConditional == null) return false;
+        MethodDeclaration md = currentConditional.getMethodDeclaration();
+        Statement conditionStmt = currentConditional.getStatement();
+        if (md == null || conditionStmt == null || md.getBody().isEmpty()) return false;
+
+        for (Statement stmt : md.getBody().orElseThrow().getStatements()) {
+            if (stmt == conditionStmt) break;
+            for (MethodCallExpr call : stmt.findAll(MethodCallExpr.class)) {
+                for (Expression arg : call.getArguments()) {
+                    if (arg.isNameExpr() && arg.asNameExpr().getNameAsString().equals(varName)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private void addPreCondition(Statement statement, Expression expr) {
