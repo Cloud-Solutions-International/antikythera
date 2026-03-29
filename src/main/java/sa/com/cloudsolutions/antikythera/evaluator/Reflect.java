@@ -358,6 +358,65 @@ public class Reflect {
         };
     }
 
+    /**
+     * For reflective calls to {@link Long#parseLong(String)} / {@link Integer#parseInt(String)}
+     * (including radix overloads), replace non-numeric string placeholders so evaluation does not
+     * throw {@link NumberFormatException}.
+     */
+    public static Object[] coerceArgumentsForNumericParsing(Method method, Object[] args) {
+        if (args == null || args.length == 0) {
+            return args;
+        }
+        if (!(args[0] instanceof String s)) {
+            return args;
+        }
+        Class<?> dc = method.getDeclaringClass();
+        String mname = method.getName();
+        if (dc == Long.class && "parseLong".equals(mname)) {
+            String coerced = stringParsableAsLongOrOne(s);
+            if (coerced == s) {
+                return args;
+            }
+            Object[] copy = args.clone();
+            copy[0] = coerced;
+            return copy;
+        }
+        if (dc == Integer.class && "parseInt".equals(mname)) {
+            String coerced = stringParsableAsIntOrOne(s);
+            if (coerced == s) {
+                return args;
+            }
+            Object[] copy = args.clone();
+            copy[0] = coerced;
+            return copy;
+        }
+        return args;
+    }
+
+    private static String stringParsableAsLongOrOne(String s) {
+        if (s == null) {
+            return null;
+        }
+        try {
+            Long.parseLong(s);
+            return s;
+        } catch (NumberFormatException e) {
+            return "1";
+        }
+    }
+
+    private static String stringParsableAsIntOrOne(String s) {
+        if (s == null) {
+            return null;
+        }
+        try {
+            Integer.parseInt(s);
+            return s;
+        } catch (NumberFormatException e) {
+            return "1";
+        }
+    }
+
     public static Expression createLiteralExpression(Object value) {
         if (value == null) {
             return new NullLiteralExpr();

@@ -84,6 +84,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -1229,7 +1230,8 @@ public class Evaluator implements EvaluationEngine {
 
     void invoke(Method method, Object[] finalArgs, Variable v) throws InvocationTargetException, IllegalAccessException {
         Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
-        returnValue = new Variable(method.invoke(target, finalArgs));
+        Object[] argsForInvoke = Reflect.coerceArgumentsForNumericParsing(method, finalArgs);
+        returnValue = new Variable(method.invoke(target, argsForInvoke));
         if (returnValue.getClazz() == null) {
             returnValue.setClazz(method.getReturnType());
         }
@@ -2125,12 +2127,48 @@ public class Evaluator implements EvaluationEngine {
     }
 
     void setupFieldWithoutInitializer(VariableDeclarator variableDeclarator) {
+        Variable collectionVar = variableForUninitializedCollectionField(variableDeclarator);
+        if (collectionVar != null) {
+            fields.put(variableDeclarator.getNameAsString(), collectionVar);
+            return;
+        }
         Variable nullVariable = new Variable(null);
         if (variableDeclarator.getType().isPrimitiveType()) {
             nullVariable.setValue(Reflect.getDefault(variableDeclarator.getType().asString()));
         }
         nullVariable.setType(variableDeclarator.getType());
         fields.put(variableDeclarator.getNameAsString(), nullVariable);
+    }
+
+    /**
+     * Map/List/Set-typed fields without an initializer get empty collections so code that
+     * immediately dereferences (e.g. {@code getMap().containsKey(...)}) does not see null.
+     */
+    private Variable variableForUninitializedCollectionField(VariableDeclarator vd) {
+        if (!vd.getType().isClassOrInterfaceType()) {
+            return null;
+        }
+        String name = vd.getType().asClassOrInterfaceType().getNameAsString();
+        return switch (name) {
+            case "Map", "HashMap", "SortedMap", "NavigableMap", "ConcurrentMap", "TreeMap",
+                    "LinkedHashMap", "ConcurrentHashMap", "WeakHashMap", "IdentityHashMap", "EnumMap" -> {
+                Variable v = Reflect.createVariable(new HashMap<>(), Reflect.JAVA_UTIL_HASH_MAP, null);
+                v.setType(vd.getType());
+                yield v;
+            }
+            case "List", "ArrayList", "LinkedList", "CopyOnWriteArrayList", "Vector",
+                    "Collection", "Iterable" -> {
+                Variable v = Reflect.createVariable(new ArrayList<>(), Reflect.JAVA_UTIL_ARRAY_LIST, null);
+                v.setType(vd.getType());
+                yield v;
+            }
+            case "Set", "HashSet", "TreeSet", "LinkedHashSet", "EnumSet", "SortedSet", "NavigableSet" -> {
+                Variable v = Reflect.createVariable(new HashSet<>(), Reflect.JAVA_UTIL_HASH_SET, null);
+                v.setType(vd.getType());
+                yield v;
+            }
+            default -> null;
+        };
     }
 
     private void checkSequences(FieldDeclaration field, VariableDeclarator variableDeclarator, Variable v) {
