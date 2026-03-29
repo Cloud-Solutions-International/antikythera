@@ -1,9 +1,11 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.type.Type;
 import org.springframework.http.ResponseEntity;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
+import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -30,6 +32,7 @@ public class MethodResponse {
     }
 
     private EvaluatorException eex;
+    private AssertionConfidence returnAssertionConfidence = AssertionConfidence.HIGH;
 
     public MethodResponse() {
 
@@ -84,5 +87,32 @@ public class MethodResponse {
 
     public void setCapturedOutput(String capturedOutput) {
         this.capturedOutput = capturedOutput;
+    }
+
+    public AssertionConfidence getReturnAssertionConfidence() {
+        return returnAssertionConfidence;
+    }
+
+    public void inferReturnAssertionConfidence(CompilationUnit cu, Type type) {
+        this.returnAssertionConfidence = confidenceForDeclaredReturnType(cu, type);
+    }
+
+    public static AssertionConfidence confidenceForDeclaredReturnType(CompilationUnit cu, Type type) {
+        if (type.isVoidType()) {
+            return AssertionConfidence.HIGH;
+        }
+        if (type.isClassOrInterfaceType()) {
+            String typeName = type.asClassOrInterfaceType().getNameAsString();
+            String fqn = AbstractCompiler.findFullyQualifiedName(cu, typeName);
+            if (fqn != null) {
+                try {
+                    Class<?> clazz = Class.forName(fqn);
+                    return clazz.isInterface() ? AssertionConfidence.LOW : AssertionConfidence.HIGH;
+                } catch (ClassNotFoundException e) {
+                    // Can't load the class; assume HIGH
+                }
+            }
+        }
+        return AssertionConfidence.HIGH;
     }
 }

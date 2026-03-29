@@ -128,7 +128,7 @@ public class Variable implements Symbol {
     }
 
     public void setInitializer(List<Expression> initializer) {
-        this.initializer = initializer;
+        this.initializer = new ArrayList<>(initializer);
     }
 
     public static String generateVariableName(Type type) {
