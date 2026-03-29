@@ -99,7 +99,7 @@ System.out.println(result.getValue());
 // Antikythera.getInstance().generateUnitTests();
 ```
 
-See the [documentation](WARP.md) for detailed usage and configuration.
+See the [documentation](docs/configurations.md) for detailed usage and configuration.
 
 ---
 
@@ -162,9 +162,9 @@ The core library is thoroughly tested with 786+ unit and integration tests. To r
 
 ## Documentation
 
-- **[WARP.md](WARP.md)** - Complete API documentation and AI agent guide
-- **[AGENT.md](AGENT.md)** - Quick reference for common patterns
-- **[docs/](docs/)** - Additional guides and specifications
+- **[AGENTS.md](AGENTS.md)** - AI agent guide: architecture, patterns, and critical rules
+- **[docs/configurations.md](docs/configurations.md)** - Configuration reference
+- **[PACKAGE.md](PACKAGE.md)** - Package and module overview
 
 ---
 
