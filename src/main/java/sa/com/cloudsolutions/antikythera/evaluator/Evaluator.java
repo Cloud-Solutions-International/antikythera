@@ -2138,7 +2138,7 @@ public class Evaluator implements EvaluationEngine {
             incrementSequence();
             v.setValue(sequence);
             MethodCallExpr mce = new MethodCallExpr(
-                    "set" + AbstractCompiler.instanceToClassName(variableDeclarator.getNameAsString()));
+                    "set" + AbstractCompiler.setterSuffixFromFieldName(variableDeclarator.getNameAsString()));
             String type = v.getType().asString();
             if (type.equals("long") || type.equals("Long") || type.equals("java.lang.Long")) {
                 mce.addArgument(new LongLiteralExpr().setValue(Long.toString(sequence) + "L"));
@@ -2160,7 +2160,7 @@ public class Evaluator implements EvaluationEngine {
             if (!v.getInitializer().isEmpty()) {
                 Expression first = v.getInitializer().getFirst();
                 if (first instanceof MethodCallExpr m && m.getScope().isPresent()) {
-                    MethodCallExpr mce = new MethodCallExpr().setName("set" + AbstractCompiler.instanceToClassName(entry.getKey()));
+                    MethodCallExpr mce = new MethodCallExpr().setName("set" + AbstractCompiler.setterSuffixFromFieldName(entry.getKey()));
                     mce.addArgument(first);
                     fi.add(mce);
                     for (int i = 1; i < v.getInitializer().size(); i++) {

@@ -433,11 +433,7 @@ public class ControlFlowEvaluator extends Evaluator {
     private void setupConditionalVariablesWithSetter(Statement stmt, Map.Entry<Expression, Object> entry, Expression scope) {
         MethodCallExpr setter = new MethodCallExpr();
         String name = entry.getKey().asMethodCallExpr().getNameAsString();
-        if (name.startsWith("is")) {
-            setter.setName("set" + name.substring(2));
-        } else {
-            setter.setName("set" + name.substring(3));
-        }
+        setter.setName(AbstractCompiler.setterNameFromGetterName(name));
         if ( scope instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
             setter.setScope(mce.getScope().orElseThrow().clone());
         }

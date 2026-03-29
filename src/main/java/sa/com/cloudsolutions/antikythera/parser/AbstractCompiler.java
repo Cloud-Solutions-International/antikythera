@@ -1610,6 +1610,38 @@ public class AbstractCompiler {
     }
 
     /**
+     * JavaBeans-style suffix for {@code set}<em>Suffix</em> from a field name.
+     * For example {@code isActive} &rarr; {@code Active} (so {@code setActive}), matching Lombok and
+     * typical hand-written setters for {@code boolean isActive} fields.
+     */
+    public static String setterSuffixFromFieldName(String fieldName) {
+        if (fieldName == null || fieldName.isEmpty()) {
+            return fieldName;
+        }
+        if (fieldName.startsWith("is") && fieldName.length() > 2 && Character.isUpperCase(fieldName.charAt(2))) {
+            return fieldName.substring(2);
+        }
+        return instanceToClassName(fieldName);
+    }
+
+    /**
+     * Maps a JavaBeans-style getter name to its setter name ({@code isActive} &rarr; {@code setActive},
+     * {@code getName} &rarr; {@code setName}, {@code getIsActive} &rarr; {@code setIsActive}).
+     */
+    public static String setterNameFromGetterName(String getterName) {
+        if (getterName == null || getterName.isEmpty()) {
+            return getterName;
+        }
+        if (getterName.startsWith("is") && getterName.length() > 2 && Character.isUpperCase(getterName.charAt(2))) {
+            return "set" + getterName.substring(2);
+        }
+        if (getterName.startsWith("get") && getterName.length() > 3) {
+            return "set" + getterName.substring(3);
+        }
+        return getterName;
+    }
+
+    /**
      * Extracts annotation attributes from a JavaParser annotation.
      * Handles both single-member and normal annotations.
      *

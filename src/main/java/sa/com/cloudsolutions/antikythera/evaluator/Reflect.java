@@ -429,6 +429,12 @@ public class Reflect {
                 init.setScope(new NameExpr(OPTIONAL));
                 v.setInitializer(List.of(init));
             }
+            case "java.util.Date" -> {
+                ObjectCreationExpr expr = new ObjectCreationExpr()
+                        .setType(new ClassOrInterfaceType(null, "Date"));
+                v.setInitializer(List.of(expr));
+                GeneratorState.addImport(new ImportDeclaration("java.util.Date", false, false));
+            }
             default -> {
                 ObjectCreationExpr expr = new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName(typeName));
@@ -546,6 +552,7 @@ public class Reflect {
                 result.setInitializer(List.of(new StringLiteralExpr(ANTIKYTHERA)));
                 yield result;
             }
+            case "java.util.Date" -> createVariable(new java.util.Date(), "java.util.Date", null);
             default -> new Variable(null);
         };
     }

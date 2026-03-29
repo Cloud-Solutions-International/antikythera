@@ -251,4 +251,18 @@ class AbstractCompilerTest {
         // We just verify it doesn't crash
         assertTrue(result == null || result.equals("int"));
     }
+
+    @Test
+    void setterSuffixFromFieldName_handlesBooleanIsPrefix() {
+        assertEquals("Active", AbstractCompiler.setterSuffixFromFieldName("isActive"));
+        assertEquals("Resolved", AbstractCompiler.setterSuffixFromFieldName("isResolved"));
+        assertEquals("Name", AbstractCompiler.setterSuffixFromFieldName("name"));
+    }
+
+    @Test
+    void setterNameFromGetterName_matchesJavaBeans() {
+        assertEquals("setActive", AbstractCompiler.setterNameFromGetterName("isActive"));
+        assertEquals("setName", AbstractCompiler.setterNameFromGetterName("getName"));
+        assertEquals("setIsActive", AbstractCompiler.setterNameFromGetterName("getIsActive"));
+    }
 }
