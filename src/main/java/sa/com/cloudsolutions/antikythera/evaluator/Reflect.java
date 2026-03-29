@@ -415,13 +415,15 @@ public class Reflect {
                 v.setInitializer(List.of(mce));
             }
             case JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST -> {
+                GeneratorState.addImport(new ImportDeclaration(JAVA_UTIL_ARRAY_LIST, false, false));
                 ObjectCreationExpr init = new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("ArrayList<>"));
                 v.setInitializer(List.of(init));
             }
             case JAVA_UTIL_SET, JAVA_UTIL_HASH_SET -> {
+                GeneratorState.addImport(new ImportDeclaration(JAVA_UTIL_HASH_SET, false, false));
                 ObjectCreationExpr init = new ObjectCreationExpr()
-                        .setType(new ClassOrInterfaceType().setName("HashSet"));
+                        .setType(new ClassOrInterfaceType().setName("HashSet<>"));
                 v.setInitializer(List.of(init));
             }
             case JAVA_UTIL_OPTIONAL, OPTIONAL -> {
