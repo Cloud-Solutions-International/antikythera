@@ -1,0 +1,79 @@
+name: Code Review (AI)
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: code-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  code-review:
+    name: Review pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    env:
+      IMAGE: e4c5/code-review-agent:1.0.1
+
+      SCM_PROVIDER: github
+      SCM_URL: https://api.github.com
+      SCM_OWNER: ${{ github.repository_owner }}
+      SCM_REPO: ${{ github.event.repository.name }}
+      SCM_PR_NUM: ${{ github.event.pull_request.number }}
+      SCM_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      SCM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      LLM_PROVIDER: ${{ vars.CODE_REVIEW_LLM_PROVIDER || 'openrouter' }}
+      LLM_MODEL: ${{ vars.CODE_REVIEW_LLM_MODEL || 'google/gemini-3.1-flash-lite-preview' }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+
+      SCM_SKIP_LABEL: skip-ai-review
+      SCM_SKIP_TITLE_PATTERN: "[skip-ai-review]"
+      CODE_REVIEW_LOG_LEVEL: INFO
+
+    steps:
+      - name: Skip when LLM secret is not configured
+        if: ${{ env.LLM_API_KEY == '' }}
+        run: echo "LLM_API_KEY is not configured; skipping AI review."
+
+      - name: Pull agent image
+        if: ${{ env.LLM_API_KEY != '' }}
+        run: docker pull "$IMAGE"
+
+      - name: Run AI code review
+        if: ${{ env.LLM_API_KEY != '' }}
+        run: |
+          docker run --rm \
+            -e SCM_PROVIDER \
+            -e SCM_URL \
+            -e SCM_OWNER \
+            -e SCM_REPO \
+            -e SCM_PR_NUM \
+            -e SCM_HEAD_SHA \
+            -e SCM_TOKEN \
+            -e SCM_SKIP_LABEL \
+            -e SCM_SKIP_TITLE_PATTERN \
+            -e LLM_PROVIDER \
+            -e LLM_MODEL \
+            -e LLM_API_KEY \
+            -e CODE_REVIEW_LOG_LEVEL \
+            "$IMAGE" \
+            --owner "$SCM_OWNER" \
+            --repo "$SCM_REPO" \
+            --pr "$SCM_PR_NUM" \
+            --head-sha "$SCM_HEAD_SHA"
