@@ -11,10 +11,9 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Tests for stream operation evaluation using the self-contained FunctionalStream source file.
@@ -38,7 +37,6 @@ class TestFunctionalStream extends TestHelper {
         AntikytheraRunTime.reset();
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
-        System.setOut(new PrintStream(outContent));
     }
 
     @ParameterizedTest
@@ -77,7 +75,7 @@ class TestFunctionalStream extends TestHelper {
                 m -> m.getNameAsString().equals(name)).orElseThrow();
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
         Variable v = evaluator.executeMethod(method);
-        assertNull(v.getValue());
-        assertEquals(value + "\n", outContent.toString());
+        assertNotNull(v.getValue());
+        assertEquals(value, v.getValue().toString());
     }
 }
