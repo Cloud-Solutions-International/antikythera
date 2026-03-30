@@ -118,6 +118,14 @@ import java.io.PrintStream;
 @SuppressWarnings("java:S106")
 public class Evaluator implements EvaluationEngine {
     private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
+    public static final String JAVA_UTIL_STREAM = "java.util.stream.";
+    public static final String TO_LIST = "toList";
+    public static final String TO_ARRAY = "toArray";
+    public static final String COUNT = "count";
+    public static final String AS_DOUBLE_STREAM = "asDoubleStream";
+    public static final String MAP_TO_OBJ = "mapToObj";
+    public static final String SORTED = "sorted";
+    public static final String REDUCE = "reduce";
     /**
      * The fields that were encountered in the current class.
      */
@@ -1179,7 +1187,7 @@ public class Evaluator implements EvaluationEngine {
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
-        if (method == null && v.getClazz().getName().startsWith("java.util.stream.")) {
+        if (method == null && v.getClazz().getName().startsWith(JAVA_UTIL_STREAM)) {
             // Short-circuit: method lookup can fail for stream classes when argument types
             // don't widen correctly (e.g. int→long for limit/skip). Route directly to
             // handleStreamMethods which uses the public Stream interface methods.
@@ -1237,7 +1245,7 @@ public class Evaluator implements EvaluationEngine {
             invoke(method, finalArgs, v);
         } catch (InaccessibleObjectException ioe) {
             // InaccessibleObjectException: JDK internal classes that can't be opened
-            if (v.getClazz().getName().startsWith("java.util.stream.")) {
+            if (v.getClazz().getName().startsWith(JAVA_UTIL_STREAM)) {
                 handleStreamMethods(v, reflectionArguments);
             } else {
                 Method publicMethod = Reflect.findPublicMethod(v.getClazz(),
@@ -1251,7 +1259,7 @@ public class Evaluator implements EvaluationEngine {
             // IllegalArgumentException: argument type mismatch on the concrete internal class
             // (e.g. BiFunction passed where BinaryOperator expected). Route stream classes
             // through handleStreamMethods which invokes via the public Stream interface.
-            if (v.getClazz().getName().startsWith("java.util.stream.")) {
+            if (v.getClazz().getName().startsWith(JAVA_UTIL_STREAM)) {
                 handleStreamMethods(v, reflectionArguments);
             } else {
                 throw iae;
@@ -1268,18 +1276,16 @@ public class Evaluator implements EvaluationEngine {
         }
     }
 
-    @SuppressWarnings({"unchecked", "java:S3740"})
-    private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) {
+    @SuppressWarnings({"java:S3740"})
+    private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
         String methodName = reflectionArguments.getMethodName();
         Object obj = v.getValue();
         Object[] finalArgs = reflectionArguments.getFinalArgs();
 
         if (obj instanceof IntStream || obj instanceof LongStream || obj instanceof DoubleStream) {
             dispatchPrimitiveStreamOp(methodName, obj, finalArgs);
-        } else if (obj instanceof Stream<?> stream) {
-            if (!dispatchIntermediateOp(methodName, stream, finalArgs)) {
-                dispatchTerminalOp(methodName, stream, finalArgs);
-            }
+        } else if (obj instanceof Stream<?> stream  && !dispatchIntermediateOp(methodName, stream, finalArgs)) {
+            dispatchTerminalOp(methodName, stream, finalArgs);
         }
     }
 
@@ -1289,74 +1295,65 @@ public class Evaluator implements EvaluationEngine {
      * @return {@code true} if the operation was handled, {@code false} if the method name is not
      *         an intermediate operation and the caller should attempt terminal dispatch.
      */
-    @SuppressWarnings({"unchecked", "java:S3740", "java:S3776"})
-    private boolean dispatchIntermediateOp(String methodName, Stream<?> stream, Object[] finalArgs) {
-        try {
-            Object result;
-            switch (methodName) {
-                case "filter", "takeWhile", "dropWhile" -> {
-                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
-                    Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
-                    result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
-                }
-                case "map" -> {
-                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
-                    result = Stream.class.getMethod("map", Function.class).invoke(stream, fn);
-                }
-                case "flatMap" -> {
-                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
-                    result = Stream.class.getMethod("flatMap", Function.class).invoke(stream, fn);
-                }
-                case "peek" -> {
-                    Consumer<Object> consumer = toStreamConsumer(finalArgs[0]);
-                    result = Stream.class.getMethod("peek", Consumer.class).invoke(stream, consumer);
-                }
-                case "sorted" -> {
-                    if (finalArgs.length == 0 || finalArgs[0] == null) {
-                        result = Stream.class.getMethod("sorted").invoke(stream);
-                    } else {
-                        Comparator<Object> comp = toStreamComparator(finalArgs[0]);
-                        result = Stream.class.getMethod("sorted", Comparator.class).invoke(stream, comp);
-                    }
-                }
-                case "distinct" -> result = Stream.class.getMethod("distinct").invoke(stream);
-                case "limit" -> {
-                    long n = ((Number) finalArgs[0]).longValue();
-                    result = Stream.class.getMethod("limit", long.class).invoke(stream, n);
-                }
-                case "skip" -> {
-                    long n = ((Number) finalArgs[0]).longValue();
-                    result = Stream.class.getMethod("skip", long.class).invoke(stream, n);
-                }
-                case "mapToInt" -> {
-                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
-                    ToIntFunction<Object> toIntFn = x -> ((Number) fn.apply(x)).intValue();
-                    result = Stream.class.getMethod("mapToInt", ToIntFunction.class).invoke(stream, toIntFn);
-                }
-                case "mapToLong" -> {
-                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
-                    ToLongFunction<Object> toLongFn = x -> ((Number) fn.apply(x)).longValue();
-                    result = Stream.class.getMethod("mapToLong", ToLongFunction.class).invoke(stream, toLongFn);
-                }
-                case "mapToDouble" -> {
-                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
-                    ToDoubleFunction<Object> toDblFn = x -> ((Number) fn.apply(x)).doubleValue();
-                    result = Stream.class.getMethod("mapToDouble", ToDoubleFunction.class).invoke(stream, toDblFn);
-                }
-                default -> { return false; }
+    @SuppressWarnings({"java:S3740", "java:S3776"})
+    private boolean dispatchIntermediateOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Object result;
+        switch (methodName) {
+            case "filter", "takeWhile", "dropWhile" -> {
+                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
+                result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
             }
-            Variable rv = new Variable(result);
-            rv.setClazz(result != null ? result.getClass() : Stream.class);
-            returnValue = rv;
-            return true;
-        } catch (InvocationTargetException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException re) throw re;
-            throw new AntikytheraException(cause);
-        } catch (ReflectiveOperationException e) {
-            logger.warn("dispatchIntermediateOp({}) failed: {}", methodName, e.getMessage());
-            return false;
+            case "map" -> {
+                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                result = Stream.class.getMethod("map", Function.class).invoke(stream, fn);
+            }
+            case "flatMap" -> {
+                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                result = Stream.class.getMethod("flatMap", Function.class).invoke(stream, fn);
+            }
+            case "peek" -> {
+                Consumer<Object> consumer = toStreamConsumer(finalArgs[0]);
+                result = Stream.class.getMethod("peek", Consumer.class).invoke(stream, consumer);
+            }
+            case SORTED -> {
+                if (finalArgs.length == 0 || finalArgs[0] == null) {
+                    result = Stream.class.getMethod(SORTED).invoke(stream);
+                } else {
+                    Comparator<Object> comp = toStreamComparator(finalArgs[0]);
+                    result = Stream.class.getMethod(SORTED, Comparator.class).invoke(stream, comp);
+                }
+            }
+            case "distinct" -> result = Stream.class.getMethod("distinct").invoke(stream);
+            case "limit" -> {
+                long n = ((Number) finalArgs[0]).longValue();
+                result = Stream.class.getMethod("limit", long.class).invoke(stream, n);
+            }
+            case "skip" -> {
+                long n = ((Number) finalArgs[0]).longValue();
+                result = Stream.class.getMethod("skip", long.class).invoke(stream, n);
+            }
+            case "mapToInt" -> {
+                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                ToIntFunction<Object> toIntFn = x -> ((Number) fn.apply(x)).intValue();
+                result = Stream.class.getMethod("mapToInt", ToIntFunction.class).invoke(stream, toIntFn);
+            }
+            case "mapToLong" -> {
+                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                ToLongFunction<Object> toLongFn = x -> ((Number) fn.apply(x)).longValue();
+                result = Stream.class.getMethod("mapToLong", ToLongFunction.class).invoke(stream, toLongFn);
+            }
+            case "mapToDouble" -> {
+                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                ToDoubleFunction<Object> toDblFn = x -> ((Number) fn.apply(x)).doubleValue();
+                result = Stream.class.getMethod("mapToDouble", ToDoubleFunction.class).invoke(stream, toDblFn);
+            }
+            default -> { return false; }
         }
+        Variable rv = new Variable(result);
+        rv.setClazz(result != null ? result.getClass() : Stream.class);
+        returnValue = rv;
+        return true;
     }
 
     /**
@@ -1378,9 +1375,9 @@ public class Evaluator implements EvaluationEngine {
                     Collector<Object, ?, Object> col = (Collector<Object, ?, Object>) finalArgs[0];
                     result = Stream.class.getMethod("collect", Collector.class).invoke(stream, col);
                 }
-                case "count" -> result = Stream.class.getMethod("count").invoke(stream);
-                case "toList" -> result = Stream.class.getMethod("toList").invoke(stream);
-                case "toArray" -> result = Stream.class.getMethod("toArray").invoke(stream);
+                case COUNT -> result = Stream.class.getMethod(COUNT).invoke(stream);
+                case TO_LIST -> result = Stream.class.getMethod(TO_LIST).invoke(stream);
+                case TO_ARRAY -> result = Stream.class.getMethod(TO_ARRAY).invoke(stream);
                 case "findFirst" -> result = Stream.class.getMethod("findFirst").invoke(stream);
                 case "findAny" -> result = Stream.class.getMethod("findAny").invoke(stream);
                 case "anyMatch", "allMatch", "noneMatch" -> {
@@ -1392,13 +1389,13 @@ public class Evaluator implements EvaluationEngine {
                     Comparator<Object> comp = toStreamComparator(finalArgs[0]);
                     result = Stream.class.getMethod(methodName, Comparator.class).invoke(stream, comp);
                 }
-                case "reduce" -> {
+                case REDUCE -> {
                     if (finalArgs.length == 1) {
                         BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[0]);
-                        result = Stream.class.getMethod("reduce", BinaryOperator.class).invoke(stream, op);
+                        result = Stream.class.getMethod(REDUCE, BinaryOperator.class).invoke(stream, op);
                     } else {
                         BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[1]);
-                        result = Stream.class.getMethod("reduce", Object.class, BinaryOperator.class)
+                        result = Stream.class.getMethod(REDUCE, Object.class, BinaryOperator.class)
                                 .invoke(stream, finalArgs[0], op);
                     }
                 }
@@ -1424,75 +1421,68 @@ public class Evaluator implements EvaluationEngine {
      * Dispatch terminal (and conversion) operations on primitive specialised streams
      * ({@link IntStream}, {@link LongStream}, {@link DoubleStream}).
      */
-    @SuppressWarnings({"unchecked", "java:S3740", "java:S3776"})
-    private void dispatchPrimitiveStreamOp(String methodName, Object stream, Object[] finalArgs) {
-        try {
-            Class<?> iface;
-            if (stream instanceof IntStream) {
-                iface = IntStream.class;
-            } else if (stream instanceof LongStream) {
-                iface = LongStream.class;
-            } else {
-                iface = DoubleStream.class;
-            }
-            Object result;
-            switch (methodName) {
-                case "sum" -> result = iface.getMethod("sum").invoke(stream);
-                case "count" -> result = iface.getMethod("count").invoke(stream);
-                case "average" -> result = iface.getMethod("average").invoke(stream);
-                case "min" -> result = iface.getMethod("min").invoke(stream);
-                case "max" -> result = iface.getMethod("max").invoke(stream);
-                case "summaryStatistics" -> result = iface.getMethod("summaryStatistics").invoke(stream);
-                case "boxed" -> result = iface.getMethod("boxed").invoke(stream);
-                case "toList" -> result = iface.getMethod("toList").invoke(stream);
-                case "toArray" -> result = iface.getMethod("toArray").invoke(stream);
-                case "asLongStream" -> result = IntStream.class.getMethod("asLongStream").invoke(stream);
-                case "asDoubleStream" -> {
-                    if (stream instanceof IntStream) {
-                        result = IntStream.class.getMethod("asDoubleStream").invoke(stream);
-                    } else {
-                        result = LongStream.class.getMethod("asDoubleStream").invoke(stream);
-                    }
-                }
-                case "forEach" -> {
-                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
-                    if (stream instanceof IntStream is) {
-                        is.forEach(fn::apply);
-                    } else if (stream instanceof LongStream ls) {
-                        ls.forEach(fn::apply);
-                    } else {
-                        ((DoubleStream) stream).forEach(fn::apply);
-                    }
-                    returnValue = new Variable(null);
-                    return;
-                }
-                case "mapToObj" -> {
-                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
-                    if (stream instanceof IntStream is) {
-                        result = IntStream.class.getMethod("mapToObj", IntFunction.class)
-                                .invoke(is, (IntFunction<Object>) fn::apply);
-                    } else if (stream instanceof LongStream ls) {
-                        result = LongStream.class.getMethod("mapToObj", LongFunction.class)
-                                .invoke(ls, (LongFunction<Object>) fn::apply);
-                    } else {
-                        result = DoubleStream.class.getMethod("mapToObj", DoubleFunction.class)
-                                .invoke(stream, (DoubleFunction<Object>) fn::apply);
-                    }
-                }
-                default -> { return; }
-            }
-            Variable rv = new Variable(result);
-            if (result != null) {
-                rv.setClazz(result.getClass());
-            }
-            returnValue = rv;
-        } catch (InvocationTargetException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException re) throw re;
-            throw new AntikytheraException(cause);
-        } catch (ReflectiveOperationException e) {
-            logger.warn("dispatchPrimitiveStreamOp({}) failed: {}", methodName, e.getMessage());
+    @SuppressWarnings({"java:S3740", "java:S3776"})
+    private void dispatchPrimitiveStreamOp(String methodName, Object stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Class<?> iface;
+        if (stream instanceof IntStream) {
+            iface = IntStream.class;
+        } else if (stream instanceof LongStream) {
+            iface = LongStream.class;
+        } else {
+            iface = DoubleStream.class;
         }
+        Object result;
+        switch (methodName) {
+            case "sum" -> result = iface.getMethod("sum").invoke(stream);
+            case COUNT -> result = iface.getMethod(COUNT).invoke(stream);
+            case "average" -> result = iface.getMethod("average").invoke(stream);
+            case "min" -> result = iface.getMethod("min").invoke(stream);
+            case "max" -> result = iface.getMethod("max").invoke(stream);
+            case "summaryStatistics" -> result = iface.getMethod("summaryStatistics").invoke(stream);
+            case "boxed" -> result = iface.getMethod("boxed").invoke(stream);
+            case TO_LIST -> result = iface.getMethod(TO_LIST).invoke(stream);
+            case TO_ARRAY -> result = iface.getMethod(TO_ARRAY).invoke(stream);
+            case "asLongStream" -> result = IntStream.class.getMethod("asLongStream").invoke(stream);
+            case AS_DOUBLE_STREAM -> {
+                if (stream instanceof IntStream) {
+                    result = IntStream.class.getMethod(AS_DOUBLE_STREAM).invoke(stream);
+                } else {
+                    result = LongStream.class.getMethod(AS_DOUBLE_STREAM).invoke(stream);
+                }
+            }
+            case "forEach" -> {
+                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                if (stream instanceof IntStream is) {
+                    is.forEach(fn::apply);
+                } else if (stream instanceof LongStream ls) {
+                    ls.forEach(fn::apply);
+                } else {
+                    ((DoubleStream) stream).forEach(fn::apply);
+                }
+                returnValue = new Variable(null);
+                return;
+            }
+            case MAP_TO_OBJ -> {
+                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                if (stream instanceof IntStream is) {
+                    result = IntStream.class.getMethod(MAP_TO_OBJ, IntFunction.class)
+                            .invoke(is, (IntFunction<Object>) fn::apply);
+                } else if (stream instanceof LongStream ls) {
+                    result = LongStream.class.getMethod(MAP_TO_OBJ, LongFunction.class)
+                            .invoke(ls, (LongFunction<Object>) fn::apply);
+                } else {
+                    result = DoubleStream.class.getMethod(MAP_TO_OBJ, DoubleFunction.class)
+                            .invoke(stream, (DoubleFunction<Object>) fn::apply);
+                }
+            }
+            default -> { return; }
+        }
+        Variable rv = new Variable(result);
+        if (result != null) {
+            rv.setClazz(result.getClass());
+        }
+        returnValue = rv;
+
     }
 
     @SuppressWarnings("unchecked")
