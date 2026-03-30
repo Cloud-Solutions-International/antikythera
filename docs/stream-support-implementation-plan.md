@@ -19,6 +19,16 @@ held as a class field or constructed inline. The failure mode is:
 
 **The root cause of most stream failures is step 4**, not the stream source.
 
+### Code locations (verified)
+
+| Item | Location |
+|---|---|
+| `handleStreamMethods` | `Evaluator.java` line 1241 — only handles `forEach` |
+| `invokeinAccessibleMethod` | `Evaluator.java` line 1210 — detects `java.util.stream.*` prefix |
+| `isReturning()` | `FPEvaluator.java` line 104 — switch at line 123 |
+| `FunctionEvaluator` | implements `java.util.function.Function<T,R>` |
+| `ConsumerEvaluator` | implements `java.util.function.Consumer<T>` |
+
 ---
 
 ## What Already Works (do not regress)
@@ -64,12 +74,51 @@ interface method) IS accessible. We can invoke via the interface method directly
 These operations take a functional argument and return another stream. They must:
 - Execute the method via the public `Stream` interface (not the internal class)
 - Store the resulting stream as the new `returnValue`
+- Set `returnValue.clazz` to the **actual runtime class** of the returned stream (e.g. from
+  `result.getClass()`), not `Stream.class`. This is critical: `invokeinAccessibleMethod` routes to
+  `handleStreamMethods` by checking `v.getClazz().getName().startsWith("java.util.stream.")`. If
+  the clazz is set incorrectly the chain silently breaks.
 
 Operations: `map`, `filter`, `sorted`, `distinct`, `peek`, `flatMap`, `limit`, `skip`,
 `takeWhile`, `dropWhile`
 
+Operations returning a **primitive specialised stream** (to be dispatched onward to P4 terminal
+handling): `mapToInt`, `mapToLong`, `mapToDouble`, `mapToObj`
+
+> **Note — `sorted` has two overloads:** `sorted()` (no-arg, natural ordering) and
+> `sorted(Comparator<? super T>)`. Both must be handled. For the no-arg form, look up
+> `Stream.class.getMethod("sorted")` (no parameters); for the Comparator form use
+> `Stream.class.getMethod("sorted", Comparator.class)`.
+
 **Approach:** Call `Stream.class.getMethod(methodName, ...)` to obtain the interface method, then
 invoke it with the already-proxied functional argument.
+
+> **Critical implementation note — functional interface type adaptation:**
+> Each Stream method expects a specific functional interface type:
+>
+> | Stream method | Expected parameter type |
+> |---|---|
+> | `filter` | `Predicate<? super T>` (raw: `Predicate`) |
+> | `map` | `Function<? super T, ? extends R>` (raw: `Function`) |
+> | `flatMap` | `Function<? super T, ? extends Stream<? extends R>>` (raw: `Function`) |
+> | `sorted` | `Comparator<? super T>` (raw: `Comparator`) |
+> | `peek` | `Consumer<? super T>` (raw: `Consumer`) |
+> | `takeWhile` / `dropWhile` | `Predicate<? super T>` (raw: `Predicate`) |
+> | `mapToInt/Long/Double` | `ToIntFunction` / `ToLongFunction` / `ToDoubleFunction` |
+>
+> The FPEvaluator proxy for a returning single-arg lambda is always a `FunctionEvaluator`
+> (implements `java.util.function.Function`), regardless of context. Passing a `Function` where
+> `Predicate` is expected will cause a `ClassCastException` inside the stream implementation.
+> The dispatcher must **adapt** each proxy to the required interface. Recommended approach: for
+> each intermediate operation, create a thin adapter lambda at dispatch time, e.g.:
+> ```java
+> // filter expects Predicate, but proxy is a Function<Object,Object> (return type erased to Object)
+> Function<Object, Object> fn = (Function<Object, Object>) proxy;
+> Predicate<Object> predicate = x -> Boolean.TRUE.equals(fn.apply(x));
+> stream.filter(predicate);
+> ```
+> Using `Stream.class.getMethod("filter", Predicate.class).invoke(stream, predicate)` avoids
+> the inaccessible-class problem while keeping type safety.
 
 #### 1.2 Terminal operations that return a non-stream value
 
@@ -78,21 +127,25 @@ These consume the stream and return a concrete result (or void).
 | Method | Return type | Notes |
 |---|---|---|
 | `forEach` | void | Already implemented |
-| `collect` | Object (depends on Collector) | Most complex; see P3 |
-| `findFirst` | `Optional<T>` | No functional arg |
-| `findAny` | `Optional<T>` | No functional arg |
+| `collect` | Object (depends on Collector) | Most complex; see P3. Two overloads: `collect(Collector)` and `collect(Supplier, BiConsumer, BiConsumer)` — implement the Collector form first |
+| `findFirst` | `Optional<T>` | No functional arg; wrap result in `Variable` with `clazz = Optional.class` |
+| `findAny` | `Optional<T>` | No functional arg; wrap similarly |
 | `count` | long | No functional arg |
-| `min` | `Optional<T>` | Takes `Comparator` |
+| `min` | `Optional<T>` | Takes `Comparator`; see adaptation note in §1.1 |
 | `max` | `Optional<T>` | Takes `Comparator` |
-| `anyMatch` | boolean | Takes `Predicate` |
+| `anyMatch` | boolean | Takes `Predicate`; see adaptation note in §1.1 |
 | `allMatch` | boolean | Takes `Predicate` |
 | `noneMatch` | boolean | Takes `Predicate` |
-| `reduce` | `Optional<T>` or T | Takes `BinaryOperator` or identity + accumulator |
+| `reduce` | `Optional<T>` or T | Three overloads: (a) `reduce(BinaryOperator<T>)` → `Optional<T>`; (b) `reduce(T identity, BinaryOperator<T>)` → `T`; (c) `reduce(U identity, BiFunction<U,T,U>, BinaryOperator<U>)` → `U`. Implement (a) and (b) first. |
 | `toList` | `List<T>` | No-arg terminal (Java 16+) |
 | `toArray` | `Object[]` | Optional `IntFunction` arg |
 
 **Approach:** For each, obtain the interface method from `Stream.class`, invoke it, wrap result in
 `Variable`.
+
+> **Optional return types:** `findFirst`, `findAny`, `min`, `max`, and the single-arg `reduce` all
+> return `Optional<T>`. Set `returnValue.clazz = Optional.class` so downstream code that calls
+> `.isPresent()` / `.get()` / `.ifPresent()` resolves correctly through the existing reflection path.
 
 #### 1.3 Suggested structure for the expanded `handleStreamMethods`
 
@@ -122,17 +175,20 @@ New test methods in `TestFunctional` (new methods in `Functional.java` test help
 | New test method | What it covers |
 |---|---|
 | `streamMap` — `list.stream().map(lambda).collect(Collectors.toList())` where list is a method parameter | P1 core case |
-| `streamFilter` — `list.stream().filter(lambda)` | filter via handleStreamMethods |
+| `streamFilter` — `list.stream().filter(lambda)` | filter via handleStreamMethods (Predicate adaptation) |
 | `streamCount` — `list.stream().count()` | count terminal |
-| `streamFindFirst` — `list.stream().findFirst()` | findFirst terminal |
-| `streamAnyMatch` — `list.stream().anyMatch(lambda)` | boolean terminal |
+| `streamFindFirst` — `list.stream().findFirst()` | findFirst terminal → Optional |
+| `streamAnyMatch` — `list.stream().anyMatch(lambda)` | boolean terminal (Predicate adaptation) |
 | `streamAllMatch` — `list.stream().allMatch(lambda)` | boolean terminal |
 | `streamNoneMatch` — `list.stream().noneMatch(lambda)` | boolean terminal |
-| `streamMin` / `streamMax` | Comparator-based terminals |
-| `streamReduce` | BinaryOperator terminal |
+| `streamMin` / `streamMax` | Comparator-based terminals (Comparator adaptation) |
+| `streamReduce` | BinaryOperator terminal (single-arg form returning Optional) |
+| `streamReduceWithIdentity` | two-arg reduce returning T |
 | `streamLimit` / `streamSkip` | stateful intermediate ops |
 | `streamDistinct` | stateful intermediate op |
-| `streamFlatMap` | flatMap with lambda returning a stream |
+| `streamFlatMap` | flatMap with lambda returning a stream (Function adaptation) |
+| `streamSorted` | no-arg `sorted()` — natural ordering |
+| `streamSortedWithComparator` | `sorted(Comparator)` — Comparator adaptation |
 
 Each test method should take its stream source as a **method parameter** (not a field) to exercise
 the inaccessible-class path rather than the happy path.
@@ -154,10 +210,25 @@ case "map", "filter", "sorted", "reduce", "anyMatch", "allMatch", "noneMatch",
 **Missing methods:** `flatMap`, `mapToInt`, `mapToLong`, `mapToDouble`, `mapToObj`, `collect`,
 `min`, `max`, `takeWhile`, `dropWhile`.
 
-**Effect of the bug:** When a lambda is used in one of these missing positions and the body is an
-expression statement (no explicit `return`), `isReturning()` returns `false`. The lambda body is
-then treated as void (a `Consumer` instead of a `Function`), causing wrong runtime behaviour or
+**What `isReturning()` actually does (verified against source):**
+
+The method has three cases (lines 118–130):
+
+1. **Non-block lambda** (`x -> expr`, no `{}`): always returns `true` — handled at line 118–119.
+   These are *never* affected by the missing names.
+2. **Block lambda with an explicit `return` statement** (`x -> { return …; }`): caught at line 54
+   of `create()` before `isReturning()` is called. These are also *never* affected.
+3. **Block lambda with no explicit `return`** (`x -> { expr; }`): reaches the `switch` at line 123.
+   **This is the only case where the missing operation names matter.**
+
+**Effect of the bug:** When a *block-statement* lambda that has no explicit `return` statement is
+used in one of the missing operations (e.g. `stream.flatMap(x -> { return x.getItems().stream(); })`
+written without `return`), `isReturning()` returns `false`. The lambda body is then treated as
+void (a `ConsumerEvaluator` instead of a `FunctionEvaluator`), causing wrong runtime behaviour or
 a `ClassCastException` in the proxy.
+
+> **Interaction with P1:** `mapToInt/Long/Double/Obj` are listed here as missing from
+> `isReturning()` and should be added in parallel with the P1 dispatcher changes.
 
 **Approach:** Add the missing names to the `switch` in `isReturning()`.
 
@@ -168,7 +239,7 @@ a `ClassCastException` in the proxy.
 #### 2.2 Tests to add
 
 New parameterized cases in `TestFunctional.testBiFunction` that exercise `flatMap` and `collect`
-with expression-statement (non-block) lambdas:
+with **block-body lambdas** (containing `{}`) that have no explicit `return` statement:
 
 ```java
 "flatMapTest; [A, A, B, B]"   // List<List<Person>> flattened
@@ -234,9 +305,11 @@ called, the result is `java.util.stream.IntPipeline` (or similar), which has its
 
 #### 4.1 Detection
 
-After P1, if `mapToInt`/`mapToLong`/`mapToDouble` is dispatched as an intermediate op and its
-result is stored, the subsequent method call will be on an `IntStream`/`LongStream`/`DoubleStream`
-object. These also start with `java.util.stream.` so they will reach `handleStreamMethods`.
+After P1, `mapToInt`/`mapToLong`/`mapToDouble` are dispatched as intermediate ops in
+`dispatchIntermediateOp` (returning the primitive stream result). The subsequent method call will
+be on an `IntStream`/`LongStream`/`DoubleStream` object. These also start with `java.util.stream.`
+so they will reach `handleStreamMethods`. The dispatcher must then look up methods on the correct
+primitive-stream interface class rather than `Stream.class`.
 
 #### 4.2 Additional terminal ops required
 
@@ -250,7 +323,8 @@ object. These also start with `java.util.stream.` so they will reach `handleStre
 
 **Approach:** Extend `dispatchTerminalOp` (added in P1) to check for primitive stream-specific
 method names and invoke via `IntStream.class` / `LongStream.class` / `DoubleStream.class`
-interface methods.
+interface methods. Detect which primitive stream interface to use with
+`instanceof IntStream` / `instanceof LongStream` / `instanceof DoubleStream` checks on the value.
 
 #### 4.3 Static factory `IntStream.range` / `rangeClosed`
 
@@ -273,6 +347,23 @@ through the existing static method invocation path in `Evaluator`. Add tests to 
 
 ---
 
+## Known Limitations / Out of Scope
+
+The following stream patterns are **not covered** by this plan and are deferred:
+
+| Pattern | Reason |
+|---|---|
+| `Stream.generate(Supplier)` / `Stream.iterate(seed, fn)` | Infinite / generator streams — need lazy evaluation semantics |
+| `Stream.of(...)` static factory | Usually works via the existing static method path; add a targeted test before declaring done |
+| `String.chars()` / `CharSequence.chars()` | Returns `IntStream` — P4 terminal ops would handle once P4 lands, but the source method needs testing |
+| `map.entrySet().stream()` | Common in service code; needs `Map.Entry` handling — test and verify |
+| `Optional.stream()` (Java 9+) | Uncommon; defer until a real case is encountered |
+| Parallel streams (`parallelStream()`, `.parallel()`) | `AntikytheraRunTime` and `Branching` hold shared mutable static state; parallel execution would corrupt state |
+| `Collectors.teeing` (Java 12+) | Complex two-collector combinator; defer |
+| `Stream.concat(a, b)` | Static method; likely works via existing path — add a test to confirm |
+
+---
+
 ## Checklist
 
 ### Pre-work
@@ -283,26 +374,35 @@ through the existing static method invocation path in `Evaluator`. Add tests to 
 ### P1 — Expand `handleStreamMethods`
 
 - [ ] Identify the `Stream` interface methods for all intermediate ops (`map`, `filter`, `flatMap`,
-      `distinct`, `limit`, `skip`, `peek`, `sorted`, `takeWhile`, `dropWhile`)
-- [ ] Implement `dispatchIntermediateOp`: look up method on `Stream.class`, invoke on stream object,
-      store result in `returnValue`
+      `distinct`, `limit`, `skip`, `peek`, `sorted` (both overloads), `takeWhile`, `dropWhile`,
+      `mapToInt`, `mapToLong`, `mapToDouble`, `mapToObj`)
+- [ ] Implement functional-interface adapters for each intermediate op so that a `FunctionEvaluator`
+      (implements `Function`) can be adapted to `Predicate` (for `filter`, `takeWhile`, `dropWhile`),
+      `Comparator` (for `sorted`), `Consumer` (for `peek`), and the `ToInt/Long/DoubleFunction`
+      specialisations (for `mapToInt/Long/Double`)
+- [ ] Implement `dispatchIntermediateOp`: look up method on `Stream.class` (or appropriate
+      primitive-stream class), invoke with adapted argument, store result in `returnValue` with
+      `clazz` set from `result.getClass()`
 - [ ] Identify the `Stream` interface methods for all terminal ops (`collect`, `count`, `findFirst`,
       `findAny`, `min`, `max`, `anyMatch`, `allMatch`, `noneMatch`, `reduce`, `toList`, `toArray`,
       `forEach` — existing)
 - [ ] Implement `dispatchTerminalOp`: look up method on `Stream.class`, invoke on stream object,
-      wrap result in `Variable` with correct `clazz`
+      wrap result in `Variable` with correct `clazz` (use `Optional.class` for Optional-returning ops)
 - [ ] Refactor `handleStreamMethods` to dispatch to `dispatchIntermediateOp` or `dispatchTerminalOp`
 - [ ] Ensure `forEach` existing behaviour is preserved in the new dispatch structure
 - [ ] Add `streamMap` test method to `Functional.java` (list param → map → collect)
-- [ ] Add `streamFilter` test method
+- [ ] Add `streamFilter` test method (Predicate adaptation)
 - [ ] Add `streamCount` test method
-- [ ] Add `streamFindFirst` test method
+- [ ] Add `streamFindFirst` test method (Optional result)
 - [ ] Add `streamAnyMatch`, `streamAllMatch`, `streamNoneMatch` test methods
-- [ ] Add `streamMin`, `streamMax` test methods
-- [ ] Add `streamReduce` test method
+- [ ] Add `streamMin`, `streamMax` test methods (Comparator adaptation)
+- [ ] Add `streamReduce` test method (single-arg, Optional result)
+- [ ] Add `streamReduceWithIdentity` test method (two-arg, T result)
 - [ ] Add `streamLimit`, `streamSkip` test methods
 - [ ] Add `streamDistinct` test method
-- [ ] Add `streamFlatMap` test method
+- [ ] Add `streamFlatMap` test method (Function adaptation returning Stream)
+- [ ] Add `streamSorted` test method (no-arg)
+- [ ] Add `streamSortedWithComparator` test method (Comparator adaptation)
 - [ ] Add all new method names to `TestFunctional.testBiFunction` `@CsvSource`
 - [ ] Run `TestFunctional` — all tests pass
 - [ ] Run full `antikythera` test suite — no regressions
@@ -311,8 +411,9 @@ through the existing static method invocation path in `Evaluator`. Add tests to 
 ### P2 — Fix `FPEvaluator.isReturning()`
 
 - [ ] Add `flatMap`, `mapToInt`, `mapToLong`, `mapToDouble`, `mapToObj`, `collect`, `min`, `max`,
-      `takeWhile`, `dropWhile` to the `switch` in `isReturning()`
-- [ ] Add expression-lambda `flatMap` test to `Functional.java`
+      `takeWhile`, `dropWhile` to the `switch` in `isReturning()` (only block-statement lambdas
+      with no explicit `return` reach this code path)
+- [ ] Add block-body `flatMap` test to `Functional.java` (lambda with `{}` and no explicit return)
 - [ ] Verify `TestFunctional` still passes
 - [ ] Run full `antikythera` test suite — no regressions
 
@@ -327,9 +428,11 @@ through the existing static method invocation path in `Evaluator`. Add tests to 
 
 ### P4 — Primitive specialised streams
 
+- [ ] Confirm `mapToInt/Long/Double` intermediate dispatch is handled in P1's
+      `dispatchIntermediateOp` (routing, not terminal handling)
 - [ ] Extend `dispatchTerminalOp` (or add `dispatchPrimitiveStreamOp`) to handle `IntStream`,
       `LongStream`, `DoubleStream` terminal methods (`sum`, `average`, `boxed`,
-      `summaryStatistics`)
+      `summaryStatistics`); detect which interface to use via `instanceof` checks on the stream value
 - [ ] Add `intStreamRange` test to `Functional.java`
 - [ ] Add `mapToIntSum` test
 - [ ] Add `mapToLongSum` test
@@ -354,4 +457,6 @@ through the existing static method invocation path in `Evaluator`. Add tests to 
 | `antikythera-test-helper/src/main/java/.../testhelper/evaluator/Functional.java` | P1, P2, P3, P4 |
 | `antikythera/src/test/java/.../evaluator/TestFunctional.java` | P1, P2, P3, P4 |
 
-No new classes need to be created. All changes are additive expansions within existing methods.
+No new top-level classes need to be created. All changes are additive expansions within existing
+methods. Small private helper methods (`dispatchIntermediateOp`, `dispatchTerminalOp`, and
+functional-interface adapter utilities) will be added as private methods within `Evaluator.java`.
