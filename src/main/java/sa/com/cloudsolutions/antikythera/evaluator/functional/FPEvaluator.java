@@ -122,7 +122,8 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
                 String name = mce.getNameAsString();
                 return switch (name) {
                     case "map", "filter", "sorted", "reduce", "anyMatch", "allMatch", "noneMatch",
-                         "findFirst", "findAny" -> true;
+                         "findFirst", "findAny", "flatMap", "mapToInt", "mapToLong", "mapToDouble",
+                         "mapToObj", "collect", "min", "max", "takeWhile", "dropWhile" -> true;
                     default -> false;
                 };
             }

@@ -91,7 +91,22 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Comparator;
+import java.util.function.BiFunction;
+import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
+import java.util.function.DoubleFunction;
+import java.util.function.Function;
+import java.util.function.IntFunction;
+import java.util.function.LongFunction;
+import java.util.function.Predicate;
+import java.util.function.ToDoubleFunction;
+import java.util.function.ToIntFunction;
+import java.util.function.ToLongFunction;
+import java.util.stream.Collector;
+import java.util.stream.DoubleStream;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 import java.util.stream.Stream;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -1164,6 +1179,10 @@ public class Evaluator implements EvaluationEngine {
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
+        if (method == null && v.getClazz().getName().startsWith("java.util.stream.")) {
+            handleStreamMethods(v, reflectionArguments);
+            return returnValue;
+        }
         validateReflectiveMethod(v, reflectionArguments, method);
         reflectionArguments.setMethod(method);
         reflectionArguments.finalizeArguments();
@@ -1213,17 +1232,21 @@ public class Evaluator implements EvaluationEngine {
         try {
             method.setAccessible(true);
             invoke(method, finalArgs, v);
-        } catch (InaccessibleObjectException ioe) {
-            // Handle JDK stream methods differently
+        } catch (InaccessibleObjectException | IllegalArgumentException ex) {
+            // Handle JDK stream methods differently — also catches IllegalArgumentException
+            // which occurs when functional-interface argument types don't match the concrete
+            // stream class's internal method (e.g. BiFunction passed where BinaryOperator expected).
             if (v.getClazz().getName().startsWith("java.util.stream.")) {
                 handleStreamMethods(v, reflectionArguments);
-            } else {
+            } else if (ex instanceof InaccessibleObjectException) {
                 Method publicMethod = Reflect.findPublicMethod(v.getClazz(),
                         reflectionArguments.getMethodName(),
                         reflectionArguments.getArgumentTypes());
                 if (publicMethod != null) {
                     invoke(publicMethod, finalArgs, v);
                 }
+            } else {
+                throw (IllegalArgumentException) ex;
             }
         }
     }
@@ -1241,15 +1264,280 @@ public class Evaluator implements EvaluationEngine {
     private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) {
         String methodName = reflectionArguments.getMethodName();
         Object obj = v.getValue();
+        Object[] finalArgs = reflectionArguments.getFinalArgs();
 
-        if ("forEach".equals(methodName)) {
-            Consumer<?> action = (Consumer<?>) reflectionArguments.getFinalArgs()[0];
-            if (obj instanceof Stream stream) {
-                stream.forEach(action);
-                returnValue = new Variable(null); // void method
+        if (obj instanceof IntStream || obj instanceof LongStream || obj instanceof DoubleStream) {
+            dispatchPrimitiveStreamOp(v, methodName, obj, finalArgs);
+        } else if (obj instanceof Stream<?> stream) {
+            if (!dispatchIntermediateOp(v, methodName, stream, finalArgs)) {
+                dispatchTerminalOp(v, methodName, stream, finalArgs);
             }
         }
     }
+
+    /**
+     * Dispatch intermediate stream operations (those that return a new Stream).
+     *
+     * @return {@code true} if the operation was handled, {@code false} if the method name is not
+     *         an intermediate operation and the caller should attempt terminal dispatch.
+     */
+    @SuppressWarnings({"unchecked", "java:S3740"})
+    private boolean dispatchIntermediateOp(Variable v, String methodName, Stream<?> stream, Object[] finalArgs) {
+        try {
+            Object result;
+            switch (methodName) {
+                case "filter", "takeWhile", "dropWhile" -> {
+                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                    Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
+                    result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
+                }
+                case "map" -> {
+                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                    result = Stream.class.getMethod("map", Function.class).invoke(stream, fn);
+                }
+                case "flatMap" -> {
+                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                    result = Stream.class.getMethod("flatMap", Function.class).invoke(stream, fn);
+                }
+                case "peek" -> {
+                    Consumer<Object> consumer = toStreamConsumer(finalArgs[0]);
+                    result = Stream.class.getMethod("peek", Consumer.class).invoke(stream, consumer);
+                }
+                case "sorted" -> {
+                    if (finalArgs.length == 0 || finalArgs[0] == null) {
+                        result = Stream.class.getMethod("sorted").invoke(stream);
+                    } else {
+                        Comparator<Object> comp = toStreamComparator(finalArgs[0]);
+                        result = Stream.class.getMethod("sorted", Comparator.class).invoke(stream, comp);
+                    }
+                }
+                case "distinct" -> result = Stream.class.getMethod("distinct").invoke(stream);
+                case "limit" -> {
+                    long n = ((Number) finalArgs[0]).longValue();
+                    result = Stream.class.getMethod("limit", long.class).invoke(stream, n);
+                }
+                case "skip" -> {
+                    long n = ((Number) finalArgs[0]).longValue();
+                    result = Stream.class.getMethod("skip", long.class).invoke(stream, n);
+                }
+                case "mapToInt" -> {
+                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                    ToIntFunction<Object> toIntFn = x -> ((Number) fn.apply(x)).intValue();
+                    result = Stream.class.getMethod("mapToInt", ToIntFunction.class).invoke(stream, toIntFn);
+                }
+                case "mapToLong" -> {
+                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                    ToLongFunction<Object> toLongFn = x -> ((Number) fn.apply(x)).longValue();
+                    result = Stream.class.getMethod("mapToLong", ToLongFunction.class).invoke(stream, toLongFn);
+                }
+                case "mapToDouble" -> {
+                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                    ToDoubleFunction<Object> toDblFn = x -> ((Number) fn.apply(x)).doubleValue();
+                    result = Stream.class.getMethod("mapToDouble", ToDoubleFunction.class).invoke(stream, toDblFn);
+                }
+                default -> { return false; }
+            }
+            Variable rv = new Variable(result);
+            rv.setClazz(result != null ? result.getClass() : Stream.class);
+            returnValue = rv;
+            return true;
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException re) throw re;
+            throw new AntikytheraException(cause);
+        } catch (ReflectiveOperationException e) {
+            logger.warn("dispatchIntermediateOp({}) failed: {}", methodName, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Dispatch terminal stream operations (those that consume the stream and return a non-stream
+     * result).
+     */
+    @SuppressWarnings({"unchecked", "java:S3740"})
+    private void dispatchTerminalOp(Variable v, String methodName, Stream<?> stream, Object[] finalArgs) {
+        try {
+            Object result;
+            switch (methodName) {
+                case "forEach" -> {
+                    Consumer<Object> action = toStreamConsumer(finalArgs[0]);
+                    stream.forEach(action);
+                    returnValue = new Variable(null);
+                    return;
+                }
+                case "collect" -> {
+                    Collector<Object, ?, Object> col = (Collector<Object, ?, Object>) finalArgs[0];
+                    result = Stream.class.getMethod("collect", Collector.class).invoke(stream, col);
+                }
+                case "count" -> result = Stream.class.getMethod("count").invoke(stream);
+                case "toList" -> result = Stream.class.getMethod("toList").invoke(stream);
+                case "toArray" -> result = Stream.class.getMethod("toArray").invoke(stream);
+                case "findFirst" -> result = Stream.class.getMethod("findFirst").invoke(stream);
+                case "findAny" -> result = Stream.class.getMethod("findAny").invoke(stream);
+                case "anyMatch", "allMatch", "noneMatch" -> {
+                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                    Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
+                    result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
+                }
+                case "min", "max" -> {
+                    Comparator<Object> comp = toStreamComparator(finalArgs[0]);
+                    result = Stream.class.getMethod(methodName, Comparator.class).invoke(stream, comp);
+                }
+                case "reduce" -> {
+                    if (finalArgs.length == 1) {
+                        BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[0]);
+                        result = Stream.class.getMethod("reduce", BinaryOperator.class).invoke(stream, op);
+                    } else {
+                        BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[1]);
+                        result = Stream.class.getMethod("reduce", Object.class, BinaryOperator.class)
+                                .invoke(stream, finalArgs[0], op);
+                    }
+                }
+                default -> { return; }
+            }
+            Variable rv = new Variable(result);
+            if (result instanceof Optional) {
+                rv.setClazz(Optional.class);
+            } else if (result != null) {
+                rv.setClazz(result.getClass());
+            }
+            returnValue = rv;
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException re) throw re;
+            throw new AntikytheraException(cause);
+        } catch (ReflectiveOperationException e) {
+            logger.warn("dispatchTerminalOp({}) failed: {}", methodName, e.getMessage());
+        }
+    }
+
+    /**
+     * Dispatch terminal (and conversion) operations on primitive specialised streams
+     * ({@link IntStream}, {@link LongStream}, {@link DoubleStream}).
+     */
+    @SuppressWarnings({"unchecked", "java:S3740"})
+    private void dispatchPrimitiveStreamOp(Variable v, String methodName, Object stream, Object[] finalArgs) {
+        try {
+            Class<?> iface;
+            if (stream instanceof IntStream) {
+                iface = IntStream.class;
+            } else if (stream instanceof LongStream) {
+                iface = LongStream.class;
+            } else {
+                iface = DoubleStream.class;
+            }
+            Object result;
+            switch (methodName) {
+                case "sum" -> result = iface.getMethod("sum").invoke(stream);
+                case "count" -> result = iface.getMethod("count").invoke(stream);
+                case "average" -> result = iface.getMethod("average").invoke(stream);
+                case "min" -> result = iface.getMethod("min").invoke(stream);
+                case "max" -> result = iface.getMethod("max").invoke(stream);
+                case "summaryStatistics" -> result = iface.getMethod("summaryStatistics").invoke(stream);
+                case "boxed" -> result = iface.getMethod("boxed").invoke(stream);
+                case "toList" -> result = iface.getMethod("toList").invoke(stream);
+                case "toArray" -> result = iface.getMethod("toArray").invoke(stream);
+                case "asLongStream" -> result = IntStream.class.getMethod("asLongStream").invoke(stream);
+                case "asDoubleStream" -> {
+                    if (stream instanceof IntStream) {
+                        result = IntStream.class.getMethod("asDoubleStream").invoke(stream);
+                    } else {
+                        result = LongStream.class.getMethod("asDoubleStream").invoke(stream);
+                    }
+                }
+                case "forEach" -> {
+                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                    if (stream instanceof IntStream is) {
+                        is.forEach(x -> fn.apply(x));
+                    } else if (stream instanceof LongStream ls) {
+                        ls.forEach(x -> fn.apply(x));
+                    } else {
+                        ((DoubleStream) stream).forEach(x -> fn.apply(x));
+                    }
+                    returnValue = new Variable(null);
+                    return;
+                }
+                case "mapToObj" -> {
+                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                    if (stream instanceof IntStream is) {
+                        result = IntStream.class.getMethod("mapToObj", IntFunction.class)
+                                .invoke(is, (IntFunction<Object>) x -> fn.apply(x));
+                    } else if (stream instanceof LongStream ls) {
+                        result = LongStream.class.getMethod("mapToObj", LongFunction.class)
+                                .invoke(ls, (LongFunction<Object>) x -> fn.apply(x));
+                    } else {
+                        result = DoubleStream.class.getMethod("mapToObj", DoubleFunction.class)
+                                .invoke(stream, (DoubleFunction<Object>) x -> fn.apply(x));
+                    }
+                }
+                default -> { return; }
+            }
+            Variable rv = new Variable(result);
+            if (result != null) {
+                rv.setClazz(result.getClass());
+            }
+            returnValue = rv;
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException re) throw re;
+            throw new AntikytheraException(cause);
+        } catch (ReflectiveOperationException e) {
+            logger.warn("dispatchPrimitiveStreamOp({}) failed: {}", methodName, e.getMessage());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Function<Object, Object> toStreamFunction(Object arg) {
+        if (arg instanceof Function<?, ?> f) {
+            return (Function<Object, Object>) f;
+        }
+        throw new AntikytheraException("Expected Function for stream operation but got: "
+                + (arg == null ? "null" : arg.getClass().getName()));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Consumer<Object> toStreamConsumer(Object arg) {
+        if (arg instanceof Consumer<?> c) {
+            return (Consumer<Object>) c;
+        }
+        if (arg instanceof Function<?, ?> f) {
+            Function<Object, Object> fn = (Function<Object, Object>) f;
+            return x -> fn.apply(x);
+        }
+        throw new AntikytheraException("Expected Consumer for stream operation but got: "
+                + (arg == null ? "null" : arg.getClass().getName()));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Comparator<Object> toStreamComparator(Object arg) {
+        if (arg instanceof Comparator<?> c) {
+            return (Comparator<Object>) c;
+        }
+        if (arg instanceof BiFunction<?, ?, ?> bf) {
+            BiFunction<Object, Object, Object> bfo = (BiFunction<Object, Object, Object>) bf;
+            return (a, b) -> {
+                Object r = bfo.apply(a, b);
+                return r instanceof Number n ? n.intValue() : 0;
+            };
+        }
+        throw new AntikytheraException("Expected Comparator for stream operation but got: "
+                + (arg == null ? "null" : arg.getClass().getName()));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static BinaryOperator<Object> toStreamBinaryOperator(Object arg) {
+        if (arg instanceof BinaryOperator<?> bo) {
+            return (BinaryOperator<Object>) bo;
+        }
+        if (arg instanceof BiFunction<?, ?, ?> bf) {
+            BiFunction<Object, Object, Object> bfo = (BiFunction<Object, Object, Object>) bf;
+            return (a, b) -> bfo.apply(a, b);
+        }
+        throw new AntikytheraException("Expected BinaryOperator for stream operation but got: "
+                + (arg == null ? "null" : arg.getClass().getName()));
+    }
+
 
     /**
      * Execute a method that is part of a chain of method calls
