@@ -450,10 +450,89 @@ public class ControlFlowEvaluator extends Evaluator {
                 createSetterFromGetter(entry, setter);
             }
             if (setter.getArguments().isEmpty()) {
-                setter.addArgument(entry.getValue().toString());
+                Expression setterArg = resolveSetterArgument(stmt, scope, setter.getNameAsString(), entry.getValue());
+                setter.addArgument(setterArg != null ? setterArg : new NullLiteralExpr());
             }
         }
         addPreCondition(stmt, setter);
+    }
+
+    /**
+     * Resolves a valid Java expression to use as the argument for a setter call.
+     * Looks up the declared parameter type from the TypeDeclaration, then tries to adapt
+     * the domain value to that type (so e.g. Integer(1) for a Long setter becomes 1L).
+     * Falls back to Reflect.variableFactory when the domain value is incompatible
+     * (e.g. a List from TruthTable.isEmptyMethodCall passed to a String setter).
+     */
+    private Expression resolveSetterArgument(Statement stmt, Expression scope, String setterName, Object domainValue) {
+        String scopeName;
+        if (scope instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+            scopeName = mce.getScope().orElseThrow().toString();
+        } else {
+            scopeName = scope.toString();
+        }
+
+        Symbol sym = getValue(stmt, scopeName);
+        if (sym == null || !(sym.getValue() instanceof Evaluator ev)) {
+            return domainValueToExpression(domainValue, null);
+        }
+
+        Optional<TypeDeclaration<?>> typeOpt = AntikytheraRunTime.getTypeDeclaration(ev.getClassName());
+        if (typeOpt.isEmpty()) {
+            return domainValueToExpression(domainValue, null);
+        }
+
+        for (MethodDeclaration md : typeOpt.get().getMethodsByName(setterName)) {
+            if (md.getParameters().size() == 1) {
+                Type paramType = md.getParameter(0).getType();
+                Expression adapted = domainValueToExpression(domainValue, paramType.asString());
+                if (adapted != null) {
+                    return adapted;
+                }
+                String fqn = AbstractCompiler.findFullyQualifiedName(cu, paramType.asString());
+                if (fqn == null) {
+                    fqn = paramType.asString();
+                }
+                Variable v = Reflect.variableFactory(fqn);
+                if (v != null && v.getInitializer() != null && !v.getInitializer().isEmpty()) {
+                    return v.getInitializer().getFirst();
+                }
+                break;
+            }
+        }
+        // Setter not found in TypeDeclaration (e.g. Lombok-generated) — adapt domain value using runtime type
+        return domainValueToExpression(domainValue, null);
+    }
+
+    /**
+     * Converts a domain value to a Java AST literal expression adapted to the declared type name.
+     * When declaredType is null, uses the runtime type of the value directly.
+     * Returns null when the value cannot be expressed as a valid literal for the declared type.
+     */
+    private Expression domainValueToExpression(Object value, String declaredType) {
+        if (value instanceof String s) {
+            if (declaredType == null || declaredType.equals("String") || declaredType.equals("java.lang.String")) {
+                return new StringLiteralExpr(s);
+            }
+            return null;
+        }
+        if (value instanceof Boolean b) {
+            if (declaredType == null || declaredType.equals("boolean") || declaredType.equals("Boolean") || declaredType.equals("java.lang.Boolean")) {
+                return StaticJavaParser.parseExpression(b.toString());
+            }
+            return null;
+        }
+        if (value instanceof Number n) {
+            String t = declaredType != null ? declaredType : (value instanceof Long ? "long" : value instanceof Double ? "double" : value instanceof Float ? "float" : "int");
+            return switch (t) {
+                case "int", "Integer", "java.lang.Integer" -> new IntegerLiteralExpr(String.valueOf(n.intValue()));
+                case "long", "Long", "java.lang.Long" -> new LongLiteralExpr(n.longValue() + "L");
+                case "double", "Double", "java.lang.Double" -> StaticJavaParser.parseExpression(String.valueOf(n.doubleValue()));
+                case "float", "Float", "java.lang.Float" -> StaticJavaParser.parseExpression(n.floatValue() + "f");
+                default -> null;
+            };
+        }
+        return null;
     }
 
     @SuppressWarnings("java:S5411")
