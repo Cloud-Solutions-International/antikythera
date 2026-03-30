@@ -1180,6 +1180,9 @@ public class Evaluator implements EvaluationEngine {
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
         if (method == null && v.getClazz().getName().startsWith("java.util.stream.")) {
+            // Short-circuit: method lookup can fail for stream classes when argument types
+            // don't widen correctly (e.g. int→long for limit/skip). Route directly to
+            // handleStreamMethods which uses the public Stream interface methods.
             handleStreamMethods(v, reflectionArguments);
             return returnValue;
         }
@@ -1232,21 +1235,26 @@ public class Evaluator implements EvaluationEngine {
         try {
             method.setAccessible(true);
             invoke(method, finalArgs, v);
-        } catch (InaccessibleObjectException | IllegalArgumentException ex) {
-            // Handle JDK stream methods differently — also catches IllegalArgumentException
-            // which occurs when functional-interface argument types don't match the concrete
-            // stream class's internal method (e.g. BiFunction passed where BinaryOperator expected).
+        } catch (InaccessibleObjectException ioe) {
+            // InaccessibleObjectException: JDK internal classes that can't be opened
             if (v.getClazz().getName().startsWith("java.util.stream.")) {
                 handleStreamMethods(v, reflectionArguments);
-            } else if (ex instanceof InaccessibleObjectException) {
+            } else {
                 Method publicMethod = Reflect.findPublicMethod(v.getClazz(),
                         reflectionArguments.getMethodName(),
                         reflectionArguments.getArgumentTypes());
                 if (publicMethod != null) {
                     invoke(publicMethod, finalArgs, v);
                 }
+            }
+        } catch (IllegalArgumentException iae) {
+            // IllegalArgumentException: argument type mismatch on the concrete internal class
+            // (e.g. BiFunction passed where BinaryOperator expected). Route stream classes
+            // through handleStreamMethods which invokes via the public Stream interface.
+            if (v.getClazz().getName().startsWith("java.util.stream.")) {
+                handleStreamMethods(v, reflectionArguments);
             } else {
-                throw (IllegalArgumentException) ex;
+                throw iae;
             }
         }
     }

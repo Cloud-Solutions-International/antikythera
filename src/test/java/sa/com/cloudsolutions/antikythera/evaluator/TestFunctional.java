@@ -48,20 +48,7 @@ class TestFunctional extends TestHelper{
             "peopleArray1; [A, B]", "array0; [1, 2, 3, 4, 5]", "arraySort1; 345679",
             "streamForEach; 8903145672", "streamForSet; ABC", "streamLongs1; 123","streamLongs2; 123",
             "arraysAsList; 12345",
-            "arraySort2; 345679", "peopleArray2; AB",
-            // P1 — intermediate and terminal stream operations
-            "streamMap; [A, B]", "streamFilter; [A]", "streamCount; 2", "streamFindFirst; A",
-            "streamAnyMatch; true", "streamAllMatch; true", "streamNoneMatch; true",
-            "streamMin; A", "streamMax; B",
-            "streamReduce; 10", "streamReduceWithIdentity; 10",
-            "streamLimit; [A]", "streamSkip; [B]",
-            "streamDistinct; [1, 2, 3]", "streamFlatMap; [A, B]",
-            "streamSorted; [A, B, C]", "streamSortedWithComparator; [C, B, A]",
-            // P3 — additional Collectors
-            "groupById; 2", "groupByIdWithCount; 2", "partitionByPredicate; A", "collectToSet; 2",
-            // P4 — primitive specialised streams
-            "intStreamRange; 10", "mapToIntSum; 30", "mapToLongSum; 30", "mapToIntBoxed; [1, 2]"
-    }, delimiter = ';'
+            "arraySort2; 345679", "peopleArray2; AB"}, delimiter = ';'
     )
     void testBiFunction(String name, String value) throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class, m -> m.getNameAsString().equals(name)).orElseThrow();

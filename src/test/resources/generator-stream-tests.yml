@@ -1,0 +1,12 @@
+# Configuration for self-contained stream evaluation tests.
+# base_path points to a local source directory within the antikythera project so that
+# these tests run without requiring the external antikythera-test-helper repository.
+
+variables:
+  m2_folder: ${HOME}/.m2/repository
+
+base_path: src/test/evaluator-sources
+
+base_package: sa.com.cloudsolutions.antikythera.evaluator
+
+output_path: /tmp/antikythera

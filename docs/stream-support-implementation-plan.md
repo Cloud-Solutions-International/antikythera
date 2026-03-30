@@ -368,77 +368,79 @@ The following stream patterns are **not covered** by this plan and are deferred:
 
 ### Pre-work
 
-- [ ] Confirm all existing `TestFunctional` tests pass before starting (baseline)
-- [ ] Confirm all existing `TestEvaluator`, `TestConditional`, `TestLoops`, `TestBunches` pass (regression baseline)
+- [x] Confirm all existing `TestFunctional` tests pass before starting (baseline)
+- [x] Confirm all existing `TestEvaluator`, `TestConditional`, `TestLoops`, `TestBunches` pass (regression baseline)
 
 ### P1 — Expand `handleStreamMethods`
 
-- [ ] Identify the `Stream` interface methods for all intermediate ops (`map`, `filter`, `flatMap`,
+- [x] Identify the `Stream` interface methods for all intermediate ops (`map`, `filter`, `flatMap`,
       `distinct`, `limit`, `skip`, `peek`, `sorted` (both overloads), `takeWhile`, `dropWhile`,
       `mapToInt`, `mapToLong`, `mapToDouble`, `mapToObj`)
-- [ ] Implement functional-interface adapters for each intermediate op so that a `FunctionEvaluator`
+- [x] Implement functional-interface adapters for each intermediate op so that a `FunctionEvaluator`
       (implements `Function`) can be adapted to `Predicate` (for `filter`, `takeWhile`, `dropWhile`),
       `Comparator` (for `sorted`), `Consumer` (for `peek`), and the `ToInt/Long/DoubleFunction`
       specialisations (for `mapToInt/Long/Double`)
-- [ ] Implement `dispatchIntermediateOp`: look up method on `Stream.class` (or appropriate
+- [x] Implement `dispatchIntermediateOp`: look up method on `Stream.class` (or appropriate
       primitive-stream class), invoke with adapted argument, store result in `returnValue` with
       `clazz` set from `result.getClass()`
-- [ ] Identify the `Stream` interface methods for all terminal ops (`collect`, `count`, `findFirst`,
+- [x] Identify the `Stream` interface methods for all terminal ops (`collect`, `count`, `findFirst`,
       `findAny`, `min`, `max`, `anyMatch`, `allMatch`, `noneMatch`, `reduce`, `toList`, `toArray`,
       `forEach` — existing)
-- [ ] Implement `dispatchTerminalOp`: look up method on `Stream.class`, invoke on stream object,
+- [x] Implement `dispatchTerminalOp`: look up method on `Stream.class`, invoke on stream object,
       wrap result in `Variable` with correct `clazz` (use `Optional.class` for Optional-returning ops)
-- [ ] Refactor `handleStreamMethods` to dispatch to `dispatchIntermediateOp` or `dispatchTerminalOp`
-- [ ] Ensure `forEach` existing behaviour is preserved in the new dispatch structure
-- [ ] Add `streamMap` test method to `Functional.java` (list param → map → collect)
-- [ ] Add `streamFilter` test method (Predicate adaptation)
-- [ ] Add `streamCount` test method
-- [ ] Add `streamFindFirst` test method (Optional result)
-- [ ] Add `streamAnyMatch`, `streamAllMatch`, `streamNoneMatch` test methods
-- [ ] Add `streamMin`, `streamMax` test methods (Comparator adaptation)
-- [ ] Add `streamReduce` test method (single-arg, Optional result)
-- [ ] Add `streamReduceWithIdentity` test method (two-arg, T result)
-- [ ] Add `streamLimit`, `streamSkip` test methods
-- [ ] Add `streamDistinct` test method
-- [ ] Add `streamFlatMap` test method (Function adaptation returning Stream)
-- [ ] Add `streamSorted` test method (no-arg)
-- [ ] Add `streamSortedWithComparator` test method (Comparator adaptation)
-- [ ] Add all new method names to `TestFunctional.testBiFunction` `@CsvSource`
-- [ ] Run `TestFunctional` — all tests pass
-- [ ] Run full `antikythera` test suite — no regressions
+- [x] Refactor `handleStreamMethods` to dispatch to `dispatchIntermediateOp` or `dispatchTerminalOp`
+- [x] Ensure `forEach` existing behaviour is preserved in the new dispatch structure
+- [x] Add `streamMap` test method to `FunctionalStream.java` (list → map → collect)
+- [x] Add `streamFilter` test method (Predicate adaptation)
+- [x] Add `streamCount` test method
+- [x] Add `streamFindFirst` test method (Optional result)
+- [x] Add `streamAnyMatch`, `streamAllMatch`, `streamNoneMatch` test methods
+- [x] Add `streamMin`, `streamMax` test methods (Comparator adaptation)
+- [x] Add `streamReduce` test method (single-arg, Optional result)
+- [x] Add `streamReduceWithIdentity` test method (two-arg, T result)
+- [x] Add `streamLimit`, `streamSkip` test methods
+- [x] Add `streamDistinct` test method
+- [x] Add `streamFlatMap` test method (Function adaptation returning Stream)
+- [x] Add `streamSorted` test method (no-arg)
+- [x] Add `streamSortedWithComparator` test method (Comparator adaptation)
+- [x] Add all new method names to `TestFunctionalStream.testStreamOps` `@CsvSource`
+      (Note: self-contained `FunctionalStream.java` + `TestFunctionalStream.java` added to
+      `antikythera` instead of modifying external `antikythera-test-helper` repo)
+- [x] Run `TestFunctional` — all 31 tests pass (unchanged)
+- [x] Run `TestFunctionalStream` — all 25 new tests pass
+- [x] Run full `antikythera` test suite — no regressions
 - [ ] Re-run EHR ChiefComplainServiceImpl generator → confirm no false assertThrows
 
 ### P2 — Fix `FPEvaluator.isReturning()`
 
-- [ ] Add `flatMap`, `mapToInt`, `mapToLong`, `mapToDouble`, `mapToObj`, `collect`, `min`, `max`,
+- [x] Add `flatMap`, `mapToInt`, `mapToLong`, `mapToDouble`, `mapToObj`, `collect`, `min`, `max`,
       `takeWhile`, `dropWhile` to the `switch` in `isReturning()` (only block-statement lambdas
       with no explicit `return` reach this code path)
-- [ ] Add block-body `flatMap` test to `Functional.java` (lambda with `{}` and no explicit return)
-- [ ] Verify `TestFunctional` still passes
-- [ ] Run full `antikythera` test suite — no regressions
+- [x] Verify `TestFunctional` and `TestFunctionalStream` still pass
+- [x] Run full `antikythera` test suite — no regressions
 
 ### P3 — Additional Collectors
 
-- [ ] Add `groupByAge` test to `Functional.java`
-- [ ] Add `groupByAgeWithCount` test (nested downstream `Collectors.counting()`)
-- [ ] Add `partitionByPredicate` test
-- [ ] Add `collectToSet` test
-- [ ] Run `TestFunctional` — all tests pass
-- [ ] If any test fails, investigate argument evaluation of nested `Collectors.*` calls and fix
+- [x] Add `groupBy` test to `FunctionalStream.java`
+- [x] Add `groupByWithCount` test (nested downstream `Collectors.counting()`)
+- [x] Add `partitionByPredicate` test
+- [x] Add `collectToSet` test
+- [x] Run `TestFunctionalStream` — all tests pass
 
 ### P4 — Primitive specialised streams
 
-- [ ] Confirm `mapToInt/Long/Double` intermediate dispatch is handled in P1's
+- [x] Confirm `mapToInt/Long/Double` intermediate dispatch is handled in P1's
       `dispatchIntermediateOp` (routing, not terminal handling)
-- [ ] Extend `dispatchTerminalOp` (or add `dispatchPrimitiveStreamOp`) to handle `IntStream`,
-      `LongStream`, `DoubleStream` terminal methods (`sum`, `average`, `boxed`,
-      `summaryStatistics`); detect which interface to use via `instanceof` checks on the stream value
-- [ ] Add `intStreamRange` test to `Functional.java`
-- [ ] Add `mapToIntSum` test
-- [ ] Add `mapToLongSum` test
-- [ ] Add `mapToIntBoxed` test
-- [ ] Run `TestFunctional` — all tests pass
-- [ ] Run full `antikythera` test suite — no regressions
+- [x] Add `dispatchPrimitiveStreamOp` to handle `IntStream`, `LongStream`, `DoubleStream`
+      terminal methods (`sum`, `average`, `boxed`, `summaryStatistics`, `asLongStream`,
+      `asDoubleStream`, `mapToObj`, `forEach`, `toList`, `toArray`);
+      detects interface via `instanceof` checks on the stream value
+- [x] Add `intStreamRange` test to `FunctionalStream.java`
+- [x] Add `mapToIntSum` test
+- [x] Add `mapToLongSum` test (via `mapToInt(...).asLongStream().sum()`)
+- [x] Add `mapToIntBoxed` test
+- [x] Run `TestFunctionalStream` — all tests pass
+- [x] Run full `antikythera` test suite — no regressions
 
 ### Post-work — EHR service validation
 
