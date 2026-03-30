@@ -103,6 +103,7 @@ import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
 import java.util.function.ToIntFunction;
 import java.util.function.ToLongFunction;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collector;
 import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
@@ -1300,16 +1301,16 @@ public class Evaluator implements EvaluationEngine {
         Object result;
         switch (methodName) {
             case "filter", "takeWhile", "dropWhile" -> {
-                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
                 result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
             }
             case "map" -> {
-                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 result = Stream.class.getMethod("map", Function.class).invoke(stream, fn);
             }
             case "flatMap" -> {
-                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 result = Stream.class.getMethod("flatMap", Function.class).invoke(stream, fn);
             }
             case "peek" -> {
@@ -1334,17 +1335,17 @@ public class Evaluator implements EvaluationEngine {
                 result = Stream.class.getMethod("skip", long.class).invoke(stream, n);
             }
             case "mapToInt" -> {
-                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 ToIntFunction<Object> toIntFn = x -> ((Number) fn.apply(x)).intValue();
                 result = Stream.class.getMethod("mapToInt", ToIntFunction.class).invoke(stream, toIntFn);
             }
             case "mapToLong" -> {
-                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 ToLongFunction<Object> toLongFn = x -> ((Number) fn.apply(x)).longValue();
                 result = Stream.class.getMethod("mapToLong", ToLongFunction.class).invoke(stream, toLongFn);
             }
             case "mapToDouble" -> {
-                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 ToDoubleFunction<Object> toDblFn = x -> ((Number) fn.apply(x)).doubleValue();
                 result = Stream.class.getMethod("mapToDouble", ToDoubleFunction.class).invoke(stream, toDblFn);
             }
@@ -1381,7 +1382,7 @@ public class Evaluator implements EvaluationEngine {
                 case "findFirst" -> result = Stream.class.getMethod("findFirst").invoke(stream);
                 case "findAny" -> result = Stream.class.getMethod("findAny").invoke(stream);
                 case "anyMatch", "allMatch", "noneMatch" -> {
-                    Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                    UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                     Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
                     result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
                 }
@@ -1451,7 +1452,7 @@ public class Evaluator implements EvaluationEngine {
                 }
             }
             case "forEach" -> {
-                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 if (stream instanceof IntStream is) {
                     is.forEach(fn::apply);
                 } else if (stream instanceof LongStream ls) {
@@ -1463,7 +1464,7 @@ public class Evaluator implements EvaluationEngine {
                 return;
             }
             case MAP_TO_OBJ -> {
-                Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 if (stream instanceof IntStream is) {
                     result = IntStream.class.getMethod(MAP_TO_OBJ, IntFunction.class)
                             .invoke(is, (IntFunction<Object>) fn::apply);
@@ -1485,10 +1486,13 @@ public class Evaluator implements EvaluationEngine {
 
     }
 
-    @SuppressWarnings("unchecked")
-    private static Function<Object, Object> toStreamFunction(Object arg) {
+    private static UnaryOperator<Object> toStreamFunction(Object arg) {
+        if (arg instanceof UnaryOperator<?> uo) {
+            return (UnaryOperator<Object>) uo;
+        }
         if (arg instanceof Function<?, ?> f) {
-            return (Function<Object, Object>) f;
+            Function<Object, Object> fn = (Function<Object, Object>) f;
+            return fn::apply;
         }
         throw new AntikytheraException("Expected Function for stream operation but got: "
                 + (arg == null ? "null" : arg.getClass().getName()));
@@ -1499,8 +1503,8 @@ public class Evaluator implements EvaluationEngine {
         if (arg instanceof Consumer<?> c) {
             return (Consumer<Object>) c;
         }
-        if (arg instanceof Function<?, ?> f) {
-            Function<Object, Object> fn = (Function<Object, Object>) f;
+        if (arg instanceof Function<?, ?>) {
+            UnaryOperator<Object> fn = toStreamFunction(arg);
             return fn::apply;
         }
         throw new AntikytheraException("Expected Consumer for stream operation but got: "
