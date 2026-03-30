@@ -1275,10 +1275,10 @@ public class Evaluator implements EvaluationEngine {
         Object[] finalArgs = reflectionArguments.getFinalArgs();
 
         if (obj instanceof IntStream || obj instanceof LongStream || obj instanceof DoubleStream) {
-            dispatchPrimitiveStreamOp(v, methodName, obj, finalArgs);
+            dispatchPrimitiveStreamOp(methodName, obj, finalArgs);
         } else if (obj instanceof Stream<?> stream) {
-            if (!dispatchIntermediateOp(v, methodName, stream, finalArgs)) {
-                dispatchTerminalOp(v, methodName, stream, finalArgs);
+            if (!dispatchIntermediateOp(methodName, stream, finalArgs)) {
+                dispatchTerminalOp(methodName, stream, finalArgs);
             }
         }
     }
@@ -1289,8 +1289,8 @@ public class Evaluator implements EvaluationEngine {
      * @return {@code true} if the operation was handled, {@code false} if the method name is not
      *         an intermediate operation and the caller should attempt terminal dispatch.
      */
-    @SuppressWarnings({"unchecked", "java:S3740"})
-    private boolean dispatchIntermediateOp(Variable v, String methodName, Stream<?> stream, Object[] finalArgs) {
+    @SuppressWarnings({"unchecked", "java:S3740", "java:S3776"})
+    private boolean dispatchIntermediateOp(String methodName, Stream<?> stream, Object[] finalArgs) {
         try {
             Object result;
             switch (methodName) {
@@ -1363,8 +1363,8 @@ public class Evaluator implements EvaluationEngine {
      * Dispatch terminal stream operations (those that consume the stream and return a non-stream
      * result).
      */
-    @SuppressWarnings({"unchecked", "java:S3740"})
-    private void dispatchTerminalOp(Variable v, String methodName, Stream<?> stream, Object[] finalArgs) {
+    @SuppressWarnings({"unchecked", "java:S3740", "java:S3776"})
+    private void dispatchTerminalOp(String methodName, Stream<?> stream, Object[] finalArgs) {
         try {
             Object result;
             switch (methodName) {
@@ -1424,8 +1424,8 @@ public class Evaluator implements EvaluationEngine {
      * Dispatch terminal (and conversion) operations on primitive specialised streams
      * ({@link IntStream}, {@link LongStream}, {@link DoubleStream}).
      */
-    @SuppressWarnings({"unchecked", "java:S3740"})
-    private void dispatchPrimitiveStreamOp(Variable v, String methodName, Object stream, Object[] finalArgs) {
+    @SuppressWarnings({"unchecked", "java:S3740", "java:S3776"})
+    private void dispatchPrimitiveStreamOp(String methodName, Object stream, Object[] finalArgs) {
         try {
             Class<?> iface;
             if (stream instanceof IntStream) {
@@ -1457,11 +1457,11 @@ public class Evaluator implements EvaluationEngine {
                 case "forEach" -> {
                     Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
                     if (stream instanceof IntStream is) {
-                        is.forEach(x -> fn.apply(x));
+                        is.forEach(fn::apply);
                     } else if (stream instanceof LongStream ls) {
-                        ls.forEach(x -> fn.apply(x));
+                        ls.forEach(fn::apply);
                     } else {
-                        ((DoubleStream) stream).forEach(x -> fn.apply(x));
+                        ((DoubleStream) stream).forEach(fn::apply);
                     }
                     returnValue = new Variable(null);
                     return;
@@ -1470,13 +1470,13 @@ public class Evaluator implements EvaluationEngine {
                     Function<Object, Object> fn = toStreamFunction(finalArgs[0]);
                     if (stream instanceof IntStream is) {
                         result = IntStream.class.getMethod("mapToObj", IntFunction.class)
-                                .invoke(is, (IntFunction<Object>) x -> fn.apply(x));
+                                .invoke(is, (IntFunction<Object>) fn::apply);
                     } else if (stream instanceof LongStream ls) {
                         result = LongStream.class.getMethod("mapToObj", LongFunction.class)
-                                .invoke(ls, (LongFunction<Object>) x -> fn.apply(x));
+                                .invoke(ls, (LongFunction<Object>) fn::apply);
                     } else {
                         result = DoubleStream.class.getMethod("mapToObj", DoubleFunction.class)
-                                .invoke(stream, (DoubleFunction<Object>) x -> fn.apply(x));
+                                .invoke(stream, (DoubleFunction<Object>) fn::apply);
                     }
                 }
                 default -> { return; }
@@ -1511,7 +1511,7 @@ public class Evaluator implements EvaluationEngine {
         }
         if (arg instanceof Function<?, ?> f) {
             Function<Object, Object> fn = (Function<Object, Object>) f;
-            return x -> fn.apply(x);
+            return fn::apply;
         }
         throw new AntikytheraException("Expected Consumer for stream operation but got: "
                 + (arg == null ? "null" : arg.getClass().getName()));
@@ -1540,7 +1540,7 @@ public class Evaluator implements EvaluationEngine {
         }
         if (arg instanceof BiFunction<?, ?, ?> bf) {
             BiFunction<Object, Object, Object> bfo = (BiFunction<Object, Object, Object>) bf;
-            return (a, b) -> bfo.apply(a, b);
+            return bfo::apply;
         }
         throw new AntikytheraException("Expected BinaryOperator for stream operation but got: "
                 + (arg == null ? "null" : arg.getClass().getName()));

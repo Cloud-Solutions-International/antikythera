@@ -12,23 +12,26 @@ import java.util.stream.IntStream;
  * Self-contained test class for stream operation evaluation.
  * Uses only standard Java types; no dependency on antikythera-test-helper.
  */
-@SuppressWarnings({"java:S106","java:S4276", "unused","java:S1612","java:S1117","java:S1602"})
+@SuppressWarnings({"java:S106","java:S4276", "unused","java:S1612","java:S1117","java:S1602","java:S3655","java:S1192"})
 public class FunctionalStream {
 
-    List<String> names = new ArrayList<>(List.of("A", "B"));
+    private static final String VALUE_A = "A";
+    private static final String VALUE_B = "B";
+
+    List<String> names = new ArrayList<>(List.of(VALUE_A, VALUE_B));
     List<Integer> numbers = new ArrayList<>(List.of(1, 2, 3, 4));
 
     // --- P1: intermediate operations ---
 
     private void streamMap() {
-        List<String> result = names.stream().map(s -> s.toLowerCase()).collect(Collectors.toList());
+        List<String> result = names.stream().map(s -> s.toLowerCase()).toList();
         System.out.println(result);
     }
 
     private void streamFilter() {
         List<String> result = names.stream()
-                .filter(s -> s.equals("A"))
-                .collect(Collectors.toList());
+                .filter(s -> s.equals(VALUE_A))
+                .toList();
         System.out.println(result);
     }
 
@@ -43,7 +46,7 @@ public class FunctionalStream {
     }
 
     private void streamAnyMatch() {
-        boolean result = names.stream().anyMatch(s -> s.equals("A"));
+        boolean result = names.stream().anyMatch(s -> s.equals(VALUE_A));
         System.out.println(result);
     }
 
@@ -78,38 +81,38 @@ public class FunctionalStream {
     }
 
     private void streamLimit() {
-        List<String> result = names.stream().limit(1).collect(Collectors.toList());
+        List<String> result = names.stream().limit(1).toList();
         System.out.println(result);
     }
 
     private void streamSkip() {
-        List<String> result = names.stream().skip(1).collect(Collectors.toList());
+        List<String> result = names.stream().skip(1).toList();
         System.out.println(result);
     }
 
     private void streamDistinct() {
         List<Integer> ints = new ArrayList<>(List.of(1, 2, 2, 3, 3, 3));
-        List<Integer> result = ints.stream().distinct().sorted().collect(Collectors.toList());
+        List<Integer> result = ints.stream().distinct().sorted().toList();
         System.out.println(result);
     }
 
     private void streamFlatMap() {
-        List<List<String>> groups = List.of(List.of("A"), List.of("B"));
+        List<List<String>> groups = List.of(List.of(VALUE_A), List.of(VALUE_B));
         List<String> result = groups.stream()
                 .flatMap(g -> g.stream())
-                .collect(Collectors.toList());
+                .toList();
         System.out.println(result);
     }
 
     private void streamSorted() {
-        List<String> input = new ArrayList<>(List.of("C", "A", "B"));
-        List<String> result = input.stream().sorted().collect(Collectors.toList());
+        List<String> input = new ArrayList<>(List.of("C", VALUE_A, VALUE_B));
+        List<String> result = input.stream().sorted().toList();
         System.out.println(result);
     }
 
     private void streamSortedWithComparator() {
-        List<String> input = new ArrayList<>(List.of("A", "C", "B"));
-        List<String> result = input.stream().sorted((a, b) -> b.compareTo(a)).collect(Collectors.toList());
+        List<String> input = new ArrayList<>(List.of(VALUE_A, "C", VALUE_B));
+        List<String> result = input.stream().sorted((a, b) -> b.compareTo(a)).toList();
         System.out.println(result);
     }
 
@@ -129,7 +132,7 @@ public class FunctionalStream {
 
     private void partitionByPredicate() {
         Map<Boolean, List<String>> result = names.stream()
-                .collect(Collectors.partitioningBy(s -> s.equals("A")));
+                .collect(Collectors.partitioningBy(s -> s.equals(VALUE_A)));
         System.out.println(result.get(true).get(0));
     }
 
