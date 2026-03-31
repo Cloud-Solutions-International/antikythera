@@ -552,37 +552,52 @@ public class Evaluator implements EvaluationEngine {
     @SuppressWarnings("java:S3011")
     Variable evaluateFieldAccessExpression(FieldAccessExpr fae) throws ReflectiveOperationException {
         TypeWrapper wrapper = AbstractCompiler.findType(cu, fae.getScope().toString());
-        if (wrapper != null) {
-            if (wrapper.getClazz() != null) {
-                Field field = wrapper.getClazz().getDeclaredField(fae.getNameAsString());
-                field.setAccessible(true);
-                Object value = field.get(null);
-                if (capturedOutputStream != null && (value == System.out || value == System.err)) {
-                    value = new PrintStream(capturedOutputStream, true);
-                }
-                return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), value);
-            }
-            Variable v = evaluateFieldAccessExpression(fae, wrapper.getType());
-            if (v != null) {
-                return v;
-            }
+        Variable resolvedByType = resolveFieldAccessViaTypeWrapper(fae, wrapper);
+        if (resolvedByType != null) {
+            return resolvedByType;
         }
-        Variable v = evaluateExpression(fae.getScope());
-        if (v != null) {
-            Object value = v.getValue();
-            if (value instanceof Evaluator eval) {
-                return eval.getField(fae.getNameAsString());
-            } else if (value != null ) {
-                if (value.getClass().isArray() && fae.getNameAsString().equals("length")) {
-                    return new Variable(Array.getLength(v.getValue()));
-                } else {
-                    Field field = v.getValue().getClass().getDeclaredField(fae.getNameAsString());
-                    field.setAccessible(true);
-                    return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), field.get(v.getValue()));
-                }
-            }
+
+        Variable scopeVariable = evaluateExpression(fae.getScope());
+        return resolveFieldAccessViaScopeValue(fae, scopeVariable);
+    }
+
+    @SuppressWarnings("java:S3011")
+    private Variable resolveFieldAccessViaTypeWrapper(FieldAccessExpr fae, TypeWrapper wrapper) throws ReflectiveOperationException {
+        if (wrapper == null) {
+            return null;
         }
-        return v;
+        if (wrapper.getClazz() != null) {
+            Field field = wrapper.getClazz().getDeclaredField(fae.getNameAsString());
+            field.setAccessible(true);
+            Object value = field.get(null);
+            if (capturedOutputStream != null && (value == System.out || value == System.err)) {
+                value = new PrintStream(capturedOutputStream, true);
+            }
+            return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), value);
+        }
+        return evaluateFieldAccessExpression(fae, wrapper.getType());
+    }
+
+    @SuppressWarnings("java:S3011")
+    private Variable resolveFieldAccessViaScopeValue(FieldAccessExpr fae, Variable scopeVariable)
+            throws ReflectiveOperationException {
+        if (scopeVariable == null) {
+            return null;
+        }
+        Object value = scopeVariable.getValue();
+        if (value instanceof Evaluator eval) {
+            return eval.getField(fae.getNameAsString());
+        }
+        if (value == null) {
+            return scopeVariable;
+        }
+        if (value.getClass().isArray() && "length".equals(fae.getNameAsString())) {
+            return new Variable(Array.getLength(scopeVariable.getValue()));
+        }
+
+        Field field = scopeVariable.getValue().getClass().getDeclaredField(fae.getNameAsString());
+        field.setAccessible(true);
+        return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), field.get(scopeVariable.getValue()));
     }
 
     private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, TypeDeclaration<?> td) {
@@ -600,15 +615,14 @@ public class Evaluator implements EvaluationEngine {
                     return v;
                 }
             }
-        }
-        else if (td.isEnumDeclaration()) {
+        } else if (td.isEnumDeclaration()) {
             EnumDeclaration enumDeclaration = td.asEnumDeclaration();
-            return AntikytheraRunTime.getStaticVariable(enumDeclaration.getFullyQualifiedName().orElseThrow(), fae.getNameAsString());
+            return AntikytheraRunTime.getStaticVariable(enumDeclaration.getFullyQualifiedName().orElseThrow(),
+                    fae.getNameAsString());
         }
         return null;
     }
 
-    @SuppressWarnings("java:S3011")
     private Variable evaluateAssignment(Expression expr) throws ReflectiveOperationException {
         AssignExpr assignExpr = expr.asAssignExpr();
         Expression target = assignExpr.getTarget();
