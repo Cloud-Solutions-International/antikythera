@@ -1015,33 +1015,24 @@ public class Evaluator implements EvaluationEngine {
 
     private ScopeStepResult evaluateScopeStep(Scope scope, Variable variable) throws ReflectiveOperationException {
         Expression expression = scope.getExpression();
-        if (expression.isNameExpr()) {
-            return new ScopeStepResult(resolveExpression(expression.asNameExpr()), false);
-        }
-        if (expression.isFieldAccessExpr()) {
-            return evaluateFieldAccessScopeStep(scope, variable, expression);
-        }
-        if (expression.isMethodCallExpr()) {
-            scope.setVariable(variable);
-            scope.setScopedMethodCall(expression.asMethodCallExpr());
-            return new ScopeStepResult(evaluateMethodCall(scope), false);
-        }
-        if (expression.isLiteralExpr()) {
-            return new ScopeStepResult(evaluateLiteral(expression), false);
-        }
-        if (expression.isThisExpr()) {
-            return new ScopeStepResult(new Variable(this), false);
-        }
-        if (expression.isTypeExpr()) {
-            return new ScopeStepResult(createScopeTypeVariable(expression), false);
-        }
-        if (expression.isObjectCreationExpr()) {
-            return new ScopeStepResult(createObject(expression.asObjectCreationExpr()), false);
-        }
-        if (expression.isArrayAccessExpr()) {
-            return new ScopeStepResult(evaluateArrayAccess(expression), false);
-        }
-        return new ScopeStepResult(variable, false);
+        return switch (expression) {
+            case NameExpr nameExpr -> new ScopeStepResult(resolveExpression(nameExpr), false);
+            case FieldAccessExpr fieldAccessExpr -> evaluateFieldAccessScopeStep(scope, variable, fieldAccessExpr);
+            case MethodCallExpr methodCallExpr -> {
+                scope.setVariable(variable);
+                scope.setScopedMethodCall(methodCallExpr);
+                yield new ScopeStepResult(evaluateMethodCall(scope), false);
+            }
+            case Expression literalExpr when literalExpr.isLiteralExpr() ->
+                    new ScopeStepResult(evaluateLiteral(literalExpr), false);
+            case Expression thisExpr when thisExpr.isThisExpr() -> new ScopeStepResult(new Variable(this), false);
+            case Expression typeExpr when typeExpr.isTypeExpr() ->
+                    new ScopeStepResult(createScopeTypeVariable(typeExpr), false);
+            case ObjectCreationExpr objectCreationExpr ->
+                    new ScopeStepResult(createObject(objectCreationExpr), false);
+            case ArrayAccessExpr arrayAccessExpr -> new ScopeStepResult(evaluateArrayAccess(arrayAccessExpr), false);
+            default -> new ScopeStepResult(variable, false);
+        };
     }
 
     private ScopeStepResult evaluateFieldAccessScopeStep(Scope scope, Variable variable, Expression expression)
