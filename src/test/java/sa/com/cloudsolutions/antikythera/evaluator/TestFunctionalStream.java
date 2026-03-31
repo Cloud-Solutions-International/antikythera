@@ -17,12 +17,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Tests for stream operation evaluation using the self-contained FunctionalStream source file.
- * Does not depend on the external antikythera-test-helper repository.
+ * Uses FunctionalStream from antikythera-test-helper repository.
  */
 class TestFunctionalStream extends TestHelper {
 
     public static final String SAMPLE_CLASS =
-            "sa.com.cloudsolutions.antikythera.evaluator.stream.FunctionalStream";
+            "sa.com.cloudsolutions.antikythera.testhelper.evaluator.stream.FunctionalStream";
     CompilationUnit cu;
 
     @BeforeAll
