@@ -2317,31 +2317,58 @@ public class Evaluator implements EvaluationEngine {
     }
 
     private void executeForLoop(ForStmt forStmt) throws ReflectiveOperationException {
+        // Create loop context for exception tracking
+        LoopContext loopCtx = new LoopContext();
+        loopCtx.setLoopStatement(forStmt);
+        loopCtx.setEmptyCollection(false); // Regular for loops don't iterate collections directly
+        
+        activeLoops.get().push(loopCtx);
         loops.addLast(true);
 
-        for (Node n : forStmt.getInitialization()) {
-            if (n instanceof VariableDeclarationExpr vdecl) {
-                evaluateExpression(vdecl);
-            }
-        }
-        while ((boolean) evaluateExpression(forStmt.getCompare().orElseThrow()).getValue() &&
-                Boolean.TRUE.equals(loops.peekLast())) {
-            executeBlock(forStmt.getBody().asBlockStmt().getStatements());
-            for (Node n : forStmt.getUpdate()) {
-                if (n instanceof Expression e) {
-                    evaluateExpression(e);
+        try {
+            int iteration = 0;
+            for (Node n : forStmt.getInitialization()) {
+                if (n instanceof VariableDeclarationExpr vdecl) {
+                    evaluateExpression(vdecl);
                 }
             }
+            while ((boolean) evaluateExpression(forStmt.getCompare().orElseThrow()).getValue() &&
+                    Boolean.TRUE.equals(loops.peekLast())) {
+                loopCtx.setIterationWhenThrown(iteration);
+                executeBlock(forStmt.getBody().asBlockStmt().getStatements());
+                for (Node n : forStmt.getUpdate()) {
+                    if (n instanceof Expression e) {
+                        evaluateExpression(e);
+                    }
+                }
+                iteration++;
+            }
+        } finally {
+            loops.pollLast();
+            activeLoops.get().pop();
         }
-        loops.pollLast();
     }
 
     private void executeDoWhile(DoStmt whileStmt) throws ReflectiveOperationException {
+        // Create loop context for exception tracking
+        LoopContext loopCtx = new LoopContext();
+        loopCtx.setLoopStatement(whileStmt);
+        loopCtx.setEmptyCollection(false);
+        
+        activeLoops.get().push(loopCtx);
         loops.push(true);
-        do {
-            executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
-        } while ((boolean) evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast()));
-        loops.pollLast();
+        
+        try {
+            int iteration = 0;
+            do {
+                loopCtx.setIterationWhenThrown(iteration);
+                executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+                iteration++;
+            } while ((boolean) evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast()));
+        } finally {
+            loops.pollLast();
+            activeLoops.get().pop();
+        }
     }
 
     /**
@@ -2352,11 +2379,25 @@ public class Evaluator implements EvaluationEngine {
      * @throws ReflectiveOperationException if the classes cannot be instantiated as needed with reflection
      */
     private void executeWhile(WhileStmt whileStmt) throws ReflectiveOperationException {
+        // Create loop context for exception tracking
+        LoopContext loopCtx = new LoopContext();
+        loopCtx.setLoopStatement(whileStmt);
+        loopCtx.setEmptyCollection(false);
+        
+        activeLoops.get().push(loopCtx);
         loops.push(true);
-        while ((boolean) evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast())) {
-            executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+        
+        try {
+            int iteration = 0;
+            while ((boolean) evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast())) {
+                loopCtx.setIterationWhenThrown(iteration);
+                executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+                iteration++;
+            }
+        } finally {
+            loops.pollLast();
+            activeLoops.get().pop();
         }
-        loops.pollLast();
     }
 
     /**
