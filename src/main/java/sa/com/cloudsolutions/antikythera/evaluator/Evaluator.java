@@ -127,6 +127,8 @@ public class Evaluator implements EvaluationEngine {
     public static final String MAP_TO_OBJ = "mapToObj";
     public static final String SORTED = "sorted";
     public static final String REDUCE = "reduce";
+    public static final String LIMIT = "limit";
+    public static final String DISTINCT = "distinct";
     /**
      * The fields that were encountered in the current class.
      */
@@ -1361,10 +1363,10 @@ public class Evaluator implements EvaluationEngine {
                     result = Stream.class.getMethod(SORTED, Comparator.class).invoke(stream, comp);
                 }
             }
-            case "distinct" -> result = Stream.class.getMethod("distinct").invoke(stream);
-            case "limit" -> {
+            case DISTINCT -> result = Stream.class.getMethod(DISTINCT).invoke(stream);
+            case LIMIT -> {
                 long n = ((Number) finalArgs[0]).longValue();
-                result = Stream.class.getMethod("limit", long.class).invoke(stream, n);
+                result = Stream.class.getMethod(LIMIT, long.class).invoke(stream, n);
             }
             case "skip" -> {
                 long n = ((Number) finalArgs[0]).longValue();
@@ -1398,60 +1400,53 @@ public class Evaluator implements EvaluationEngine {
      * result).
      */
     @SuppressWarnings({"unchecked", "java:S3740", "java:S3776"})
-    private void dispatchTerminalOp(String methodName, Stream<?> stream, Object[] finalArgs) {
-        try {
-            Object result;
-            switch (methodName) {
-                case "forEach" -> {
-                    Consumer<Object> action = toStreamConsumer(finalArgs[0]);
-                    stream.forEach(action);
-                    returnValue = new Variable(null);
-                    return;
-                }
-                case "collect" -> {
-                    Collector<Object, ?, Object> col = (Collector<Object, ?, Object>) finalArgs[0];
-                    result = Stream.class.getMethod("collect", Collector.class).invoke(stream, col);
-                }
-                case COUNT -> result = Stream.class.getMethod(COUNT).invoke(stream);
-                case TO_LIST -> result = Stream.class.getMethod(TO_LIST).invoke(stream);
-                case TO_ARRAY -> result = Stream.class.getMethod(TO_ARRAY).invoke(stream);
-                case "findFirst" -> result = Stream.class.getMethod("findFirst").invoke(stream);
-                case "findAny" -> result = Stream.class.getMethod("findAny").invoke(stream);
-                case "anyMatch", "allMatch", "noneMatch" -> {
-                    UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                    Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
-                    result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
-                }
-                case "min", "max" -> {
-                    Comparator<Object> comp = toStreamComparator(finalArgs[0]);
-                    result = Stream.class.getMethod(methodName, Comparator.class).invoke(stream, comp);
-                }
-                case REDUCE -> {
-                    if (finalArgs.length == 1) {
-                        BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[0]);
-                        result = Stream.class.getMethod(REDUCE, BinaryOperator.class).invoke(stream, op);
-                    } else {
-                        BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[1]);
-                        result = Stream.class.getMethod(REDUCE, Object.class, BinaryOperator.class)
-                                .invoke(stream, finalArgs[0], op);
-                    }
-                }
-                default -> { return; }
+    private void dispatchTerminalOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Object result;
+        switch (methodName) {
+            case "forEach" -> {
+                Consumer<Object> action = toStreamConsumer(finalArgs[0]);
+                stream.forEach(action);
+                returnValue = new Variable(null);
+                return;
             }
-            Variable rv = new Variable(result);
-            if (result instanceof Optional) {
-                rv.setClazz(Optional.class);
-            } else if (result != null) {
-                rv.setClazz(result.getClass());
+            case "collect" -> {
+                Collector<Object, ?, Object> col = (Collector<Object, ?, Object>) finalArgs[0];
+                result = Stream.class.getMethod("collect", Collector.class).invoke(stream, col);
             }
-            returnValue = rv;
-        } catch (InvocationTargetException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException re) throw re;
-            throw new AntikytheraException(cause);
-        } catch (ReflectiveOperationException e) {
-            logger.warn("dispatchTerminalOp({}) failed: {}", methodName, e.getMessage());
+            case COUNT -> result = Stream.class.getMethod(COUNT).invoke(stream);
+            case TO_LIST -> result = Stream.class.getMethod(TO_LIST).invoke(stream);
+            case TO_ARRAY -> result = Stream.class.getMethod(TO_ARRAY).invoke(stream);
+            case "findFirst" -> result = Stream.class.getMethod("findFirst").invoke(stream);
+            case "findAny" -> result = Stream.class.getMethod("findAny").invoke(stream);
+            case "anyMatch", "allMatch", "noneMatch" -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
+                result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
+            }
+            case "min", "max" -> {
+                Comparator<Object> comp = toStreamComparator(finalArgs[0]);
+                result = Stream.class.getMethod(methodName, Comparator.class).invoke(stream, comp);
+            }
+            case REDUCE -> {
+                if (finalArgs.length == 1) {
+                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[0]);
+                    result = Stream.class.getMethod(REDUCE, BinaryOperator.class).invoke(stream, op);
+                } else {
+                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[1]);
+                    result = Stream.class.getMethod(REDUCE, Object.class, BinaryOperator.class)
+                            .invoke(stream, finalArgs[0], op);
+                }
+            }
+            default -> { return; }
         }
+        Variable rv = new Variable(result);
+        if (result instanceof Optional) {
+            rv.setClazz(Optional.class);
+        } else if (result != null) {
+            rv.setClazz(result.getClass());
+        }
+        returnValue = rv;
+
     }
 
     /**
@@ -1508,10 +1503,10 @@ public class Evaluator implements EvaluationEngine {
                 };
             }
             case SORTED -> result = iface.getMethod(SORTED).invoke(stream);
-            case "distinct" -> result = iface.getMethod("distinct").invoke(stream);
-            case "limit" -> {
+            case DISTINCT -> result = iface.getMethod(DISTINCT).invoke(stream);
+            case LIMIT -> {
                 long n = ((Number) finalArgs[0]).longValue();
-                result = iface.getMethod("limit", long.class).invoke(stream, n);
+                result = iface.getMethod(LIMIT, long.class).invoke(stream, n);
             }
             case "skip" -> {
                 long n = ((Number) finalArgs[0]).longValue();
@@ -1544,9 +1539,9 @@ public class Evaluator implements EvaluationEngine {
             case "forEach" -> {
                 Consumer<Object> consumer = toStreamConsumer(finalArgs[0]);
                 switch (stream) {
-                    case IntStream is -> is.forEach(n -> consumer.accept(n));
-                    case LongStream ls -> ls.forEach(n -> consumer.accept(n));
-                    case DoubleStream ds -> ds.forEach(n -> consumer.accept(n));
+                    case IntStream is -> is.forEach(consumer::accept);
+                    case LongStream ls -> ls.forEach(consumer::accept);
+                    case DoubleStream ds -> ds.forEach(consumer::accept);
                     default -> throw new AntikytheraException("Unsupported primitive stream type for forEach: "
                             + stream.getClass().getName());
                 }
