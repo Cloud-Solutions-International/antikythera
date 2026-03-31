@@ -11,6 +11,7 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -37,6 +38,27 @@ class TestFunctionalStream extends TestHelper {
         AntikytheraRunTime.reset();
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
+    }
+
+    /**
+     * Tests where the stream source is a method parameter supplied by DummyArgumentGenerator
+     * (an empty ArrayList). Verifies the dispatch path works for parameter-sourced streams,
+     * mirroring the ChiefComplainServiceImpl failure scenario.
+     */
+    @ParameterizedTest
+    @CsvSource(value = {
+            "streamMapFromParam; []",
+            "streamFilterFromParam; []",
+            "streamCountFromParam; 0"
+    }, delimiter = ';')
+    void testStreamOpsWithParam(String name, String value) throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                m -> m.getNameAsString().equals(name)).orElseThrow();
+        AntikytheraRunTime.push(new Variable(new ArrayList<>()));
+        evaluator = EvaluatorFactory.create(SAMPLE_CLASS, Evaluator.class);
+        Variable v = evaluator.executeMethod(method);
+        assertNotNull(v.getValue());
+        assertEquals(value, v.getValue().toString());
     }
 
     @ParameterizedTest
@@ -68,7 +90,19 @@ class TestFunctionalStream extends TestHelper {
             "intStreamRange; 10",
             "mapToIntSum; 30",
             "mapToLongSum; 30",
-            "mapToIntBoxed; [1, 2]"
+            "mapToIntBoxed; [1, 2]",
+            // peek (P1 gap)
+            "streamPeek; [a, b]",
+            // mapToDouble (P4 gap)
+            "mapToDoubleSum; 15.0",
+            // IntStream.forEach fix (was using wrong adapter)
+            "intStreamForEach; 6",
+            // primitive stream intermediate operations
+            "intStreamFilter; 7",
+            "intStreamMap; 50",
+            "intStreamSorted; [1, 2, 3]",
+            // primitive stream reduce
+            "intStreamReduce; 10"
     }, delimiter = ';')
     void testStreamOps(String name, String value) throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,

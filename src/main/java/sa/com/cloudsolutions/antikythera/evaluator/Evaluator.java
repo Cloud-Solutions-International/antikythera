@@ -1481,12 +1481,66 @@ public class Evaluator implements EvaluationEngine {
                     result = LongStream.class.getMethod(AS_DOUBLE_STREAM).invoke(stream);
                 }
             }
-            case "forEach" -> {
+            case "filter" -> {
                 UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                result = switch (stream) {
+                    case IntStream is -> is.filter(n -> Boolean.TRUE.equals(fn.apply(n)));
+                    case LongStream ls -> ls.filter(n -> Boolean.TRUE.equals(fn.apply(n)));
+                    case DoubleStream ds -> ds.filter(n -> Boolean.TRUE.equals(fn.apply(n)));
+                    default -> throw new AntikytheraException("Unsupported primitive stream type for filter: "
+                            + stream.getClass().getName());
+                };
+            }
+            case "map" -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                result = switch (stream) {
+                    case IntStream is -> is.map(n -> ((Number) fn.apply(n)).intValue());
+                    case LongStream ls -> ls.map(n -> ((Number) fn.apply(n)).longValue());
+                    case DoubleStream ds -> ds.map(n -> ((Number) fn.apply(n)).doubleValue());
+                    default -> throw new AntikytheraException("Unsupported primitive stream type for map: "
+                            + stream.getClass().getName());
+                };
+            }
+            case SORTED -> result = iface.getMethod(SORTED).invoke(stream);
+            case "distinct" -> result = iface.getMethod("distinct").invoke(stream);
+            case "limit" -> {
+                long n = ((Number) finalArgs[0]).longValue();
+                result = iface.getMethod("limit", long.class).invoke(stream, n);
+            }
+            case "skip" -> {
+                long n = ((Number) finalArgs[0]).longValue();
+                result = iface.getMethod("skip", long.class).invoke(stream, n);
+            }
+            case REDUCE -> {
+                if (finalArgs.length == 1) {
+                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[0]);
+                    result = switch (stream) {
+                        case IntStream is -> is.reduce((a, b) -> ((Number) op.apply(a, b)).intValue());
+                        case LongStream ls -> ls.reduce((a, b) -> ((Number) op.apply(a, b)).longValue());
+                        case DoubleStream ds -> ds.reduce((a, b) -> ((Number) op.apply(a, b)).doubleValue());
+                        default -> throw new AntikytheraException("Unsupported primitive stream type for reduce: "
+                                + stream.getClass().getName());
+                    };
+                } else {
+                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[1]);
+                    result = switch (stream) {
+                        case IntStream is -> is.reduce(((Number) finalArgs[0]).intValue(),
+                                (a, b) -> ((Number) op.apply(a, b)).intValue());
+                        case LongStream ls -> ls.reduce(((Number) finalArgs[0]).longValue(),
+                                (a, b) -> ((Number) op.apply(a, b)).longValue());
+                        case DoubleStream ds -> ds.reduce(((Number) finalArgs[0]).doubleValue(),
+                                (a, b) -> ((Number) op.apply(a, b)).doubleValue());
+                        default -> throw new AntikytheraException("Unsupported primitive stream type for reduce: "
+                                + stream.getClass().getName());
+                    };
+                }
+            }
+            case "forEach" -> {
+                Consumer<Object> consumer = toStreamConsumer(finalArgs[0]);
                 switch (stream) {
-                    case IntStream is -> is.forEach(fn::apply);
-                    case LongStream ls -> ls.forEach(fn::apply);
-                    case DoubleStream ds -> ds.forEach(fn::apply);
+                    case IntStream is -> is.forEach(n -> consumer.accept(n));
+                    case LongStream ls -> ls.forEach(n -> consumer.accept(n));
+                    case DoubleStream ds -> ds.forEach(n -> consumer.accept(n));
                     default -> throw new AntikytheraException("Unsupported primitive stream type for forEach: "
                             + stream.getClass().getName());
                 }
