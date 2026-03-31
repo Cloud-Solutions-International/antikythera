@@ -1004,42 +1004,67 @@ public class Evaluator implements EvaluationEngine {
     public Variable evaluateScopeChain(ScopeChain chain) throws ReflectiveOperationException {
         Variable variable = null;
         for (Scope scope : chain.getChain().reversed()) {
-            Expression expr2 = scope.getExpression();
-            if (expr2.isNameExpr()) {
-                variable = resolveExpression(expr2.asNameExpr());
-            } else if (expr2.isFieldAccessExpr()) {
-                if (variable != null) {
-                    /*
-                     * getValue should have returned to us a valid field. That means
-                     * we will have an evaluator instance as the 'value' in the variable v
-                     */
-                    variable = evaluateScopedFieldAccess(variable, expr2);
-                }
-                else if (scope.getTypeWrapper() != null){
-                    return evaluateScopeChainFieldAccessHelper(scope);
-                }
-            } else if (expr2.isMethodCallExpr()) {
-                scope.setVariable(variable);
-                scope.setScopedMethodCall(expr2.asMethodCallExpr());
-                variable = evaluateMethodCall(scope);
-            } else if (expr2.isLiteralExpr()) {
-                variable = evaluateLiteral(expr2);
-            } else if (expr2.isThisExpr()) {
-                variable = new Variable(this);
-            } else if (expr2.isTypeExpr()) {
-                String s = expr2.toString();
-                Object scopeType = findScopeType(s);
-                variable = new Variable(scopeType);
-                if (scopeType instanceof Class<?> clazz) {
-                    variable.setClazz(clazz);
-                }
-            } else if (expr2.isObjectCreationExpr()) {
-                variable = createObject(expr2.asObjectCreationExpr());
-            } else if (expr2.isArrayAccessExpr()) {
-                variable = evaluateArrayAccess(expr2);
+            ScopeStepResult stepResult = evaluateScopeStep(scope, variable);
+            variable = stepResult.variable();
+            if (stepResult.stop()) {
+                return variable;
             }
         }
         return variable;
+    }
+
+    private ScopeStepResult evaluateScopeStep(Scope scope, Variable variable) throws ReflectiveOperationException {
+        Expression expression = scope.getExpression();
+        if (expression.isNameExpr()) {
+            return new ScopeStepResult(resolveExpression(expression.asNameExpr()), false);
+        }
+        if (expression.isFieldAccessExpr()) {
+            return evaluateFieldAccessScopeStep(scope, variable, expression);
+        }
+        if (expression.isMethodCallExpr()) {
+            scope.setVariable(variable);
+            scope.setScopedMethodCall(expression.asMethodCallExpr());
+            return new ScopeStepResult(evaluateMethodCall(scope), false);
+        }
+        if (expression.isLiteralExpr()) {
+            return new ScopeStepResult(evaluateLiteral(expression), false);
+        }
+        if (expression.isThisExpr()) {
+            return new ScopeStepResult(new Variable(this), false);
+        }
+        if (expression.isTypeExpr()) {
+            return new ScopeStepResult(createScopeTypeVariable(expression), false);
+        }
+        if (expression.isObjectCreationExpr()) {
+            return new ScopeStepResult(createObject(expression.asObjectCreationExpr()), false);
+        }
+        if (expression.isArrayAccessExpr()) {
+            return new ScopeStepResult(evaluateArrayAccess(expression), false);
+        }
+        return new ScopeStepResult(variable, false);
+    }
+
+    private ScopeStepResult evaluateFieldAccessScopeStep(Scope scope, Variable variable, Expression expression)
+            throws ReflectiveOperationException {
+        if (variable != null) {
+            return new ScopeStepResult(evaluateScopedFieldAccess(variable, expression), false);
+        }
+        if (scope.getTypeWrapper() != null) {
+            return new ScopeStepResult(evaluateScopeChainFieldAccessHelper(scope), true);
+        }
+        return new ScopeStepResult(variable, false);
+    }
+
+    private Variable createScopeTypeVariable(Expression expression) {
+        Object scopeType = findScopeType(expression.toString());
+        Variable variable = new Variable(scopeType);
+        if (scopeType instanceof Class<?> clazz) {
+            variable.setClazz(clazz);
+        }
+        return variable;
+    }
+
+    private record ScopeStepResult(Variable variable, boolean stop) {
     }
 
     private Variable evaluateScopeChainFieldAccessHelper(Scope scope) {
@@ -1256,14 +1281,14 @@ public class Evaluator implements EvaluationEngine {
                     invoke(publicMethod, finalArgs, v);
                 }
             }
-        } catch (IllegalArgumentException iae) {
+        } catch (IllegalArgumentException e) {
             // IllegalArgumentException: argument type mismatch on the concrete internal class
             // (e.g. BiFunction passed where BinaryOperator expected). Route stream classes
             // through handleStreamMethods which invokes via the public Stream interface.
             if (v.getClazz().getName().startsWith(JAVA_UTIL_STREAM)) {
                 handleStreamMethods(v, reflectionArguments);
             } else {
-                throw iae;
+                throw e;
             }
         }
     }
@@ -1453,28 +1478,28 @@ public class Evaluator implements EvaluationEngine {
             }
             case "forEach" -> {
                 UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                if (stream instanceof IntStream is) {
-                    is.forEach(fn::apply);
-                } else if (stream instanceof LongStream ls) {
-                    ls.forEach(fn::apply);
-                } else {
-                    ((DoubleStream) stream).forEach(fn::apply);
+                switch (stream) {
+                    case IntStream is -> is.forEach(fn::apply);
+                    case LongStream ls -> ls.forEach(fn::apply);
+                    case DoubleStream ds -> ds.forEach(fn::apply);
+                    default -> throw new AntikytheraException("Unsupported primitive stream type for forEach: "
+                            + stream.getClass().getName());
                 }
                 returnValue = new Variable(null);
                 return;
             }
             case MAP_TO_OBJ -> {
                 UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                if (stream instanceof IntStream is) {
-                    result = IntStream.class.getMethod(MAP_TO_OBJ, IntFunction.class)
+                result = switch (stream) {
+                    case IntStream is -> IntStream.class.getMethod(MAP_TO_OBJ, IntFunction.class)
                             .invoke(is, (IntFunction<Object>) fn::apply);
-                } else if (stream instanceof LongStream ls) {
-                    result = LongStream.class.getMethod(MAP_TO_OBJ, LongFunction.class)
+                    case LongStream ls -> LongStream.class.getMethod(MAP_TO_OBJ, LongFunction.class)
                             .invoke(ls, (LongFunction<Object>) fn::apply);
-                } else {
-                    result = DoubleStream.class.getMethod(MAP_TO_OBJ, DoubleFunction.class)
-                            .invoke(stream, (DoubleFunction<Object>) fn::apply);
-                }
+                    case DoubleStream ds -> DoubleStream.class.getMethod(MAP_TO_OBJ, DoubleFunction.class)
+                            .invoke(ds, (DoubleFunction<Object>) fn::apply);
+                    default -> throw new AntikytheraException("Unsupported primitive stream type for mapToObj: "
+                            + stream.getClass().getName());
+                };
             }
             default -> { return; }
         }
@@ -1491,8 +1516,8 @@ public class Evaluator implements EvaluationEngine {
             return (UnaryOperator<Object>) uo;
         }
         if (arg instanceof Function<?, ?> f) {
-            Function<Object, Object> fn = (Function<Object, Object>) f;
-            return fn::apply;
+            Function fnRaw = f;
+            return fnRaw::apply;
         }
         throw new AntikytheraException("Expected Function for stream operation but got: "
                 + (arg == null ? "null" : arg.getClass().getName()));
@@ -1511,15 +1536,15 @@ public class Evaluator implements EvaluationEngine {
                 + (arg == null ? "null" : arg.getClass().getName()));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static Comparator<Object> toStreamComparator(Object arg) {
         if (arg instanceof Comparator<?> c) {
             return (Comparator<Object>) c;
         }
         if (arg instanceof BiFunction<?, ?, ?> bf) {
-            BiFunction<Object, Object, Object> bfo = (BiFunction<Object, Object, Object>) bf;
+            BiFunction bfRaw =  bf;
             return (a, b) -> {
-                Object r = bfo.apply(a, b);
+                Object r = bfRaw.apply(a, b);
                 return r instanceof Number n ? n.intValue() : 0;
             };
         }
@@ -1527,14 +1552,14 @@ public class Evaluator implements EvaluationEngine {
                 + (arg == null ? "null" : arg.getClass().getName()));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static BinaryOperator<Object> toStreamBinaryOperator(Object arg) {
         if (arg instanceof BinaryOperator<?> bo) {
             return (BinaryOperator<Object>) bo;
         }
         if (arg instanceof BiFunction<?, ?, ?> bf) {
-            BiFunction<Object, Object, Object> bfo = (BiFunction<Object, Object, Object>) bf;
-            return bfo::apply;
+            BiFunction bfRaw =  bf;
+            return bfRaw::apply;
         }
         throw new AntikytheraException("Expected BinaryOperator for stream operation but got: "
                 + (arg == null ? "null" : arg.getClass().getName()));
