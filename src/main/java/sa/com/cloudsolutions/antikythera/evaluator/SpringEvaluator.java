@@ -301,7 +301,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             if (onTest) {
                 startOutputCapture();
             }
-            Evaluator.clearLastException();
+            Evaluator.clearLastExceptionContext();
             GeneratorState.clearWhenThen();
             if (cd instanceof MethodDeclaration md) {
                 executeMethod(md);
@@ -331,7 +331,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         boolean hasSideEffects = (output != null && !output.isEmpty())
                 || !GeneratorState.getWhenThen().isEmpty()
                 || !Branching.getApplicableConditions(cd).isEmpty()
-                || Evaluator.getLastException() != null
+                || Evaluator.getLastExceptionContext() != null
                 || sa.com.cloudsolutions.antikythera.evaluator.logging.LogRecorder.hasLogs();
 
         if (!skipNoSideEffects || hasSideEffects) {
@@ -698,7 +698,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         if (eex.getError() != 0 && onTest) {
             Variable r = new Variable(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
             controllerResponse.setResponse(r);
-            controllerResponse.setException(eex);
+            
+            // Get context from evaluator or create new one
+            ExceptionContext ctx = Evaluator.getLastExceptionContext();
+            if (ctx == null) {
+                ctx = new ExceptionContext();
+                ctx.setException(eex);
+            }
+            controllerResponse.setExceptionContext(ctx);
+            
             createTests(controllerResponse);
             returnFrom = methodCall;
         } else {

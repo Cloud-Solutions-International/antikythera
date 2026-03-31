@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.generator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.type.Type;
 import org.springframework.http.ResponseEntity;
+import sa.com.cloudsolutions.antikythera.evaluator.ExceptionContext;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
@@ -31,7 +32,7 @@ public class MethodResponse {
         statusCodes.put("INTERNAL_SERVER_ERROR", 500);
     }
 
-    private EvaluatorException eex;
+    private ExceptionContext exceptionContext;
     private AssertionConfidence returnAssertionConfidence = AssertionConfidence.HIGH;
 
     public MethodResponse() {
@@ -74,11 +75,28 @@ public class MethodResponse {
     }
 
     public void setException(EvaluatorException eex) {
-        this.eex = eex;
+        if (eex == null) {
+            this.exceptionContext = null;
+        } else {
+            ExceptionContext ctx = new ExceptionContext();
+            ctx.setException(eex);
+            this.exceptionContext = ctx;
+        }
+    }
+    
+    public void setExceptionContext(ExceptionContext ctx) {
+        this.exceptionContext = ctx;
     }
 
     public EvaluatorException getException() {
-        return eex;
+        if (exceptionContext != null && exceptionContext.getException() instanceof EvaluatorException ee) {
+            return ee;
+        }
+        return null;
+    }
+    
+    public ExceptionContext getExceptionContext() {
+        return exceptionContext;
     }
 
     public String getCapturedOutput() {

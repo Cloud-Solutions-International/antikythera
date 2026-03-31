@@ -170,7 +170,13 @@ public class Evaluator implements EvaluationEngine {
 
     private static long sequence = 0;
 
-    private static Exception lastException;
+    private static ExceptionContext lastExceptionContext;
+    
+    /**
+     * Thread-local stack of active loop contexts for exception tracking.
+     */
+    private static final ThreadLocal<Deque<LoopContext>> activeLoops = 
+        ThreadLocal.withInitial(LinkedList::new);
 
     protected Evaluator() {
         locals = new HashMap<>();
@@ -2090,10 +2096,10 @@ public class Evaluator implements EvaluationEngine {
 
     @SuppressWarnings("unchecked")
     private void executeBlockHelper(List<Statement> statements) throws Exception {
-        Evaluator.setLastException(null);
+        Evaluator.clearLastExceptionContext();
         for (Statement stmt : statements) {
-            if (lastException != null) {
-                throw lastException;
+            if (lastExceptionContext != null && lastExceptionContext.getException() != null) {
+                throw lastExceptionContext.getException();
             }
             if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
                 executeStatement(stmt);
@@ -2257,17 +2263,39 @@ public class Evaluator implements EvaluationEngine {
     }
 
     private void executeForEachWithCollection(Collection<?> list, ForEachStmt forEachStmt) throws ReflectiveOperationException {
-        for (Object value : list) {
-            for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
-                Symbol v = getLocal(forEachStmt, vdecl.getNameAsString());
-                if (v != null) {
-                    v.setValue(value);
-                } else {
-                    v = new Variable(value);
-                    setLocal(forEachStmt, vdecl.getNameAsString(), v);
+        // Create loop context for exception tracking
+        LoopContext loopCtx = new LoopContext();
+        loopCtx.setLoopStatement(forEachStmt);
+        loopCtx.setEmptyCollection(list.isEmpty());
+        
+        String iteratorVarName = null;
+        if (!forEachStmt.getVariable().getVariables().isEmpty()) {
+            iteratorVarName = forEachStmt.getVariable().getVariables().get(0).getNameAsString();
+            loopCtx.setIteratorVariable(iteratorVarName);
+        }
+        
+        activeLoops.get().push(loopCtx);
+        
+        try {
+            int iteration = 0;
+            for (Object value : list) {
+                loopCtx.setIterationWhenThrown(iteration);
+                loopCtx.setCurrentElement(new Variable(value));
+                
+                for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
+                    Symbol v = getLocal(forEachStmt, vdecl.getNameAsString());
+                    if (v != null) {
+                        v.setValue(value);
+                    } else {
+                        v = new Variable(value);
+                        setLocal(forEachStmt, vdecl.getNameAsString(), v);
+                    }
                 }
+                executeBlock(forEachStmt.getBody().asBlockStmt().getStatements());
+                iteration++;
             }
-            executeBlock(forEachStmt.getBody().asBlockStmt().getStatements());
+        } finally {
+            activeLoops.get().pop();
         }
     }
 
@@ -2395,7 +2423,22 @@ public class Evaluator implements EvaluationEngine {
     }
 
     private static void setLastException(Exception e) {
-        lastException = e;
+        if (e == null) {
+            lastExceptionContext = null;
+            return;
+        }
+        
+        ExceptionContext ctx = new ExceptionContext();
+        ctx.setException(e);
+        
+        // Capture loop context if inside loop
+        Deque<LoopContext> loops = activeLoops.get();
+        if (!loops.isEmpty()) {
+            ctx.setInsideLoop(true);
+            ctx.setLoopContext(loops.peek());
+        }
+        
+        lastExceptionContext = ctx;
     }
 
     private boolean isExceptionMatch(TypeWrapper wrapper, Exception e) {
@@ -2747,10 +2790,18 @@ public class Evaluator implements EvaluationEngine {
     }
 
     public static Exception getLastException() {
-        return lastException;
+        return lastExceptionContext != null ? lastExceptionContext.getException() : null;
+    }
+    
+    public static ExceptionContext getLastExceptionContext() {
+        return lastExceptionContext;
     }
 
     public static void clearLastException() {
-        lastException = null;
+        lastExceptionContext = null;
+    }
+    
+    public static void clearLastExceptionContext() {
+        lastExceptionContext = null;
     }
 }
