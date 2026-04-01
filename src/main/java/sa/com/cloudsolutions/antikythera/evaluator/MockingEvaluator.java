@@ -10,7 +10,9 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
 import com.github.javaparser.ast.expr.NameExpr;
@@ -72,13 +74,16 @@ public class MockingEvaluator extends ControlFlowEvaluator {
      * @return a Variable that contains an instance of the returnType
      */
     private Variable mockExecution(Method m, String returnType) {
-        if (variableName != null) {
-            Variable result = Reflect.variableFactory(returnType);
-            if (result != null) {
+        Variable result = Reflect.variableFactory(returnType);
+        if (result != null) {
+            if (variableName != null) {
+                // Only register the Mockito stub when we have a named scope variable.
+                // Intermediate/nested evaluators (variableName == null) still return values
+                // so that evaluation can proceed past chained calls.
                 MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(m.getName(), returnType, variableName);
                 methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(m));
-                return result;
             }
+            return result;
         }
         if (m.getDeclaringClass().equals(Object.class)) {
             try {
@@ -131,8 +136,19 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return handleOptionals(sc);
         }
         else if (Object.class.equals(clazz)) {
+            // Before popping, check if a Class<T> argument hints at the real return type.
+            // Pattern: utilConfig.getConfigValue(g, h, key, FeatureTogglesResponse.class)
+            String classHint = extractClassArgumentHint(sc, method);
+
             for (int i = 0 ; i < method.getParameters().length ; i++) {
                 AntikytheraRunTime.pop();
+            }
+
+            if (classHint != null) {
+                Variable v = mockReturnWithClassHint(sc, method, classHint);
+                if (v != null) {
+                    return v;
+                }
             }
 
             Class<?> foundIn = callable.getFoundInClass();
@@ -144,6 +160,81 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             }
         }
         return executeMethod(method);
+    }
+
+    /**
+     * Inspect the MethodCallExpr's arguments for a Class&lt;T&gt; literal (e.g. {@code Foo.class}).
+     * When found, return the fully-qualified name of T so the caller can create a properly-typed
+     * stub instead of leaving the return value as {@code null}.
+     *
+     * @param sc     the current scope (carries the MethodCallExpr from the calling code)
+     * @param method the binary method being mocked
+     * @return the fully-qualified class name hinted by a {@code Class<T>} argument, or {@code null}
+     */
+    private String extractClassArgumentHint(Scope sc, Method method) {
+        MethodCallExpr mce = sc.getScopedMethodCall();
+        if (mce == null) {
+            return null;
+        }
+        java.lang.reflect.Parameter[] params = method.getParameters();
+        NodeList<Expression> args = mce.getArguments();
+        for (int i = 0; i < params.length && i < args.size(); i++) {
+            if (Class.class.equals(params[i].getType())) {
+                Expression arg = args.get(i);
+                if (arg.isClassExpr()) {
+                    String simpleTypeName = arg.asClassExpr().getType().asString();
+                    // Resolve against the calling CU (not UtilConfig's CU)
+                    Optional<CompilationUnit> callerCu = mce.findAncestor(CompilationUnit.class);
+                    if (callerCu.isPresent()) {
+                        String fqn = AbstractCompiler.findFullyQualifiedName(callerCu.get(), simpleTypeName);
+                        if (fqn != null) {
+                            return fqn;
+                        }
+                    }
+                    return simpleTypeName;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * When a method returning {@code Object} is called with a {@code Class<T>} hint, register a
+     * {@code Mockito.when(...).thenReturn(Mockito.mock(T.class, Answers.RETURNS_DEEP_STUBS))} stub
+     * and return a {@link MockingEvaluator} for T so that chained calls on the result can be traced.
+     *
+     * @param sc           the current scope
+     * @param method       the binary method being mocked
+     * @param hintedTypeFqn fully-qualified name of the hinted return type
+     * @return a Variable wrapping a MockingEvaluator for T, or {@code null} if T cannot be found
+     */
+    private Variable mockReturnWithClassHint(Scope sc, Method method, String hintedTypeFqn) {
+        if (variableName == null) {
+            return null;
+        }
+
+        // Build: Mockito.mock(T.class, org.mockito.Answers.RETURNS_DEEP_STUBS)
+        String simpleTypeName = hintedTypeFqn.contains(".")
+                ? hintedTypeFqn.substring(hintedTypeFqn.lastIndexOf('.') + 1)
+                : hintedTypeFqn;
+        Expression deepMockExpr = new MethodCallExpr(new NameExpr("Mockito"), "mock")
+                .setArguments(new NodeList<>(
+                        new ClassExpr(StaticJavaParser.parseClassOrInterfaceType(simpleTypeName)),
+                        new FieldAccessExpr(new NameExpr("org.mockito.Answers"), "RETURNS_DEEP_STUBS")
+                ));
+
+        MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(method.getName(), deepMockExpr, variableName);
+        methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(method));
+
+        // Add import for the hinted type so the test compiles
+        GeneratorState.addImport(new ImportDeclaration(hintedTypeFqn, false, false));
+
+        // Return a MockingEvaluator so chained calls on the result (e.g. .getRelease()) are handled
+        Evaluator eval = EvaluatorFactory.create(hintedTypeFqn, MockingEvaluator.class);
+        if (eval != null) {
+            return new Variable(eval);
+        }
+        return null;
     }
 
     private Variable mockRepositoryMethodCall(Scope sc, Callable callable) throws ReflectiveOperationException {

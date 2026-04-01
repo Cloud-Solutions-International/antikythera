@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
@@ -15,6 +16,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MemberValuePair;
@@ -683,6 +685,16 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 }
             }
 
+            // For binary-only mocks (real Mockito proxies, not Evaluators), methods that return
+            // Object with a Class<T> argument hint need special handling: register a deep-stub
+            // stub and return a usable mock so evaluation can proceed past chained calls.
+            if (v != null && !(v.getValue() instanceof Evaluator) && isBinaryMockTarget(scope)) {
+                Variable hintResult = interceptBinaryMockObjectReturn(v, methodCall);
+                if (hintResult != null) {
+                    return hintResult;
+                }
+            }
+
             return super.evaluateMethodCall(scope);
         } catch (AntikytheraException aex) {
             if (aex instanceof EvaluatorException eex) {
@@ -691,6 +703,101 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
         }
         return null;
+    }
+
+    private boolean isBinaryMockTarget(Scope scope) {
+        MethodCallExpr methodCall = scope.getScopedMethodCall();
+        if (methodCall == null || methodCall.getScope().isEmpty()) {
+            return false;
+        }
+
+        String fieldClass = getFieldClass(methodCall.getScope().get());
+        return fieldClass != null && MockingRegistry.isMockTarget(fieldClass);
+    }
+
+    /**
+     * When a binary-only Mockito proxy (no source available) has a method that returns {@code Object}
+     * and one of the parameters is {@code Class<T>}, the caller is using a "class-typed factory" pattern
+     * (e.g. {@code utilConfig.getConfigValue(g, h, key, FeatureTogglesResponse.class)}).
+     * <p>
+     * This method:
+     * <ol>
+     *   <li>Detects the pattern via reflection on {@code v}'s class.</li>
+     *   <li>Extracts the hinted return type from the {@code ClassExpr} argument in the AST.</li>
+     *   <li>Registers a {@code when(...).thenReturn(Mockito.mock(T.class, RETURNS_DEEP_STUBS))} stub
+     *       in {@link GeneratorState} so the generated test contains the stub.</li>
+     *   <li>Returns a deep-stub Mockito mock of T so that chained calls (e.g. {@code .getRelease()})
+     *       can be evaluated without NPE.</li>
+     * </ol>
+     *
+     * @param v          the Variable holding the binary-only mock object
+     * @param methodCall the AST method call expression
+     * @return a Variable wrapping a deep-stub mock of the hinted type, or {@code null} if the pattern
+     *         does not apply
+     */
+    private Variable interceptBinaryMockObjectReturn(Variable v, MethodCallExpr methodCall) {
+        Class<?> targetClass = v.getClazz();
+        if (targetClass == null) {
+            return null;
+        }
+        String methodName = methodCall.getNameAsString();
+        int argCount = methodCall.getArguments().size();
+
+        // Find the method by name and parameter count
+        java.lang.reflect.Method targetMethod = null;
+        for (java.lang.reflect.Method m : targetClass.getMethods()) {
+            if (m.getName().equals(methodName) && m.getParameterCount() == argCount) {
+                targetMethod = m;
+                break;
+            }
+        }
+        if (targetMethod == null || !Object.class.equals(targetMethod.getReturnType())) {
+            return null;
+        }
+
+        // Find a Class<T> literal argument
+        java.lang.reflect.Parameter[] params = targetMethod.getParameters();
+        NodeList<Expression> args = methodCall.getArguments();
+        String hintedTypeFqn = null;
+        for (int i = 0; i < params.length && i < args.size(); i++) {
+            if (Class.class.equals(params[i].getType())) {
+                Expression arg = args.get(i);
+                if (arg.isClassExpr()) {
+                    String simpleTypeName = arg.asClassExpr().getType().asString();
+                    hintedTypeFqn = AbstractCompiler.findFullyQualifiedName(cu, simpleTypeName);
+                    if (hintedTypeFqn == null) {
+                        hintedTypeFqn = simpleTypeName;
+                    }
+                    break;
+                }
+            }
+        }
+        if (hintedTypeFqn == null) {
+            return null;
+        }
+
+        // Determine the scope variable name for the when() stub
+        Optional<Expression> scopeOpt = methodCall.getScope();
+        if (scopeOpt.isEmpty() || !scopeOpt.get().isNameExpr()) {
+            return null;
+        }
+        String scopeVarName = scopeOpt.get().asNameExpr().getNameAsString();
+
+        // Build: Mockito.when(scopeVar.method(any(),...)).thenReturn(Mockito.mock(T.class, Answers.RETURNS_DEEP_STUBS))
+        String simpleTypeName = hintedTypeFqn.contains(".")
+                ? hintedTypeFqn.substring(hintedTypeFqn.lastIndexOf('.') + 1)
+                : hintedTypeFqn;
+        Expression deepMockExpr = new MethodCallExpr(new NameExpr("Mockito"), "mock")
+                .setArguments(new NodeList<>(
+                        new ClassExpr(new ClassOrInterfaceType(simpleTypeName)),
+                        new FieldAccessExpr(new NameExpr("org.mockito.Answers"), "RETURNS_DEEP_STUBS")
+                ));
+        MethodCallExpr whenMethodCall = MockingRegistry.buildMockitoWhen(methodName, deepMockExpr, scopeVarName);
+        whenMethodCall.setArguments(MockingRegistry.generateArgumentsForWhen(targetMethod));
+        GeneratorState.addImport(new ImportDeclaration(hintedTypeFqn, false, false));
+
+        // Return a deep-stub mock for continued evaluation
+        return MockingRegistry.createMockitoDeepStubInstance(hintedTypeFqn);
     }
 
     private void testForInternalError(MethodCallExpr methodCall, EvaluatorException eex) throws EvaluatorException {
