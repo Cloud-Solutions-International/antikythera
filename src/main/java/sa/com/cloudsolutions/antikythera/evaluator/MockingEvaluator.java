@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -13,6 +14,7 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -26,6 +28,9 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +38,7 @@ import java.util.Optional;
 import java.util.Set;
 
 public class MockingEvaluator extends ControlFlowEvaluator {
+    private static final Logger logger = LoggerFactory.getLogger(MockingEvaluator.class);
     private static final Set<String> collectionTypes = Set.of(
             "java.util.List",
             "java.util.ArrayList",
@@ -312,6 +318,27 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         }
 
         setupParameters(md);
+
+        // Trace the method body to discover mock interactions for stub generation.
+        // This ensures that calls on @Autowired dependencies inside private helpers
+        // (e.g. a boolean helper that calls utilConfig.getConfigValue()) are intercepted
+        // by MockReturnValueHandler and recorded as when().thenReturn() stubs.
+        // Simple single-statement getters are skipped since they have no interesting calls.
+        if (!isSingleStatementAccessor(methodName, "get", body) && body != null) {
+            Node savedReturnFrom = returnFrom;
+            Variable savedReturnValue = returnValue;
+            try {
+                returnFrom = null;
+                returnValue = null;
+                executeBlock(body.getStatements());
+            } catch (Exception e) {
+                logger.debug("Body trace of {} failed: {}", methodName, e.getMessage());
+            } finally {
+                returnFrom = savedReturnFrom;
+                returnValue = savedReturnValue;
+            }
+        }
+
         Variable getterValue = resolveSimpleGetterReturn(methodName, body);
         if (getterValue != null) {
             return getterValue;
@@ -337,6 +364,22 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return;
         }
         setupParameters(md);
+        // Trace the body to discover mock interactions (e.g. calls on @Autowired fields)
+        // so that when().thenReturn() stubs are generated for them.
+        if (body != null) {
+            Node savedReturnFrom = returnFrom;
+            Variable savedReturnValue = returnValue;
+            try {
+                returnFrom = null;
+                returnValue = null;
+                executeBlock(body.getStatements());
+            } catch (Exception e) {
+                logger.debug("Body trace of void method {} failed: {}", methodName, e.getMessage());
+            } finally {
+                returnFrom = savedReturnFrom;
+                returnValue = savedReturnValue;
+            }
+        }
     }
 
     private Variable resolveSimpleGetterReturn(String methodName, BlockStmt body) {
@@ -680,11 +723,15 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         if (l == null) {
             // First iteration: return null so the null-path test is generated.
+            // Register an explicit when().thenReturn(null) stub so that RETURNS_DEEP_STUBS
+            // on the @Mock field does not override the expected null behaviour at runtime.
             l = new LineOfCode(stmt);
             Branching.registerBranch(l);
-            for (int i = 0; i < methodCall.getArguments().size(); i++) {
-                AntikytheraRunTime.pop();
-            }
+            MethodCallExpr when = createWhenExpression(methodCall); // also pops arguments
+            Variable nullVar = new Variable((Object) null);
+            nullVar.setInitializer(List.of(new NullLiteralExpr()));
+            MockingCall then = createThenExpression(sc, nullVar, when);
+            MockingRegistry.when(className, then);
             return new Variable((Object) null);
         }
 
