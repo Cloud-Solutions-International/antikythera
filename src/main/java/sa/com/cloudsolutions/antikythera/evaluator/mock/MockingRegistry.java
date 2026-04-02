@@ -39,8 +39,6 @@ import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -197,102 +195,6 @@ public class MockingRegistry {
             v.setClazz(cls);
             return v;
         }
-    }
-
-    /**
-     * Create a Mockito mock with {@code RETURNS_DEEP_STUBS} for a binary-only class.
-     * Used when a method returns {@code Object} but the call site casts to a specific type;
-     * deep stubs ensure that chained method calls on the result also return sensible values.
-     *
-     * Some test environments cannot initialize Mockito's inline mock maker. In those cases we
-     * still need a best-effort runtime placeholder so evaluator execution can continue without
-     * polluting stdout/stderr or poisoning later Mockito-based tests.
-     */
-    public static Variable createMockitoDeepStubInstance(String className) {
-        try {
-            Class<?> cls = AbstractCompiler.loadClass(className);
-            Variable instance = createRuntimePlaceholder(cls);
-            if (instance != null) {
-                return instance;
-            }
-
-            Variable v = new Variable(Mockito.mock(cls, org.mockito.Answers.RETURNS_DEEP_STUBS));
-            v.setClazz(cls);
-            return v;
-        } catch (Exception e) {
-            logger.debug("Cannot create deep-stub runtime instance for {}: {}", className, e.getMessage());
-            Variable v = new Variable((Object) null);
-            try {
-                v.setClazz(AbstractCompiler.loadClass(className));
-            } catch (ClassNotFoundException ignored) {
-                // leave clazz unset if the type is unavailable at runtime
-            }
-            return v;
-        }
-    }
-
-    private static Variable createRuntimePlaceholder(Class<?> cls)
-            throws InvocationTargetException, InstantiationException, IllegalAccessException {
-        if (cls.isEnum()) {
-            Object[] constants = cls.getEnumConstants();
-            if (constants != null && constants.length > 0) {
-                Variable v = new Variable(constants[0]);
-                v.setClazz(cls);
-                return v;
-            }
-            return null;
-        }
-
-        if (cls.isInterface() || Modifier.isAbstract(cls.getModifiers())) {
-            return null;
-        }
-
-        try {
-            Constructor<?> ctor = cls.getDeclaredConstructor();
-            ctor.setAccessible(true);
-            Variable v = new Variable(ctor.newInstance());
-            v.setClazz(cls);
-            return v;
-        } catch (NoSuchMethodException e) {
-            Constructor<?> simplest = findSimplestConstructor(cls);
-            if (simplest == null) {
-                return null;
-            }
-            simplest.setAccessible(true);
-            return createObjectWithDefaults(cls, simplest);
-        }
-    }
-
-    private static Variable createObjectWithDefaults(Class<?> cls, Constructor<?> constructor)
-            throws InvocationTargetException, InstantiationException, IllegalAccessException {
-        Object[] args = new Object[constructor.getParameterCount()];
-        Class<?>[] paramTypes = constructor.getParameterTypes();
-        for (int i = 0; i < paramTypes.length; i++) {
-            args[i] = paramTypes[i].equals(String.class) ? "Antikythera" : Reflect.getDefault(paramTypes[i]);
-        }
-        Variable v = new Variable(constructor.newInstance(args));
-        v.setClazz(cls);
-        return v;
-    }
-
-    private static Constructor<?> findSimplestConstructor(Class<?> cls) {
-        Constructor<?> simplest = null;
-        int minParams = Integer.MAX_VALUE;
-        for (Constructor<?> ctor : cls.getDeclaredConstructors()) {
-            Class<?>[] paramTypes = ctor.getParameterTypes();
-            boolean allSimple = true;
-            for (Class<?> paramType : paramTypes) {
-                if (!(Reflect.isPrimitiveOrBoxed(paramType) || paramType.equals(String.class))) {
-                    allSimple = false;
-                    break;
-                }
-            }
-            if (allSimple && paramTypes.length < minParams) {
-                minParams = paramTypes.length;
-                simplest = ctor;
-            }
-        }
-        return simplest;
     }
 
     public static Variable createByteBuddyMockInstance(String className) throws ReflectiveOperationException {
