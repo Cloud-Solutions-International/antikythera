@@ -284,6 +284,18 @@ public class MockingRegistry {
         return args;
     }
 
+    public static NodeList<Expression> generateArgumentsForWhen(Method m, Object[] invocationArguments) {
+        NodeList<Expression> args = new NodeList<>();
+        java.lang.reflect.Parameter[] parameters = m.getParameters();
+        for (int i = 0; i < parameters.length; i++) {
+            Object invocationArgument = invocationArguments != null && i < invocationArguments.length
+                    ? invocationArguments[i]
+                    : null;
+            args.add(MockingRegistry.createMockitoArgument(parameters[i].getType(), invocationArgument));
+        }
+        return args;
+    }
+
 
     public static Expression expressionFactory(String qualifiedName) {
         if (qualifiedName == null) {
@@ -407,6 +419,18 @@ public class MockingRegistry {
             return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
         }
         return mce;
+    }
+
+    public static Expression createMockitoArgument(Class<?> parameterType, Object invocationArgument) {
+        if (Class.class.equals(parameterType) && invocationArgument instanceof Class<?> clazz) {
+            GeneratorState.addImport(new ImportDeclaration(MOCKITO_FQN, false, false));
+            return new MethodCallExpr(
+                    new NameExpr(MOCKITO),
+                    "eq",
+                    new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, clazz.getCanonicalName())))
+            );
+        }
+        return createMockitoArgument(parameterType.getSimpleName());
     }
 
     private static MethodCallExpr generateAnyExpression(String typeName) {
