@@ -10,6 +10,7 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
@@ -19,6 +20,7 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
@@ -160,6 +162,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     private Variable mockRepositoryMethodDeclaration(Scope sc, Callable callable) throws ReflectiveOperationException {
         MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
         Type t = md.getType();
+        if (t.isPrimitiveType() && t.asPrimitiveType().getType() == PrimitiveType.Primitive.BOOLEAN) {
+            return createRepositoryBooleanVariable(sc);
+        }
         if (t.isClassOrInterfaceType()) {
             Variable v = createVariable(sc, t, md);
             if (v != null) return v;
@@ -183,6 +188,10 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     private Variable createVariable(Scope sc, Type t, MethodDeclaration md) {
         if (t.asClassOrInterfaceType().isBoxedType()) {
+            if (Reflect.BOOLEAN.equals(t.asClassOrInterfaceType().getNameAsString())
+                    || Reflect.JAVA_LANG_BOOLEAN.equals(t.asString())) {
+                return createRepositoryBooleanVariable(sc);
+            }
             MethodCallExpr methodCall = sc.getScopedMethodCall();
             Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
             LineOfCode l = Branching.get(stmt.hashCode());
@@ -210,6 +219,30 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             }
         }
         return null;
+    }
+
+    private Variable createRepositoryBooleanVariable(Scope sc) {
+        MethodCallExpr methodCall = sc.getScopedMethodCall();
+        Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
+        LineOfCode l = Branching.get(stmt.hashCode());
+        boolean value;
+
+        if (l == null) {
+            l = new LineOfCode(stmt);
+            Branching.add(l);
+            value = false;
+        } else {
+            l.setPathTaken(LineOfCode.TRUE_PATH);
+            value = true;
+        }
+
+        Variable v = new Variable(value);
+        v.setInitializer(List.of(new BooleanLiteralExpr(value)));
+
+        MethodCallExpr when = createWhenExpression(methodCall);
+        MockingCall then = createThenExpression(sc, v, when);
+        MockingRegistry.when(className, then);
+        return v;
     }
 
     private Variable mockRepositoryMethod(Scope sc, Callable callable) throws ReflectiveOperationException {
