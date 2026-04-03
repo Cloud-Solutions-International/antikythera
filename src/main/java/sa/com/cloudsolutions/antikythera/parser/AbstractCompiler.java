@@ -467,7 +467,7 @@ public class AbstractCompiler {
         return cu;
     }
 
-    static void populateTypeMetadata(TypeDeclaration<?> type, TypeWrapper typeWrapper) {
+    public static void populateTypeMetadata(TypeDeclaration<?> type, TypeWrapper typeWrapper) {
         if (hasAnyAnnotation(type, "Service", "org.springframework.stereotype.Service")) {
             typeWrapper.setService(true);
         } else if (hasAnyAnnotation(type, "RestController", "Controller",
