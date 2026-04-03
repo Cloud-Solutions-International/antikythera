@@ -407,15 +407,7 @@ public class AbstractCompiler {
 
     private void processType(TypeDeclaration<?> type, CompilationUnit cu) {
         TypeWrapper typeWrapper = new TypeWrapper(type);
-        if (type.isAnnotationPresent("Service")
-                || type.isAnnotationPresent("org.springframework.stereotype.Service")) {
-            typeWrapper.setService(true);
-        } else if (type.isAnnotationPresent("RestController")
-                || type.isAnnotationPresent("Controller")) {
-            typeWrapper.setController(true);
-        } else if (type.isAnnotationPresent("Component")) {
-            typeWrapper.setComponent(true);
-        }
+        populateTypeMetadata(type, typeWrapper);
 
         if (type.isClassOrInterfaceDeclaration()) {
             ClassOrInterfaceDeclaration cdecl = type.asClassOrInterfaceDeclaration();
@@ -475,6 +467,33 @@ public class AbstractCompiler {
         return cu;
     }
 
+    static void populateTypeMetadata(TypeDeclaration<?> type, TypeWrapper typeWrapper) {
+        if (hasAnyAnnotation(type, "Service", "org.springframework.stereotype.Service")) {
+            typeWrapper.setService(true);
+        } else if (hasAnyAnnotation(type, "RestController", "Controller",
+                "org.springframework.web.bind.annotation.RestController",
+                "org.springframework.stereotype.Controller")) {
+            typeWrapper.setController(true);
+        } else if (hasAnyAnnotation(type, "Component", "org.springframework.stereotype.Component")) {
+            typeWrapper.setComponent(true);
+        }
+
+        typeWrapper.setRepository(hasAnyAnnotation(type, "Repository", "org.springframework.stereotype.Repository"));
+        typeWrapper.setConfiguration(hasAnyAnnotation(type, "Configuration",
+                "org.springframework.context.annotation.Configuration",
+                "ConfigurationProperties",
+                "org.springframework.boot.context.properties.ConfigurationProperties"));
+    }
+
+    private static boolean hasAnyAnnotation(TypeDeclaration<?> type, String... annotationNames) {
+        for (String annotationName : annotationNames) {
+            if (type.isAnnotationPresent(annotationName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     protected static boolean shouldSkip(String p) {
         List<?> skip = Settings.getProperty("skip", List.class).orElseGet(List::of);
         for (Object s : skip) {
@@ -483,6 +502,10 @@ public class AbstractCompiler {
             }
         }
         return false;
+    }
+
+    public static boolean matchesSkipPattern(String p) {
+        return shouldSkip(p);
     }
 
     /**

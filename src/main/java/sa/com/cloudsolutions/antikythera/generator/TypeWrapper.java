@@ -14,6 +14,8 @@ public class TypeWrapper {
     private boolean isController;
     private boolean isService;
     private boolean component;
+    private boolean repository;
+    private boolean configuration;
     private boolean isInterface;
     private boolean isEntity;
 
@@ -83,6 +85,22 @@ public class TypeWrapper {
 
     public void setComponent(boolean component) {
         this.component = component;
+    }
+
+    public boolean isRepository() {
+        return repository;
+    }
+
+    public void setRepository(boolean repository) {
+        this.repository = repository;
+    }
+
+    public boolean isConfiguration() {
+        return configuration;
+    }
+
+    public void setConfiguration(boolean configuration) {
+        this.configuration = configuration;
     }
 
     public boolean isInterface() {
