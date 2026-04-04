@@ -464,15 +464,22 @@ public class ControlFlowEvaluator extends Evaluator {
      * Falls back to Reflect.variableFactory when the domain value is incompatible
      * (e.g. a List from TruthTable.isEmptyMethodCall passed to a String setter).
      */
+    /**
+     * Resolves the appropriate expression to use as an argument for a setter method call.
+     * <p>
+     * This method analyzes the setter's parameter type and creates an expression that matches
+     * that type, adapting the provided domain value as needed.
+     *
+     * @param stmt the statement context for symbol lookup
+     * @param scope the expression representing the object on which the setter is called
+     * @param setterName the name of the setter method
+     * @param domainValue the domain value to be passed to the setter
+     * @return an Expression representing the adapted argument value
+     */
     private Expression resolveSetterArgument(Statement stmt, Expression scope, String setterName, Object domainValue) {
-        String scopeName;
-        if (scope instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
-            scopeName = mce.getScope().orElseThrow().toString();
-        } else {
-            scopeName = scope.toString();
-        }
-
+        String scopeName = extractScopeName(scope);
         Symbol sym = getValue(stmt, scopeName);
+        
         if (sym == null || !(sym.getValue() instanceof Evaluator ev)) {
             return domainValueToExpression(domainValue, null);
         }
@@ -482,26 +489,81 @@ public class ControlFlowEvaluator extends Evaluator {
             return domainValueToExpression(domainValue, null);
         }
 
-        for (MethodDeclaration md : typeOpt.get().getMethodsByName(setterName)) {
+        return resolveArgumentFromTypeDeclaration(typeOpt.get(), setterName, domainValue);
+    }
+
+    /**
+     * Extracts the scope name from a scope expression.
+     * <p>
+     * If the scope is a method call expression with a scope, extracts that scope's string
+     * representation. Otherwise, uses the scope expression's toString().
+     *
+     * @param scope the scope expression
+     * @return the scope name as a string
+     */
+    private String extractScopeName(Expression scope) {
+        if (scope instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+            return mce.getScope().orElseThrow().toString();
+        }
+        return scope.toString();
+    }
+
+    /**
+     * Resolves the setter argument by examining the type declaration's setter methods.
+     * <p>
+     * Looks for the setter method by name, extracts its parameter type, and adapts the
+     * domain value to match that type. Falls back to runtime type adaptation if the
+     * setter is not found (e.g., Lombok-generated setters).
+     *
+     * @param typeDecl the type declaration containing the setter method
+     * @param setterName the name of the setter method
+     * @param domainValue the domain value to adapt
+     * @return an Expression representing the adapted argument
+     */
+    private Expression resolveArgumentFromTypeDeclaration(TypeDeclaration<?> typeDecl, String setterName, Object domainValue) {
+        for (MethodDeclaration md : typeDecl.getMethodsByName(setterName)) {
             if (md.getParameters().size() == 1) {
                 Type paramType = md.getParameter(0).getType();
-                Expression adapted = domainValueToExpression(domainValue, paramType.asString());
+                Expression adapted = adaptDomainValueToParameterType(paramType, domainValue);
                 if (adapted != null) {
                     return adapted;
-                }
-                String fqn = AbstractCompiler.findFullyQualifiedName(cu, paramType.asString());
-                if (fqn == null) {
-                    fqn = paramType.asString();
-                }
-                Variable v = Reflect.variableFactory(fqn);
-                if (v != null && v.getInitializer() != null && !v.getInitializer().isEmpty()) {
-                    return v.getInitializer().getFirst();
                 }
                 break;
             }
         }
         // Setter not found in TypeDeclaration (e.g. Lombok-generated) — adapt domain value using runtime type
         return domainValueToExpression(domainValue, null);
+    }
+
+    /**
+     * Adapts a domain value to match a specific parameter type.
+     * <p>
+     * First attempts direct type-based conversion. If that fails, tries to create a
+     * Variable using reflection and extract its initializer expression.
+     *
+     * @param paramType the target parameter type
+     * @param domainValue the domain value to adapt
+     * @return an Expression representing the adapted value, or null if adaptation fails
+     */
+    private Expression adaptDomainValueToParameterType(Type paramType, Object domainValue) {
+        // Try direct type conversion
+        Expression adapted = domainValueToExpression(domainValue, paramType.asString());
+        if (adapted != null) {
+            return adapted;
+        }
+
+        // Try using reflection to create a variable and extract its initializer
+        String fqn = AbstractCompiler.findFullyQualifiedName(cu, paramType.asString());
+        if (fqn == null) {
+            fqn = paramType.asString();
+        }
+        
+        Variable v = Reflect.variableFactory(fqn);
+        if (v != null && v.getInitializer() != null && !v.getInitializer().isEmpty()) {
+            return v.getInitializer().getFirst();
+        }
+        
+        return null;
     }
 
     /**
