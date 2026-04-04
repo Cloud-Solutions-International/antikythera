@@ -303,7 +303,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
             Evaluator.clearLastExceptionContext();
             GeneratorState.clearWhenThen();
+            GeneratorState.clearMockStubReturnHints();
+            GeneratorState.clearPendingObjectStubReturnFqns();
             if (cd instanceof MethodDeclaration md) {
+                md.findCompilationUnit().ifPresent(cu -> md.findAncestor(ClassOrInterfaceDeclaration.class)
+                        .ifPresent(coid -> MethodBodyMockStubAnalyzer.registerHintsForType(coid, cu)));
                 executeMethod(md);
             } else if (cd instanceof ConstructorDeclaration constructorDeclaration) {
                 executeConstructor(constructorDeclaration);

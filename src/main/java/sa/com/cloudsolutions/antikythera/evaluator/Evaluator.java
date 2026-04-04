@@ -21,6 +21,7 @@ import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.CharLiteralExpr;
+import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
@@ -366,7 +367,27 @@ public class Evaluator implements EvaluationEngine {
              */
             return evaluateExpression(expr.asEnclosedExpr().getInner());
         } else if (expr.isCastExpr()) {
-            return evaluateExpression(expr.asCastExpr().getExpression());
+            CastExpr castExpr = expr.asCastExpr();
+            Expression inner = castExpr.getExpression();
+            if (inner instanceof MethodCallExpr) {
+                boolean pushedPending = false;
+                Optional<CompilationUnit> cuOpt = expr.findCompilationUnit();
+                if (cuOpt.isPresent()) {
+                    String fqn = AbstractCompiler.findFullyQualifiedName(cuOpt.get(), castExpr.getType());
+                    if (fqn != null) {
+                        GeneratorState.pushPendingObjectStubReturnFqn(fqn);
+                        pushedPending = true;
+                    }
+                }
+                try {
+                    return evaluateExpression(inner);
+                } finally {
+                    if (pushedPending) {
+                        GeneratorState.popPendingObjectStubReturnFqn();
+                    }
+                }
+            }
+            return evaluateExpression(inner);
         } else if (expr.isConditionalExpr()) {
             return evaluateConditionalExpression(expr.asConditionalExpr());
         } else if (expr.isClassExpr()) {

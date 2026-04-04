@@ -230,7 +230,29 @@ public class MockingRegistry {
     }
 
     public static MethodCallExpr buildMockitoWhen(String methodName, String returnType, String variableName) {
-        return buildMockitoWhen(methodName, expressionFactory(returnType), variableName);
+        return buildMockitoWhen(methodName, expressionFactory(resolveReturnTypeForStub(returnType, methodName, variableName)), variableName);
+    }
+
+    /**
+     * When the declared return type is {@code Object}, use a cast target from
+     * {@link GeneratorState} (see {@link sa.com.cloudsolutions.antikythera.evaluator.MethodBodyMockStubAnalyzer})
+     * or from {@code (T) mock.call()} so {@code thenReturn} is compatible with downstream casts.
+     */
+    static String resolveReturnTypeForStub(String returnType, String methodName, String mockScopeVariableName) {
+        if (!"java.lang.Object".equals(returnType)) {
+            return returnType;
+        }
+        String pending = GeneratorState.peekPendingObjectStubReturnFqn();
+        if (pending != null) {
+            return pending;
+        }
+        if (mockScopeVariableName != null) {
+            String hint = GeneratorState.getMockStubReturnHint(mockScopeVariableName, methodName);
+            if (hint != null) {
+                return hint;
+            }
+        }
+        return returnType;
     }
 
     public static MethodCallExpr buildMockitoWhen(String methodName, Expression returnValue, String scopeVariable) {
@@ -354,12 +376,19 @@ public class MockingRegistry {
 
             case "Boolean", "java.lang.Boolean", Reflect.PRIMITIVE_BOOLEAN -> new BooleanLiteralExpr(false);
 
-            case Reflect.PRIMITIVE_FLOAT, Reflect.FLOAT, Reflect.PRIMITIVE_DOUBLE, Reflect.DOUBLE ->
+            case Reflect.PRIMITIVE_FLOAT, Reflect.FLOAT, Reflect.PRIMITIVE_DOUBLE, Reflect.DOUBLE,
+                    "java.lang.Float", "java.lang.Double" ->
                     new DoubleLiteralExpr("0.0");
 
-            case Reflect.INTEGER, "int" -> new IntegerLiteralExpr("0");
+            case Reflect.INTEGER, "int", Reflect.JAVA_LANG_INTEGER -> new IntegerLiteralExpr("0");
 
-            case "Long", "long", "java.lang.Long" -> new LongLiteralExpr("-100L");
+            case "Short", "short", "java.lang.Short" -> new IntegerLiteralExpr("0");
+
+            case "Byte", "byte", Reflect.JAVA_LANG_BYTE -> new IntegerLiteralExpr("0");
+
+            case "Character", "char", Reflect.JAVA_LANG_CHARACTER -> new IntegerLiteralExpr("0");
+
+            case "Long", "long", Reflect.JAVA_LANG_LONG -> new LongLiteralExpr("-100L");
 
             case "String", "java.lang.String" -> new StringLiteralExpr("0");
 
@@ -375,6 +404,9 @@ public class MockingRegistry {
     private static Expression createExpressionForUnknownType(String qualifiedName) {
         try {
             Class<?> cls = AbstractCompiler.loadClass(qualifiedName);
+            if (isJavaLangPrimitiveWrapper(cls)) {
+                return expressionFactory(cls.getName());
+            }
             if (cls.isInterface() || java.lang.reflect.Modifier.isAbstract(cls.getModifiers())) {
                 return createMockExpression(cls.getSimpleName());
             }
@@ -399,6 +431,12 @@ public class MockingRegistry {
             simpleName = simpleName.replace('$', '.');
             return createMockExpression(simpleName);
         }
+    }
+
+    private static boolean isJavaLangPrimitiveWrapper(Class<?> cls) {
+        return Integer.class.equals(cls) || Long.class.equals(cls) || Short.class.equals(cls)
+                || Byte.class.equals(cls) || Character.class.equals(cls) || Float.class.equals(cls)
+                || Double.class.equals(cls) || Boolean.class.equals(cls);
     }
 
     /**
