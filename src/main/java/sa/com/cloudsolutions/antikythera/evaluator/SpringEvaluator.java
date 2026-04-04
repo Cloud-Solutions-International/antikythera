@@ -343,6 +343,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             if (onTest) {
                 mr.setCapturedOutput(output);
             }
+            ExceptionContext last = Evaluator.getLastExceptionContext();
+            if (last != null && last.getException() != null) {
+                Throwable t = last.getException();
+                if (t instanceof EvaluatorException ee) {
+                    mr.setException(ee);
+                } else {
+                    mr.setException(new EvaluatorException("Symbolic evaluation", t));
+                }
+            }
             createTests(mr);
         }
     }
