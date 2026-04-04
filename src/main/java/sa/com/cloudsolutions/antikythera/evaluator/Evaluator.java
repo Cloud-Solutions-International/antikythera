@@ -1351,9 +1351,33 @@ public class Evaluator implements EvaluationEngine {
 
     /**
      * Dispatch intermediate stream operations (those that return a new Stream).
+     * <p>
+     * This method handles intermediate operations by:
+     * <ul>
+     *     <li>Converting symbolic evaluation results to appropriate functional interfaces</li>
+     *     <li>Using reflection to invoke the actual stream method on the JDK Stream class</li>
+     *     <li>Preserving the stream type for further chained operations</li>
+     * </ul>
      *
+     * <p><strong>Type Adaptation:</strong> Arguments are automatically converted from symbolic
+     * evaluation representations (e.g., {@link Variable}, {@link Function}) to the appropriate
+     * functional interfaces ({@link Predicate}, {@link Consumer}, {@link Comparator}, etc.)
+     * using the {@code toStream*} helper methods.
+     *
+     * <p><strong>Supported Operations:</strong> filter, takeWhile, dropWhile, map, flatMap,
+     * peek, sorted, distinct, limit, skip, mapToInt, mapToLong, mapToDouble.
+     *
+     * <p><strong>Null Handling:</strong> The sorted() operation can be invoked with or without
+     * a comparator. Other operations expect non-null arguments as per Stream API contracts.
+     *
+     * @param methodName the name of the stream method to invoke
+     * @param stream the stream instance to operate on
+     * @param finalArgs the arguments for the operation (already symbolically evaluated)
      * @return {@code true} if the operation was handled, {@code false} if the method name is not
      *         an intermediate operation and the caller should attempt terminal dispatch.
+     * @throws NoSuchMethodException if the stream method cannot be found via reflection
+     * @throws InvocationTargetException if the stream operation throws an exception
+     * @throws IllegalAccessException if the stream method is not accessible
      */
     @SuppressWarnings({"java:S3740", "java:S3776"})
     private boolean dispatchIntermediateOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
@@ -1419,6 +1443,37 @@ public class Evaluator implements EvaluationEngine {
     /**
      * Dispatch terminal stream operations (those that consume the stream and return a non-stream
      * result).
+     * <p>
+     * Terminal operations end the stream pipeline and produce a result. This method:
+     * <ul>
+     *     <li>Converts symbolic evaluation results to appropriate functional interfaces</li>
+     *     <li>Invokes the terminal operation using reflection</li>
+     *     <li>Wraps the result in a {@link Variable} with appropriate type information</li>
+     * </ul>
+     *
+     * <p><strong>Type Adaptation:</strong> Similar to intermediate operations, arguments are
+     * automatically converted from symbolic representations to functional interfaces.
+     *
+     * <p><strong>Supported Operations:</strong> forEach, collect, count, toList, toArray,
+     * findFirst, findAny, anyMatch, allMatch, noneMatch, min, max, reduce.
+     *
+     * <p><strong>Result Handling:</strong>
+     * <ul>
+     *     <li>{@code forEach} returns {@code null} wrapped in a Variable</li>
+     *     <li>{@code findFirst}, {@code findAny}, {@code min}, {@code max} return {@link Optional}</li>
+     *     <li>{@code reduce} with one argument returns {@link Optional}, with two returns direct value</li>
+     *     <li>Other operations return their respective result types</li>
+     * </ul>
+     *
+     * <p><strong>Void Operations:</strong> If the method name is not recognized, this method
+     * returns silently (switch default case), allowing the caller to handle unknown operations.
+     *
+     * @param methodName the name of the terminal stream method to invoke
+     * @param stream the stream instance to consume
+     * @param finalArgs the arguments for the operation (already symbolically evaluated)
+     * @throws NoSuchMethodException if the stream method cannot be found via reflection
+     * @throws InvocationTargetException if the stream operation throws an exception
+     * @throws IllegalAccessException if the stream method is not accessible
      */
     @SuppressWarnings({"unchecked", "java:S3740", "java:S3776"})
     private void dispatchTerminalOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
@@ -1592,6 +1647,23 @@ public class Evaluator implements EvaluationEngine {
 
     }
 
+    /**
+     * Adapts a symbolic evaluation result to a {@link UnaryOperator} for use in stream operations.
+     * <p>
+     * During symbolic evaluation, lambda expressions and method references are represented as
+     * various functional interface types. This method normalizes them to {@code UnaryOperator<Object>}
+     * which is the common form used internally for stream transformations.
+     *
+     * <p><strong>Supported Input Types:</strong>
+     * <ul>
+     *     <li>{@link UnaryOperator} - returned as-is (with unchecked cast)</li>
+     *     <li>{@link Function} - wrapped to return a UnaryOperator that delegates to the function</li>
+     * </ul>
+     *
+     * @param arg the symbolic evaluation result (typically a lambda or method reference)
+     * @return a {@code UnaryOperator<Object>} that can be used in stream operations
+     * @throws AntikytheraException if the argument is null or not a recognized functional type
+     */
     private static UnaryOperator<Object> toStreamFunction(Object arg) {
         if (arg instanceof UnaryOperator<?> uo) {
             return (UnaryOperator<Object>) uo;
@@ -1604,6 +1676,26 @@ public class Evaluator implements EvaluationEngine {
                 + (arg == null ? "null" : arg.getClass().getName()));
     }
 
+    /**
+     * Adapts a symbolic evaluation result to a {@link Consumer} for use in stream operations.
+     * <p>
+     * Stream operations like {@code forEach} and {@code peek} require {@code Consumer} arguments.
+     * This method converts symbolic representations to the expected type.
+     *
+     * <p><strong>Supported Input Types:</strong>
+     * <ul>
+     *     <li>{@link Consumer} - returned as-is (with unchecked cast)</li>
+     *     <li>{@link Function} - converted via {@link #toStreamFunction(Object)} and wrapped
+     *         as a Consumer that ignores the function's return value</li>
+     * </ul>
+     *
+     * <p><strong>Note:</strong> When a Function is provided, its return value is discarded
+     * (side-effect only execution), which matches the semantics of Consumer.
+     *
+     * @param arg the symbolic evaluation result (typically a lambda or method reference)
+     * @return a {@code Consumer<Object>} that can be used in stream operations
+     * @throws AntikytheraException if the argument is null or not a recognized functional type
+     */
     @SuppressWarnings("unchecked")
     private static Consumer<Object> toStreamConsumer(Object arg) {
         if (arg instanceof Consumer<?> c) {
@@ -1617,6 +1709,30 @@ public class Evaluator implements EvaluationEngine {
                 + (arg == null ? "null" : arg.getClass().getName()));
     }
 
+    /**
+     * Adapts a symbolic evaluation result to a {@link Comparator} for use in stream operations.
+     * <p>
+     * Stream operations like {@code sorted}, {@code min}, and {@code max} may require
+     * {@code Comparator} arguments. This method converts symbolic representations to the expected type.
+     *
+     * <p><strong>Supported Input Types:</strong>
+     * <ul>
+     *     <li>{@link Comparator} - returned as-is (with unchecked cast)</li>
+     *     <li>{@link BiFunction} - wrapped as a Comparator that:
+     *         <ul>
+     *             <li>Invokes the BiFunction with two comparison arguments</li>
+     *             <li>Converts the result to an int (0 if not a Number)</li>
+     *         </ul>
+     *     </li>
+     * </ul>
+     *
+     * <p><strong>Note:</strong> BiFunction results are expected to be numeric comparison results
+     * (negative, zero, or positive). Non-numeric results default to 0 (equal).
+     *
+     * @param arg the symbolic evaluation result (typically a lambda or method reference)
+     * @return a {@code Comparator<Object>} that can be used in stream operations
+     * @throws AntikytheraException if the argument is null or not a recognized functional type
+     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Comparator<Object> toStreamComparator(Object arg) {
         if (arg instanceof Comparator<?> c) {
@@ -1633,6 +1749,26 @@ public class Evaluator implements EvaluationEngine {
                 + (arg == null ? "null" : arg.getClass().getName()));
     }
 
+    /**
+     * Adapts a symbolic evaluation result to a {@link BinaryOperator} for use in stream operations.
+     * <p>
+     * Stream operations like {@code reduce} require {@code BinaryOperator} arguments which combine
+     * two values of the same type into one. This method converts symbolic representations to the
+     * expected type.
+     *
+     * <p><strong>Supported Input Types:</strong>
+     * <ul>
+     *     <li>{@link BinaryOperator} - returned as-is (with unchecked cast)</li>
+     *     <li>{@link BiFunction} - wrapped as a BinaryOperator that delegates to the BiFunction</li>
+     * </ul>
+     *
+     * <p><strong>Note:</strong> Both BinaryOperator and BiFunction have the same functional signature
+     * {@code (T, T) -> T}, so BiFunction can be used interchangeably in this symbolic evaluation context.
+     *
+     * @param arg the symbolic evaluation result (typically a lambda or method reference)
+     * @return a {@code BinaryOperator<Object>} that can be used in stream reduce operations
+     * @throws AntikytheraException if the argument is null or not a recognized functional type
+     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static BinaryOperator<Object> toStreamBinaryOperator(Object arg) {
         if (arg instanceof BinaryOperator<?> bo) {
