@@ -646,6 +646,42 @@ public class ControlFlowEvaluator extends Evaluator {
      * method body.  A positive result indicates the variable may be an output parameter
      * (e.g. an error-accumulator list) that is populated before the condition is checked,
      * making a "force-empty" override unreachable at runtime.
+     *
+     * <p><strong>Algorithm:</strong>
+     * <ol>
+     *     <li>Early return {@code false} if inputs are invalid (null varName, no current conditional)</li>
+     *     <li>Extract the enclosing method declaration and the conditional statement being evaluated</li>
+     *     <li>Early return {@code false} if method structure is invalid (no body)</li>
+     *     <li>Iterate through all statements in the method body <strong>until</strong> reaching the
+     *         conditional statement (break prevents scanning statements after the condition)</li>
+     *     <li>For each statement before the condition:
+     *         <ul>
+     *             <li>Find all method call expressions (including nested calls)</li>
+     *             <li>Check each argument to each call</li>
+     *             <li>Return {@code true} immediately if the variable name matches any argument</li>
+     *         </ul>
+     *     </li>
+     *     <li>Return {@code false} if no matches found in pre-condition statements</li>
+     * </ol>
+     *
+     * <p><strong>Example Scenario:</strong><br>
+     * Consider this method:
+     * <pre>{@code
+     * void process(List<String> errors) {
+     *     validate(errors);        // errors passed as argument here
+     *     if (errors.isEmpty()) {  // conditional we're analyzing
+     *         // ...
+     *     }
+     * }
+     * }</pre>
+     * When analyzing the {@code errors.isEmpty()} condition, this method returns {@code true}
+     * because "errors" appears as an argument to {@code validate()} before the condition.
+     * This indicates "errors" is likely an output parameter that gets populated by validate(),
+     * so forcing it to be empty for branch coverage would be unrealistic.
+     *
+     * @param varName the variable name to search for (typically extracted from a condition)
+     * @return {@code true} if the variable is passed as an argument to any method call before
+     *         the current condition, {@code false} otherwise
      */
     private boolean isPassedToMethodBeforeCondition(String varName) {
         if (varName == null || currentConditional == null) return false;
