@@ -121,15 +121,42 @@ import java.io.PrintStream;
 public class Evaluator implements EvaluationEngine {
     private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
     public static final String JAVA_UTIL_STREAM = "java.util.stream.";
+    
+    // Stream terminal operation method names
     public static final String TO_LIST = "toList";
     public static final String TO_ARRAY = "toArray";
     public static final String COUNT = "count";
+    
+    // Stream intermediate operation method names
+    public static final String SORTED = "sorted";
+    public static final String DISTINCT = "distinct";
+    public static final String LIMIT = "limit";
+    public static final String SKIP = "skip";
+    public static final String FILTER = "filter";
+    public static final String TAKE_WHILE = "takeWhile";
+    public static final String DROP_WHILE = "dropWhile";
+    public static final String MAP = "map";
+    public static final String FLAT_MAP = "flatMap";
+    public static final String PEEK = "peek";
+    public static final String MAP_TO_INT = "mapToInt";
+    public static final String MAP_TO_LONG = "mapToLong";
+    public static final String MAP_TO_DOUBLE = "mapToDouble";
+    
+    // Stream terminal operation method names
+    public static final String FOR_EACH = "forEach";
+    public static final String COLLECT = "collect";
+    public static final String FIND_FIRST = "findFirst";
+    public static final String FIND_ANY = "findAny";
+    public static final String ANY_MATCH = "anyMatch";
+    public static final String ALL_MATCH = "allMatch";
+    public static final String NONE_MATCH = "noneMatch";
+    public static final String MIN = "min";
+    public static final String MAX = "max";
+    public static final String REDUCE = "reduce";
+    
+    // Primitive stream operation method names
     public static final String AS_DOUBLE_STREAM = "asDoubleStream";
     public static final String MAP_TO_OBJ = "mapToObj";
-    public static final String SORTED = "sorted";
-    public static final String REDUCE = "reduce";
-    public static final String LIMIT = "limit";
-    public static final String DISTINCT = "distinct";
     /**
      * The fields that were encountered in the current class.
      */
@@ -1383,22 +1410,22 @@ public class Evaluator implements EvaluationEngine {
     private boolean dispatchIntermediateOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         Object result;
         switch (methodName) {
-            case "filter", "takeWhile", "dropWhile" -> {
+            case FILTER, TAKE_WHILE, DROP_WHILE -> {
                 UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
                 result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
             }
-            case "map" -> {
+            case MAP -> {
                 UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                result = Stream.class.getMethod("map", Function.class).invoke(stream, fn);
+                result = Stream.class.getMethod(MAP, Function.class).invoke(stream, fn);
             }
-            case "flatMap" -> {
+            case FLAT_MAP -> {
                 UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                result = Stream.class.getMethod("flatMap", Function.class).invoke(stream, fn);
+                result = Stream.class.getMethod(FLAT_MAP, Function.class).invoke(stream, fn);
             }
-            case "peek" -> {
+            case PEEK -> {
                 Consumer<Object> consumer = toStreamConsumer(finalArgs[0]);
-                result = Stream.class.getMethod("peek", Consumer.class).invoke(stream, consumer);
+                result = Stream.class.getMethod(PEEK, Consumer.class).invoke(stream, consumer);
             }
             case SORTED -> {
                 if (finalArgs.length == 0 || finalArgs[0] == null) {
@@ -1413,24 +1440,24 @@ public class Evaluator implements EvaluationEngine {
                 long n = ((Number) finalArgs[0]).longValue();
                 result = Stream.class.getMethod(LIMIT, long.class).invoke(stream, n);
             }
-            case "skip" -> {
+            case SKIP -> {
                 long n = ((Number) finalArgs[0]).longValue();
-                result = Stream.class.getMethod("skip", long.class).invoke(stream, n);
+                result = Stream.class.getMethod(SKIP, long.class).invoke(stream, n);
             }
-            case "mapToInt" -> {
+            case MAP_TO_INT -> {
                 UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 ToIntFunction<Object> toIntFn = x -> ((Number) fn.apply(x)).intValue();
-                result = Stream.class.getMethod("mapToInt", ToIntFunction.class).invoke(stream, toIntFn);
+                result = Stream.class.getMethod(MAP_TO_INT, ToIntFunction.class).invoke(stream, toIntFn);
             }
-            case "mapToLong" -> {
+            case MAP_TO_LONG -> {
                 UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 ToLongFunction<Object> toLongFn = x -> ((Number) fn.apply(x)).longValue();
-                result = Stream.class.getMethod("mapToLong", ToLongFunction.class).invoke(stream, toLongFn);
+                result = Stream.class.getMethod(MAP_TO_LONG, ToLongFunction.class).invoke(stream, toLongFn);
             }
-            case "mapToDouble" -> {
+            case MAP_TO_DOUBLE -> {
                 UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 ToDoubleFunction<Object> toDblFn = x -> ((Number) fn.apply(x)).doubleValue();
-                result = Stream.class.getMethod("mapToDouble", ToDoubleFunction.class).invoke(stream, toDblFn);
+                result = Stream.class.getMethod(MAP_TO_DOUBLE, ToDoubleFunction.class).invoke(stream, toDblFn);
             }
             default -> { return false; }
         }
@@ -1479,27 +1506,27 @@ public class Evaluator implements EvaluationEngine {
     private void dispatchTerminalOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         Object result;
         switch (methodName) {
-            case "forEach" -> {
+            case FOR_EACH -> {
                 Consumer<Object> action = toStreamConsumer(finalArgs[0]);
                 stream.forEach(action);
                 returnValue = new Variable(null);
                 return;
             }
-            case "collect" -> {
+            case COLLECT -> {
                 Collector<Object, ?, Object> col = (Collector<Object, ?, Object>) finalArgs[0];
-                result = Stream.class.getMethod("collect", Collector.class).invoke(stream, col);
+                result = Stream.class.getMethod(COLLECT, Collector.class).invoke(stream, col);
             }
             case COUNT -> result = Stream.class.getMethod(COUNT).invoke(stream);
             case TO_LIST -> result = Stream.class.getMethod(TO_LIST).invoke(stream);
             case TO_ARRAY -> result = Stream.class.getMethod(TO_ARRAY).invoke(stream);
-            case "findFirst" -> result = Stream.class.getMethod("findFirst").invoke(stream);
-            case "findAny" -> result = Stream.class.getMethod("findAny").invoke(stream);
-            case "anyMatch", "allMatch", "noneMatch" -> {
+            case FIND_FIRST -> result = Stream.class.getMethod(FIND_FIRST).invoke(stream);
+            case FIND_ANY -> result = Stream.class.getMethod(FIND_ANY).invoke(stream);
+            case ANY_MATCH, ALL_MATCH, NONE_MATCH -> {
                 UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
                 Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
                 result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
             }
-            case "min", "max" -> {
+            case MIN, MAX -> {
                 Comparator<Object> comp = toStreamComparator(finalArgs[0]);
                 result = Stream.class.getMethod(methodName, Comparator.class).invoke(stream, comp);
             }
