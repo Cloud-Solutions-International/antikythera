@@ -68,6 +68,12 @@ public class Settings {
     public static final String STRICT_TYPE_RESOLUTION = "strict_type_resolution";
     public static final String APPLICATION_VERSION = "application.version";
     /**
+     * Optional list of dependency <strong>simple</strong> class names (e.g. {@code ProblemFeignClient})
+     * that should use a plain {@code @Mock} instead of {@code RETURNS_DEEP_STUBS}, even when the name
+     * ends with {@code Client}. Matching is by simple name only (not FQCN).
+     */
+    public static final String PLAIN_MOCK_DEPENDENCY_SIMPLE_NAMES = "plain_mock_dependency_simple_names";
+    /**
      * HashMap to store the configurations.
      */
     protected static HashMap<String, Object> props;
