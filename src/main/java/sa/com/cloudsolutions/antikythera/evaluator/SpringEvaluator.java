@@ -586,10 +586,127 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                         mr.setCapturedOutput(capturedOutputStream.toString());
                     }
                     createTests(mr);
+
+                    if (onTest && returnValue.getValue() instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator<?> fpEval
+                            && currentCallable instanceof MethodDeclaration md) {
+                        tryGenerateFPApplicationTest(fpEval, md);
+                    }
                 }
             }
         }
         return v;
+    }
+
+    /**
+     * Invokes the returned functional evaluator (e.g., a JPA {@code Specification} lambda) with
+     * all-null arguments to discover whether applying the function at runtime throws an exception.
+     *
+     * <p>When an exception is found, a second {@link MethodResponse} is created with
+     * {@link MethodResponse#isFpApplicationTest()} {@code = true} so that the generator emits the
+     * primary invocation as a plain statement and wraps the functional-application call in
+     * {@code assertThrows}.</p>
+     */
+    private void tryGenerateFPApplicationTest(
+            sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator<?> fpEval,
+            MethodDeclaration md) {
+
+        int arity = fpEval.getMethodDeclaration().getParameters().size();
+        ExceptionContext ctx = null;
+        try {
+            invokeFPEvaluatorWithNullArgs(fpEval, arity);
+        } catch (Exception e) {
+            ctx = buildExceptionContextFromFPFailure(e);
+        }
+
+        if (ctx == null) {
+            return;
+        }
+
+        String fpMethodName = inferFunctionalMethodName(md, fpEval);
+        StringBuilder sb = new StringBuilder("resp.").append(fpMethodName).append("(");
+        for (int i = 0; i < arity; i++) {
+            if (i > 0) sb.append(", ");
+            sb.append("null");
+        }
+        sb.append(")");
+
+        MethodResponse fpMr = new MethodResponse();
+        fpMr.setExceptionContext(ctx);
+        fpMr.setFpApplicationTest(true);
+        fpMr.setFpApplicationCall(sb.toString());
+        createTests(fpMr);
+    }
+
+    private static void invokeFPEvaluatorWithNullArgs(
+            sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator<?> fpEval,
+            int arity) {
+        Object[] nullArgs = new Object[arity];
+        if (fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.NAryFunctionEvaluator n) {
+            n.invoke(nullArgs);
+        } else if (fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.NAryConsumerEvaluator n) {
+            n.invoke(nullArgs);
+        } else if (fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.BiFunctionEvaluator bfe) {
+            bfe.apply(null, null);
+        } else if (fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.BiConsumerEvaluator bce) {
+            bce.accept(null, null);
+        } else if (fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.FunctionEvaluator fe) {
+            fe.apply(null);
+        } else if (fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.ConsumerEvaluator ce) {
+            ce.accept(null);
+        } else if (fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.SupplierEvaluator se) {
+            se.get();
+        } else if (fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.RunnableEvaluator re) {
+            re.run();
+        }
+    }
+
+    private static ExceptionContext buildExceptionContextFromFPFailure(Exception e) {
+        // Unwrap wrapper exceptions to find the root cause
+        Throwable unwrapped = e;
+        while (unwrapped.getCause() != null) {
+            unwrapped = unwrapped.getCause();
+        }
+
+        EvaluatorException eex;
+        if (unwrapped instanceof EvaluatorException ee && ee.getError() == EvaluatorException.NPE) {
+            // Re-wrap with a real NullPointerException cause so JunitAsserter emits NPE.class
+            eex = new EvaluatorException("Application NPE", new NullPointerException());
+        } else {
+            eex = new EvaluatorException(e.getMessage() != null ? e.getMessage() : "FP application exception", e);
+        }
+
+        ExceptionContext ctx = new ExceptionContext();
+        ctx.setException(eex);
+        return ctx;
+    }
+
+    /**
+     * Infers the single abstract method name for the functional interface returned by
+     * {@code md}, falling back to {@code "apply"} / {@code "accept"} for unknown types.
+     */
+    private static String inferFunctionalMethodName(
+            MethodDeclaration md,
+            sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator<?> fpEval) {
+        Type returnType = md.getType();
+        if (returnType.isClassOrInterfaceType()) {
+            String typeName = returnType.asClassOrInterfaceType().getNameAsString();
+            return switch (typeName) {
+                case "Specification" -> "toPredicate";
+                case "Predicate" -> "test";
+                case "Supplier", "Callable" -> "get";
+                case "Runnable" -> "run";
+                default -> isConsumerLike(fpEval) ? "accept" : "apply";
+            };
+        }
+        return isConsumerLike(fpEval) ? "accept" : "apply";
+    }
+
+    private static boolean isConsumerLike(
+            sa.com.cloudsolutions.antikythera.evaluator.functional.FPEvaluator<?> fpEval) {
+        return fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.ConsumerEvaluator
+                || fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.BiConsumerEvaluator
+                || fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.NAryConsumerEvaluator
+                || fpEval instanceof sa.com.cloudsolutions.antikythera.evaluator.functional.RunnableEvaluator;
     }
 
     /**

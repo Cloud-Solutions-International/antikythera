@@ -5,6 +5,7 @@ import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
@@ -32,6 +33,12 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
 
         // Visit the "else" branch if it exists
         stmt.getElseStmt().ifPresent(elseStmt -> elseStmt.accept(this, lineOfCode));
+    }
+
+    @Override
+    public void visit(LambdaExpr n, LineOfCode arg) {
+        // Do not traverse into lambda bodies — conditions inside lambdas belong to a different
+        // callable scope and must not be registered as branches of the enclosing method.
     }
 
     @Override

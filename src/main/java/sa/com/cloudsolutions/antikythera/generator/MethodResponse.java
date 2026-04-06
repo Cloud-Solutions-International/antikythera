@@ -35,6 +35,21 @@ public class MethodResponse {
     private ExceptionContext exceptionContext;
     private AssertionConfidence returnAssertionConfidence = AssertionConfidence.HIGH;
 
+    /**
+     * When true, this response represents an additional test that applies the returned
+     * functional value (e.g., a JPA {@code Specification}) to null arguments.
+     * The generator should emit the main invocation as a plain statement and then wrap
+     * {@link #fpApplicationCall} in {@code assertThrows} rather than wrapping the
+     * primary invocation.
+     */
+    private boolean fpApplicationTest;
+
+    /**
+     * The expression to wrap in {@code assertThrows} for an FP application test,
+     * e.g. {@code "resp.toPredicate(null, null, null)"}.
+     */
+    private String fpApplicationCall;
+
     public MethodResponse() {
 
     }
@@ -137,6 +152,22 @@ public class MethodResponse {
 
     public void setCapturedOutput(String capturedOutput) {
         this.capturedOutput = capturedOutput;
+    }
+
+    public boolean isFpApplicationTest() {
+        return fpApplicationTest;
+    }
+
+    public void setFpApplicationTest(boolean fpApplicationTest) {
+        this.fpApplicationTest = fpApplicationTest;
+    }
+
+    public String getFpApplicationCall() {
+        return fpApplicationCall;
+    }
+
+    public void setFpApplicationCall(String fpApplicationCall) {
+        this.fpApplicationCall = fpApplicationCall;
     }
 
     public AssertionConfidence getReturnAssertionConfidence() {
