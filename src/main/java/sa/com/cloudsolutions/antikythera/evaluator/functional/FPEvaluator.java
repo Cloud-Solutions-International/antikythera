@@ -83,7 +83,7 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
                 case 0 -> EvaluatorFactory.create("java.util.function.Supplier", SupplierEvaluator.class);
                 case 1 -> EvaluatorFactory.create("java.util.function.Function", FunctionEvaluator.class);
                 case 2 -> EvaluatorFactory.create("java.util.function.BiFunction", BiFunctionEvaluator.class);
-                default -> throw new UnsupportedOperationException("Not supported yet.");
+                default -> EvaluatorFactory.create("java.util.function.Function", NAryFunctionEvaluator.class);
             };
             eval.setMethod(md);
             return eval;
@@ -92,9 +92,8 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
                 case 0 -> EvaluatorFactory.create("java.lang.Runnable", RunnableEvaluator.class);
                 case 1 -> EvaluatorFactory.create("java.util.function.Consumer", ConsumerEvaluator.class);
                 case 2 -> EvaluatorFactory.create("java.util.function.BiConsumer", BiConsumerEvaluator.class);
-                default -> throw new UnsupportedOperationException("Not supported yet.");
+                default -> EvaluatorFactory.create("java.util.function.Consumer", NAryConsumerEvaluator.class);
             };
-
             eval.setMethod(md);
             return eval;
         }

@@ -15,6 +15,13 @@ public record FunctionalInvocationHandler(FPEvaluator<?> evaluator) implements I
         if (method.getDeclaringClass() == Object.class) {
             return method.invoke(this, args);
         }
+        if (evaluator instanceof NAryFunctionEvaluator n) {
+            return n.invoke(args);
+        }
+        if (evaluator instanceof NAryConsumerEvaluator n) {
+            n.invoke(args);
+            return null;
+        }
         if (evaluator instanceof BiConsumer bc) {
             bc.accept(args[0], args[1]);
             return null;
