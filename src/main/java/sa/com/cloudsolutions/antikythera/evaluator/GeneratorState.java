@@ -45,6 +45,12 @@ public class GeneratorState {
     }
 
     public static void addImport(ImportDeclaration s) {
+        // Never allow internal antikythera classes or private/anonymous JDK classes ($) into
+        // generated test files — they are not on the test classpath and would cause compile errors.
+        String name = s.getNameAsString();
+        if (name.startsWith("sa.com.cloudsolutions.antikythera.") || name.contains("$")) {
+            return;
+        }
         imports.add(s);
     }
 
