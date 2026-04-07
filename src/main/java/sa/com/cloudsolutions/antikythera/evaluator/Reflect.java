@@ -42,8 +42,11 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Reflect {
+    private static final Logger logger = LoggerFactory.getLogger(Reflect.class);
     public static final String ANTIKYTHERA = "Antikythera";
     public static final String BOOLEAN = "Boolean";
     public static final String BYTE = "Byte";
@@ -750,7 +753,20 @@ public class Reflect {
      */
     public static List<Method> getMethodsByName(Class<?> clazz, String name) {
         List<Method> methods = new ArrayList<>();
-        for (Method m : clazz.getMethods()) {
+        Method[] candidates;
+        try {
+            candidates = clazz.getMethods();
+        } catch (NoClassDefFoundError e) {
+            // A transitive dependency is missing from the classpath (e.g. spring-messaging for KafkaTemplate).
+            // Fall back to declared methods only, which may still load fine.
+            try {
+                candidates = clazz.getDeclaredMethods();
+            } catch (NoClassDefFoundError e2) {
+                logger.debug("Cannot inspect methods of {} — missing dependency: {}", clazz.getName(), e2.getMessage());
+                return methods;
+            }
+        }
+        for (Method m : candidates) {
             if (m.getName().equals(name)) {
                 methods.add(m);
             }

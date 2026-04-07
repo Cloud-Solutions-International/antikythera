@@ -645,6 +645,14 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             for(int i = 0 ; i < initializer.size() -1; i++) {
                 mocks.add(initializer.get(i));
             }
+            // Add import for the variable's class so the variable declaration compiles in the generated test.
+            Class<?> cls = then.getVariable().getClazz();
+            if (cls != null) {
+                String fqn = cls.getName();
+                if (!fqn.startsWith("java.lang.") && !fqn.contains("$")) {
+                    GeneratorState.addImport(new ImportDeclaration(fqn, false, false));
+                }
+            }
         }
         MethodCallExpr when = StaticJavaParser.parseExpression(
                 String.format(

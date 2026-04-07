@@ -177,24 +177,54 @@ public class MockingRegistry {
     }
 
     public static Variable createMockitoMockInstance(Class<?> cls) {
+        String mockName = cls.getSimpleName();
+        mockName = Character.toLowerCase(mockName.charAt(0)) + mockName.substring(1);
+
+        // Attempt 1: full mock with MockReturnValueHandler so when/then stubs are auto-generated
         try {
-            String mockName = cls.getSimpleName();
-            mockName = Character.toLowerCase(mockName.charAt(0)) + mockName.substring(1);
-            Variable v = new Variable(Mockito.mock(cls, withSettings().name(mockName).defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
+            Variable v = new Variable(Mockito.mock(cls, withSettings().name(mockName)
+                    .defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
             v.setClazz(cls);
-            // Set initializer so test generator knows to use Mockito.mock()
             v.setInitializer(List.of(new MethodCallExpr(
                 new NameExpr(MOCKITO), "mock",
                 new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
             )));
             return v;
         } catch (MockitoException e) {
-            logger.warn("Cannot create Mockito mock for {} ({}), substituting null — tests involving this type may be incomplete",
-                    cls.getName(), e.getMessage().lines().findFirst().orElse(""));
+            logger.debug("Full mock creation failed for {} — will retry with plain mock. Reason: {}",
+                    cls.getName(), firstMeaningfulLine(e));
+        }
+
+        // Attempt 2: plain mock — allows evaluation to continue past method calls on this type
+        // but when/then stubs will not be auto-generated for its methods.
+        // Catch Throwable because missing transitive dependencies cause NoClassDefFoundError (an Error, not Exception).
+        try {
+            Variable v = new Variable(Mockito.mock(cls));
+            v.setClazz(cls);
+            v.setInitializer(List.of(new MethodCallExpr(
+                new NameExpr(MOCKITO), "mock",
+                new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
+            )));
+            logger.warn("Using plain Mockito mock for {} — when/then stubs will not be generated for its methods",
+                    cls.getName());
+            return v;
+        } catch (Throwable e2) {
+            logger.warn("Cannot create any Mockito mock for {} — tests involving this type will lack mock setup. Reason: {}",
+                    cls.getName(), firstMeaningfulLine(e2));
             Variable v = new Variable(null);
             v.setClazz(cls);
+            v.setInitializer(List.of(new MethodCallExpr(
+                new NameExpr(MOCKITO), "mock",
+                new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
+            )));
+            v.setFailedMock(true);
             return v;
         }
+    }
+
+    private static String firstMeaningfulLine(Throwable e) {
+        return e.getMessage() == null ? "(no message)"
+                : e.getMessage().lines().filter(l -> !l.isBlank()).findFirst().orElse("(no message)");
     }
 
     public static Variable createByteBuddyMockInstance(String className) throws ReflectiveOperationException {

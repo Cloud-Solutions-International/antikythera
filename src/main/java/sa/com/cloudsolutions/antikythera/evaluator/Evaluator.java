@@ -1281,6 +1281,16 @@ public class Evaluator implements EvaluationEngine {
             handleStreamMethods(v, reflectionArguments);
             return returnValue;
         }
+        // If the variable is a failed mock (null value, mock creation failed due to missing
+        // transitive dependency), absorb the method call silently.  The generated test will
+        // have a real @Mock that works at runtime, so no assertThrows should be emitted.
+        if (v.isFailedMock()) {
+            returnValue = new Variable(null);
+            if (v.getClazz() != null) {
+                returnValue.setClazz(v.getClazz());
+            }
+            return returnValue;
+        }
         validateReflectiveMethod(v, reflectionArguments, method);
         reflectionArguments.setMethod(method);
         reflectionArguments.finalizeArguments();
