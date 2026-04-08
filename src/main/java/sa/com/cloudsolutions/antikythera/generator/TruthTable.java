@@ -859,6 +859,10 @@ public class TruthTable {
         this.condition = condition;
     }
 
+    public Expression getCondition() {
+        return condition;
+    }
+
     /**
      * Collects variable names from the condition expression.
      */

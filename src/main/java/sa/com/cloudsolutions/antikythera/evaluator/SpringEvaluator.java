@@ -272,6 +272,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 prepareInvocationContext(cd);
 
                 currentConditional = Branching.getHighestPriority(cd);
+                if (currentConditional != null) {
+                    BranchingTrace.record("target:"
+                            + cd.getNameAsString()
+                            + "|statement=" + currentConditional.getStatement()
+                            + "|pathTaken=" + currentConditional.getPathTaken());
+                }
                 if ((currentConditional == null || currentConditional.isFullyTravelled()) && oldSize != 0) {
                     break;
                 }
@@ -917,7 +923,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     Variable createTests(MethodResponse response) {
         if (response != null) {
             for (ITestGenerator generator : generators) {
-                generator.setPreConditions(Branching.getApplicableConditions(currentCallable));
+                List<Precondition> applicableConditions = Branching.getApplicableConditions(currentCallable);
+                BranchingTrace.record("preconditions:"
+                        + currentCallable.getNameAsString()
+                        + "|values=" + applicableConditions);
+                generator.setPreConditions(applicableConditions);
                 generator.createTests(currentCallable, response);
             }
             return new Variable(response);
@@ -1058,6 +1068,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         tt.generateTruthTable();
 
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
+        BranchingTrace.record("truthTable:"
+                + currentConditional.getCallableDeclaration().getNameAsString()
+                + "|desiredState=" + state
+                + "|rows=" + values.size()
+                + "|condition=" + tt.getCondition());
 
         if (!values.isEmpty()) {
             setupIfCondition(values);
@@ -1066,6 +1081,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private void setupIfCondition(List<Map<Expression, Object>> combinations) {
         Map<Expression, Object> combination = adjustForEnums(combinations.getFirst());
+        BranchingTrace.record("selected:"
+                + currentConditional.getCallableDeclaration().getNameAsString()
+                + "|combination=" + combination);
         for (var entry : combination.entrySet()) {
             Expression key = entry.getKey();
             if (key instanceof MethodCallExpr mce) {

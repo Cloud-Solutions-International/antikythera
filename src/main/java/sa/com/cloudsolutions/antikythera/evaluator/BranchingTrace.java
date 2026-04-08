@@ -1,0 +1,30 @@
+package sa.com.cloudsolutions.antikythera.evaluator;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * Lightweight in-memory trace of branch exploration decisions.
+ *
+ * <p>This is intended for tests and diagnostics while improving branch-combination coverage.
+ * It is deliberately process-local and cleared explicitly by tests.</p>
+ */
+public final class BranchingTrace {
+    private static final List<String> EVENTS = new ArrayList<>();
+
+    private BranchingTrace() {
+    }
+
+    public static synchronized void clear() {
+        EVENTS.clear();
+    }
+
+    public static synchronized void record(String event) {
+        EVENTS.add(event);
+    }
+
+    public static synchronized List<String> snapshot() {
+        return Collections.unmodifiableList(new ArrayList<>(EVENTS));
+    }
+}
