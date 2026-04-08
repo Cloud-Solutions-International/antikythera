@@ -55,6 +55,8 @@ public class MockingRegistry {
     private static final Logger logger = LoggerFactory.getLogger(MockingRegistry.class);
     private static final Map<String, Map<Callable, MockingCall>> mockedFields = new HashMap<>();
     private static Map<String, List<Expression>> customMockExpressions = new HashMap<>();
+    /** Types for which all mock-creation attempts have already failed; suppress duplicate warnings. */
+    private static final java.util.Set<String> unmockableTypes = new java.util.HashSet<>();
 
     public static final String MOCKITO = "Mockito";
     public static final String MOCKITO_FQN = "org.mockito.Mockito";
@@ -92,6 +94,7 @@ public class MockingRegistry {
 
     public static void reset() {
         mockedFields.clear();
+        unmockableTypes.clear();
         clearCustomMockExpressions();
     }
 
@@ -209,16 +212,37 @@ public class MockingRegistry {
                     cls.getName());
             return v;
         } catch (Throwable e2) {
-            logger.warn("Cannot create any Mockito mock for {} — tests involving this type will lack mock setup. Reason: {}",
-                    cls.getName(), firstMeaningfulLine(e2));
-            Variable v = new Variable(null);
-            v.setClazz(cls);
-            v.setInitializer(List.of(new MethodCallExpr(
-                new NameExpr(MOCKITO), "mock",
-                new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
-            )));
-            v.setFailedMock(true);
-            return v;
+            // Attempt 3: ByteBuddy — handles classes that Mockito cannot subclass (e.g. no no-arg constructor,
+            // requires mockito-inline, etc.)
+            try {
+                MethodInterceptor interceptor = new MethodInterceptor(cls);
+                Class<?> bb = AKBuddy.createDynamicClass(interceptor);
+                Variable v = new Variable(AKBuddy.createInstance(bb, interceptor));
+                v.setClazz(cls);
+                v.setInitializer(List.of(new MethodCallExpr(
+                    new NameExpr(MOCKITO), "mock",
+                    new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
+                )));
+                logger.debug("Fell back to ByteBuddy mock for {} — Mockito could not mock this class",
+                        cls.getName());
+                return v;
+            } catch (Throwable e3) {
+                // Only warn once per unmockable type to avoid log spam when the same type appears multiple times
+                if (unmockableTypes.add(cls.getName())) {
+                    logger.warn("Cannot create any mock for {} — tests involving this type will lack mock setup. Reason: {}",
+                            cls.getName(), firstMeaningfulLine(e2));
+                } else {
+                    logger.debug("Skipping repeated mock-failure for {} (already warned)", cls.getName());
+                }
+                Variable v = new Variable(null);
+                v.setClazz(cls);
+                v.setInitializer(List.of(new MethodCallExpr(
+                    new NameExpr(MOCKITO), "mock",
+                    new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
+                )));
+                v.setFailedMock(true);
+                return v;
+            }
         }
     }
 
