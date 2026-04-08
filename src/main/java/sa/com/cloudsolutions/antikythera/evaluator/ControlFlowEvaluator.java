@@ -21,11 +21,16 @@ import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.ExpressionStmt;
+import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
@@ -74,6 +79,20 @@ public class ControlFlowEvaluator extends Evaluator {
             List<Expression> expr = setupConditionThroughAssignmentForLocal(stmt, entry, v, nameExpr);
             if (expr != null) return expr;
         } else {
+            List<Expression> derivedExpr = setupConditionThroughPriorLocalAssignment(stmt, entry, nameExpr.getNameAsString());
+            if (!derivedExpr.isEmpty()) {
+                for (Expression expression : derivedExpr) {
+                    addPreCondition(stmt, expression);
+                }
+                return derivedExpr;
+            }
+            List<Expression> mockExpr = setupConditionThroughExistingMock(stmt, entry);
+            if (!mockExpr.isEmpty()) {
+                for (Expression expression : mockExpr) {
+                    addPreCondition(stmt, expression);
+                }
+                return mockExpr;
+            }
             v = new Variable(entry.getValue());
         }
 
@@ -85,8 +104,193 @@ public class ControlFlowEvaluator extends Evaluator {
         return expr;
     }
 
+    private List<Expression> setupConditionThroughPriorLocalAssignment(Statement stmt, Map.Entry<Expression, Object> entry,
+                                                                       String variableName) {
+        MethodDeclaration methodDeclaration = stmt.findAncestor(MethodDeclaration.class).orElse(null);
+        if (methodDeclaration == null || methodDeclaration.getBody().isEmpty()) {
+            return List.of();
+        }
+        Expression assignedExpression = findPreviousAssignmentExpression(methodDeclaration.getBody().orElseThrow(), stmt, variableName);
+        if (assignedExpression == null) {
+            BranchingTrace.record("priorLocal:miss|name=" + variableName + "|statement=" + stmt);
+            return List.of();
+        }
+
+        if (assignedExpression.isConditionalExpr()) {
+            assignedExpression = selectConditionalBranch(assignedExpression.asConditionalExpr());
+        }
+        if (!assignedExpression.isMethodCallExpr()) {
+            BranchingTrace.record("priorLocal:skip|name=" + variableName + "|expression=" + assignedExpression);
+            return List.of();
+        }
+
+        MethodCallExpr methodCallExpr = assignedExpression.asMethodCallExpr();
+        Type returnType = resolveMethodCallReturnType(methodCallExpr);
+        if (returnType == null) {
+            BranchingTrace.record("priorLocal:skip|name=" + variableName + "|reason=noReturnType|expression=" + methodCallExpr);
+            return List.of();
+        }
+        Expression returnValue = adaptDomainValueToParameterType(returnType, entry.getValue());
+        if (returnValue == null) {
+            BranchingTrace.record("priorLocal:skip|name=" + variableName + "|reason=noReturnValue|type=" + returnType);
+            return List.of();
+        }
+
+        MethodCallExpr when = new MethodCallExpr(new NameExpr("Mockito"), "when")
+                .addArgument(methodCallExpr.clone());
+        MethodCallExpr thenReturn = new MethodCallExpr(when, "thenReturn")
+                .addArgument(returnValue);
+        BranchingTrace.record("priorLocal:emit|name=" + variableName + "|expression=" + thenReturn);
+        return List.of(thenReturn);
+    }
+
+    private Expression findPreviousAssignmentExpression(BlockStmt block, Statement currentStatement, String variableName) {
+        for (Statement statement : block.getStatements()) {
+            if (statement == currentStatement) {
+                break;
+            }
+            Expression candidate = extractAssignmentExpression(statement, variableName);
+            if (candidate != null) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private Expression extractAssignmentExpression(Statement statement, String variableName) {
+        if (statement.isIfStmt()) {
+            return extractAssignmentExpression(statement.asIfStmt(), variableName);
+        }
+        if (!(statement instanceof ExpressionStmt expressionStmt)) {
+            return null;
+        }
+        Expression expression = expressionStmt.getExpression();
+        if (expression.isVariableDeclarationExpr()) {
+            for (VariableDeclarator variableDeclarator : expression.asVariableDeclarationExpr().getVariables()) {
+                if (variableDeclarator.getNameAsString().equals(variableName)) {
+                    return variableDeclarator.getInitializer().orElse(null);
+                }
+            }
+        }
+        if (expression.isAssignExpr()) {
+            AssignExpr assignExpr = expression.asAssignExpr();
+            if (assignExpr.getTarget().isNameExpr()
+                    && assignExpr.getTarget().asNameExpr().getNameAsString().equals(variableName)) {
+                return assignExpr.getValue();
+            }
+        }
+        return null;
+    }
+
+    private Expression extractAssignmentExpression(IfStmt ifStmt, String variableName) {
+        boolean conditionValue = evaluateConditionSafely(ifStmt.getCondition());
+        Statement selectedBranch = conditionValue
+                ? ifStmt.getThenStmt()
+                : ifStmt.getElseStmt().orElse(null);
+        if (selectedBranch == null) {
+            return null;
+        }
+        if (selectedBranch.isBlockStmt()) {
+            for (Statement nested : selectedBranch.asBlockStmt().getStatements()) {
+                Expression expression = extractAssignmentExpression(nested, variableName);
+                if (expression != null) {
+                    return expression;
+                }
+            }
+            return null;
+        }
+        return extractAssignmentExpression(selectedBranch, variableName);
+    }
+
+    private boolean evaluateConditionSafely(Expression condition) {
+        try {
+            Variable variable = evaluateExpression(condition);
+            return variable != null && Boolean.TRUE.equals(variable.getValue());
+        } catch (ReflectiveOperationException | RuntimeException ex) {
+            return false;
+        }
+    }
+
+    private Expression selectConditionalBranch(ConditionalExpr conditionalExpr) {
+        return evaluateConditionSafely(conditionalExpr.getCondition())
+                ? conditionalExpr.getThenExpr()
+                : conditionalExpr.getElseExpr();
+    }
+
+    private Type resolveMethodCallReturnType(MethodCallExpr methodCallExpr) {
+        try {
+            MCEWrapper wrapper = wrapCallExpression(methodCallExpr);
+            if (wrapper.getMatchingCallable() != null && wrapper.getMatchingCallable().isMethodDeclaration()) {
+                return wrapper.getMatchingCallable().asMethodDeclaration().getType();
+            }
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // Best effort only.
+        }
+        try {
+            ResolvedType resolvedType = methodCallExpr.calculateResolvedType();
+            return StaticJavaParser.parseType(resolvedType.describe());
+        } catch (RuntimeException ignored) {
+            // Best effort only.
+        }
+        return null;
+    }
+
+    private List<Expression> setupConditionThroughExistingMock(Statement stmt, Map.Entry<Expression, Object> entry) {
+        List<MockingCall> mocks = MockingRegistry.getAllMocks();
+        for (int i = mocks.size() - 1; i >= 0; i--) {
+            MockingCall mockingCall = mocks.get(i);
+            Expression whenThen = rewriteMockReturnExpression(mockingCall, entry.getValue());
+            if (whenThen != null) {
+                BranchingTrace.record("mockFallback:emit|statement=" + stmt + "|expression=" + whenThen);
+                return List.of(whenThen);
+            }
+        }
+        return List.of();
+    }
+
+    private Expression rewriteMockReturnExpression(MockingCall mockingCall, Object domainValue) {
+        if (mockingCall.getExpression() == null || mockingCall.getExpression().isEmpty()) {
+            return null;
+        }
+        Expression last = mockingCall.getExpression().getLast();
+        if (!(last instanceof MethodCallExpr thenReturn) || !thenReturn.getNameAsString().equals("thenReturn")) {
+            return null;
+        }
+        Type returnType = resolveMockingCallReturnType(mockingCall);
+        if (returnType == null) {
+            return null;
+        }
+        Expression returnValue = adaptDomainValueToParameterType(returnType, domainValue);
+        if (returnValue == null) {
+            return null;
+        }
+
+        MethodCallExpr rewritten = thenReturn.clone();
+        rewritten.setArgument(0, returnValue);
+        return rewritten;
+    }
+
+    private Type resolveMockingCallReturnType(MockingCall mockingCall) {
+        if (mockingCall.getVariable() != null && mockingCall.getVariable().getType() != null) {
+            return mockingCall.getVariable().getType();
+        }
+        if (mockingCall.getCallable() != null && mockingCall.getCallable().isMethodDeclaration()) {
+            return mockingCall.getCallable().asMethodDeclaration().getType();
+        }
+        return null;
+    }
+
     @SuppressWarnings("unchecked")
     private List<Expression> setupConditionThroughAssignmentForLocal(Statement stmt, Map.Entry<Expression, Object> entry, Symbol v, NameExpr nameExpr) {
+        if (v instanceof Variable variable) {
+            BranchingTrace.record("localAssign:"
+                    + nameExpr.getNameAsString()
+                    + "|type=" + variable.getType()
+                    + "|value=" + variable.getValue()
+                    + "|initializers=" + variable.getInitializer().size());
+        } else {
+            BranchingTrace.record("localAssign:" + nameExpr.getNameAsString() + "|symbol=" + v.getClass().getSimpleName());
+        }
         if (v.getInitializer() != null) {
             MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
 
@@ -100,6 +304,13 @@ public class ControlFlowEvaluator extends Evaluator {
                     return expr;
                 }
             }
+            List<Expression> stubExpressions = setupConditionThroughMockedLocalInitializer(entry, v);
+            if (!stubExpressions.isEmpty()) {
+                for (Expression expression : stubExpressions) {
+                    addPreCondition(stmt, expression);
+                }
+                return stubExpressions;
+            }
             /*
              * We tried to match the name of the variable with the name of the parameter, but
              * a match could not be found. So it is not possible to force branching by
@@ -107,6 +318,56 @@ public class ControlFlowEvaluator extends Evaluator {
              */
         }
         return List.of();
+    }
+
+    private List<Expression> setupConditionThroughMockedLocalInitializer(Map.Entry<Expression, Object> entry, Symbol value) {
+        if (value.getInitializer().isEmpty()) {
+            BranchingTrace.record("localStub:skip|reason=noInitializer|entry=" + entry.getKey());
+            return List.of();
+        }
+        Expression initializer = value.getInitializer().getFirst();
+        if (!initializer.isMethodCallExpr()) {
+            BranchingTrace.record("localStub:skip|reason=initializer=" + initializer.getClass().getSimpleName()
+                    + "|entry=" + entry.getKey());
+            return List.of();
+        }
+
+        Type returnType = resolveMockedLocalReturnType(value, initializer.asMethodCallExpr());
+        if (returnType == null) {
+            BranchingTrace.record("localStub:skip|reason=noReturnType|initializer=" + initializer
+                    + "|entry=" + entry.getKey());
+            return List.of();
+        }
+
+        Expression returnValue = adaptDomainValueToParameterType(returnType, entry.getValue());
+        if (returnValue == null) {
+            BranchingTrace.record("localStub:skip|reason=noReturnValue|returnType=" + returnType
+                    + "|domain=" + entry.getValue());
+            return List.of();
+        }
+
+        MethodCallExpr when = new MethodCallExpr(new NameExpr("Mockito"), "when")
+                .addArgument(initializer.clone());
+        MethodCallExpr thenReturn = new MethodCallExpr(when, "thenReturn")
+                .addArgument(returnValue);
+        BranchingTrace.record("localStub:emit|initializer=" + initializer + "|returnType=" + returnType
+                + "|returnValue=" + returnValue);
+        return List.of(thenReturn);
+    }
+
+    private Type resolveMockedLocalReturnType(Symbol value, MethodCallExpr initializer) {
+        if (value.getType() != null) {
+            return value.getType();
+        }
+        try {
+            MCEWrapper wrapper = wrapCallExpression(initializer);
+            if (wrapper.getMatchingCallable() != null && wrapper.getMatchingCallable().isMethodDeclaration()) {
+                return wrapper.getMatchingCallable().asMethodDeclaration().getType();
+            }
+        } catch (RuntimeException | ReflectiveOperationException ignored) {
+            // Best-effort only; if the mock call cannot be resolved we simply skip this precondition.
+        }
+        return null;
     }
 
     private List<Expression> setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Symbol v) {
@@ -391,7 +652,13 @@ public class ControlFlowEvaluator extends Evaluator {
             Map.Entry<Expression, Object> argumentEntry = new AbstractMap.SimpleEntry<>(argument, entry.getValue());
             setupConditionThroughMethodCalls(stmt, argumentEntry, argument);
         } else {
-            setupConditionThroughAssignment(stmt, entry);
+            List<Expression> expressions = setupConditionThroughAssignment(stmt, entry);
+            if (expressions.isEmpty()) {
+                expressions = setupConditionThroughExistingMock(stmt, entry);
+            }
+            for (Expression expression : expressions) {
+                addPreCondition(stmt, expression);
+            }
         }
     }
 

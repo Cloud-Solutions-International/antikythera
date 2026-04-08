@@ -976,6 +976,15 @@ public class Evaluator implements EvaluationEngine {
             Symbol old = getValue(node, nameAsString);
             if (old instanceof Variable ov) {
                 ov.setValue(v.getValue());
+                if (v instanceof Variable vv) {
+                    if (vv.getType() != null) {
+                        ov.setType(vv.getType());
+                    }
+                    if (vv.getInitializer() != null && !vv.getInitializer().isEmpty()) {
+                        ov.setInitializer(vv.getInitializer());
+                    }
+                    ov.setFailedMock(vv.isFailedMock());
+                }
                 return;
             }
         }
