@@ -43,6 +43,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -425,9 +426,122 @@ public class ControlFlowEvaluator extends Evaluator {
             }
         }
 
+        if (v != null && addCollectionMembershipPrecondition(stmt, entry, expr, v)) {
+            return;
+        }
+
         if (v != null && v.getValue() instanceof Evaluator) {
             setupConditionalVariablesWithSetter(stmt, entry, expr);
         }
+    }
+
+    private boolean addCollectionMembershipPrecondition(Statement stmt, Map.Entry<Expression, Object> entry,
+                                                        Expression expr, Symbol value) {
+        if (!(entry.getKey() instanceof MethodCallExpr conditionCall)
+                || !(entry.getValue() instanceof Boolean desiredState)
+                || !conditionCall.getScope().map(expr::equals).orElse(false)) {
+            return false;
+        }
+
+        MethodCallExpr precondition = desiredState ? buildPositiveMembershipPrecondition(expr, value, conditionCall) : null;
+        if (precondition != null) {
+            addPreCondition(stmt, precondition);
+            return true;
+        }
+
+        if (!desiredState && requiresCollectionReset(value, conditionCall.getNameAsString())) {
+            Expression reset = buildEmptyCollectionInitializer(value);
+            if (reset != null) {
+                addPreCondition(stmt, new AssignExpr(expr.clone(), reset, AssignExpr.Operator.ASSIGN));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private MethodCallExpr buildPositiveMembershipPrecondition(Expression scope, Symbol wrappedValue,
+                                                               MethodCallExpr conditionCall) {
+        Object currentValue = wrappedValue.getValue();
+        return switch (conditionCall.getNameAsString()) {
+            case "contains" -> currentValue instanceof Collection<?>
+                    ? new MethodCallExpr(scope.clone(), "add").addArgument(conditionCall.getArgument(0).clone())
+                    : null;
+            case "containsKey" -> buildMapContainsKeyPrecondition(scope, currentValue, conditionCall);
+            case "containsValue" -> buildMapContainsValuePrecondition(scope, currentValue, conditionCall);
+            default -> null;
+        };
+    }
+
+    private MethodCallExpr buildMapContainsKeyPrecondition(Expression scope, Object currentValue,
+                                                           MethodCallExpr conditionCall) {
+        if (!(currentValue instanceof Map<?, ?>)) {
+            return null;
+        }
+        Expression valueExpr = createDefaultExpressionForType(getCollectionTypeArgument(scope, 1));
+        return new MethodCallExpr(scope.clone(), "put")
+                .addArgument(conditionCall.getArgument(0).clone())
+                .addArgument(valueExpr);
+    }
+
+    private MethodCallExpr buildMapContainsValuePrecondition(Expression scope, Object currentValue,
+                                                             MethodCallExpr conditionCall) {
+        if (!(currentValue instanceof Map<?, ?>)) {
+            return null;
+        }
+        Expression keyExpr = createDefaultExpressionForType(getCollectionTypeArgument(scope, 0));
+        return new MethodCallExpr(scope.clone(), "put")
+                .addArgument(keyExpr)
+                .addArgument(conditionCall.getArgument(0).clone());
+    }
+
+    private boolean requiresCollectionReset(Symbol value, String methodName) {
+        Object currentValue = value.getValue();
+        return switch (methodName) {
+            case "contains", TruthTable.IS_EMPTY -> currentValue instanceof Collection<?> collection && !collection.isEmpty();
+            case "containsKey", "containsValue" -> currentValue instanceof Map<?, ?> map && !map.isEmpty();
+            default -> false;
+        };
+    }
+
+    private Type getCollectionTypeArgument(Expression scope, int index) {
+        if (!scope.isNameExpr() || currentConditional == null) {
+            return new ClassOrInterfaceType().setName("Object");
+        }
+        return currentConditional.getMethodDeclaration()
+                .getParameterByName(scope.asNameExpr().getNameAsString())
+                .flatMap(param -> param.getType().isClassOrInterfaceType()
+                        ? param.getType().asClassOrInterfaceType().getTypeArguments()
+                        : Optional.empty())
+                .filter(typeArgs -> index < typeArgs.size())
+                .map(typeArgs -> typeArgs.get(index))
+                .orElse(new ClassOrInterfaceType().setName("Object"));
+    }
+
+    private Expression createDefaultExpressionForType(Type type) {
+        String qualifiedName = AbstractCompiler.findFullyQualifiedName(cu, type);
+        Variable variable = Reflect.variableFactory(qualifiedName != null ? qualifiedName : type.asString());
+        if (variable != null && !variable.getInitializer().isEmpty()) {
+            return variable.getInitializer().getFirst().clone();
+        }
+        Object defaultValue = Reflect.getDefault(type.asString());
+        if (defaultValue != null) {
+            return Reflect.createLiteralExpression(defaultValue);
+        }
+        return new NullLiteralExpr();
+    }
+
+    private Expression buildEmptyCollectionInitializer(Symbol value) {
+        Object currentValue = value.getValue();
+        if (currentValue instanceof Map<?, ?>) {
+            return StaticJavaParser.parseExpression("new java.util.HashMap<>()");
+        }
+        if (currentValue instanceof Set<?>) {
+            return StaticJavaParser.parseExpression("new java.util.HashSet<>()");
+        }
+        if (currentValue instanceof Collection<?>) {
+            return StaticJavaParser.parseExpression("new java.util.ArrayList<>()");
+        }
+        return null;
     }
 
     private void setupConditionalVariablesWithSetter(Statement stmt, Map.Entry<Expression, Object> entry, Expression scope) {
@@ -531,6 +645,15 @@ public class ControlFlowEvaluator extends Evaluator {
                 break;
             }
         }
+        String propertyName = AbstractCompiler.classToInstanceName(setterName.substring(3));
+        for (var field : typeDecl.getFields()) {
+            if (field.getVariable(0).getNameAsString().equals(propertyName)) {
+                Expression adapted = adaptDomainValueToParameterType(field.getVariable(0).getType(), domainValue);
+                if (adapted != null) {
+                    return adapted;
+                }
+            }
+        }
         // Setter not found in TypeDeclaration (e.g. Lombok-generated) — adapt domain value using runtime type
         return domainValueToExpression(domainValue, null);
     }
@@ -546,6 +669,11 @@ public class ControlFlowEvaluator extends Evaluator {
      * @return an Expression representing the adapted value, or null if adaptation fails
      */
     private Expression adaptDomainValueToParameterType(Type paramType, Object domainValue) {
+        Expression collectionExpr = collectionDomainValueToExpression(paramType, domainValue);
+        if (collectionExpr != null) {
+            return collectionExpr;
+        }
+
         // Try direct type conversion
         Expression adapted = domainValueToExpression(domainValue, paramType.asString());
         if (adapted != null) {
@@ -564,6 +692,79 @@ public class ControlFlowEvaluator extends Evaluator {
         }
         
         return null;
+    }
+
+    private Expression collectionDomainValueToExpression(Type paramType, Object domainValue) {
+        if (!paramType.isClassOrInterfaceType()) {
+            return null;
+        }
+        String rawType = paramType.asClassOrInterfaceType().getNameAsString();
+        NodeList<Type> typeArgs = paramType.asClassOrInterfaceType()
+                .getTypeArguments()
+                .orElse(new NodeList<>());
+
+        if (domainValue instanceof List<?> list) {
+            return switch (rawType) {
+                case "List", "Collection", "ArrayList", "LinkedList" -> buildListExpression(typeArgs, list);
+                case "Set", "HashSet", "LinkedHashSet", "TreeSet" -> buildSetExpression(typeArgs, list);
+                default -> null;
+            };
+        }
+        if (domainValue instanceof Set<?> set) {
+            List<?> values = new ArrayList<>(set);
+            return switch (rawType) {
+                case "Set", "HashSet", "LinkedHashSet", "TreeSet" -> buildSetExpression(typeArgs, values);
+                case "List", "Collection", "ArrayList", "LinkedList" -> buildListExpression(typeArgs, values);
+                default -> null;
+            };
+        }
+        if (domainValue instanceof Map<?, ?> map && (rawType.equals("Map") || rawType.equals("HashMap")
+                || rawType.equals("LinkedHashMap") || rawType.equals("TreeMap"))) {
+            return buildMapExpression(typeArgs, map);
+        }
+        return null;
+    }
+
+    private Expression buildListExpression(NodeList<Type> typeArgs, List<?> values) {
+        if (values.isEmpty()) {
+            return StaticJavaParser.parseExpression("new java.util.ArrayList<>()");
+        }
+        Expression element = buildCollectionElementExpression(typeArgs, 0, values.getFirst());
+        return StaticJavaParser.parseExpression(
+                "new java.util.ArrayList<>(java.util.List.of(" + element + "))");
+    }
+
+    private Expression buildSetExpression(NodeList<Type> typeArgs, List<?> values) {
+        if (values.isEmpty()) {
+            return StaticJavaParser.parseExpression("new java.util.HashSet<>()");
+        }
+        Expression element = buildCollectionElementExpression(typeArgs, 0, values.getFirst());
+        return StaticJavaParser.parseExpression(
+                "new java.util.HashSet<>(java.util.List.of(" + element + "))");
+    }
+
+    private Expression buildMapExpression(NodeList<Type> typeArgs, Map<?, ?> values) {
+        if (values.isEmpty()) {
+            return StaticJavaParser.parseExpression("new java.util.HashMap<>()");
+        }
+        Map.Entry<?, ?> first = values.entrySet().iterator().next();
+        Expression key = buildCollectionElementExpression(typeArgs, 0, first.getKey());
+        Expression value = buildCollectionElementExpression(typeArgs, 1, first.getValue());
+        return StaticJavaParser.parseExpression(
+                "new java.util.HashMap<>(java.util.Map.of(" + key + ", " + value + "))");
+    }
+
+    private Expression buildCollectionElementExpression(NodeList<Type> typeArgs, int index, Object value) {
+        if (value != null) {
+            Expression direct = domainValueToExpression(value, null);
+            if (direct != null) {
+                return direct;
+            }
+        }
+        if (index < typeArgs.size()) {
+            return createDefaultExpressionForType(typeArgs.get(index));
+        }
+        return value == null ? new NullLiteralExpr() : new StringLiteralExpr(value.toString());
     }
 
     /**

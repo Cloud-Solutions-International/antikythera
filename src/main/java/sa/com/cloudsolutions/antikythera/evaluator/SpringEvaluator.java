@@ -60,10 +60,12 @@ import java.sql.SQLException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Extends the basic evaluator to provide support for JPA repositories and their special behavior.
@@ -431,11 +433,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         for (Precondition cond : currentConditional.getPreconditions()) {
             if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
                 if (mce.getScope().orElseThrow() instanceof NameExpr ne
-                        && ne.getNameAsString().equals(p.getNameAsString())
-                        && va.getValue() instanceof Evaluator eval) {
-
-                    MCEWrapper wrapper = eval.wrapCallExpression(mce);
-                    eval.executeLocalMethod(wrapper);
+                        && ne.getNameAsString().equals(p.getNameAsString())) {
+                    if (va.getValue() instanceof Evaluator eval) {
+                        applyEvaluatorPrecondition(eval, mce);
+                    } else {
+                        applyCollectionPrecondition(va, mce);
+                    }
                 }
             } else if (cond.getExpression() instanceof AssignExpr assignExpr &&
                     assignExpr.getTarget().toString().equals(p.getNameAsString())) {
@@ -446,6 +449,201 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 va.setValue(createObject(oce).getValue());
                 va.setInitializer(List.of(oce));
             }
+        }
+    }
+
+    private void applyEvaluatorPrecondition(Evaluator eval, MethodCallExpr mce) throws ReflectiveOperationException {
+        try {
+            MCEWrapper wrapper = eval.wrapCallExpression(mce);
+            eval.executeLocalMethod(wrapper);
+        } catch (RuntimeException | ReflectiveOperationException ex) {
+            if (!applyDirectSetterFieldPrecondition(eval, mce)) {
+                throw ex;
+            }
+        }
+    }
+
+    private boolean applyDirectSetterFieldPrecondition(Evaluator eval, MethodCallExpr mce) throws ReflectiveOperationException {
+        if (!mce.getNameAsString().startsWith("set") || mce.getArguments().size() != 1) {
+            return false;
+        }
+        String fieldName = AbstractCompiler.classToInstanceName(mce.getNameAsString().substring(3));
+        Variable field = eval.getField(fieldName);
+        if (field == null) {
+            return false;
+        }
+        Expression argument = mce.getArgument(0);
+        Variable value = evaluateExpression(argument);
+
+        if (value != null) {
+            field.setValue(value.getValue());
+            if (value.getType() != null) {
+                field.setType(value.getType());
+            }
+            if (value.getInitializer() != null && !value.getInitializer().isEmpty()) {
+                field.setInitializer(value.getInitializer());
+                return true;
+            }
+        }
+        if (applySyntheticCollectionValue(field, argument)) {
+            return true;
+        }
+        field.setInitializer(List.of(argument.clone()));
+        return true;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private boolean applySyntheticCollectionValue(Variable field, Expression argument) {
+        if (argument.isNullLiteralExpr()) {
+            field.setValue(null);
+            field.setInitializer(List.of(argument.clone()));
+            return true;
+        }
+        if (!argument.isObjectCreationExpr()) {
+            return false;
+        }
+
+        Object syntheticValue = synthesizeObjectCreationValue(argument.asObjectCreationExpr());
+        if (syntheticValue == null) {
+            return false;
+        }
+
+        field.setValue(syntheticValue);
+        if (field.getType() == null) {
+            field.setClazz(syntheticValue.getClass());
+        }
+        field.setInitializer(List.of(argument.clone()));
+        return true;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Object synthesizeObjectCreationValue(ObjectCreationExpr oce) {
+        String typeName = oce.getType().getNameAsString();
+        return switch (typeName) {
+            case "ArrayList", "LinkedList" -> synthesizeListValue(oce);
+            case "HashSet", "LinkedHashSet", "TreeSet" -> synthesizeSetValue(oce);
+            case "HashMap", "LinkedHashMap", "TreeMap" -> synthesizeMapValue(oce);
+            default -> null;
+        };
+    }
+
+    private List<Object> synthesizeListValue(ObjectCreationExpr oce) {
+        List<Object> values = new ArrayList<>();
+        if (oce.getArguments().size() == 1) {
+            Object seed = synthesizeFactoryArgument(oce.getArgument(0));
+            if (seed instanceof Collection<?> collection) {
+                values.addAll(collection);
+            } else if (seed != null) {
+                values.add(seed);
+            }
+        }
+        return values;
+    }
+
+    private Set<Object> synthesizeSetValue(ObjectCreationExpr oce) {
+        Set<Object> values = new HashSet<>();
+        if (oce.getArguments().size() == 1) {
+            Object seed = synthesizeFactoryArgument(oce.getArgument(0));
+            if (seed instanceof Collection<?> collection) {
+                values.addAll(collection);
+            } else if (seed != null) {
+                values.add(seed);
+            }
+        }
+        return values;
+    }
+
+    private Map<Object, Object> synthesizeMapValue(ObjectCreationExpr oce) {
+        Map<Object, Object> values = new HashMap<>();
+        if (oce.getArguments().size() == 1) {
+            Object seed = synthesizeFactoryArgument(oce.getArgument(0));
+            if (seed instanceof Map<?, ?> map) {
+                values.putAll(map);
+            }
+        }
+        return values;
+    }
+
+    private Object synthesizeFactoryArgument(Expression expr) {
+        Variable evaluated = null;
+        try {
+            evaluated = evaluateExpression(expr);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // Fall back to AST-based synthesis for collection factory methods.
+        }
+        if (evaluated != null) {
+            return evaluated.getValue();
+        }
+        if (!expr.isMethodCallExpr()) {
+            return null;
+        }
+
+        MethodCallExpr factoryCall = expr.asMethodCallExpr();
+        if (factoryCall.getNameAsString().equals("of")) {
+            if (factoryCall.getScope().isPresent() && factoryCall.getScope().orElseThrow().toString().endsWith("List")) {
+                return synthesizeFactoryList(factoryCall);
+            }
+            if (factoryCall.getScope().isPresent() && factoryCall.getScope().orElseThrow().toString().endsWith("Set")) {
+                return new HashSet<>(synthesizeFactoryList(factoryCall));
+            }
+            if (factoryCall.getScope().isPresent() && factoryCall.getScope().orElseThrow().toString().endsWith("Map")) {
+                return synthesizeFactoryMap(factoryCall);
+            }
+        }
+        return null;
+    }
+
+    private List<Object> synthesizeFactoryList(MethodCallExpr factoryCall) {
+        List<Object> values = new ArrayList<>();
+        for (Expression argument : factoryCall.getArguments()) {
+            Variable value = null;
+            try {
+                value = evaluateExpression(argument);
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                // Leave unresolved arguments out of the synthetic collection.
+            }
+            if (value != null) {
+                values.add(value.getValue());
+            }
+        }
+        return values;
+    }
+
+    private Map<Object, Object> synthesizeFactoryMap(MethodCallExpr factoryCall) {
+        Map<Object, Object> values = new HashMap<>();
+        for (int i = 0; i + 1 < factoryCall.getArguments().size(); i += 2) {
+            Object key = null;
+            Object valueObject = null;
+            try {
+                Variable keyValue = evaluateExpression(factoryCall.getArgument(i));
+                if (keyValue != null) {
+                    key = keyValue.getValue();
+                }
+                Variable valueValue = evaluateExpression(factoryCall.getArgument(i + 1));
+                if (valueValue != null) {
+                    valueObject = valueValue.getValue();
+                }
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                // Ignore unresolved map elements in the synthetic value.
+            }
+            if (key != null) {
+                values.put(key, valueObject);
+            }
+        }
+        return values;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void applyCollectionPrecondition(Symbol parameterValue, MethodCallExpr mce) throws ReflectiveOperationException {
+        Object target = parameterValue.getValue();
+        if (target instanceof Map map && mce.getNameAsString().equals("put") && mce.getArguments().size() == 2) {
+            Object key = evaluateExpression(mce.getArgument(0)).getValue();
+            Object value = evaluateExpression(mce.getArgument(1)).getValue();
+            map.put(key, value);
+        } else if (target instanceof Collection collection && mce.getNameAsString().equals("add")
+                && mce.getArguments().size() == 1) {
+            Object value = evaluateExpression(mce.getArgument(0)).getValue();
+            collection.add(value);
         }
     }
 
