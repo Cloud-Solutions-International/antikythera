@@ -98,6 +98,7 @@ public abstract class DepsolvingParser {
             }
 
         } catch (AntikytheraException | ReflectiveOperationException e) {
+            ProcessingReport.getInstance().recordCurrentMethodFailed(e.getMessage());
             if ("log".equals(Settings.getProperty("dependencies.on_error"))) {
                 logger.warn("Could not complete processing {} due to {}", md.getName(), e.getMessage());
             } else {
