@@ -28,6 +28,7 @@ import sa.com.cloudsolutions.antikythera.parser.converter.RepositoryMethodParser
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.util.Collection;
+import java.util.Set;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -147,7 +148,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 table = findTableNameFromClass(cls);
             }
         } else {
-            logger.warn("Compilation unit is null");
+            logger.warn("Entity TypeWrapper is null; could not resolve the entity type for this repository");
         }
         return table;
     }
@@ -718,10 +719,23 @@ public class BaseRepositoryParser extends AbstractCompiler {
             if (tp.isClassOrInterfaceDeclaration()) {
                 var cls = tp.asClassOrInterfaceDeclaration();
 
+                Set<String> typeParamNames = cls.getTypeParameters().stream()
+                        .map(tp2 -> tp2.getNameAsString())
+                        .collect(java.util.stream.Collectors.toSet());
+
                 for (var parent : cls.getExtendedTypes()) {
                     if (isRepositoryInterface(parent.toString())) {
                         parent.getTypeArguments().ifPresent(t -> {
-                            entityType = t.getFirst().orElseThrow();
+                            Type firstArg = t.getFirst().orElseThrow();
+                            if (typeParamNames.contains(firstArg.asString())) {
+                                // The first type argument is a type parameter of this interface (e.g.
+                                // FoodIngredientRepository<FoodIngredient> extends JpaRepository<FoodIngredient, Long>).
+                                // There is no concrete entity to resolve here; skip this extended type.
+                                logger.debug("Skipping generic repository base '{}': first type arg '{}' is a type parameter",
+                                        parent.getNameAsString(), firstArg.asString());
+                                return;
+                            }
+                            entityType = firstArg;
                             entity = findEntity(entityType);
                             table = findTableName(entity);
                             eval = EvaluatorFactory.create(cls.getFullyQualifiedName().orElseThrow(), Evaluator.class);
