@@ -42,6 +42,7 @@ class TestBranchingCombinations extends TestHelper {
         ((SpringEvaluator) evaluator).setArgumentGenerator(new DummyArgumentGenerator());
         System.setOut(new PrintStream(outContent));
         Branching.clear();
+        BranchingTrace.enable();
         BranchingTrace.clear();
     }
 

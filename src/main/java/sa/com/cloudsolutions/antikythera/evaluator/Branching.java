@@ -21,11 +21,13 @@ public class Branching {
     }
 
     public static void add(LineOfCode lineOfCode) {
-        PriorityQueue<LineOfCode> queue = conditionals.computeIfAbsent(
-            lineOfCode.getCallableDeclaration(),
-            k -> new PriorityQueue<>(new LineOfCodeComparator())
-        );
-        queue.add(lineOfCode);
+        if (lineOfCode.shouldSchedule()) {
+            PriorityQueue<LineOfCode> queue = conditionals.computeIfAbsent(
+                lineOfCode.getCallableDeclaration(),
+                k -> new PriorityQueue<>(new LineOfCodeComparator())
+            );
+            queue.add(lineOfCode);
+        }
         branches.putIfAbsent(lineOfCode.getStatement().hashCode(), lineOfCode);
     }
 
@@ -35,7 +37,7 @@ public class Branching {
      * we only need to track first-vs-second call but don't want extra loop iterations.
      */
     public static void registerBranch(LineOfCode lineOfCode) {
-        branches.putIfAbsent(lineOfCode.getStatement().hashCode(), lineOfCode);
+        add(lineOfCode.markPreconditionOnly());
     }
 
     public static LineOfCode get(int hashCode) {

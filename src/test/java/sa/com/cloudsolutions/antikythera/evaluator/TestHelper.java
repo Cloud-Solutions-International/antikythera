@@ -33,6 +33,7 @@ public class TestHelper {
         GeneratorState.clearImports();
         GeneratorState.clearMockStubReturnHints();
         GeneratorState.clearPendingObjectStubReturnFqns();
+        BranchingTrace.disable();
         BranchingTrace.clear();
         LogRecorder.clearLogs();
         MockingRegistry.reset();

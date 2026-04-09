@@ -198,7 +198,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             Variable v;
             if (l == null) {
                 l = new LineOfCode(stmt);
-                Branching.registerBranch(l);
+                Branching.add(l.markPreconditionOnly());
                 v = Reflect.generateDefaultVariable(t.asClassOrInterfaceType().getNameAsString());
             }
             else {
@@ -229,7 +229,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         if (l == null) {
             l = new LineOfCode(stmt);
-            Branching.registerBranch(l);
+            Branching.add(l.markPreconditionOnly());
             value = false;
         } else {
             l.setPathTaken(LineOfCode.TRUE_PATH);
@@ -507,7 +507,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     @Override
     Variable optionalPresentPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         LineOfCode l = new LineOfCode(stmt);
-        Branching.registerBranch(l);
+        Branching.add(l.markPreconditionOnly());
 
         if (sc.getVariable().getValue() instanceof MockingEvaluator eval) {
             l.setPathTaken(LineOfCode.TRUE_PATH);
@@ -579,7 +579,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         Variable v;
         if (branch == null) {
             branch = new LineOfCode(stmt);
-            Branching.registerBranch(branch);
+            Branching.add(branch.markPreconditionOnly());
             branch.setPathTaken(LineOfCode.TRUE_PATH);
             v = createRepositoryOptionalDeclarationValue(md, true);
         }
@@ -694,7 +694,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     private Variable repositoryFullPath(Scope sc, Statement stmt, String collectionTypeName) {
         LineOfCode l = new LineOfCode(stmt);
         l.setPathTaken(LineOfCode.TRUE_PATH);
-        Branching.registerBranch(l);
+        Branching.add(l.markPreconditionOnly());
 
         Callable callable = sc.getMCEWrapper().getMatchingCallable();
         CallableDeclaration<?> callableDeclaration = callable.getCallableDeclaration();
@@ -762,7 +762,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             // Register an explicit when().thenReturn(null) stub so that RETURNS_DEEP_STUBS
             // on the @Mock field does not override the expected null behaviour at runtime.
             l = new LineOfCode(stmt);
-            Branching.registerBranch(l);
+            Branching.add(l.markPreconditionOnly());
             MethodCallExpr when = createWhenExpression(methodCall); // also pops arguments
             Variable nullVar = new Variable((Object) null);
             nullVar.setInitializer(List.of(new NullLiteralExpr()));

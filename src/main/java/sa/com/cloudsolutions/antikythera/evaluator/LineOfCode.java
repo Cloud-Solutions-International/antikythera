@@ -18,6 +18,10 @@ import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
  * Represents a line of code within a method, including its associated conditions and execution paths.
  */
 public class LineOfCode {
+    public enum BranchKind {
+        CONTROL_FLOW,
+        PRECONDITION_ONLY
+    }
 
     /**
      * Represents the state where the node has not been visited at all.
@@ -67,6 +71,7 @@ public class LineOfCode {
      */
     private RepositoryQuery repositoryQuery;
     private boolean result;
+    private BranchKind branchKind = BranchKind.CONTROL_FLOW;
 
     /**
      * Constructs a `LineOfCode` instance for the given statement.
@@ -357,6 +362,23 @@ public class LineOfCode {
 
     public void setResult(boolean b) {
         this.result = b;
+    }
+
+    public BranchKind getBranchKind() {
+        return branchKind;
+    }
+
+    public void setBranchKind(BranchKind branchKind) {
+        this.branchKind = branchKind;
+    }
+
+    public LineOfCode markPreconditionOnly() {
+        this.branchKind = BranchKind.PRECONDITION_ONLY;
+        return this;
+    }
+
+    public boolean shouldSchedule() {
+        return branchKind == BranchKind.CONTROL_FLOW;
     }
 
     public List<LineOfCode> getChildren() {

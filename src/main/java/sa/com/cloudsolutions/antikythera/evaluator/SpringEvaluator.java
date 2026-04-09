@@ -1382,7 +1382,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         LineOfCode branch = Branching.get(stmt.hashCode());
         if (branch == null) {
             branch = new LineOfCode(stmt);
-            Branching.registerBranch(branch);
+            Branching.add(branch.markPreconditionOnly());
             branch.setPathTaken(LineOfCode.TRUE_PATH);
             return createRepositoryOptionalValue(classType, true);
         }

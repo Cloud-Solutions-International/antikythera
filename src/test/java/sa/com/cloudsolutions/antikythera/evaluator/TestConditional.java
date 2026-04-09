@@ -259,6 +259,7 @@ class TestConditionalWithOptional extends TestHelper {
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         System.setOut(new PrintStream(outContent));
         Branching.clear();
+        BranchingTrace.enable();
         BranchingTrace.clear();
     }
 

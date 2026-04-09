@@ -123,17 +123,17 @@ public class ControlFlowEvaluator extends Evaluator {
         if (assignedExpression.isConditionalExpr()) {
             assignedExpression = selectConditionalBranch(assignedExpression.asConditionalExpr());
         }
+        List<Expression> derivedExpressions = setupConditionThroughDerivedLocalAssignment(stmt, assignedExpression, entry);
+        if (!derivedExpressions.isEmpty()) {
+            BranchingTrace.record("priorLocal:emit|name=" + variableName + "|expression=" + derivedExpressions);
+            return derivedExpressions;
+        }
         if (!assignedExpression.isMethodCallExpr()) {
             BranchingTrace.record("priorLocal:skip|name=" + variableName + "|expression=" + assignedExpression);
             return List.of();
         }
 
         MethodCallExpr methodCallExpr = assignedExpression.asMethodCallExpr();
-        List<Expression> optionalExpr = setupConditionThroughOptionalDerivedLocal(stmt, methodCallExpr, entry);
-        if (!optionalExpr.isEmpty()) {
-            BranchingTrace.record("priorLocal:emit|name=" + variableName + "|expression=" + optionalExpr);
-            return optionalExpr;
-        }
         Type returnType = resolveMethodCallReturnType(methodCallExpr);
         if (returnType == null) {
             BranchingTrace.record("priorLocal:skip|name=" + variableName + "|reason=noReturnType|expression=" + methodCallExpr);
@@ -153,9 +153,23 @@ public class ControlFlowEvaluator extends Evaluator {
         return List.of(thenReturn);
     }
 
-    private List<Expression> setupConditionThroughOptionalDerivedLocal(Statement stmt,
-                                                                       MethodCallExpr methodCallExpr,
-                                                                       Map.Entry<Expression, Object> entry) {
+    private List<Expression> setupConditionThroughDerivedLocalAssignment(Statement stmt,
+                                                                         Expression assignedExpression,
+                                                                         Map.Entry<Expression, Object> entry) {
+        if (!assignedExpression.isMethodCallExpr()) {
+            return List.of();
+        }
+        MethodCallExpr methodCallExpr = assignedExpression.asMethodCallExpr();
+        List<Expression> expressions = setupConditionThroughOptionalFallback(stmt, methodCallExpr, entry);
+        if (!expressions.isEmpty()) {
+            return expressions;
+        }
+        return List.of();
+    }
+
+    private List<Expression> setupConditionThroughOptionalFallback(Statement stmt,
+                                                                   MethodCallExpr methodCallExpr,
+                                                                   Map.Entry<Expression, Object> entry) {
         if (!"orElse".equals(methodCallExpr.getNameAsString()) || methodCallExpr.getArguments().size() != 1) {
             return List.of();
         }
@@ -171,7 +185,7 @@ public class ControlFlowEvaluator extends Evaluator {
             return List.of();
         }
 
-        Object fallbackValue = simpleLiteralValue(methodCallExpr.getArgument(0));
+        Object fallbackValue = literalValueOrSentinel(methodCallExpr.getArgument(0));
         if (fallbackValue == UnresolvedLiteral.INSTANCE) {
             return List.of();
         }
@@ -184,7 +198,7 @@ public class ControlFlowEvaluator extends Evaluator {
         return setupConditionThroughAssignment(new AbstractMap.SimpleEntry<>(source.clone(), sourceValue), sourceSymbol);
     }
 
-    private Object simpleLiteralValue(Expression expression) {
+    private Object literalValueOrSentinel(Expression expression) {
         if (expression.isNullLiteralExpr()) {
             return null;
         }
@@ -1586,7 +1600,7 @@ public class ControlFlowEvaluator extends Evaluator {
                     Branching.add(l);
                     BranchingTrace.record("ofNullable:queue|statement=" + stmt + "|mode=conditional");
                 } else {
-                    Branching.registerBranch(l);
+                    Branching.add(l.markPreconditionOnly());
                     BranchingTrace.record("ofNullable:queue|statement=" + stmt + "|mode=branchOnly");
                 }
                 BranchingTrace.record("ofNullable:register|statement=" + stmt + "|argument=" + argument);

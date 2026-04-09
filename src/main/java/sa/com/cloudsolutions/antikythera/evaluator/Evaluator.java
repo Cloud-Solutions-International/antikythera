@@ -663,19 +663,7 @@ public class Evaluator implements EvaluationEngine {
             for (var variable : field.getVariables()) {
                 if (variable.getNameAsString().equals(fae.getNameAsString())) {
                     if (field.isStatic()) {
-                        String ownerClassName = td.getFullyQualifiedName()
-                                .orElse(getClassName() + "." + td.getNameAsString());
-                        Variable staticVariable = AntikytheraRunTime.getStaticVariable(ownerClassName,
-                                variable.getNameAsString());
-                        if (staticVariable == null) {
-                            Evaluator ownerEvaluator = EvaluatorFactory.createLazily(ownerClassName,
-                                    this.getClass().asSubclass(Evaluator.class));
-                            ownerEvaluator.setupFields();
-                            ownerEvaluator.initializeFields();
-                            staticVariable = AntikytheraRunTime.getStaticVariable(ownerClassName,
-                                    variable.getNameAsString());
-                        }
-                        return staticVariable;
+                        return resolveStaticFieldValue(td, variable.getNameAsString());
                     }
                     Variable v = new Variable(field.getVariable(0).getType().asString());
                     variable.getInitializer().ifPresent(f -> v.setValue(f.toString()));
@@ -688,6 +676,21 @@ public class Evaluator implements EvaluationEngine {
                     fae.getNameAsString());
         }
         return null;
+    }
+
+    private Variable resolveStaticFieldValue(TypeDeclaration<?> ownerType, String fieldName) {
+        String ownerClassName = ownerType.getFullyQualifiedName()
+                .orElse(getClassName() + "." + ownerType.getNameAsString());
+        Variable staticVariable = AntikytheraRunTime.getStaticVariable(ownerClassName, fieldName);
+        if (staticVariable != null) {
+            return staticVariable;
+        }
+
+        Evaluator ownerEvaluator = EvaluatorFactory.createLazily(ownerClassName,
+                this.getClass().asSubclass(Evaluator.class));
+        ownerEvaluator.setupFields();
+        ownerEvaluator.initializeFields();
+        return AntikytheraRunTime.getStaticVariable(ownerClassName, fieldName);
     }
 
     private Variable evaluateAssignment(Expression expr) throws ReflectiveOperationException {

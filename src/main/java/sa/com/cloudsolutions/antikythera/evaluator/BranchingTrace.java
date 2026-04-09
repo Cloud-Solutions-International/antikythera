@@ -12,6 +12,7 @@ import java.util.List;
  */
 public final class BranchingTrace {
     private static final List<String> EVENTS = new ArrayList<>();
+    private static boolean enabled = Boolean.getBoolean("antikythera.branching.trace");
 
     private BranchingTrace() {
     }
@@ -20,7 +21,23 @@ public final class BranchingTrace {
         EVENTS.clear();
     }
 
+    public static synchronized void enable() {
+        enabled = true;
+    }
+
+    public static synchronized void disable() {
+        enabled = false;
+        EVENTS.clear();
+    }
+
+    public static synchronized boolean isEnabled() {
+        return enabled;
+    }
+
     public static synchronized void record(String event) {
+        if (!enabled) {
+            return;
+        }
         EVENTS.add(event);
     }
 
