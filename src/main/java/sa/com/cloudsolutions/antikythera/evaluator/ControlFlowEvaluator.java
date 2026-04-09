@@ -706,6 +706,11 @@ public class ControlFlowEvaluator extends Evaluator {
         Expression key = entry.getKey();
         NameExpr nameExpr = key.isNameExpr() ? key.asNameExpr() : key.asMethodCallExpr().getArgument(0).asNameExpr();
 
+        List<Expression> objectEqualsAssignments = setupObjectEqualsReferenceAssignment(entry, v, nameExpr);
+        if (!objectEqualsAssignments.isEmpty()) {
+            return objectEqualsAssignments;
+        }
+
         List<Expression> valueExpressions;
         if (entry.getValue() == null) {
             if (v.getClazz() != null && v.getClazz().isPrimitive()) {
@@ -740,6 +745,36 @@ public class ControlFlowEvaluator extends Evaluator {
             return List.of(a);
         }
         return valueExpressions;
+    }
+
+    private List<Expression> setupObjectEqualsReferenceAssignment(Map.Entry<Expression, Object> entry,
+                                                                  Symbol v,
+                                                                  NameExpr target) {
+        if (!(entry.getValue() instanceof Boolean desiredState) || v.getType() instanceof PrimitiveType) {
+            return List.of();
+        }
+        Optional<Node> parent = entry.getKey().getParentNode();
+        if (parent.isEmpty() || !(parent.get() instanceof MethodCallExpr methodCallExpr)
+                || !"equals".equals(methodCallExpr.getNameAsString())
+                || methodCallExpr.getArguments().size() != 1) {
+            return List.of();
+        }
+        if (!methodCallExpr.getScope().map(target::equals).orElse(false)) {
+            return List.of();
+        }
+
+        Expression source = methodCallExpr.getArgument(0);
+        AssignExpr assignExpr;
+        if (desiredState) {
+            assignExpr = new AssignExpr(new NameExpr(target.getNameAsString()), source.clone(), AssignExpr.Operator.ASSIGN);
+        } else {
+            Expression distinct = v.getType() != null ? createDefaultExpressionForType(v.getType()) : null;
+            if (distinct == null) {
+                return List.of();
+            }
+            assignExpr = new AssignExpr(new NameExpr(target.getNameAsString()), distinct, AssignExpr.Operator.ASSIGN);
+        }
+        return List.of(assignExpr);
     }
 
     private List<Expression> setupConditionForNonPrimitive(Map.Entry<Expression, Object> entry, Symbol v) {

@@ -7,8 +7,11 @@ import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
@@ -72,6 +75,7 @@ public class LineOfCode {
     private RepositoryQuery repositoryQuery;
     private boolean result;
     private BranchKind branchKind = BranchKind.CONTROL_FLOW;
+    private final Map<Integer, LinkedHashSet<String>> attemptedCombinationsByPath = new HashMap<>();
 
     /**
      * Constructs a `LineOfCode` instance for the given statement.
@@ -387,5 +391,30 @@ public class LineOfCode {
 
     public Expression getConditionalExpression() {
         return binaryExpr;
+    }
+
+    public void recordCombinationAttempt(int path, String fingerprint) {
+        if (path != FALSE_PATH && path != TRUE_PATH) {
+            throw new IllegalArgumentException("Combination attempts must target FALSE_PATH or TRUE_PATH");
+        }
+        attemptedCombinationsByPath
+                .computeIfAbsent(path, ignored -> new LinkedHashSet<>())
+                .add(fingerprint);
+    }
+
+    public boolean hasAttemptedCombination(int path, String fingerprint) {
+        return attemptedCombinationsByPath
+                .getOrDefault(path, new LinkedHashSet<>())
+                .contains(fingerprint);
+    }
+
+    public Set<String> getAttemptedCombinations(int path) {
+        return Collections.unmodifiableSet(
+                attemptedCombinationsByPath.getOrDefault(path, new LinkedHashSet<>())
+        );
+    }
+
+    public int getAttemptedCombinationCount(int path) {
+        return attemptedCombinationsByPath.getOrDefault(path, new LinkedHashSet<>()).size();
     }
 }
