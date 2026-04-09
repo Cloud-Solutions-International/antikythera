@@ -64,6 +64,7 @@ import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -1129,6 +1130,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
 
         Node node = parentNode.get();
+        if (node instanceof MethodCallExpr methodCall && isEnumEqualsMethodCall(methodCall)) {
+            handleMethodCallWithEnum(methodCall, combination, entry, result);
+            return;
+        }
+
         TypeWrapper keyType = (key instanceof FieldAccessExpr fieldAccessExpr)
                 ? AbstractCompiler.findType(cu, fieldAccessExpr.getScope().toString())
                 : AbstractCompiler.findType(cu, key.toString());
@@ -1140,6 +1146,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         } else {
             result.put(key, entry.getValue());
         }
+    }
+
+    private boolean isEnumEqualsMethodCall(MethodCallExpr methodCall) {
+        if (!"equals".equals(methodCall.getNameAsString()) || methodCall.getArguments().size() != 1
+                || methodCall.getScope().isEmpty()) {
+            return false;
+        }
+        return resolveEnumConstant(methodCall.getScope().orElseThrow()) != null
+                || resolveEnumConstant(methodCall.getArgument(0)) != null;
     }
 
     private void adjustForEnumConstantComparison(Node node, Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
@@ -1160,7 +1175,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         TypeWrapper rightType = resolveType(right);
 
         boolean isEquals = binaryExpr.getOperator() == BinaryExpr.Operator.EQUALS;
-        boolean conditionMatches = isEquals == (combination.get(left) == combination.get(right));
+        boolean conditionMatches = isEquals == Objects.equals(combination.get(left), combination.get(right));
 
         if (leftType != null && leftType.getEnumConstant() != null) {
             if (conditionMatches) {
@@ -1212,26 +1227,77 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     private void handleMethodCallWithEnum(MethodCallExpr methodCall, Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
-        methodCall.getScope().ifPresent(scope -> {
-            if (scope instanceof NameExpr nameExpr) {
-                TypeWrapper scopeType = AbstractCompiler.findType(cu, nameExpr.getNameAsString());
-                TypeWrapper keyType = AbstractCompiler.findType(cu, entry.getKey().asNameExpr().getNameAsString());
+        if (!"equals".equals(methodCall.getNameAsString()) || methodCall.getArguments().size() != 1
+                || methodCall.getScope().isEmpty()) {
+            result.put(entry.getKey(), entry.getValue());
+            return;
+        }
 
-                if (scopeType != null && scopeType.getEnumConstant() != null) {
-                    handleEnumComparison(scopeType, entry, combination, nameExpr, entry.getKey().asNameExpr(), result);
-                } else if (keyType != null && keyType.getEnumConstant() != null) {
-                    handleEnumComparison(keyType, entry, combination, nameExpr, nameExpr, result);
-                }
-            }
-        });
+        Expression scope = methodCall.getScope().orElseThrow();
+        Expression argument = methodCall.getArgument(0);
+
+        EnumConstantDeclaration scopeEnum = resolveEnumConstant(scope);
+        EnumConstantDeclaration argumentEnum = resolveEnumConstant(argument);
+
+        EnumConstantDeclaration constantEnum;
+        Expression targetExpr;
+        if (scopeEnum != null) {
+            constantEnum = scopeEnum;
+            targetExpr = argument;
+        } else if (argumentEnum != null) {
+            constantEnum = argumentEnum;
+            targetExpr = scope;
+        } else {
+            result.put(entry.getKey(), entry.getValue());
+            return;
+        }
+
+        if (!entry.getKey().toString().equals(targetExpr.toString()) || !targetExpr.isNameExpr()) {
+            return;
+        }
+
+        boolean conditionMatches = Objects.equals(combination.get(scope), combination.get(argument));
+        if (conditionMatches) {
+            result.put(targetExpr.asNameExpr(), constantEnum);
+        } else {
+            putEnumMismatch(constantEnum, targetExpr, result);
+        }
     }
 
-    private void handleEnumComparison(TypeWrapper enumType, Map.Entry<Expression, Object> entry, Map<Expression, Object> combination, NameExpr compareExpr, NameExpr targetExpr, Map<Expression, Object> result) {
-        if (entry.getValue() == combination.get(compareExpr)) {
-            result.put(targetExpr, enumType.getEnumConstant());
-        } else {
-            setupEnumMismatch(enumType, entry.getKey(), result, targetExpr);
+    private EnumConstantDeclaration resolveEnumConstant(Expression expr) {
+        if (!(expr instanceof NameExpr || expr instanceof FieldAccessExpr)) {
+            return null;
         }
+        String constantName = expr instanceof NameExpr ne ? ne.getNameAsString() : expr.asFieldAccessExpr().getNameAsString();
+
+        if (typeDeclaration instanceof EnumDeclaration enumDecl) {
+            return enumDecl.getEntries().stream()
+                    .filter(entry -> entry.getNameAsString().equals(constantName))
+                    .findFirst()
+                    .orElse(null);
+        }
+        return null;
+    }
+
+    private void putEnumMismatch(EnumConstantDeclaration constantEnum, Expression targetExpr, Map<Expression, Object> result) {
+        constantEnum.findAncestor(EnumDeclaration.class).ifPresent(enumDecl -> enumDecl.getEntries().stream()
+                .filter(entry -> !entry.getNameAsString().equals(constantEnum.getNameAsString()))
+                .findFirst()
+                .ifPresent(other -> result.put(targetExpr, other)));
+    }
+
+    private boolean matchesEnumConstant(TypeWrapper enumType, Object candidate) {
+        if (enumType == null || enumType.getEnumConstant() == null || candidate == null) {
+            return false;
+        }
+        String expectedName = enumType.getEnumConstant().getNameAsString();
+        if (candidate instanceof EnumConstantDeclaration ecd) {
+            return expectedName.equals(ecd.getNameAsString());
+        }
+        if (candidate instanceof FieldAccessExpr fae) {
+            return expectedName.equals(fae.getNameAsString());
+        }
+        return Objects.equals(candidate, enumType.getEnumConstant());
     }
 
     private void adjustForEnumMethodCall(MethodCallExpr methodCall, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {

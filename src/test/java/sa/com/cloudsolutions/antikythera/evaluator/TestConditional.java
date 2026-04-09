@@ -38,7 +38,9 @@ class TestConditional extends TestHelper {
     }
 
     @BeforeEach
-    void each() {
+    void each() throws IOException {
+        AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         System.setOut(new PrintStream(outContent));
@@ -249,10 +251,15 @@ class TestConditionalWithOptional extends TestHelper {
     }
 
     @BeforeEach
-    void each() {
+    void each() throws IOException {
+        AntikytheraRunTime.resetAll();
+        AbstractCompiler.reset();
+        AbstractCompiler.preProcess();
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         System.setOut(new PrintStream(outContent));
+        Branching.clear();
+        BranchingTrace.clear();
     }
 
     @ParameterizedTest
@@ -267,7 +274,7 @@ class TestConditionalWithOptional extends TestHelper {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
                 md -> md.getNameAsString().equals(methodName)).orElseThrow();
         evaluator.visit(method);
-        assertEquals(expectedOutput.replace("\\n","\n"), outContent.toString().strip());
+        assertEquals(expectedOutput.replace("\\n","\n"), outContent.toString().strip(),
+                "Trace: " + BranchingTrace.snapshot());
     }
 }
-

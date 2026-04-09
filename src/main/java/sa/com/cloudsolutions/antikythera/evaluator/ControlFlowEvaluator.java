@@ -4,6 +4,7 @@ import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -22,6 +23,7 @@ import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
+import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.stmt.BlockStmt;
@@ -30,6 +32,8 @@ import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.resolution.MethodUsage;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.resolution.types.ResolvedType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -125,6 +129,11 @@ public class ControlFlowEvaluator extends Evaluator {
         }
 
         MethodCallExpr methodCallExpr = assignedExpression.asMethodCallExpr();
+        List<Expression> optionalExpr = setupConditionThroughOptionalDerivedLocal(stmt, methodCallExpr, entry);
+        if (!optionalExpr.isEmpty()) {
+            BranchingTrace.record("priorLocal:emit|name=" + variableName + "|expression=" + optionalExpr);
+            return optionalExpr;
+        }
         Type returnType = resolveMethodCallReturnType(methodCallExpr);
         if (returnType == null) {
             BranchingTrace.record("priorLocal:skip|name=" + variableName + "|reason=noReturnType|expression=" + methodCallExpr);
@@ -142,6 +151,60 @@ public class ControlFlowEvaluator extends Evaluator {
                 .addArgument(returnValue);
         BranchingTrace.record("priorLocal:emit|name=" + variableName + "|expression=" + thenReturn);
         return List.of(thenReturn);
+    }
+
+    private List<Expression> setupConditionThroughOptionalDerivedLocal(Statement stmt,
+                                                                       MethodCallExpr methodCallExpr,
+                                                                       Map.Entry<Expression, Object> entry) {
+        if (!"orElse".equals(methodCallExpr.getNameAsString()) || methodCallExpr.getArguments().size() != 1) {
+            return List.of();
+        }
+        Expression scope = methodCallExpr.getScope().orElse(null);
+        if (!(scope instanceof MethodCallExpr optionalCall)
+                || !"ofNullable".equals(optionalCall.getNameAsString())
+                || optionalCall.getArguments().size() != 1) {
+            return List.of();
+        }
+
+        Expression source = optionalCall.getArgument(0);
+        if (!source.isNameExpr()) {
+            return List.of();
+        }
+
+        Object fallbackValue = simpleLiteralValue(methodCallExpr.getArgument(0));
+        if (fallbackValue == UnresolvedLiteral.INSTANCE) {
+            return List.of();
+        }
+
+        Object sourceValue = java.util.Objects.equals(entry.getValue(), fallbackValue) ? null : entry.getValue();
+        Symbol sourceSymbol = getValue(stmt, source.toString());
+        if (sourceSymbol == null) {
+            return List.of();
+        }
+        return setupConditionThroughAssignment(new AbstractMap.SimpleEntry<>(source.clone(), sourceValue), sourceSymbol);
+    }
+
+    private Object simpleLiteralValue(Expression expression) {
+        if (expression.isNullLiteralExpr()) {
+            return null;
+        }
+        if (expression instanceof IntegerLiteralExpr integerLiteralExpr) {
+            return integerLiteralExpr.asNumber().intValue();
+        }
+        if (expression instanceof LongLiteralExpr longLiteralExpr) {
+            return longLiteralExpr.asNumber().longValue();
+        }
+        if (expression instanceof StringLiteralExpr stringLiteralExpr) {
+            return stringLiteralExpr.getValue();
+        }
+        if (expression instanceof BooleanLiteralExpr booleanLiteralExpr) {
+            return booleanLiteralExpr.getValue();
+        }
+        return UnresolvedLiteral.INSTANCE;
+    }
+
+    private enum UnresolvedLiteral {
+        INSTANCE
     }
 
     private Expression findPreviousAssignmentExpression(BlockStmt block, Statement currentStatement, String variableName) {
@@ -217,22 +280,166 @@ public class ControlFlowEvaluator extends Evaluator {
                 : conditionalExpr.getElseExpr();
     }
 
-    private Type resolveMethodCallReturnType(MethodCallExpr methodCallExpr) {
+    protected Type resolveMethodCallReturnType(MethodCallExpr methodCallExpr) {
+        MethodResolution resolution = resolveMethodCall(methodCallExpr);
+        if (resolution.returnType() != null) {
+            return resolution.returnType();
+        }
+        return null;
+    }
+
+    private MethodResolution resolveMethodCall(MethodCallExpr methodCallExpr) {
         try {
-            MCEWrapper wrapper = wrapCallExpression(methodCallExpr);
-            if (wrapper.getMatchingCallable() != null && wrapper.getMatchingCallable().isMethodDeclaration()) {
-                return wrapper.getMatchingCallable().asMethodDeclaration().getType();
+            Type resolvedReturnType = resolveReturnTypeFromResolvedMethodUsage(methodCallExpr);
+            MCEWrapper lightweightWrapper = new MCEWrapper(methodCallExpr);
+            Callable callable = AbstractCompiler.resolveCallableFromResolvedMethod(methodCallExpr, lightweightWrapper)
+                    .orElse(null);
+            if (callable == null) {
+                MCEWrapper wrapper = wrapCallExpression(methodCallExpr);
+                callable = wrapper.getMatchingCallable();
+                if (callable == null) {
+                    callable = resolveCallableForReturnType(methodCallExpr, wrapper).orElse(null);
+                    if (callable != null) {
+                        wrapper.setMatchingCallable(callable);
+                    }
+                }
+            } else {
+                lightweightWrapper.setMatchingCallable(callable);
+            }
+            Type callableReturnType = extractReturnType(callable);
+            if (resolvedReturnType != null || callableReturnType != null) {
+                return new MethodResolution(callable, resolvedReturnType != null ? resolvedReturnType : callableReturnType);
             }
         } catch (ReflectiveOperationException | RuntimeException ignored) {
             // Best effort only.
         }
         try {
             ResolvedType resolvedType = methodCallExpr.calculateResolvedType();
-            return StaticJavaParser.parseType(resolvedType.describe());
+            return new MethodResolution(null, StaticJavaParser.parseType(resolvedType.describe()));
         } catch (RuntimeException ignored) {
             // Best effort only.
         }
+        return new MethodResolution(null, null);
+    }
+
+    private Type resolveReturnTypeFromResolvedMethodUsage(MethodCallExpr methodCallExpr) {
+        Optional<MethodUsage> usage = AbstractCompiler.resolveMethodAsUsage(methodCallExpr);
+        if (usage.isPresent()) {
+            return parseResolvedType(usage.get().returnType());
+        }
+        Optional<ResolvedMethodDeclaration> declaration = AbstractCompiler.resolveMethodDeclaration(methodCallExpr);
+        if (declaration.isPresent()) {
+            return parseResolvedType(declaration.get().getReturnType());
+        }
         return null;
+    }
+
+    private Type parseResolvedType(ResolvedType resolvedType) {
+        try {
+            return StaticJavaParser.parseType(resolvedType.describe());
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private Optional<Callable> resolveCallableForReturnType(MethodCallExpr methodCallExpr, MCEWrapper wrapper) {
+        if (methodCallExpr.getScope().isPresent()) {
+            Optional<Callable> scopedCallable = resolveCallableFromScope(methodCallExpr, wrapper,
+                    methodCallExpr.getScope().orElseThrow());
+            if (scopedCallable.isPresent()) {
+                return scopedCallable;
+            }
+        }
+        if (typeDeclaration != null) {
+            return AbstractCompiler.findCallableDeclaration(wrapper, typeDeclaration);
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Callable> resolveCallableFromScope(MethodCallExpr methodCallExpr, MCEWrapper wrapper,
+                                                        Expression scopeExpression) {
+        if (scopeExpression.isThisExpr() && typeDeclaration != null) {
+            return AbstractCompiler.findCallableDeclaration(wrapper, typeDeclaration);
+        }
+
+        Type scopeType = resolveScopeType(methodCallExpr, scopeExpression);
+        if (scopeType == null || cu == null) {
+            return Optional.empty();
+        }
+
+        TypeWrapper wrapperType = AbstractCompiler.findType(cu, scopeType);
+        if (wrapperType == null) {
+            return Optional.empty();
+        }
+        if (wrapperType.getType() != null) {
+            return AbstractCompiler.findCallableDeclaration(wrapper, wrapperType.getType());
+        }
+        return Optional.empty();
+    }
+
+    private Type resolveScopeType(MethodCallExpr methodCallExpr, Expression scopeExpression) {
+        if (scopeExpression.isNameExpr()) {
+            String name = scopeExpression.asNameExpr().getNameAsString();
+            Symbol symbol = getValue(methodCallExpr, name);
+            if (symbol != null && symbol.getType() != null) {
+                return symbol.getType();
+            }
+            Type declaredType = findDeclaredType(methodCallExpr, name);
+            if (declaredType != null) {
+                return declaredType;
+            }
+        }
+
+        try {
+            ResolvedType resolvedType = scopeExpression.calculateResolvedType();
+            return StaticJavaParser.parseType(resolvedType.describe());
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private Type findDeclaredType(MethodCallExpr methodCallExpr, String name) {
+        MethodDeclaration methodDeclaration = methodCallExpr.findAncestor(MethodDeclaration.class).orElse(null);
+        if (methodDeclaration != null) {
+            for (Parameter parameter : methodDeclaration.getParameters()) {
+                if (parameter.getNameAsString().equals(name)) {
+                    return parameter.getType();
+                }
+            }
+            for (VariableDeclarator variableDeclarator : methodDeclaration.findAll(VariableDeclarator.class)) {
+                if (variableDeclarator.getNameAsString().equals(name)) {
+                    return variableDeclarator.getType();
+                }
+            }
+        }
+        if (typeDeclaration != null) {
+            for (VariableDeclarator variableDeclarator : typeDeclaration.findAll(VariableDeclarator.class)) {
+                if (variableDeclarator.getNameAsString().equals(name)) {
+                    return variableDeclarator.getType();
+                }
+            }
+        }
+        return null;
+    }
+
+    private Type extractReturnType(Callable callable) {
+        if (callable == null) {
+            return null;
+        }
+        if (callable.isMethodDeclaration()) {
+            return callable.asMethodDeclaration().getType();
+        }
+        if (callable.getMethod() != null) {
+            try {
+                return StaticJavaParser.parseType(callable.getMethod().getGenericReturnType().getTypeName());
+            } catch (RuntimeException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private record MethodResolution(Callable callable, Type returnType) {
     }
 
     private List<Expression> setupConditionThroughExistingMock(Statement stmt, Map.Entry<Expression, Object> entry) {
@@ -359,15 +566,7 @@ public class ControlFlowEvaluator extends Evaluator {
         if (value.getType() != null) {
             return value.getType();
         }
-        try {
-            MCEWrapper wrapper = wrapCallExpression(initializer);
-            if (wrapper.getMatchingCallable() != null && wrapper.getMatchingCallable().isMethodDeclaration()) {
-                return wrapper.getMatchingCallable().asMethodDeclaration().getType();
-            }
-        } catch (RuntimeException | ReflectiveOperationException ignored) {
-            // Best-effort only; if the mock call cannot be resolved we simply skip this precondition.
-        }
-        return null;
+        return resolveMethodCallReturnType(initializer);
     }
 
     private List<Expression> setupConditionThroughAssignment(Map.Entry<Expression, Object> entry, Symbol v) {
@@ -375,7 +574,13 @@ public class ControlFlowEvaluator extends Evaluator {
         NameExpr nameExpr = key.isNameExpr() ? key.asNameExpr() : key.asMethodCallExpr().getArgument(0).asNameExpr();
 
         List<Expression> valueExpressions;
-        if (v.getType() instanceof PrimitiveType) {
+        if (entry.getValue() == null) {
+            if (v.getClazz() != null && v.getClazz().isPrimitive()) {
+                valueExpressions = List.of(Reflect.createLiteralExpression(Reflect.getDefault(v.getClazz())));
+            } else {
+                valueExpressions = List.of(new NullLiteralExpr());
+            }
+        } else if (v.getType() instanceof PrimitiveType) {
             valueExpressions = List.of(Reflect.createLiteralExpression(entry.getValue()));
         } else if (entry.getValue() instanceof ClassOrInterfaceType cType) {
             Variable vx = Reflect.createVariable(Reflect.getDefault(cType.getNameAsString()), cType.getNameAsString(), v.getName());
@@ -1362,7 +1567,10 @@ public class ControlFlowEvaluator extends Evaluator {
     private void handleOptionalOfNullable(ReflectionArguments reflectionArguments) {
         Statement stmt = reflectionArguments.getMethodCallExpression().findAncestor(Statement.class).orElseThrow();
         LineOfCode l = Branching.get(stmt.hashCode());
+        BranchingTrace.record("ofNullable:seen|statement=" + stmt + "|existing=" + (l != null));
         if (l != null) {
+            BranchingTrace.record("ofNullable:skip|statement=" + stmt + "|reason=existingBranch|path=" + l.getPathTaken()
+                    + "|preconditions=" + l.getPreconditions().size());
             return;
         }
 
@@ -1371,18 +1579,31 @@ public class ControlFlowEvaluator extends Evaluator {
             Expression argument = mce.getArguments().getFirst().orElseThrow();
             if (argument.isNameExpr()) {
                 l = new LineOfCode(stmt);
-                Branching.add(l);
+                CallableDeclaration<?> callable = stmt.findAncestor(CallableDeclaration.class).orElse(null);
+                boolean hasActiveConditional = currentConditional != null
+                        && currentConditional.getCallableDeclaration().equals(callable);
+                if (callable != null && !hasActiveConditional) {
+                    Branching.add(l);
+                    BranchingTrace.record("ofNullable:queue|statement=" + stmt + "|mode=conditional");
+                } else {
+                    Branching.registerBranch(l);
+                    BranchingTrace.record("ofNullable:queue|statement=" + stmt + "|mode=branchOnly");
+                }
+                BranchingTrace.record("ofNullable:register|statement=" + stmt + "|argument=" + argument);
 
                 if (returnValue != null && returnValue.getValue() instanceof Optional<?> opt) {
                     Object value = null;
                     if (opt.isPresent()) {
                         l.setPathTaken(LineOfCode.TRUE_PATH);
+                        BranchingTrace.record("ofNullable:path|statement=" + stmt + "|path=present");
                     } else {
-                        value = Reflect.getDefault(argument.getClass());
+                        value = null;
                         l.setPathTaken(LineOfCode.FALSE_PATH);
+                        BranchingTrace.record("ofNullable:path|statement=" + stmt + "|path=empty|assigned=" + value);
                     }
                     Map.Entry<Expression, Object> entry = new AbstractMap.SimpleEntry<>(argument, value);
                     setupConditionThroughAssignment(stmt, entry);
+                    BranchingTrace.record("ofNullable:afterAssign|statement=" + stmt + "|preconditions=" + l.getPreconditions().size());
                 }
             }
         }

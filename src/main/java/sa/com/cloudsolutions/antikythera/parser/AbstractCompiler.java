@@ -31,8 +31,12 @@ import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.printer.lexicalpreservation.LexicalPreservingPrinter;
+import com.github.javaparser.resolution.MethodUsage;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
@@ -1265,6 +1269,38 @@ public class AbstractCompiler {
         }
 
         return findConstructorDeclaration(methodCall, decl);
+    }
+
+    public static Optional<ResolvedMethodDeclaration> resolveMethodDeclaration(MethodCallExpr methodCallExpr) {
+        try {
+            return Optional.of(methodCallExpr.resolve());
+        } catch (RuntimeException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    public static Optional<MethodUsage> resolveMethodAsUsage(MethodCallExpr methodCallExpr) {
+        if (combinedTypeSolver == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(JavaParserFacade.get(combinedTypeSolver).solveMethodAsUsage(methodCallExpr));
+        } catch (RuntimeException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    public static Optional<Callable> resolveCallableFromResolvedMethod(MethodCallExpr methodCallExpr, MCEWrapper wrapper) {
+        Optional<ResolvedMethodDeclaration> resolved = resolveMethodDeclaration(methodCallExpr);
+        if (resolved.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Optional<MethodDeclaration> methodDeclaration = resolved.get().toAst(MethodDeclaration.class);
+        if (methodDeclaration.isPresent()) {
+            return Optional.of(new Callable(methodDeclaration.get(), wrapper));
+        }
+        return Optional.empty();
     }
 
     /**

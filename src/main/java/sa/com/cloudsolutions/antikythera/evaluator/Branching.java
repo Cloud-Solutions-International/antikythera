@@ -58,6 +58,14 @@ public class Branching {
                 applicableConditions.addAll(lineOfCode.getPreconditions());
             }
         }
+        BranchingTrace.record("applicable:"
+                + methodDeclaration.getNameAsString()
+                + "|count=" + applicableConditions.size()
+                + "|branches=" + branches.values().stream()
+                        .filter(lineOfCode -> lineOfCode.getCallableDeclaration().equals(methodDeclaration))
+                        .map(lineOfCode -> lineOfCode.getPathTaken() + ":" + lineOfCode.getPreconditions().size()
+                                + ":" + lineOfCode.getStatement())
+                        .toList());
         return applicableConditions;
     }
 

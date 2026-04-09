@@ -198,7 +198,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             Variable v;
             if (l == null) {
                 l = new LineOfCode(stmt);
-                Branching.add(l);
+                Branching.registerBranch(l);
                 v = Reflect.generateDefaultVariable(t.asClassOrInterfaceType().getNameAsString());
             }
             else {
@@ -229,7 +229,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         if (l == null) {
             l = new LineOfCode(stmt);
-            Branching.add(l);
+            Branching.registerBranch(l);
             value = false;
         } else {
             l.setPathTaken(LineOfCode.TRUE_PATH);
@@ -507,7 +507,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     @Override
     Variable optionalPresentPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         LineOfCode l = new LineOfCode(stmt);
-        Branching.add(l);
+        Branching.registerBranch(l);
 
         if (sc.getVariable().getValue() instanceof MockingEvaluator eval) {
             l.setPathTaken(LineOfCode.TRUE_PATH);
@@ -579,7 +579,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         Variable v;
         if (branch == null) {
             branch = new LineOfCode(stmt);
-            Branching.add(branch);
+            Branching.registerBranch(branch);
             branch.setPathTaken(LineOfCode.TRUE_PATH);
             v = createRepositoryOptionalDeclarationValue(md, true);
         }
@@ -694,7 +694,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     private Variable repositoryFullPath(Scope sc, Statement stmt, String collectionTypeName) {
         LineOfCode l = new LineOfCode(stmt);
         l.setPathTaken(LineOfCode.TRUE_PATH);
-        Branching.add(l);
+        Branching.registerBranch(l);
 
         Callable callable = sc.getMCEWrapper().getMatchingCallable();
         CallableDeclaration<?> callableDeclaration = callable.getCallableDeclaration();
