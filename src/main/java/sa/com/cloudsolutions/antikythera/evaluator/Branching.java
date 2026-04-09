@@ -7,10 +7,14 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.stream.Collectors;
 
 public class Branching {
     private static final HashMap<CallableDeclaration<?>, PriorityQueue<LineOfCode>> conditionals = new HashMap<>();
     private static final HashMap<Integer, LineOfCode> branches = new HashMap<>();
+
+    public record BranchAttempt(LineOfCode target, List<Precondition> applicableConditions) {
+    }
 
     private Branching() {
     }
@@ -44,22 +48,30 @@ public class Branching {
     }
 
     public static List<Precondition> getApplicableConditions(CallableDeclaration<?> methodDeclaration) {
-        List<Precondition> applicableConditions = new ArrayList<>();
+        return getBranchAttempt(methodDeclaration, null).applicableConditions();
+    }
 
-        for (LineOfCode lineOfCode : branches.values()) {
-            if (lineOfCode.getPathTaken() != LineOfCode.BOTH_PATHS && lineOfCode.getCallableDeclaration().equals(methodDeclaration)) {
+    public static BranchAttempt getBranchAttempt(CallableDeclaration<?> methodDeclaration, LineOfCode target) {
+        List<LineOfCode> relevantBranches = branches.values().stream()
+                .filter(lineOfCode -> lineOfCode.getCallableDeclaration().equals(methodDeclaration))
+                .collect(Collectors.toList());
+
+        List<Precondition> applicableConditions = new ArrayList<>();
+        for (LineOfCode lineOfCode : relevantBranches) {
+            if (lineOfCode.getPathTaken() != LineOfCode.BOTH_PATHS) {
                 applicableConditions.addAll(lineOfCode.getPreconditions());
             }
         }
-        BranchingTrace.record(() -> "applicable:"
+
+        BranchingTrace.record(() -> "attempt:"
                 + methodDeclaration.getNameAsString()
+                + "|target=" + (target == null ? "<none>" : target.getStatement())
                 + "|count=" + applicableConditions.size()
-                + "|branches=" + branches.values().stream()
-                .filter(lineOfCode -> lineOfCode.getCallableDeclaration().equals(methodDeclaration))
+                + "|branches=" + relevantBranches.stream()
                 .map(lineOfCode -> lineOfCode.getPathTaken() + ":" + lineOfCode.getPreconditions().size()
                         + ":" + lineOfCode.getStatement())
                 .toList());
-        return applicableConditions;
+        return new BranchAttempt(target, applicableConditions);
     }
 
     public static int size(CallableDeclaration<?> methodDeclaration)

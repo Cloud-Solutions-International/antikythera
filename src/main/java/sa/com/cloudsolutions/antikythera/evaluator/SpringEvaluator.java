@@ -946,9 +946,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     Variable createTests(MethodResponse response) {
         if (response != null) {
             for (ITestGenerator generator : generators) {
-                List<Precondition> applicableConditions = Branching.getApplicableConditions(currentCallable);
+                Branching.BranchAttempt attempt = Branching.getBranchAttempt(currentCallable, currentConditional);
+                List<Precondition> applicableConditions = attempt.applicableConditions();
                 BranchingTrace.record(() -> "preconditions:"
                         + currentCallable.getNameAsString()
+                        + "|target=" + (attempt.target() == null ? "<none>" : attempt.target().getStatement())
                         + "|values=" + applicableConditions);
                 generator.setPreConditions(applicableConditions);
                 generator.createTests(currentCallable, response);
@@ -1104,12 +1106,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 + "|condition=" + tt.getCondition());
 
         if (!values.isEmpty()) {
-            setupIfCondition(values);
+            setupIfCondition(values, state);
         }
     }
 
-    private void setupIfCondition(List<Map<Expression, Object>> combinations) {
-        Map<Expression, Object> combination = adjustForEnums(combinations.getFirst());
+    private void setupIfCondition(List<Map<Expression, Object>> combinations, boolean desiredState) {
+        Map<Expression, Object> combination = selectNextCombination(combinations, desiredState);
         BranchingTrace.record(() -> "selected:"
                 + currentConditional.getCallableDeclaration().getNameAsString()
                 + "|combination=" + combination);
@@ -1133,6 +1135,71 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 return;
             }
         }
+    }
+
+    private Map<Expression, Object> selectNextCombination(List<Map<Expression, Object>> combinations, boolean desiredState) {
+        int targetPath = desiredState ? LineOfCode.TRUE_PATH : LineOfCode.FALSE_PATH;
+        Map<Expression, Object> fallback = null;
+        String fallbackFingerprint = null;
+
+        for (Map<Expression, Object> candidate : combinations) {
+            Map<Expression, Object> adjusted = adjustForEnums(candidate);
+            String fingerprint = fingerprintCombination(adjusted);
+            if (fallback == null) {
+                fallback = adjusted;
+                fallbackFingerprint = fingerprint;
+            }
+            if (!currentConditional.hasAttemptedCombination(targetPath, fingerprint)) {
+                currentConditional.recordCombinationAttempt(targetPath, fingerprint);
+                BranchingTrace.record(() -> "selectedRow:"
+                        + currentConditional.getCallableDeclaration().getNameAsString()
+                        + "|path=" + targetPath
+                        + "|fingerprint=" + fingerprint
+                        + "|mode=new");
+                return adjusted;
+            }
+        }
+
+        if (fallback != null) {
+            currentConditional.recordCombinationAttempt(targetPath, Objects.requireNonNull(fallbackFingerprint));
+            String recordedFingerprint = fallbackFingerprint;
+            BranchingTrace.record(() -> "selectedRow:"
+                    + currentConditional.getCallableDeclaration().getNameAsString()
+                    + "|path=" + targetPath
+                    + "|fingerprint=" + recordedFingerprint
+                    + "|mode=reuse");
+            return fallback;
+        }
+
+        return new HashMap<>();
+    }
+
+    private String fingerprintCombination(Map<Expression, Object> combination) {
+        return combination.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey((a, b) -> a.toString().compareTo(b.toString())))
+                .map(entry -> entry.getKey() + "=" + fingerprintValue(entry.getValue()))
+                .reduce((left, right) -> left + "|" + right)
+                .orElse("<empty>");
+    }
+
+    private String fingerprintValue(Object value) {
+        if (value instanceof Expression expression) {
+            return expression.toString();
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().map(this::fingerprintValue).toList().toString();
+        }
+        if (value instanceof Set<?> set) {
+            return set.stream().map(this::fingerprintValue).sorted().toList().toString();
+        }
+        if (value instanceof Map<?, ?> map) {
+            return map.entrySet().stream()
+                    .map(entry -> fingerprintValue(entry.getKey()) + "->" + fingerprintValue(entry.getValue()))
+                    .sorted()
+                    .toList()
+                    .toString();
+        }
+        return String.valueOf(value);
     }
 
     private Map<Expression, Object> adjustForEnums(Map<Expression, Object> combination) {

@@ -16,6 +16,7 @@ import java.io.PrintStream;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -107,6 +108,23 @@ class TestBranchingCombinations extends TestHelper {
                 "Expected selected-combination trace entries for sequentialDirect");
     }
 
+    @Test
+    void sequentialDirectRecordsMultipleSelectedRowFingerprints() throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("sequentialDirect")).orElseThrow();
+
+        evaluator.visit(method);
+
+        Set<String> fingerprints = BranchingTrace.snapshot().stream()
+                .filter(event -> event.startsWith("selectedRow:sequentialDirect"))
+                .map(this::extractFingerprint)
+                .filter(fingerprint -> !fingerprint.isEmpty())
+                .collect(Collectors.toSet());
+
+        assertTrue(fingerprints.size() > 1,
+                "Expected more than one selected-row fingerprint for sequentialDirect");
+    }
+
     @Disabled("Pending branch-combination exploration fix")
     @Test
     void sequentialDirectShouldCoverAllFourCombinations() throws ReflectiveOperationException {
@@ -168,5 +186,15 @@ class TestBranchingCombinations extends TestHelper {
             combinations.add(matcher.group());
         }
         return combinations;
+    }
+
+    private String extractFingerprint(String event) {
+        int idx = event.indexOf("|fingerprint=");
+        if (idx < 0) {
+            return "";
+        }
+        int start = idx + "|fingerprint=".length();
+        int end = event.indexOf("|mode=", start);
+        return end >= 0 ? event.substring(start, end) : event.substring(start);
     }
 }

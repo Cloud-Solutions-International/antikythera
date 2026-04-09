@@ -72,7 +72,7 @@ Trace usage:
   - false side explored
   - true side explored
   - [x] combinations attempted for each side
-- [ ] Avoid flattening unrelated branch preconditions into one global list without attribution.
+- [x] Avoid flattening unrelated branch preconditions into one global list without attribution.
 
 ## Phase 4: Combination-Aware Exploration
 
@@ -137,7 +137,7 @@ Trace usage:
 - [x] Step 1: add traceability
 - [x] Step 2: fix `TruthTable` constraint evaluation
 - [x] Step 3: add branch-combination tracking to `LineOfCode`
-- [ ] Step 4: update `Branching` to expose targeted branch-attempt context
+- [x] Step 4: update `Branching` to expose targeted branch-attempt context
 - [ ] Step 5: update evaluator branch selection to iterate satisfying rows
 - [x] Step 6: add `antikythera-test-helper` fixtures
 - [x] Step 7: add focused regression tests against those fixtures
@@ -171,12 +171,13 @@ Current observation:
 - The `TruthTable` layer now has direct focused tests for `Map.isEmpty()` runtime shape and literal object-construction equality, and the earlier `fileCompare(...)` / `printMap(...)` regressions are fixed.
 - Generic object-reference equality such as `a.equals(b)` now materializes through reference-aware preconditions instead of falling back to meaningless boolean/string placeholders.
 - The remaining skipped direct-combination targets now share the same reduced blocker:
-  - `sequentialDirect(...)` still needs true branch-combination exploration across independent sequential branches, not just nested/ancestor conditions.
+  - `sequentialDirect(...)` still needs true branch-combination exploration across independent sequential branches, not just nested/ancestor conditions. After row-skipping was added, it now reaches 3/4 combinations and specifically still misses `TYPE_SET|VALUES_PRESENT`, which points to loss of the earlier non-empty diagnosis-type choice while materializing the later `values` branch.
   - `deletedByDirect(...)` still needs the same independent sequential branch-combination exploration for the last missing cross-product.
 - Trace capture is now explicitly opt-in and lazily evaluated, so diagnostics are available without imposing normal-run overhead.
 - Branch scheduling intent is now carried on `LineOfCode`, and `Branching` owns the queueing policy instead of relying on separate caller APIs.
 - The next real algorithmic step is no longer “repair the current condition semantics”; it is to introduce explicit branch-attempt tracking so sequential independent branches can explore more than the first satisfying row.
 - `LineOfCode` now records per-side combination fingerprints independently of path coverage state, so the next missing piece is making `Branching` surface and consume that targeted branch-attempt context.
+- `Branching` now exposes a branch-attempt object that keeps the target branch and applicable preconditions together, so the next missing piece is to use that attempt identity to request the next untried satisfying row instead of always taking the first one.
 
 ## Improvement Opportunities
 

@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.junit.jupiter.api.BeforeAll;
@@ -145,5 +146,27 @@ class TestConditionVisitor {
             assertNotNull(l);
             assertTrue(l.isFullyTravelled());
         }
+    }
+
+    @Test
+    void branchAttemptPreservesTargetAndApplicablePreconditions() {
+        md = cu.findFirst(MethodDeclaration.class,
+                f -> f.getNameAsString().equals("conditional4")).orElseThrow();
+        md.accept(new ConditionVisitor(), null);
+
+        List<LineOfCode> lines = new ArrayList<>(Branching.get(md));
+        assertEquals(2, lines.size());
+
+        LineOfCode target = lines.getFirst();
+        LineOfCode sibling = lines.get(1);
+        target.addPrecondition(new Precondition(new NameExpr("targetRow")));
+        sibling.addPrecondition(new Precondition(new NameExpr("siblingRow")));
+
+        Branching.BranchAttempt attempt = Branching.getBranchAttempt(md, target);
+
+        assertEquals(target, attempt.target());
+        assertEquals(2, attempt.applicableConditions().size());
+        assertTrue(attempt.applicableConditions().contains(new Precondition(new NameExpr("targetRow"))));
+        assertTrue(attempt.applicableConditions().contains(new Precondition(new NameExpr("siblingRow"))));
     }
 }
