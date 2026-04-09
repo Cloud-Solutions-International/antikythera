@@ -439,6 +439,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return null;
         }
         Variable result = Reflect.variableFactory(returnType.asClassOrInterfaceType().getNameAsString());
+        if (isUnresolvedObjectReturn(result)) {
+            result = createStructuredObjectReturn(md.findCompilationUnit().orElse(null), returnType);
+        }
         if (result != null) {
             MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
         }
@@ -484,9 +487,59 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                 String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.toString());
                 result = Reflect.variableFactory(fqdn);
             }
-            MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
+            if (isUnresolvedObjectReturn(result)) {
+                result = createStructuredObjectReturn(cu1, returnType);
+            }
+            if (result == null) {
+                result = new Variable((Object) null);
+                result.setType(returnType);
+            }
+            if (result != null) {
+                MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
+            }
         }
         return result;
+    }
+
+    private boolean isUnresolvedObjectReturn(Variable result) {
+        return result != null && result.getValue() == null && result.getClazz() == null;
+    }
+
+    private Variable createStructuredObjectReturn(CompilationUnit context, Type returnType) {
+        if (context == null || !returnType.isClassOrInterfaceType()) {
+            return null;
+        }
+        TypeWrapper wrapper = AbstractCompiler.findType(context, returnType.asString());
+        if (wrapper == null) {
+            return null;
+        }
+
+        String simpleName = returnType.asClassOrInterfaceType().getNameAsString();
+        ObjectCreationExpr initializer = new ObjectCreationExpr(null,
+                new ClassOrInterfaceType(null, simpleName), new NodeList<>());
+
+        if (wrapper.getType() != null) {
+            String fqdn = wrapper.getType().getFullyQualifiedName().orElse(wrapper.getFullyQualifiedName());
+            Variable result = new Variable(EvaluatorFactory.createLazily(fqdn, MockingEvaluator.class));
+            result.setInitializer(List.of(initializer));
+            return result;
+        }
+
+        if (wrapper.getClazz() != null) {
+            try {
+                Object instance = wrapper.getClazz().getDeclaredConstructor().newInstance();
+                Variable result = new Variable(instance);
+                result.setClazz(wrapper.getClazz());
+                result.setInitializer(List.of(initializer));
+                return result;
+            } catch (ReflectiveOperationException e) {
+                Variable result = new Variable((Object) null);
+                result.setClazz(wrapper.getClazz());
+                result.setInitializer(List.of(initializer));
+                return result;
+            }
+        }
+        return null;
     }
 
     @Override

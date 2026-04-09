@@ -31,6 +31,13 @@ Expected combinations:
 - [x] Record the generated test fingerprint for each branch attempt.
 - [x] Make the trace easy to compare against the generated test body.
 
+Trace usage:
+
+- `BranchingTrace` is disabled by default.
+- Enable it explicitly in tests or diagnostics with `BranchingTrace.enable()`.
+- Disable and clear it with `BranchingTrace.disable()`.
+- You can also opt in via JVM property: `-Dantikythera.branching.trace=true`.
+
 ## Phase 2: TruthTable Correctness
 
 - [ ] Review `TruthTable.satisfiesConstraints(...)` and remove early-return behavior that skips remaining constraints.
@@ -125,7 +132,7 @@ Expected combinations:
 ## New Follow-Ups
 
 - [ ] Make method-call trace values semantic for readability, e.g. show `NON_EMPTY_STRING` instead of raw `"T"` for `StringUtils.isEmpty(...)`.
-- [ ] Diagnose why collaborator-backed fixtures fall straight into the plain `@Mock` NPE path before branch-specific collaborator stubs can form.
+- [x] Diagnose why collaborator-backed fixtures fall straight into the plain `@Mock` NPE path before branch-specific collaborator stubs can form.
 - [x] Fix generated test instantiation for constructor-injected fixtures/services; the current generator still emits no-arg construction plus reflection field injection for constructor-only classes.
 - [x] Confirm that the current blocker for `values` / `records` is `reason=noReturnType`, not failed local-variable backtracking.
 
@@ -133,6 +140,20 @@ Current observation:
 
 - The direct sequential fixture already reaches 4 observable combinations under evaluation.
 - The new branch trace shows repeated branch-attempt selection for that fixture, so the remaining gap is more likely in precondition materialization and branch-attempt identity for collaborator/object-shaped scenarios than in the basic ability to revisit sequential branches.
+- The collaborator-backed fixture failure before matrix capture was caused by constructor-injected final collaborators being treated as plain uninitialized fields unless they had `@Autowired`, leaving receivers like `repository` / `directory` without a usable runtime type.
+- `SpringEvaluator` now auto-wires constructor-injected final fields and uses `MockingEvaluator` for source interfaces, so collaborator-backed fixture evaluation no longer dies before matrix capture.
 - The original collaborator-backed failure at `reason=noReturnType` has been addressed by moving method-call resolution to a resolved-method-first path.
 - The current resolver now prefers JavaParser `MethodUsage` / resolved method metadata, uses that to recover both return type and source callable when available, and keeps manual scope-based lookup only as fallback.
 - The remaining collaborator-backed gap is no longer primarily return-type identification; it has shifted back to branch-consistent materialization of earlier assignment expressions.
+- The collaborator-backed trace now shows the concrete remaining gap:
+  - `sequentialProblemStrings(...)` only emits `priorLocal` stubs for `repository.findActive(...)`, never `findActiveByDiagnosisType(...)`
+  - `deletedByLookup(...)` only emits `priorLocal` stubs for `repository.findAllRecords(...)`, never `findOpenRecords(...)`
+- This indicates the next missing behavior is not crash handling or return-type recovery; it is branch-consistent selection of prior assignments from `if/else` and ternary expressions during later-branch materialization.
+- The collaborator-backed prior-assignment issue is now fixed and covered by active tests.
+- A targeted `TruthTable` experiment showed that `record.getDeletedBy() != null && !record.getDeletedBy().isEmpty()` is currently vulnerable to inner scope-chain method calls like `record.getDeletedBy()` being revisited as standalone boolean conditions and losing their null-aware domain.
+- That experiment was not kept yet because the first implementation regressed existing evaluator paths such as `fileCompare(...)` and `printMap(...)`; the next pass needs a narrower fix or a better typed-domain model.
+- The remaining skipped direct-combination targets now share the same reduced blocker:
+  - `sequentialDirect(...)` still needs true branch-combination exploration across independent sequential branches, not just nested/ancestor conditions.
+  - `deletedByDirect(...)` now has correct null-sensitive truth-table rows, but still needs that same independent sequential branch-combination exploration for the last missing cross-product.
+- Trace capture is now explicitly opt-in and lazily evaluated, so diagnostics are available without imposing normal-run overhead.
+- Branch scheduling intent is now carried on `LineOfCode`, and `Branching` owns the queueing policy instead of relying on separate caller APIs.

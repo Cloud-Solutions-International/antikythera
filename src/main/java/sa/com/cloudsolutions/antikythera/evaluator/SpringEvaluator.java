@@ -209,7 +209,16 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private static Variable wireFromSourceCode(Type type, String resolvedClass, FieldDeclaration fd) {
         Variable v;
         List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
-        Evaluator eval = MockingRegistry.isMockTarget(wrappers.getLast().getFullyQualifiedName())
+        if (isSourceInterface(resolvedClass)) {
+            v = createInterfaceAutowire(resolvedClass);
+            if (v != null) {
+                v.setType(type);
+                return v;
+            }
+        }
+
+        boolean useMockingEvaluator = MockingRegistry.isMockTarget(wrappers.getLast().getFullyQualifiedName());
+        Evaluator eval = useMockingEvaluator
                 ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
                 : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
 
@@ -222,6 +231,19 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             eval.invokeDefaultConstructor();
         }
         return v;
+    }
+
+    private static Variable createInterfaceAutowire(String resolvedClass) {
+        Evaluator eval = EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class);
+        return new Variable(eval);
+    }
+
+    private static boolean isSourceInterface(String resolvedClass) {
+        return AntikytheraRunTime.getTypeDeclaration(resolvedClass)
+                .filter(ClassOrInterfaceDeclaration.class::isInstance)
+                .map(ClassOrInterfaceDeclaration.class::cast)
+                .map(ClassOrInterfaceDeclaration::isInterface)
+                .orElse(false);
     }
 
     private static void setupEnumMismatch(TypeWrapper t, Expression key, Map<Expression, Object> result, Expression expr) {
@@ -952,7 +974,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
 
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
-                && (fd.getAnnotationByName("Autowired").isPresent() || MockingRegistry.isMockTarget(registryKey))) {
+                && shouldAutoWireField(fd, variable, registryKey)) {
 
             Variable v = AntikytheraRunTime.getAutoWire(registryKey);
             if (v == null) {
@@ -972,6 +994,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             return v;
         }
         return null;
+    }
+
+    private boolean shouldAutoWireField(FieldDeclaration fd, VariableDeclarator variable, String registryKey) {
+        return fd.getAnnotationByName("Autowired").isPresent()
+                || MockingRegistry.isMockTarget(registryKey)
+                || (fd.isFinal() && variable.getInitializer().isEmpty());
     }
 
     @Override

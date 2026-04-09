@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 class TestBranchingCombinations extends TestHelper {
     private static final String SAMPLE_CLASS =
@@ -36,7 +37,11 @@ class TestBranchingCombinations extends TestHelper {
     }
 
     @BeforeEach
-    void each() {
+    void each() throws IOException {
+        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
+        AntikytheraRunTime.reset();
+        MockingRegistry.reset();
+        AbstractCompiler.preProcess();
         cu = AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
         evaluator = EvaluatorFactory.create(SAMPLE_CLASS, SpringEvaluator.class);
         ((SpringEvaluator) evaluator).setArgumentGenerator(new DummyArgumentGenerator());
@@ -68,6 +73,22 @@ class TestBranchingCombinations extends TestHelper {
         String output = outContent.toString();
         assertTrue(output.contains("ALL") || output.contains("OPEN"), "Expected record-source branch output");
         assertTrue(output.contains("DELETED") || output.contains("ACTIVE"), "Expected deletedBy branch output");
+    }
+
+    @Test
+    void sequentialProblemStringsDoesNotCrashDuringEvaluation() {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("sequentialProblemStrings")).orElseThrow();
+
+        assertDoesNotThrow(() -> evaluator.visit(method));
+    }
+
+    @Test
+    void deletedByLookupDoesNotCrashDuringEvaluation() {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("deletedByLookup")).orElseThrow();
+
+        assertDoesNotThrow(() -> evaluator.visit(method));
     }
 
     @Test
@@ -114,6 +135,30 @@ class TestBranchingCombinations extends TestHelper {
                 Pattern.compile("(?:ALL|OPEN)\\|(?:DELETED|ACTIVE)")
         );
         assertEquals(4, combinations.size());
+    }
+
+    @Test
+    void sequentialProblemStringsShouldUseBothRepositorySources() throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("sequentialProblemStrings")).orElseThrow();
+
+        evaluator.visit(method);
+
+        List<String> trace = BranchingTrace.snapshot();
+        assertTrue(trace.stream().anyMatch(event -> event.contains("repository.findActive(")));
+        assertTrue(trace.stream().anyMatch(event -> event.contains("repository.findActiveByDiagnosisType(")));
+    }
+
+    @Test
+    void deletedByLookupShouldUseBothRepositorySources() throws ReflectiveOperationException {
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("deletedByLookup")).orElseThrow();
+
+        evaluator.visit(method);
+
+        List<String> trace = BranchingTrace.snapshot();
+        assertTrue(trace.stream().anyMatch(event -> event.contains("repository.findAllRecords(")));
+        assertTrue(trace.stream().anyMatch(event -> event.contains("repository.findOpenRecords(")));
     }
 
     private Set<String> extractCombinations(String text, Pattern pattern) {

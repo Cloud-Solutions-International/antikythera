@@ -1296,8 +1296,14 @@ public class Evaluator implements EvaluationEngine {
     }
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
-        Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
-        if (method == null && v.getClazz().getName().startsWith(JAVA_UTIL_STREAM)) {
+        Class<?> targetClass = v.getClazz();
+        if (targetClass == null && v.isFailedMock()) {
+            returnValue = new Variable(null);
+            return returnValue;
+        }
+
+        Method method = Reflect.findAccessibleMethod(targetClass, reflectionArguments);
+        if (method == null && targetClass != null && targetClass.getName().startsWith(JAVA_UTIL_STREAM)) {
             // Short-circuit: method lookup can fail for stream classes when argument types
             // don't widen correctly (e.g. int→long for limit/skip). Route directly to
             // handleStreamMethods which uses the public Stream interface methods.
@@ -1309,10 +1315,14 @@ public class Evaluator implements EvaluationEngine {
         // have a real @Mock that works at runtime, so no assertThrows should be emitted.
         if (v.isFailedMock()) {
             returnValue = new Variable(null);
-            if (v.getClazz() != null) {
-                returnValue.setClazz(v.getClazz());
+            if (targetClass != null) {
+                returnValue.setClazz(targetClass);
             }
             return returnValue;
+        }
+        if (targetClass == null) {
+            throw new EvaluatorException("Cannot invoke " + reflectionArguments.getMethodName()
+                    + " reflectively without a receiver type");
         }
         validateReflectiveMethod(v, reflectionArguments, method);
         reflectionArguments.setMethod(method);

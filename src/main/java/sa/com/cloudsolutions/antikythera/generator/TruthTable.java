@@ -16,7 +16,6 @@ import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
-
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -942,14 +941,14 @@ public class TruthTable {
             List<Integer> nonEmptyList = new ArrayList<>();
             nonEmptyList.add(1);
             Domain domain = new Domain(emptyList, nonEmptyList);
-            if (chain.isEmpty()) {
-                collector.put(m, domain);
+                if (chain.isEmpty()) {
+                collector.putIfAbsent(m, domain);
             } else {
                 if (scope != null && scope.toString().equals(COLLECTION_UTILS)) {
-                    collector.put(m, domain);
+                    collector.putIfAbsent(m, domain);
                     return true;
                 }
-                collector.put(chain.getChain().getFirst().getExpression(), domain);
+                collector.putIfAbsent(chain.getChain().getFirst().getExpression(), domain);
             }
             return false;
         }
@@ -1005,11 +1004,11 @@ public class TruthTable {
                     collector.put(nameExpression, stringDomain);
                 }
                 else if (isInequalityPresent()) {
-                    collector.put(nameExpression, new Domain(0, 1));
+                    collector.putIfAbsent(nameExpression, new Domain(0, 1));
                 }
                 else {
-                    collector.put(nameExpression, new Domain(true, false));
-                    collector.put(compareWith, new Domain(true, false));
+                    collector.putIfAbsent(nameExpression, new Domain(true, false));
+                    collector.putIfAbsent(compareWith, new Domain(true, false));
                 }
             }
         }

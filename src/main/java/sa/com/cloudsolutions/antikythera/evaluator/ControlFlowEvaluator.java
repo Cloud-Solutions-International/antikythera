@@ -53,6 +53,7 @@ import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -270,7 +271,8 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     private Expression extractAssignmentExpression(IfStmt ifStmt, String variableName) {
-        boolean conditionValue = evaluateConditionSafely(ifStmt.getCondition());
+        boolean conditionValue = resolveConditionValue(ifStmt.getCondition()).orElseGet(() ->
+                evaluateConditionSafely(ifStmt.getCondition()));
         Statement selectedBranch = conditionValue
                 ? ifStmt.getThenStmt()
                 : ifStmt.getElseStmt().orElse(null);
@@ -299,9 +301,116 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     private Expression selectConditionalBranch(ConditionalExpr conditionalExpr) {
-        return evaluateConditionSafely(conditionalExpr.getCondition())
+        return resolveConditionValue(conditionalExpr.getCondition()).orElseGet(() ->
+                evaluateConditionSafely(conditionalExpr.getCondition()))
                 ? conditionalExpr.getThenExpr()
                 : conditionalExpr.getElseExpr();
+    }
+
+    private Optional<Boolean> resolveConditionValue(Expression condition) {
+        List<Expression> applicableExpressions = Branching.getApplicableConditions(currentConditional.getCallableDeclaration())
+                .stream()
+                .map(Precondition::getExpression)
+                .toList();
+
+        Optional<Boolean> fromAssignments = resolveConditionFromAssignments(condition, applicableExpressions);
+        if (fromAssignments.isPresent()) {
+            return fromAssignments;
+        }
+        return resolveConditionFromSetterPreconditions(condition, applicableExpressions);
+    }
+
+    private Optional<Boolean> resolveConditionFromAssignments(Expression condition, List<Expression> expressions) {
+        if (condition.isNameExpr()) {
+            String name = condition.asNameExpr().getNameAsString();
+            return expressions.stream()
+                    .filter(AssignExpr.class::isInstance)
+                    .map(AssignExpr.class::cast)
+                    .filter(assignExpr -> assignExpr.getTarget().isNameExpr()
+                            && assignExpr.getTarget().asNameExpr().getNameAsString().equals(name))
+                    .max(Comparator.comparingInt(expr -> expr.toString().length()))
+                    .flatMap(assignExpr -> booleanLiteralValue(assignExpr.getValue()));
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Boolean> resolveConditionFromSetterPreconditions(Expression condition, List<Expression> expressions) {
+        if (!condition.isMethodCallExpr()) {
+            return Optional.empty();
+        }
+        MethodCallExpr conditionCall = condition.asMethodCallExpr();
+        if (conditionCall.getScope().isEmpty() || !(conditionCall.getScope().orElseThrow() instanceof NameExpr scope)) {
+            return Optional.empty();
+        }
+
+        String utility = scope.getNameAsString();
+        if (!utility.equals(TruthTable.STRING_UTILS) && !utility.equals(TruthTable.COLLECTION_UTILS)) {
+            return Optional.empty();
+        }
+        if (conditionCall.getArguments().size() != 1 || !conditionCall.getArgument(0).isMethodCallExpr()) {
+            return Optional.empty();
+        }
+
+        MethodCallExpr getter = conditionCall.getArgument(0).asMethodCallExpr();
+        if (getter.getScope().isEmpty()) {
+            return Optional.empty();
+        }
+        String target = getter.getScope().orElseThrow().toString();
+        String setterName = getter.getNameAsString().startsWith("get")
+                ? "set" + getter.getNameAsString().substring(3)
+                : getter.getNameAsString().startsWith("is")
+                ? "set" + getter.getNameAsString().substring(2)
+                : null;
+        if (setterName == null) {
+            return Optional.empty();
+        }
+
+        for (int i = expressions.size() - 1; i >= 0; i--) {
+            Expression expression = expressions.get(i);
+            if (!(expression instanceof MethodCallExpr setter) || setter.getScope().isEmpty()) {
+                continue;
+            }
+            if (!setter.getNameAsString().equals(setterName) || setter.getArguments().size() != 1) {
+                continue;
+            }
+            if (!setter.getScope().orElseThrow().toString().equals(target)) {
+                continue;
+            }
+            return evaluateUtilityCondition(utility, conditionCall.getNameAsString(), setter.getArgument(0));
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Boolean> evaluateUtilityCondition(String utility, String methodName, Expression argument) {
+        if (utility.equals(TruthTable.STRING_UTILS) && methodName.equals("isEmpty")) {
+            if (argument.isNullLiteralExpr()) {
+                return Optional.of(true);
+            }
+            if (argument.isStringLiteralExpr()) {
+                return Optional.of(argument.asStringLiteralExpr().getValue().isEmpty());
+            }
+            return Optional.of(false);
+        }
+        if (utility.equals(TruthTable.COLLECTION_UTILS) && methodName.equals("isEmpty")) {
+            if (argument.isMethodCallExpr()) {
+                String text = argument.toString();
+                if (text.equals("List.of()") || text.equals("Set.of()") || text.equals("Map.of()")) {
+                    return Optional.of(true);
+                }
+            }
+            if (argument.isObjectCreationExpr()) {
+                return Optional.of(argument.asObjectCreationExpr().getArguments().isEmpty());
+            }
+            return Optional.of(false);
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Boolean> booleanLiteralValue(Expression expression) {
+        if (expression.isBooleanLiteralExpr()) {
+            return Optional.of(expression.asBooleanLiteralExpr().getValue());
+        }
+        return Optional.empty();
     }
 
     protected Type resolveMethodCallReturnType(MethodCallExpr methodCallExpr) {
@@ -1060,11 +1169,31 @@ public class ControlFlowEvaluator extends Evaluator {
                 createSetterFromGetter(entry, setter);
             }
             if (setter.getArguments().isEmpty()) {
-                Expression setterArg = resolveSetterArgument(stmt, scope, setter.getNameAsString(), entry.getValue());
+                Object setterDomainValue = normalizeSetterDomainValue(entry);
+                Expression setterArg = resolveSetterArgument(stmt, scope, setter.getNameAsString(), setterDomainValue);
                 setter.addArgument(setterArg != null ? setterArg : new NullLiteralExpr());
             }
         }
         addPreCondition(stmt, setter);
+    }
+
+    private Object normalizeSetterDomainValue(Map.Entry<Expression, Object> entry) {
+        if (!(entry.getValue() instanceof Boolean desiredState)) {
+            return entry.getValue();
+        }
+        Optional<Node> parent = entry.getKey().getParentNode();
+        if (parent.isPresent() && parent.get() instanceof BinaryExpr binaryExpr) {
+            Expression otherSide = binaryExpr.getLeft().equals(entry.getKey()) ? binaryExpr.getRight() : binaryExpr.getLeft();
+            if (otherSide.isNullLiteralExpr()) {
+                boolean needsNonNull = switch (binaryExpr.getOperator()) {
+                    case NOT_EQUALS -> desiredState;
+                    case EQUALS -> !desiredState;
+                    default -> false;
+                };
+                return needsNonNull ? "T" : null;
+            }
+        }
+        return entry.getValue();
     }
 
     /**
