@@ -274,7 +274,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
                 currentConditional = Branching.getHighestPriority(cd);
                 if (currentConditional != null) {
-                    BranchingTrace.record("target:"
+                    BranchingTrace.record(() -> "target:"
                             + cd.getNameAsString()
                             + "|statement=" + currentConditional.getStatement()
                             + "|pathTaken=" + currentConditional.getPathTaken());
@@ -925,7 +925,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         if (response != null) {
             for (ITestGenerator generator : generators) {
                 List<Precondition> applicableConditions = Branching.getApplicableConditions(currentCallable);
-                BranchingTrace.record("preconditions:"
+                BranchingTrace.record(() -> "preconditions:"
                         + currentCallable.getNameAsString()
                         + "|values=" + applicableConditions);
                 generator.setPreConditions(applicableConditions);
@@ -1069,7 +1069,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         tt.generateTruthTable();
 
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
-        BranchingTrace.record("truthTable:"
+        BranchingTrace.record(() -> "truthTable:"
                 + currentConditional.getCallableDeclaration().getNameAsString()
                 + "|desiredState=" + state
                 + "|rows=" + values.size()
@@ -1082,7 +1082,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private void setupIfCondition(List<Map<Expression, Object>> combinations) {
         Map<Expression, Object> combination = adjustForEnums(combinations.getFirst());
-        BranchingTrace.record("selected:"
+        BranchingTrace.record(() -> "selected:"
                 + currentConditional.getCallableDeclaration().getNameAsString()
                 + "|combination=" + combination);
         for (var entry : combination.entrySet()) {

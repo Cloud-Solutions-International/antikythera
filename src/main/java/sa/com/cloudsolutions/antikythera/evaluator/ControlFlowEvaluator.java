@@ -116,7 +116,9 @@ public class ControlFlowEvaluator extends Evaluator {
         }
         Expression assignedExpression = findPreviousAssignmentExpression(methodDeclaration.getBody().orElseThrow(), stmt, variableName);
         if (assignedExpression == null) {
-            BranchingTrace.record("priorLocal:miss|name=" + variableName + "|statement=" + stmt);
+            if (BranchingTrace.isEnabled()) {
+                BranchingTrace.record("priorLocal:miss|name=" + variableName + "|statement=" + stmt);
+            }
             return List.of();
         }
 
@@ -125,23 +127,31 @@ public class ControlFlowEvaluator extends Evaluator {
         }
         List<Expression> derivedExpressions = setupConditionThroughDerivedLocalAssignment(stmt, assignedExpression, entry);
         if (!derivedExpressions.isEmpty()) {
-            BranchingTrace.record("priorLocal:emit|name=" + variableName + "|expression=" + derivedExpressions);
+            if (BranchingTrace.isEnabled()) {
+                BranchingTrace.record("priorLocal:emit|name=" + variableName + "|expression=" + derivedExpressions);
+            }
             return derivedExpressions;
         }
         if (!assignedExpression.isMethodCallExpr()) {
-            BranchingTrace.record("priorLocal:skip|name=" + variableName + "|expression=" + assignedExpression);
+            if (BranchingTrace.isEnabled()) {
+                BranchingTrace.record("priorLocal:skip|name=" + variableName + "|expression=" + assignedExpression);
+            }
             return List.of();
         }
 
         MethodCallExpr methodCallExpr = assignedExpression.asMethodCallExpr();
         Type returnType = resolveMethodCallReturnType(methodCallExpr);
         if (returnType == null) {
-            BranchingTrace.record("priorLocal:skip|name=" + variableName + "|reason=noReturnType|expression=" + methodCallExpr);
+            if (BranchingTrace.isEnabled()) {
+                BranchingTrace.record("priorLocal:skip|name=" + variableName + "|reason=noReturnType|expression=" + methodCallExpr);
+            }
             return List.of();
         }
         Expression returnValue = adaptDomainValueToParameterType(returnType, entry.getValue());
         if (returnValue == null) {
-            BranchingTrace.record("priorLocal:skip|name=" + variableName + "|reason=noReturnValue|type=" + returnType);
+            if (BranchingTrace.isEnabled()) {
+                BranchingTrace.record("priorLocal:skip|name=" + variableName + "|reason=noReturnValue|type=" + returnType);
+            }
             return List.of();
         }
 
@@ -149,7 +159,7 @@ public class ControlFlowEvaluator extends Evaluator {
                 .addArgument(methodCallExpr.clone());
         MethodCallExpr thenReturn = new MethodCallExpr(when, "thenReturn")
                 .addArgument(returnValue);
-        BranchingTrace.record("priorLocal:emit|name=" + variableName + "|expression=" + thenReturn);
+        BranchingTrace.record(() -> "priorLocal:emit|name=" + variableName + "|expression=" + thenReturn);
         return List.of(thenReturn);
     }
 
@@ -462,7 +472,7 @@ public class ControlFlowEvaluator extends Evaluator {
             MockingCall mockingCall = mocks.get(i);
             Expression whenThen = rewriteMockReturnExpression(mockingCall, entry.getValue());
             if (whenThen != null) {
-                BranchingTrace.record("mockFallback:emit|statement=" + stmt + "|expression=" + whenThen);
+                BranchingTrace.record(() -> "mockFallback:emit|statement=" + stmt + "|expression=" + whenThen);
                 return List.of(whenThen);
             }
         }
@@ -504,13 +514,13 @@ public class ControlFlowEvaluator extends Evaluator {
     @SuppressWarnings("unchecked")
     private List<Expression> setupConditionThroughAssignmentForLocal(Statement stmt, Map.Entry<Expression, Object> entry, Symbol v, NameExpr nameExpr) {
         if (v instanceof Variable variable) {
-            BranchingTrace.record("localAssign:"
+            BranchingTrace.record(() -> "localAssign:"
                     + nameExpr.getNameAsString()
                     + "|type=" + variable.getType()
                     + "|value=" + variable.getValue()
                     + "|initializers=" + variable.getInitializer().size());
         } else {
-            BranchingTrace.record("localAssign:" + nameExpr.getNameAsString() + "|symbol=" + v.getClass().getSimpleName());
+            BranchingTrace.record(() -> "localAssign:" + nameExpr.getNameAsString() + "|symbol=" + v.getClass().getSimpleName());
         }
         if (v.getInitializer() != null) {
             MethodDeclaration md = stmt.findAncestor(MethodDeclaration.class).orElseThrow();
@@ -543,26 +553,26 @@ public class ControlFlowEvaluator extends Evaluator {
 
     private List<Expression> setupConditionThroughMockedLocalInitializer(Map.Entry<Expression, Object> entry, Symbol value) {
         if (value.getInitializer().isEmpty()) {
-            BranchingTrace.record("localStub:skip|reason=noInitializer|entry=" + entry.getKey());
+            BranchingTrace.record(() -> "localStub:skip|reason=noInitializer|entry=" + entry.getKey());
             return List.of();
         }
         Expression initializer = value.getInitializer().getFirst();
         if (!initializer.isMethodCallExpr()) {
-            BranchingTrace.record("localStub:skip|reason=initializer=" + initializer.getClass().getSimpleName()
+            BranchingTrace.record(() -> "localStub:skip|reason=initializer=" + initializer.getClass().getSimpleName()
                     + "|entry=" + entry.getKey());
             return List.of();
         }
 
         Type returnType = resolveMockedLocalReturnType(value, initializer.asMethodCallExpr());
         if (returnType == null) {
-            BranchingTrace.record("localStub:skip|reason=noReturnType|initializer=" + initializer
+            BranchingTrace.record(() -> "localStub:skip|reason=noReturnType|initializer=" + initializer
                     + "|entry=" + entry.getKey());
             return List.of();
         }
 
         Expression returnValue = adaptDomainValueToParameterType(returnType, entry.getValue());
         if (returnValue == null) {
-            BranchingTrace.record("localStub:skip|reason=noReturnValue|returnType=" + returnType
+            BranchingTrace.record(() -> "localStub:skip|reason=noReturnValue|returnType=" + returnType
                     + "|domain=" + entry.getValue());
             return List.of();
         }
@@ -571,7 +581,7 @@ public class ControlFlowEvaluator extends Evaluator {
                 .addArgument(initializer.clone());
         MethodCallExpr thenReturn = new MethodCallExpr(when, "thenReturn")
                 .addArgument(returnValue);
-        BranchingTrace.record("localStub:emit|initializer=" + initializer + "|returnType=" + returnType
+        BranchingTrace.record(() -> "localStub:emit|initializer=" + initializer + "|returnType=" + returnType
                 + "|returnValue=" + returnValue);
         return List.of(thenReturn);
     }
@@ -1581,10 +1591,14 @@ public class ControlFlowEvaluator extends Evaluator {
     private void handleOptionalOfNullable(ReflectionArguments reflectionArguments) {
         Statement stmt = reflectionArguments.getMethodCallExpression().findAncestor(Statement.class).orElseThrow();
         LineOfCode l = Branching.get(stmt.hashCode());
-        BranchingTrace.record("ofNullable:seen|statement=" + stmt + "|existing=" + (l != null));
+        if (BranchingTrace.isEnabled()) {
+            BranchingTrace.record("ofNullable:seen|statement=" + stmt + "|existing=" + (l != null));
+        }
         if (l != null) {
-            BranchingTrace.record("ofNullable:skip|statement=" + stmt + "|reason=existingBranch|path=" + l.getPathTaken()
-                    + "|preconditions=" + l.getPreconditions().size());
+            if (BranchingTrace.isEnabled()) {
+                BranchingTrace.record("ofNullable:skip|statement=" + stmt + "|reason=existingBranch|path=" + l.getPathTaken()
+                        + "|preconditions=" + l.getPreconditions().size());
+            }
             return;
         }
 
@@ -1598,26 +1612,30 @@ public class ControlFlowEvaluator extends Evaluator {
                         && currentConditional.getCallableDeclaration().equals(callable);
                 if (callable != null && !hasActiveConditional) {
                     Branching.add(l);
-                    BranchingTrace.record("ofNullable:queue|statement=" + stmt + "|mode=conditional");
+                    BranchingTrace.record(() -> "ofNullable:queue|statement=" + stmt + "|mode=conditional");
                 } else {
                     Branching.add(l.markPreconditionOnly());
-                    BranchingTrace.record("ofNullable:queue|statement=" + stmt + "|mode=branchOnly");
+                    BranchingTrace.record(() -> "ofNullable:queue|statement=" + stmt + "|mode=branchOnly");
                 }
-                BranchingTrace.record("ofNullable:register|statement=" + stmt + "|argument=" + argument);
+                BranchingTrace.record(() -> "ofNullable:register|statement=" + stmt + "|argument=" + argument);
 
                 if (returnValue != null && returnValue.getValue() instanceof Optional<?> opt) {
                     Object value = null;
                     if (opt.isPresent()) {
                         l.setPathTaken(LineOfCode.TRUE_PATH);
-                        BranchingTrace.record("ofNullable:path|statement=" + stmt + "|path=present");
+                        BranchingTrace.record(() -> "ofNullable:path|statement=" + stmt + "|path=present");
                     } else {
                         value = null;
                         l.setPathTaken(LineOfCode.FALSE_PATH);
-                        BranchingTrace.record("ofNullable:path|statement=" + stmt + "|path=empty|assigned=" + value);
+                        if (BranchingTrace.isEnabled()) {
+                            BranchingTrace.record("ofNullable:path|statement=" + stmt + "|path=empty|assigned=" + value);
+                        }
                     }
                     Map.Entry<Expression, Object> entry = new AbstractMap.SimpleEntry<>(argument, value);
                     setupConditionThroughAssignment(stmt, entry);
-                    BranchingTrace.record("ofNullable:afterAssign|statement=" + stmt + "|preconditions=" + l.getPreconditions().size());
+                    if (BranchingTrace.isEnabled()) {
+                        BranchingTrace.record("ofNullable:afterAssign|statement=" + stmt + "|preconditions=" + l.getPreconditions().size());
+                    }
                 }
             }
         }
