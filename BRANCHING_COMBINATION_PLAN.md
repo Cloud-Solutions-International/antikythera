@@ -1,186 +1,294 @@
 # Branching Combination Plan
 
-This checklist captures the current plan for improving branch-combination coverage in the evaluator,
-with specific focus on sequential conditionals such as:
+This is the clean-start plan for branch `avurudu`, created from commit `2a5b7709`.
 
-- `ProblemServiceImpl.getPatientProblemsString(...)`
-- `ProblemServiceImpl.getPatientProblems(...)`
+The goal of this branch is not to continue layering tactical fixes on top of the previous
+implementation. The goal is to finish the remaining branch-combination problem with a smaller,
+cleaner design centered on explicit path state.
 
-The relevant core classes are:
+## Problem Statement
 
-- `src/main/java/sa/com/cloudsolutions/antikythera/evaluator/Branching.java`
-- `src/main/java/sa/com/cloudsolutions/antikythera/evaluator/LineOfCode.java`
-- `src/main/java/sa/com/cloudsolutions/antikythera/generator/TruthTable.java`
+We already know the evaluator can:
 
-## Current Diagnosis
+- revisit branches
+- generate multiple truth-table rows
+- handle many collaborator-backed and `TruthTable` correctness cases
 
-- [x] Confirm with targeted repros that the remaining gaps are branch-combination failures, not dedup failures.
-- [x] Confirm that collaborator-backed gaps were caused by branch-inconsistent prior-assignment selection, not just missing mocks or failed return-type lookup.
-- [x] Fix collaborator-backed prior-assignment source selection for `if/else` and ternary assignments and cover it with active tests.
-- [ ] Capture a concrete failing matrix for `getPatientProblemsString(...)`.
+What still remains incomplete is the last-mile cross-product exploration for sequential independent
+branches, especially when a later branch must preserve an earlier chosen side.
+
+The two primary proof targets are:
+
+- `sequentialDirect(...)`
+- `deletedByDirect(...)`
+
 Expected combinations:
-  - diagnosis type empty + DAO result empty
-  - diagnosis type empty + DAO result non-empty
-  - diagnosis type non-empty + DAO result empty
-  - diagnosis type non-empty + DAO result non-empty
-- [ ] Capture a concrete failing matrix for `getPatientProblems(...)`.
 
-## Validation Snapshot
+- `sequentialDirect(...)`
+  - `TYPE_EMPTY|VALUES_EMPTY`
+  - `TYPE_EMPTY|VALUES_PRESENT`
+  - `TYPE_SET|VALUES_EMPTY`
+  - `TYPE_SET|VALUES_PRESENT`
 
-- [x] Validate the incoming branching work with focused evaluator suites instead of relying only on ad hoc repros.
-- [x] Get the focused evaluator suite green for the current branching checkpoint.
-Current focused-suite status:
-  - Passing: `TestTruthTable`, `TestConditional`, `TestBranchingCombinations`, `TestConditionalWithOptional`, `TestStatic`, `TestReturnTypeResolution`, `TestRepository`
-  - Intentionally skipped: 2 direct 4-combination targets in `TestBranchingCombinations`
-- [ ] Re-run the full module suite after the next algorithmic branch-combination change.
+- `deletedByDirect(...)`
+  - `OPEN|ACTIVE`
+  - `OPEN|DELETED`
+  - `ALL|ACTIVE`
+  - `ALL|DELETED`
 
-## Phase 1: Observability
+## Clean-Start Decision
 
-- [x] Add debug logging or trace capture for the branch currently being targeted by the evaluator.
-- [x] Record the chosen truth-table row for each branch attempt.
-- [x] Record emitted preconditions for each branch attempt.
-- [x] Record the generated test fingerprint for each branch attempt.
-- [x] Make the trace easy to compare against the generated test body.
-- [x] Make trace capture opt-in and lazy so diagnostics do not impose normal-run overhead.
+This branch intentionally starts from `2a5b7709` because:
 
-Trace usage:
+- it already has branch-attempt context and row iteration
+- it is earlier than the later replay-index / precondition-preservation layering
+- it gives us a better base for a cleaner implementation
 
-- `BranchingTrace` is disabled by default.
-- Enable it explicitly in tests or diagnostics with `BranchingTrace.enable()`.
-- Disable and clear it with `BranchingTrace.disable()`.
-- You can also opt in via JVM property: `-Dantikythera.branching.trace=true`.
+This branch should avoid reintroducing:
 
-## Phase 2: TruthTable Correctness
+- replay-index arithmetic as a surrogate for path identity
+- broad scheduler changes just to force one more combination
+- excessive state accumulation inside `LineOfCode`
+- global precondition replay when only a targeted preserved earlier side is needed
 
-- [x] Review `TruthTable.satisfiesConstraints(...)` and remove early-return behavior that skips remaining constraints.
-- [x] Make constraint evaluation require all applicable constraints to hold.
-- [x] Add focused tests for `StringUtils.isEmpty(...)`.
-- [x] Add focused fixture-backed tests for sequential-condition exploration.
-- [ ] Add focused tests for `CollectionUtils.isEmpty(...)`.
-- [x] Add focused tests for object `equals(...)` row materialization and `Map.isEmpty()` runtime-shape domains.
-- [ ] Add focused tests for null-sensitive comparisons.
-- [ ] Verify that `findValuesForCondition(...)` returns all meaningful satisfying rows for the target repros.
-- [x] Fix typed-domain handling for instance `isEmpty()` on `Map` so non-empty rows materialize usable runtime shapes.
-- [x] Fix stable false/true row generation for object `equals(...)` conditions such as `File.equals(...)`.
+## Architectural Direction
 
-## Phase 3: Branch Identity and State
+### Keep
 
-- [ ] Define what a "logical branch point" is in `Branching`.
-- [ ] Ensure one canonical `LineOfCode` instance represents one logical branch point.
-- [x] Separate branch path coverage state from branch-combination attempt history.
-- [ ] Keep explicit knowledge of:
-  - false side explored
-  - true side explored
-  - [x] combinations attempted for each side
-- [x] Avoid flattening unrelated branch preconditions into one global list without attribution.
+- `TruthTable` for row generation only
+- `LineOfCode` for branch-point identity and structural relationships
+- `Branching` for queue/selection orchestration
+- `SpringEvaluator` for materialization and execution
 
-## Phase 4: Combination-Aware Exploration
+### Add
 
-- [ ] Change branch exploration so it does not always take the first satisfying truth-table row.
-- [ ] Add a policy for requesting the next viable satisfying row for the same branch state.
-- [ ] Skip combinations already attempted for the same branch side.
-- [ ] Prefer combinations that materially change generated setup and assertions.
-- [ ] Make sequential branch exploration preserve earlier branch choices when they are required to reach later branches.
-- [ ] Introduce an explicit branch-attempt model instead of relying on a flat list of preconditions when materializing later branches.
+- `BranchSide`
+  - `FALSE`
+  - `TRUE`
 
-## Phase 5: Integration in Evaluator Flow
+- `PreservedPathState`
+  - explicit record of earlier branch point -> chosen side
 
-- [ ] Update the evaluator to pass the targeted branch attempt, not just a flat list of preconditions, into test generation.
-- [ ] Ensure branch transitions in `LineOfCode.transition()` still work for nested `if/else` structures after combination tracking is added.
-- [ ] Re-check how `Branching.LineOfCodeComparator` prioritizes pending work once combination iteration exists.
-- [ ] Confirm that the new flow does not regress simple one-branch methods such as `DoctorNameService.getDoctorName(...)`.
-- [x] Move branch scheduling intent onto `LineOfCode` / `Branching.add(...)` instead of split caller APIs.
+- `BranchSelection`
+  - target `LineOfCode`
+  - target side
+  - chosen row fingerprint
 
-## Phase 5a: Return Type Resolution
+- `BranchAttempt`
+  - `BranchSelection`
+  - `PreservedPathState`
+  - target-local materialized preconditions
 
-- [x] Confirm whether later local-variable branch setup is blocked by missing local symbols or by failed return-type resolution.
-- [x] Confirm that earlier collaborator assignments are now being found for `values` / `records`.
-- [ ] Trace how `wrapCallExpression(...)` populates argument types for repository/interface calls.
-- [ ] Trace how `AbstractCompiler.findMethodDeclaration(...)` selects a callable when exact matching fails.
-- [ ] Audit arity-only fallback paths and identify where they can produce the wrong callable or wrong return type.
-- [ ] Audit `MCEWrapper.getArgumentTypesAsClasses()` fallbacks to `Object.class` and measure where that breaks binary lookup.
-- [x] Add focused tests for repository/interface return-type resolution, including generic collection returns.
-- [x] Add a dedicated resolver path for method-call return types that does not depend only on the current symbolic argument types.
-- [x] Prefer resolved callable metadata over `calculateResolvedType()` string parsing where possible.
-- [x] Capture and compare the return-type-resolution path for:
-  - source-declared methods
-  - generic repository methods
-  - collaborator-backed fixture methods
-- [ ] Capture and compare the return-type-resolution path for:
-  - inherited source methods
-  - binary parent/interface methods
-- [ ] Consolidate prior-local materialization so it reuses the same resolved-callable information end to end instead of mixing flat preconditions, local backtracking, and special cases.
+- `BranchAttemptPlanner`
+  - chooses the next attempt for a target branch
+  - decides what earlier branch-side choices must be preserved
+  - owns the “next untried row for this path state” logic
 
-## Phase 6: Regression Coverage
+### Responsibility Boundaries
 
-- [x] Add dedicated fixture classes in `antikythera-test-helper` for sequential-branch combination scenarios.
-- [x] Add one fixture for sequential string/collection branching similar to `getPatientProblemsString(...)`.
-- [x] Add one fixture for mixed top-level plus nested branching similar to `getPatientProblems(...)`.
-- [x] Keep the fixtures minimal so failures are attributable to branching behavior, not Spring/JPA complexity.
-- [ ] Add a regression test for `getPatientProblemsString(...)` covering all 4 combinations.
-- [ ] Add a regression test for `getPatientProblems(...)` covering the missing `deletedBy` branch family.
-- [ ] Add at least one nested-branch regression for parent/child `LineOfCode` behavior.
-- [ ] Add at least one collection/map membership regression to protect the earlier DTO precondition fix.
-- [x] Wire the new tests to use the `antikythera-test-helper` fixtures instead of relying only on large external project repros.
-- [x] Add active collaborator-backed regressions that prove both repository sources are used once prior-assignment selection is fixed.
-- [ ] Promote the remaining disabled direct 4-combination fixture tests once the core branch-combination algorithm is ready.
+- `TruthTable`
+  - derive satisfying rows for a condition and its local constraints
+  - no path-preservation policy
 
-## Fixture Design
+- `LineOfCode`
+  - minimal branch identity
+  - structural predecessor metadata only
+  - no replay heuristics
 
-- [x] Add a fixture method with two sequential `if` statements where the second branch is reachable under multiple valid first-branch assignments.
-- [x] Add a fixture method where a later branch depends on earlier object-shape setup, not just primitive parameters.
-- [ ] Add a fixture with nested `if/else` blocks to validate parent/child `LineOfCode.transition()` behavior.
-- [ ] Add expected generated-test assertions for each fixture so branch-combination loss is obvious.
+- `Branching`
+  - store branch points
+  - expose candidate targets
+  - delegate attempt construction to planner
 
-## Implementation Order
+- `BranchAttemptPlanner`
+  - produce explicit attempts
+  - maintain attempt history keyed by:
+    - target branch
+    - target side
+    - preserved predecessor-side selections
+    - selected row fingerprint
 
-- [x] Step 1: add traceability
-- [x] Step 2: fix `TruthTable` constraint evaluation
-- [x] Step 3: add branch-combination tracking to `LineOfCode`
-- [x] Step 4: update `Branching` to expose targeted branch-attempt context
-- [ ] Step 5: update evaluator branch selection to iterate satisfying rows
-- [x] Step 6: add `antikythera-test-helper` fixtures
-- [x] Step 7: add focused regression tests against those fixtures
-- [x] Step 8: eliminate the immediate `fileCompare(...)`, `printMap(...)`, and generic object-equality regressions before returning to deeper algorithmic work
+- `SpringEvaluator`
+  - take a `BranchAttempt`
+  - materialize it
+  - execute it
+  - report the result
 
-## Notes
+## Non-Goals
 
-- [ ] Do not start by tuning comparator priority alone.
-- [ ] Do not rely on deduplication to hide missing branch combinations.
-- [ ] Keep changes incremental and measurable against the focused repro methods before running the full suite.
-- [ ] Prefer fixture-backed tests for fast iteration, then validate against the external project repros.
-- [ ] Keep direct-combination experiments behind targeted tests until the disabled 4-combination fixture assertions can be promoted cleanly.
+- do not solve collaborator-backed 4-combination coverage first
+- do not redesign `TruthTable` broadly unless a direct reproducer proves it is required
+- do not use comparator tuning as the primary fix
+- do not optimize tracing or diagnostics unless they block the work
 
-## New Follow-Ups
+## Execution Strategy
 
-- [ ] Make method-call trace values semantic for readability, e.g. show `NON_EMPTY_STRING` instead of raw `"T"` for `StringUtils.isEmpty(...)`.
-- [x] Diagnose why collaborator-backed fixtures fall straight into the plain `@Mock` NPE path before branch-specific collaborator stubs can form.
-- [x] Fix generated test instantiation for constructor-injected fixtures/services; the current generator still emits no-arg construction plus reflection field injection for constructor-only classes.
-- [x] Confirm that the current blocker for `values` / `records` is `reason=noReturnType`, not failed local-variable backtracking.
-- [ ] Refactor `setupConditionThroughPriorLocalAssignment(...)` / `setupConditionThroughOptionalFallback(...)` / object-equality materialization into a generic derived-expression resolver once the current behavior is stabilized.
+### Phase 0: Stabilize the Base
 
-Current observation:
+- [ ] Confirm the branch state at `2a5b7709`
+- [ ] Record the exact baseline behavior of:
+  - `sequentialDirect(...)`
+  - `deletedByDirect(...)`
+- [ ] Record which focused tests are green before new implementation starts
+- [ ] Create a narrow working safety net command for this branch
 
-- The direct sequential fixture already reaches 4 observable combinations under evaluation.
-- The new branch trace shows repeated branch-attempt selection for that fixture, so the remaining gap is more likely in precondition materialization and branch-attempt identity for collaborator/object-shaped scenarios than in the basic ability to revisit sequential branches.
-- The collaborator-backed fixture failure before matrix capture was caused by constructor-injected final collaborators being treated as plain uninitialized fields unless they had `@Autowired`, leaving receivers like `repository` / `directory` without a usable runtime type.
-- `SpringEvaluator` now auto-wires constructor-injected final fields and uses `MockingEvaluator` for source interfaces, so collaborator-backed fixture evaluation no longer dies before matrix capture.
-- The original collaborator-backed failure at `reason=noReturnType` has been addressed by moving method-call resolution to a resolved-method-first path.
-- The current resolver now prefers JavaParser `MethodUsage` / resolved method metadata, uses that to recover both return type and source callable when available, and keeps manual scope-based lookup only as fallback.
-- The collaborator-backed prior-assignment issue is now fixed and covered by active tests.
-- The `TruthTable` layer now has direct focused tests for `Map.isEmpty()` runtime shape and literal object-construction equality, and the earlier `fileCompare(...)` / `printMap(...)` regressions are fixed.
-- Generic object-reference equality such as `a.equals(b)` now materializes through reference-aware preconditions instead of falling back to meaningless boolean/string placeholders.
-- The remaining skipped direct-combination targets now share the same reduced blocker:
-  - `sequentialDirect(...)` still needs true branch-combination exploration across independent sequential branches, not just nested/ancestor conditions. After row-skipping was added, it now reaches 3/4 combinations and specifically still misses `TYPE_SET|VALUES_PRESENT`, which points to loss of the earlier non-empty diagnosis-type choice while materializing the later `values` branch.
-  - `deletedByDirect(...)` still needs the same independent sequential branch-combination exploration for the last missing cross-product.
-- Trace capture is now explicitly opt-in and lazily evaluated, so diagnostics are available without imposing normal-run overhead.
-- Branch scheduling intent is now carried on `LineOfCode`, and `Branching` owns the queueing policy instead of relying on separate caller APIs.
-- The next real algorithmic step is no longer “repair the current condition semantics”; it is to introduce explicit branch-attempt tracking so sequential independent branches can explore more than the first satisfying row.
-- `LineOfCode` now records per-side combination fingerprints independently of path coverage state, so the next missing piece is making `Branching` surface and consume that targeted branch-attempt context.
-- `Branching` now exposes a branch-attempt object that keeps the target branch and applicable preconditions together, so the next missing piece is to use that attempt identity to request the next untried satisfying row instead of always taking the first one.
+Success criteria:
 
-## Improvement Opportunities
+- we know exactly what the base does before new design work starts
 
-- [ ] Extract a generic derived-expression resolver so Optional-derived locals, prior-local assignments, ternaries, and setter-backed object state share one materialization path.
-- [ ] Replace the flat `Branching.getApplicableConditions(...)` handoff with an explicit branch-attempt object that preserves attribution.
-- [ ] Extend the return-type-resolution test matrix to inherited and binary-callable scenarios before removing any remaining conservative fallbacks.
+### Phase 1: Recreate Only the Narrow Proven Fixes
+
+- [ ] Reapply the narrow enum fix for `OPEN.equals(s)` if it is absent on this branch
+- [ ] Reapply the narrow concrete-object setter/materialization fix if `clarendon` needs it
+- [ ] Reapply only the direct `TruthTable` regression tests that proved:
+  - enum true-row recovery
+  - object/string setter materialization correctness
+
+Success criteria:
+
+- we keep previously validated local fixes
+- we do not pull forward the later replay/preservation machinery
+
+### Phase 2: Define Explicit Path State
+
+- [ ] Introduce `BranchSide`
+- [ ] Introduce `PreservedPathState`
+- [ ] Introduce `BranchSelection`
+- [ ] Introduce `BranchAttempt`
+- [ ] Introduce `BranchAttemptPlanner`
+- [ ] Keep these types small and explicit
+
+Success criteria:
+
+- path state is represented directly, not inferred from replay indexes or aggregate counters
+
+### Phase 3: Reduce `LineOfCode` Responsibility
+
+- [ ] Audit current `LineOfCode` state on this branch
+- [ ] Keep only:
+  - branch identity
+  - current path coverage state
+  - structural predecessors / parent / child links
+- [ ] Do not put preserved-path-state logic in `LineOfCode`
+- [ ] Do not put attempt-planning policy in `LineOfCode`
+
+Success criteria:
+
+- `LineOfCode` remains a branch point, not a planning engine
+
+### Phase 4: Build Planner for Direct Fixtures Only
+
+- [ ] Make `BranchAttemptPlanner` operate only on direct fixtures first
+- [ ] For a chosen target branch, compute the relevant preserved predecessor sides
+- [ ] Ask `TruthTable` for satisfying rows for the target side
+- [ ] Track attempted combinations using:
+  - target branch
+  - target side
+  - preserved predecessor-side state
+  - row fingerprint
+- [ ] Return the next untried `BranchAttempt`
+
+Success criteria:
+
+- no replay-index arithmetic is needed to decide which earlier side is preserved
+
+### Phase 5: Materialize a `BranchAttempt`
+
+- [ ] Update `SpringEvaluator` to materialize explicit `BranchAttempt`s
+- [ ] Materialize preserved predecessor-side choices before the target branch
+- [ ] Materialize only the target-local row for the current branch attempt
+- [ ] Avoid global replay of all previous preconditions
+
+Success criteria:
+
+- earlier branch choices are preserved because they are explicit
+- later branch materialization is local and attributable
+
+### Phase 6: Prove on `sequentialDirect(...)`
+
+- [ ] Add or tighten the direct proof test for `sequentialDirect(...)`
+- [ ] Get all 4 combinations green
+- [ ] Keep the rest of the focused safety net green
+
+Success criteria:
+
+- `sequentialDirect(...)` reaches all 4 combinations with the new design
+
+### Phase 7: Prove on `deletedByDirect(...)`
+
+- [ ] Add or tighten the direct proof test for `deletedByDirect(...)`
+- [ ] Get all 4 combinations green
+- [ ] Confirm the preserved earlier side is handled explicitly, not accidentally
+
+Success criteria:
+
+- `deletedByDirect(...)` reaches all 4 combinations with the same design
+
+### Phase 8: Broaden Carefully
+
+- [ ] Only after both direct fixtures are green, revisit collaborator-backed fixtures
+- [ ] Decide whether collaborator-backed gaps need:
+  - the same preserved-path-state model
+  - or separate prior-local stub synthesis improvements
+- [ ] Re-enable collaborator-backed 4-combination assertions only after direct proof is stable
+
+Success criteria:
+
+- the direct proof layer remains clean while broader scenarios are added
+
+## Checklist of Concrete Deliverables
+
+### Design
+
+- [ ] Write the Java types for:
+  - `BranchSide`
+  - `PreservedPathState`
+  - `BranchSelection`
+  - `BranchAttempt`
+  - `BranchAttemptPlanner`
+
+### Refactoring
+
+- [ ] Remove or avoid replay-index-based path selection in new code
+- [ ] Keep `LineOfCode` focused on identity and structure
+- [ ] Keep `TruthTable` focused on row generation
+- [ ] Keep `SpringEvaluator` focused on materialization
+
+### Tests
+
+- [ ] `sequentialDirect(...)` direct 4-combination proof passes
+- [ ] `deletedByDirect(...)` direct 4-combination proof passes
+- [ ] focused safety net passes:
+  - `TestBranchingCombinations`
+  - `TestConditionVisitor`
+  - `TestLineOfCode`
+  - `TestConditional`
+  - `TestEnums`
+  - `TestConditionalWithOptional`
+  - `TestStatic`
+  - `TestReturnTypeResolution`
+  - `TestRepository`
+  - `TestTruthTable`
+
+### Validation
+
+- [ ] Run the focused safety net on the clean-start branch
+- [ ] Run the full `antikythera` module suite once the direct proof targets are green
+
+## Guardrails
+
+- [ ] Do not import late-branch replay logic from `kitchen-sink`
+- [ ] Do not copy over large chunks of the later `SpringEvaluator` state machinery without justification
+- [ ] Prefer one explicit new abstraction over multiple small tactical flags
+- [ ] Keep each phase separately verifiable
+- [ ] If a new failure appears, decide first whether it is:
+  - expected signal from the new design
+  - collateral damage from overreach
+  - a proof that the abstraction boundary is wrong
+
+## Immediate Next Step
+
+- [ ] Inspect the exact code state at `2a5b7709`
+- [ ] confirm the focused baseline
+- [ ] then add the new path-state types before any more evaluator behavior changes
+
