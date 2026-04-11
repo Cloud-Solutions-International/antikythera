@@ -358,6 +358,14 @@ public class LineOfCode {
     }
 
 
+    /**
+     * Unconditionally resets the path state to {@link #UNTRAVELLED}. Used by the cross-product
+     * exploration loop when a fully-traversed branch still has untried predecessor-side combinations.
+     */
+    public void resetPathTaken() {
+        this.pathTaken = UNTRAVELLED;
+    }
+
     public boolean getResult() {
         return result;
     }

@@ -66,6 +66,36 @@ public class Branching {
         return PLANNER.selectNextAttempt(target, side, combinations);
     }
 
+    /**
+     * Scans all branches registered for {@code cd}. For any branch that still has untried
+     * cross-product combinations, resets its path state to UNTRAVELLED and re-queues it.
+     * Returns {@code true} if at least one branch was reset, signalling the outer loop to
+     * continue rather than break.
+     */
+    public static boolean resetBranchesWithUntriedCombinations(CallableDeclaration<?> cd) {
+        boolean anyReset = false;
+        for (LineOfCode loc : branches.values()) {
+            if (loc.getCallableDeclaration().equals(cd) && PLANNER.hasUntriedCombinations(loc)) {
+                loc.resetPathTaken();
+                requeue(loc);
+                anyReset = true;
+            }
+        }
+        return anyReset;
+    }
+
+    /**
+     * Re-adds a branch directly to its method's priority queue without re-attaching predecessors
+     * or updating the branch map. Used when a fully-traversed branch needs more cross-product
+     * iterations.
+     */
+    public static void requeue(LineOfCode lineOfCode) {
+        PriorityQueue<LineOfCode> queue = conditionals.get(lineOfCode.getCallableDeclaration());
+        if (queue != null) {
+            queue.add(lineOfCode);
+        }
+    }
+
     private static void attachPredecessors(LineOfCode lineOfCode) {
         if (lineOfCode.getParent() != null) {
             lineOfCode.addPredecessor(lineOfCode.getParent());

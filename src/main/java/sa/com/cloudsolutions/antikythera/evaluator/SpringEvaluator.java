@@ -303,6 +303,19 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                             + "|pathTaken=" + currentConditional.getPathTaken());
                 }
                 if ((currentConditional == null || currentConditional.isFullyTravelled()) && oldSize != 0) {
+                    // Before giving up, scan ALL branches for untried cross-product combinations.
+                    // It is not enough to check only currentConditional: a *different* branch may
+                    // still have untried (preservedState, fingerprint) pairs even though the
+                    // currently-popped branch is fully done. Resetting those branches and
+                    // continuing ensures the full cross-product is explored.
+                    boolean resetAny = Branching.resetBranchesWithUntriedCombinations(cd);
+                    if (resetAny) {
+                        if (currentConditional != null) {
+                            Branching.requeue(currentConditional);
+                        }
+                        oldSize = Branching.size(cd);
+                        continue;
+                    }
                     break;
                 }
 
@@ -1148,6 +1161,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             LineOfCode predecessor = Branching.get(entry.getKey());
             if (predecessor != null) {
                 materializeBranchSide(predecessor, entry.getValue(), currentConditional.getStatement());
+            } else {
+                logger.trace("applyPreservedPathState: no registered branch for hash {}; "
+                        + "predecessor materialization skipped — possible AST identity mismatch",
+                        entry.getKey());
             }
         }
     }

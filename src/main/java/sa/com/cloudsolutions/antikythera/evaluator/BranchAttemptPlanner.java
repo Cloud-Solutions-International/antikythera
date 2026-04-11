@@ -62,8 +62,44 @@ final class BranchAttemptPlanner {
         attemptedRows.clear();
     }
 
+    /**
+     * Returns true if cross-product exploration is still needed for {@code target}: specifically,
+     * when there are two or more candidate preserved states (i.e., the target has sibling
+     * predecessors) and at least one (side, preservedState) pair has never been attempted.
+     *
+     * <p>Intentionally does NOT look at per-row fingerprint exhaustion within a single preserved
+     * state — that would cause spurious extra iterations on single-branch methods where the
+     * TruthTable produces multiple rows for the same side.</p>
+     */
+    boolean hasUntriedCombinations(LineOfCode target) {
+        List<PreservedPathState> candidateStates = candidatePreservedPathStates(target);
+        // Cross-product work only exists when there are 2+ distinct preserved states.
+        // A single-entry state (always [empty]) means no sibling predecessor enumeration needed.
+        if (candidateStates.size() <= 1) {
+            return false;
+        }
+        for (BranchSide side : List.of(BranchSide.FALSE, BranchSide.TRUE)) {
+            for (PreservedPathState state : candidateStates) {
+                AttemptKey key = new AttemptKey(target.getStatement().hashCode(), side, state);
+                if (!attemptedRows.containsKey(key)) {
+                    // This (side, preservedState) was never handed to the caller at all.
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private List<PreservedPathState> candidatePreservedPathStates(LineOfCode target) {
-        List<LineOfCode> orderedPredecessors = target.getPredecessors().stream().toList();
+        // Only consider sibling predecessors for cross-product expansion.
+        // A sibling predecessor shares the same parent LineOfCode as the target — these are
+        // branches that are sequential in the same block and are independently satisfiable.
+        // Ancestor/nesting predecessors (e.g., outer if → inner else-if) share variables and
+        // their truth-table rows are mutually constrained; expanding those would yield
+        // contradictory preserved states and cause spurious extra iterations.
+        List<LineOfCode> orderedPredecessors = target.getPredecessors().stream()
+                .filter(p -> p.getParent() == target.getParent())
+                .toList();
         if (orderedPredecessors.isEmpty()) {
             return List.of(PreservedPathState.empty());
         }

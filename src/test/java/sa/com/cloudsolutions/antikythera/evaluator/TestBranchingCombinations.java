@@ -4,7 +4,6 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
@@ -125,7 +124,6 @@ class TestBranchingCombinations extends TestHelper {
                 "Expected more than one selected-row fingerprint for sequentialDirect");
     }
 
-    @Disabled("Pending branch-combination exploration fix")
     @Test
     void sequentialDirectShouldCoverAllFourCombinations() throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
@@ -140,7 +138,6 @@ class TestBranchingCombinations extends TestHelper {
         assertEquals(4, combinations.size());
     }
 
-    @Disabled("Pending branch-combination exploration fix")
     @Test
     void deletedByDirectShouldCoverAllFourCombinations() throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
