@@ -2,6 +2,8 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
@@ -15,6 +17,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.types.ResolvedType;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
@@ -265,6 +268,17 @@ public class TruthTable {
             if (value instanceof Integer i && mce.toString().contains(EQUALS_CALL)) {
                 return i == Integer.parseInt(mce.getArgument(0).asIntegerLiteralExpr().getValue());
             }
+        }
+        if (EQUALS_CALL.equals(mce.getNameAsString())
+                && mce.getArguments().size() == 1
+                && mce.getArgument(0).equals(variable)
+                && scope.isPresent()) {
+            Object variableValue = normalizeEqualsOperand(truthValues.get(variable));
+            Object scopeValue = normalizeEqualsOperand(resolveEqualsOperand(scope.orElseThrow(), truthValues));
+            if (scopeValue == null) {
+                return variableValue == null;
+            }
+            return scopeValue.equals(variableValue);
         }
         return false;
     }
@@ -770,7 +784,7 @@ public class TruthTable {
     }
 
     private boolean evaluateIsEquals(MethodCallExpr condition, Map<Expression, Object> truthValues, Expression scope) {
-        Object scopeValue = normalizeEqualsOperand(truthValues.get(scope));
+        Object scopeValue = normalizeEqualsOperand(resolveEqualsOperand(scope, truthValues));
         Expression argument = condition.getArgument(0);
 
         if (argument.isLiteralExpr()) {
@@ -782,7 +796,7 @@ public class TruthTable {
             }
             return scopeValue.equals(getValue(argument, truthValues));
         } else {
-            Object rawArg = truthValues.get(argument);
+            Object rawArg = resolveEqualsOperand(argument, truthValues);
             if (rawArg == null && argument.isObjectCreationExpr()) {
                 rawArg = argument;
             }
@@ -801,10 +815,40 @@ public class TruthTable {
         return value;
     }
 
+    private Object resolveEqualsOperand(Expression operand, Map<Expression, Object> truthValues) {
+        Object value = truthValues.get(operand);
+        if (value != null) {
+            return value;
+        }
+        if (operand == null) {
+            return null;
+        }
+        if (isLikelyEnumConstantExpression(operand)) {
+            return operand.toString();
+        }
+        if (operand.isLiteralExpr() || operand.isFieldAccessExpr()) {
+            return getValue(operand, truthValues);
+        }
+        return null;
+    }
+
+    private boolean isLikelyEnumConstantExpression(Expression expression) {
+        if (expression.isNameExpr()) {
+            return expression.asNameExpr().getNameAsString().matches("[A-Z][A-Z0-9_]*");
+        }
+        if (expression.isFieldAccessExpr()) {
+            return expression.asFieldAccessExpr().getNameAsString().matches("[A-Z][A-Z0-9_]*");
+        }
+        return false;
+    }
+
     private static Object evaluateIsEmpty(Map<Expression, Object> truthValues, Expression scope) {
         Object scopeValue = truthValues.get(scope);
         if (scopeValue == null) {
             return true;
+        }
+        if (scopeValue instanceof String string) {
+            return string.isEmpty();
         }
         if (scopeValue instanceof Collection<?> collection) {
             return collection.isEmpty();
@@ -860,7 +904,19 @@ public class TruthTable {
         } else if (cond.isMethodCallExpr()) {
             MethodCallExpr mce = cond.asMethodCallExpr();
             Optional<Expression> expr = mce.getScope();
-            expr.ifPresent(expression -> addConstraint(expression, mce));
+            if ("equals".equals(mce.getNameAsString()) && mce.getArguments().size() == 1 && expr.isPresent()) {
+                Expression scope = expr.orElseThrow();
+                Expression argument = mce.getArgument(0);
+                if (isLikelyEnumConstantExpression(scope) && !isLikelyEnumConstantExpression(argument)) {
+                    addConstraint(argument, mce);
+                } else if (!isLikelyEnumConstantExpression(scope) && isLikelyEnumConstantExpression(argument)) {
+                    addConstraint(scope, mce);
+                } else {
+                    addConstraint(scope, mce);
+                }
+            } else {
+                expr.ifPresent(expression -> addConstraint(expression, mce));
+            }
         }
         else if (cond.isUnaryExpr()) {
             UnaryExpr un = cond.asUnaryExpr();
@@ -944,6 +1000,11 @@ public class TruthTable {
                     } else {
                         findDomain(m, collector, b.getLeft());
                     }
+                } else if (parent.isPresent() && parent.get() instanceof MethodCallExpr parentCall
+                        && IS_EMPTY.equals(parentCall.getNameAsString())
+                        && parentCall.getScope().filter(m::equals).isPresent()) {
+                    super.visit(m, collector);
+                    return;
                 } else {
                     collector.put(m, new Domain(true, false));
                 }
@@ -977,6 +1038,9 @@ public class TruthTable {
 
         private Domain createIsEmptyDomain(Expression scope) {
             Type resolvedType = resolveExpressionType(scope);
+            if (resolvedType != null && isStringType(resolvedType)) {
+                return new Domain("", "T");
+            }
             if (resolvedType != null && isMapType(resolvedType)) {
                 Map<Integer, Object> nonEmptyMap = new HashMap<>();
                 nonEmptyMap.put(0, null);
@@ -1009,6 +1073,11 @@ public class TruthTable {
             return type.isClassOrInterfaceType()
                     && Set.of("Map", "HashMap", "LinkedHashMap", "TreeMap")
                     .contains(type.asClassOrInterfaceType().getNameAsString());
+        }
+
+        private boolean isStringType(Type type) {
+            return type.isClassOrInterfaceType()
+                    && "String".equals(type.asClassOrInterfaceType().getNameAsString());
         }
 
         private boolean isSetType(Type type) {
@@ -1079,9 +1148,15 @@ public class TruthTable {
                     collector.put(nameExpression, stringDomain);
                 }
                 else if (compareWith.isNameExpr() || compareWith.isFieldAccessExpr()) {
-                    collector.putIfAbsent(nameExpression, new Domain(false, true));
                     if (isLikelyEnumConstant(compareWith)) {
-                        collector.putIfAbsent(compareWith, new Domain(true, false));
+                        Domain enumDomain = createEnumDomain(compareWith);
+                        if (enumDomain != null) {
+                            collector.put(nameExpression, enumDomain);
+                        } else {
+                            collector.putIfAbsent(nameExpression, new Domain(false, true));
+                        }
+                    } else {
+                        collector.putIfAbsent(nameExpression, new Domain(false, true));
                     }
                 }
                 else if (isInequalityPresent()) {
@@ -1102,6 +1177,62 @@ public class TruthTable {
                 candidate = expression.asFieldAccessExpr().getNameAsString();
             }
             return candidate != null && candidate.matches("[A-Z][A-Z0-9_]*");
+        }
+
+        private Domain createEnumDomain(Expression enumConstantExpr) {
+            EnumDeclaration enumDeclaration = resolveEnumDeclaration(enumConstantExpr);
+            if (enumDeclaration == null) {
+                return null;
+            }
+
+            String targetName = enumConstantName(enumConstantExpr);
+            if (targetName == null) {
+                return null;
+            }
+
+            Expression matching = enumConstantExpr.clone();
+            Expression mismatching = enumDeclaration.getEntries().stream()
+                    .map(EnumConstantDeclaration::getNameAsString)
+                    .filter(name -> !name.equals(targetName))
+                    .findFirst()
+                    .map(name -> createEnumExpression(enumConstantExpr, name))
+                    .orElse(null);
+            if (mismatching == null) {
+                return null;
+            }
+            return new Domain(mismatching, matching);
+        }
+
+        private EnumDeclaration resolveEnumDeclaration(Expression enumConstantExpr) {
+            try {
+                ResolvedType resolvedType = enumConstantExpr.calculateResolvedType();
+                if (resolvedType == null || !resolvedType.isReferenceType()) {
+                    return null;
+                }
+                return AntikytheraRunTime.getTypeDeclaration(resolvedType.describe())
+                        .filter(EnumDeclaration.class::isInstance)
+                        .map(EnumDeclaration.class::cast)
+                        .orElse(null);
+            } catch (RuntimeException ignored) {
+                return enumConstantExpr.findAncestor(EnumDeclaration.class).orElse(null);
+            }
+        }
+
+        private String enumConstantName(Expression enumConstantExpr) {
+            if (enumConstantExpr.isNameExpr()) {
+                return enumConstantExpr.asNameExpr().getNameAsString();
+            }
+            if (enumConstantExpr.isFieldAccessExpr()) {
+                return enumConstantExpr.asFieldAccessExpr().getNameAsString();
+            }
+            return null;
+        }
+
+        private Expression createEnumExpression(Expression template, String constantName) {
+            if (template.isFieldAccessExpr()) {
+                return new FieldAccessExpr(template.asFieldAccessExpr().getScope().clone(), constantName);
+            }
+            return new NameExpr(constantName);
         }
 
         private void handleObjectCreation(Expression nameExpression, HashMap<Expression, Domain> collector,

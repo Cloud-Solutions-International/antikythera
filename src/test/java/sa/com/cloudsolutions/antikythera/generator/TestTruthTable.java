@@ -24,6 +24,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestTruthTable {
     private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Conditional";
+    private static final String BRANCHING_CLASS =
+            "sa.com.cloudsolutions.antikythera.testhelper.evaluator.BranchingCombinations";
+    private static final String STATUS_CLASS =
+            "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Status";
 
     @BeforeAll
     static void setup() throws IOException {
@@ -41,7 +45,6 @@ class TestTruthTable {
         Expression condition = method.findFirst(IfStmt.class).orElseThrow().getCondition();
 
         TruthTable table = new TruthTable(condition);
-        table.addConstraints(List.of(condition));
         table.generateTruthTable();
 
         List<Map<Expression, Object>> trueRows = table.findValuesForCondition(true);
@@ -83,7 +86,73 @@ class TestTruthTable {
         assertEquals("new File(\"/tmp_other\")", ((Expression) falseValue).toString());
     }
 
+    @Test
+    void enumEqualsVariableProducesTrueAndFalseRows() {
+        MethodDeclaration method = enumCompilationUnit()
+                .findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("cmp5"))
+                .orElseThrow();
+        MethodCallExpr condition = method.findFirst(MethodCallExpr.class,
+                mce -> mce.toString().equals("OPEN.equals(s)")).orElseThrow();
+
+        TruthTable table = new TruthTable(condition);
+        table.generateTruthTable();
+
+        List<Map<Expression, Object>> falseRows = table.findValuesForCondition(false);
+        List<Map<Expression, Object>> trueRows = table.findValuesForCondition(true);
+
+        assertFalse(falseRows.isEmpty());
+        assertFalse(trueRows.isEmpty());
+        assertTrue(trueRows.stream()
+                .map(row -> row.get(new NameExpr("s")))
+                .map(String::valueOf)
+                .anyMatch("OPEN"::equals));
+        assertTrue(falseRows.stream()
+                .map(row -> row.get(new NameExpr("s")))
+                .map(String::valueOf)
+                .anyMatch("CLOSED"::equals));
+    }
+
+    @Test
+    void deletedByDirectProducesTrueAndFalseRows() {
+        MethodDeclaration method = branchingCompilationUnit()
+                .findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("deletedByDirect"))
+                .orElseThrow();
+        IfStmt deletedByCondition = method.findAll(IfStmt.class).getLast();
+        Expression condition = deletedByCondition.getCondition();
+
+        TruthTable table = new TruthTable(condition);
+        table.generateTruthTable();
+
+        List<Map<Expression, Object>> falseRows = table.findValuesForCondition(false);
+        List<Map<Expression, Object>> trueRows = table.findValuesForCondition(true);
+
+        assertFalse(falseRows.isEmpty());
+        assertFalse(trueRows.isEmpty());
+        assertTrue(trueRows.stream()
+                .map(row -> valueForExpression(row, "record.getDeletedBy()"))
+                .anyMatch(value -> value instanceof String text && !text.isEmpty()));
+        assertTrue(falseRows.stream()
+                .map(row -> valueForExpression(row, "record.getDeletedBy()"))
+                .anyMatch(value -> value == null || value instanceof String text && text.isEmpty()));
+    }
+
     private CompilationUnit compilationUnit() {
         return AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
+    }
+
+    private CompilationUnit branchingCompilationUnit() {
+        return AntikytheraRunTime.getCompilationUnit(BRANCHING_CLASS);
+    }
+
+    private CompilationUnit enumCompilationUnit() {
+        return AntikytheraRunTime.getCompilationUnit(STATUS_CLASS);
+    }
+
+    private Object valueForExpression(Map<Expression, Object> row, String expressionText) {
+        return row.entrySet().stream()
+                .filter(entry -> entry.getKey().toString().equals(expressionText))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
     }
 }

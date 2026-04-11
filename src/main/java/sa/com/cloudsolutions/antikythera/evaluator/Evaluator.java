@@ -813,7 +813,7 @@ public class Evaluator implements EvaluationEngine {
      */
     Variable createObject(ObjectCreationExpr oce) throws ReflectiveOperationException {
         ClassOrInterfaceType type = oce.getType();
-        TypeWrapper wrapper = AbstractCompiler.findType(cu, type.getNameAsString());
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, type.asString());
         if (wrapper == null) {
             return null;
         }

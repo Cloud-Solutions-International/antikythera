@@ -848,6 +848,41 @@ public class AbstractCompiler {
                 // ignorable
             }
         }
+        if (className.contains(".")) {
+            String outerName = className.substring(0, className.indexOf('.'));
+            String nestedPath = className.substring(className.indexOf('.') + 1);
+            ImportWrapper outerImport = findImport(cu, outerName);
+            if (outerImport != null && !outerImport.getImport().isAsterisk()) {
+                if (outerImport.getType() != null) {
+                    TypeDeclaration<?> current = outerImport.getType();
+                    String[] parts = nestedPath.split("\\.");
+                    boolean matched = true;
+                    for (String part : parts) {
+                        TypeDeclaration<?> next = current.getMembers().stream()
+                                .filter(member -> member instanceof TypeDeclaration<?>)
+                                .map(member -> (TypeDeclaration<?>) member)
+                                .filter(member -> member.getNameAsString().equals(part))
+                                .findFirst()
+                                .orElse(null);
+                        if (next != null) {
+                            current = next;
+                        } else {
+                            matched = false;
+                            break;
+                        }
+                    }
+                    if (matched) {
+                        return new TypeWrapper(current);
+                    }
+                }
+                try {
+                    String nestedFqn = outerImport.getNameAsString() + "$" + nestedPath.replace(".", "$");
+                    return new TypeWrapper(AbstractCompiler.loadClass(nestedFqn));
+                } catch (ClassNotFoundException e) {
+                    // ignorable
+                }
+            }
+        }
         return null;
     }
 

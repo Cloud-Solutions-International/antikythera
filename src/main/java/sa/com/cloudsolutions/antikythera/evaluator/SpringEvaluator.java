@@ -1343,7 +1343,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             return;
         }
 
-        boolean conditionMatches = Objects.equals(combination.get(scope), combination.get(argument));
+        boolean conditionMatches = Objects.equals(resolveEnumOperandValue(scope, combination),
+                resolveEnumOperandValue(argument, combination));
         if (conditionMatches) {
             result.put(targetExpr.asNameExpr(), constantEnum);
         } else {
@@ -1371,6 +1372,24 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 .filter(entry -> !entry.getNameAsString().equals(constantEnum.getNameAsString()))
                 .findFirst()
                 .ifPresent(other -> result.put(targetExpr, other)));
+    }
+
+    private Object resolveEnumOperandValue(Expression expression, Map<Expression, Object> combination) {
+        Object direct = combination.get(expression);
+        if (direct instanceof EnumConstantDeclaration ecd) {
+            return ecd.getNameAsString();
+        }
+        if (direct instanceof FieldAccessExpr fae) {
+            return fae.getNameAsString();
+        }
+        if (direct instanceof NameExpr ne) {
+            return ne.getNameAsString();
+        }
+        EnumConstantDeclaration constant = resolveEnumConstant(expression);
+        if (constant != null) {
+            return constant.getNameAsString();
+        }
+        return direct;
     }
 
     private boolean matchesEnumConstant(TypeWrapper enumType, Object candidate) {
