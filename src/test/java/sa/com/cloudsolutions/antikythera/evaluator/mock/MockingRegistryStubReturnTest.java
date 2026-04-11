@@ -1,5 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator.mock;
 
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
@@ -14,6 +16,8 @@ class MockingRegistryStubReturnTest {
 
     @AfterEach
     void tearDown() {
+        GeneratorState.clearWhenThen();
+        GeneratorState.clearImports();
         GeneratorState.clearMockStubReturnHints();
         GeneratorState.clearPendingObjectStubReturnFqns();
     }
@@ -54,5 +58,45 @@ class MockingRegistryStubReturnTest {
         String stub = GeneratorState.getWhenThen().getFirst().toString();
         assertFalse(stub.contains("mock(Integer.class)"), stub);
         assertTrue(stub.contains("thenReturn(0)") || stub.contains("thenReturn(0 )"), stub);
+    }
+
+    @Test
+    void addMockitoExpressionUsesDeclaredMethodReturnTypeNotRuntimeValueClass() {
+        CompilationUnit cu = StaticJavaParser.parse("""
+                package test;
+                import java.util.ArrayList;
+                interface ProblemClient {
+                    ArrayList getProblem(String hospitalId, String groupId, String userId, Long id);
+                }
+                """);
+        var method = cu.findFirst(com.github.javaparser.ast.body.MethodDeclaration.class,
+                md -> md.getNameAsString().equals("getProblem")).orElseThrow();
+
+        MockingRegistry.addMockitoExpression(method, new Object(), "problemFeignClient");
+
+        assertEquals(1, GeneratorState.getWhenThen().size());
+        String stub = GeneratorState.getWhenThen().getFirst().toString();
+        assertTrue(stub.contains("thenReturn(new ArrayList<>())"), stub);
+        assertFalse(stub.contains("Object.class"), stub);
+    }
+
+    @Test
+    void addMockitoExpressionAddsImportForDeclaredReferenceReturnType() {
+        CompilationUnit cu = StaticJavaParser.parse("""
+                package test;
+                interface ProblemClient {
+                    com.example.ProblemMaster getProblem(String hospitalId, String groupId, String userId, Long id);
+                }
+                """);
+        var method = cu.findFirst(com.github.javaparser.ast.body.MethodDeclaration.class,
+                md -> md.getNameAsString().equals("getProblem")).orElseThrow();
+
+        MockingRegistry.addMockitoExpression(method, new Object(), "problemFeignClient");
+
+        assertEquals(1, GeneratorState.getWhenThen().size());
+        String stub = GeneratorState.getWhenThen().getFirst().toString();
+        assertTrue(stub.contains("thenReturn(Mockito.mock(ProblemMaster.class))"), stub);
+        assertTrue(GeneratorState.getImports().stream()
+                .anyMatch(i -> i.getNameAsString().equals("com.example.ProblemMaster")));
     }
 }
