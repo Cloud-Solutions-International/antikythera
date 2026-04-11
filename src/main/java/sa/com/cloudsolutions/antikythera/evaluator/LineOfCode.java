@@ -394,6 +394,11 @@ public class LineOfCode {
     }
 
     public void recordCombinationAttempt(int path, String fingerprint) {
+        recordCombinationAttempt(BranchSide.fromLegacyPath(path), fingerprint);
+    }
+
+    public void recordCombinationAttempt(BranchSide side, String fingerprint) {
+        int path = side.legacyPath();
         if (path != FALSE_PATH && path != TRUE_PATH) {
             throw new IllegalArgumentException("Combination attempts must target FALSE_PATH or TRUE_PATH");
         }
@@ -403,18 +408,30 @@ public class LineOfCode {
     }
 
     public boolean hasAttemptedCombination(int path, String fingerprint) {
+        return hasAttemptedCombination(BranchSide.fromLegacyPath(path), fingerprint);
+    }
+
+    public boolean hasAttemptedCombination(BranchSide side, String fingerprint) {
         return attemptedCombinationsByPath
-                .getOrDefault(path, new LinkedHashSet<>())
+                .getOrDefault(side.legacyPath(), new LinkedHashSet<>())
                 .contains(fingerprint);
     }
 
     public Set<String> getAttemptedCombinations(int path) {
+        return getAttemptedCombinations(BranchSide.fromLegacyPath(path));
+    }
+
+    public Set<String> getAttemptedCombinations(BranchSide side) {
         return Collections.unmodifiableSet(
-                attemptedCombinationsByPath.getOrDefault(path, new LinkedHashSet<>())
+                attemptedCombinationsByPath.getOrDefault(side.legacyPath(), new LinkedHashSet<>())
         );
     }
 
     public int getAttemptedCombinationCount(int path) {
-        return attemptedCombinationsByPath.getOrDefault(path, new LinkedHashSet<>()).size();
+        return getAttemptedCombinationCount(BranchSide.fromLegacyPath(path));
+    }
+
+    public int getAttemptedCombinationCount(BranchSide side) {
+        return attemptedCombinationsByPath.getOrDefault(side.legacyPath(), new LinkedHashSet<>()).size();
     }
 }

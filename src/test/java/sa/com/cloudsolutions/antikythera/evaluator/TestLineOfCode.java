@@ -41,6 +41,8 @@ class TestLineOfCode {
         assertEquals(Set.of("row:true:1"), lineOfCode.getAttemptedCombinations(LineOfCode.TRUE_PATH));
         assertEquals(1, lineOfCode.getAttemptedCombinationCount(LineOfCode.FALSE_PATH));
         assertEquals(1, lineOfCode.getAttemptedCombinationCount(LineOfCode.TRUE_PATH));
+        assertEquals(Set.of("row:false:0"), lineOfCode.getAttemptedCombinations(BranchSide.FALSE));
+        assertEquals(Set.of("row:true:1"), lineOfCode.getAttemptedCombinations(BranchSide.TRUE));
     }
 
     @Test
@@ -55,5 +57,21 @@ class TestLineOfCode {
 
         assertThrows(IllegalArgumentException.class,
                 () -> lineOfCode.recordCombinationAttempt(LineOfCode.BOTH_PATHS, "row:both"));
+    }
+
+    @Test
+    void preservedPathStateTracksSidesByBranchIdentity() {
+        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
+                "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Conditional"
+        );
+        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                md -> md.getNameAsString().equals("conditional4")).orElseThrow();
+        IfStmt ifStmt = method.findAll(IfStmt.class).getFirst();
+        LineOfCode lineOfCode = new LineOfCode(ifStmt);
+
+        PreservedPathState state = PreservedPathState.empty().with(lineOfCode, BranchSide.TRUE);
+
+        assertEquals(BranchSide.TRUE, state.sideFor(lineOfCode).orElseThrow());
+        assertEquals(1, state.asMap().size());
     }
 }

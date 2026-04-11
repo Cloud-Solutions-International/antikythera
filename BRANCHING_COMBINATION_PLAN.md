@@ -125,12 +125,12 @@ This branch should avoid reintroducing:
 
 ### Phase 0: Stabilize the Base
 
-- [ ] Confirm the branch state at `2a5b7709`
-- [ ] Record the exact baseline behavior of:
+- [x] Confirm the branch state at `2a5b7709`
+- [x] Record the exact baseline behavior of:
   - `sequentialDirect(...)`
   - `deletedByDirect(...)`
-- [ ] Record which focused tests are green before new implementation starts
-- [ ] Create a narrow working safety net command for this branch
+- [x] Record which focused tests are green before new implementation starts
+- [x] Create a narrow working safety net command for this branch
 
 Success criteria:
 
@@ -151,12 +151,12 @@ Success criteria:
 
 ### Phase 2: Define Explicit Path State
 
-- [ ] Introduce `BranchSide`
-- [ ] Introduce `PreservedPathState`
-- [ ] Introduce `BranchSelection`
-- [ ] Introduce `BranchAttempt`
-- [ ] Introduce `BranchAttemptPlanner`
-- [ ] Keep these types small and explicit
+- [x] Introduce `BranchSide`
+- [x] Introduce `PreservedPathState`
+- [x] Introduce `BranchSelection`
+- [x] Introduce `BranchAttempt`
+- [x] Introduce `BranchAttemptPlanner`
+- [x] Keep these types small and explicit
 
 Success criteria:
 
@@ -240,7 +240,7 @@ Success criteria:
 
 ### Design
 
-- [ ] Write the Java types for:
+- [x] Write the Java types for:
   - `BranchSide`
   - `PreservedPathState`
   - `BranchSelection`
@@ -253,6 +253,7 @@ Success criteria:
 - [ ] Keep `LineOfCode` focused on identity and structure
 - [ ] Keep `TruthTable` focused on row generation
 - [ ] Keep `SpringEvaluator` focused on materialization
+- [x] Consolidate row fingerprinting into one shared utility used by planner and evaluator
 
 ### Tests
 
@@ -291,4 +292,3 @@ Success criteria:
 - [ ] Inspect the exact code state at `2a5b7709`
 - [ ] confirm the focused baseline
 - [ ] then add the new path-state types before any more evaluator behavior changes
-

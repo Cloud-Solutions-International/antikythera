@@ -946,7 +946,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     Variable createTests(MethodResponse response) {
         if (response != null) {
             for (ITestGenerator generator : generators) {
-                Branching.BranchAttempt attempt = Branching.getBranchAttempt(currentCallable, currentConditional);
+                BranchAttempt attempt = Branching.getBranchAttempt(currentCallable, currentConditional);
                 List<Precondition> applicableConditions = attempt.applicableConditions();
                 BranchingTrace.record(() -> "preconditions:"
                         + currentCallable.getNameAsString()
@@ -1144,7 +1144,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
         for (Map<Expression, Object> candidate : combinations) {
             Map<Expression, Object> adjusted = adjustForEnums(candidate);
-            String fingerprint = fingerprintCombination(adjusted);
+            String fingerprint = BranchAttemptFingerprint.fingerprintCombination(adjusted);
             if (fallback == null) {
                 fallback = adjusted;
                 fallbackFingerprint = fingerprint;
@@ -1172,34 +1172,6 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
 
         return new HashMap<>();
-    }
-
-    private String fingerprintCombination(Map<Expression, Object> combination) {
-        return combination.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey((a, b) -> a.toString().compareTo(b.toString())))
-                .map(entry -> entry.getKey() + "=" + fingerprintValue(entry.getValue()))
-                .reduce((left, right) -> left + "|" + right)
-                .orElse("<empty>");
-    }
-
-    private String fingerprintValue(Object value) {
-        if (value instanceof Expression expression) {
-            return expression.toString();
-        }
-        if (value instanceof List<?> list) {
-            return list.stream().map(this::fingerprintValue).toList().toString();
-        }
-        if (value instanceof Set<?> set) {
-            return set.stream().map(this::fingerprintValue).sorted().toList().toString();
-        }
-        if (value instanceof Map<?, ?> map) {
-            return map.entrySet().stream()
-                    .map(entry -> fingerprintValue(entry.getKey()) + "->" + fingerprintValue(entry.getValue()))
-                    .sorted()
-                    .toList()
-                    .toString();
-        }
-        return String.valueOf(value);
     }
 
     private Map<Expression, Object> adjustForEnums(Map<Expression, Object> combination) {

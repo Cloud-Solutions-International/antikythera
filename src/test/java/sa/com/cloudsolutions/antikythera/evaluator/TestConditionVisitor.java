@@ -162,11 +162,12 @@ class TestConditionVisitor {
         target.addPrecondition(new Precondition(new NameExpr("targetRow")));
         sibling.addPrecondition(new Precondition(new NameExpr("siblingRow")));
 
-        Branching.BranchAttempt attempt = Branching.getBranchAttempt(md, target);
+        BranchAttempt attempt = Branching.getBranchAttempt(md, target);
 
         assertEquals(target, attempt.target());
         assertEquals(2, attempt.applicableConditions().size());
         assertTrue(attempt.applicableConditions().contains(new Precondition(new NameExpr("targetRow"))));
         assertTrue(attempt.applicableConditions().contains(new Precondition(new NameExpr("siblingRow"))));
+        assertTrue(attempt.preservedPathState().isEmpty());
     }
 }

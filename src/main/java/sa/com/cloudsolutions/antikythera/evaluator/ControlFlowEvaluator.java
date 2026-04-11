@@ -308,7 +308,7 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     private Optional<Boolean> resolveConditionValue(Expression condition) {
-        Branching.BranchAttempt attempt = Branching.getBranchAttempt(
+        BranchAttempt attempt = Branching.getBranchAttempt(
                 currentConditional.getCallableDeclaration(), currentConditional);
         List<Expression> applicableExpressions = attempt.applicableConditions().stream()
                 .map(Precondition::getExpression)

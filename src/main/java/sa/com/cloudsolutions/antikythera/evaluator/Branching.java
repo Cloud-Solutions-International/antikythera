@@ -12,9 +12,7 @@ import java.util.stream.Collectors;
 public class Branching {
     private static final HashMap<CallableDeclaration<?>, PriorityQueue<LineOfCode>> conditionals = new HashMap<>();
     private static final HashMap<Integer, LineOfCode> branches = new HashMap<>();
-
-    public record BranchAttempt(LineOfCode target, List<Precondition> applicableConditions) {
-    }
+    private static final BranchAttemptPlanner PLANNER = new BranchAttemptPlanner();
 
     private Branching() {
     }
@@ -55,23 +53,7 @@ public class Branching {
         List<LineOfCode> relevantBranches = branches.values().stream()
                 .filter(lineOfCode -> lineOfCode.getCallableDeclaration().equals(methodDeclaration))
                 .collect(Collectors.toList());
-
-        List<Precondition> applicableConditions = new ArrayList<>();
-        for (LineOfCode lineOfCode : relevantBranches) {
-            if (lineOfCode.getPathTaken() != LineOfCode.BOTH_PATHS) {
-                applicableConditions.addAll(lineOfCode.getPreconditions());
-            }
-        }
-
-        BranchingTrace.record(() -> "attempt:"
-                + methodDeclaration.getNameAsString()
-                + "|target=" + (target == null ? "<none>" : target.getStatement())
-                + "|count=" + applicableConditions.size()
-                + "|branches=" + relevantBranches.stream()
-                .map(lineOfCode -> lineOfCode.getPathTaken() + ":" + lineOfCode.getPreconditions().size()
-                        + ":" + lineOfCode.getStatement())
-                .toList());
-        return new BranchAttempt(target, applicableConditions);
+        return PLANNER.plan(methodDeclaration, target, relevantBranches);
     }
 
     public static int size(CallableDeclaration<?> methodDeclaration)
