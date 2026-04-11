@@ -3,6 +3,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
@@ -17,7 +18,9 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -169,5 +172,45 @@ class TestConditionVisitor {
         assertTrue(attempt.applicableConditions().contains(new Precondition(new NameExpr("targetRow"))));
         assertTrue(attempt.applicableConditions().contains(new Precondition(new NameExpr("siblingRow"))));
         assertTrue(attempt.preservedPathState().isEmpty());
+    }
+
+    @Test
+    void plannerTracksPredecessorSidesSeparatelyFromRowFingerprints() {
+        cu = AntikytheraRunTime.getCompilationUnit(
+                "sa.com.cloudsolutions.antikythera.testhelper.evaluator.BranchingCombinations"
+        );
+        md = cu.findFirst(MethodDeclaration.class,
+                f -> f.getNameAsString().equals("sequentialDirect")).orElseThrow();
+        md.accept(new ConditionVisitor(), null);
+
+        List<LineOfCode> lines = new ArrayList<>(Branching.get(md));
+        assertEquals(2, lines.size());
+
+        LineOfCode first = lines.stream()
+                .filter(line -> line.getConditionalExpression().toString().contains("query.getDiagnosisType"))
+                .findFirst()
+                .orElseThrow();
+        LineOfCode second = lines.stream()
+                .filter(line -> line.getConditionalExpression().toString().contains("CollectionUtils.isEmpty(values)"))
+                .findFirst()
+                .orElseThrow();
+
+        first.setPathTaken(LineOfCode.BOTH_PATHS);
+
+        Map<Expression, Object> rowA = new LinkedHashMap<>();
+        rowA.put(new NameExpr("values"), new IntegerLiteralExpr("0"));
+        Map<Expression, Object> rowB = new LinkedHashMap<>();
+        rowB.put(new NameExpr("values"), new IntegerLiteralExpr("1"));
+
+        BranchAttempt attempt1 = Branching.selectTargetAttempt(second, BranchSide.TRUE, List.of(rowA, rowB));
+        BranchAttempt attempt2 = Branching.selectTargetAttempt(second, BranchSide.TRUE, List.of(rowA, rowB));
+        BranchAttempt attempt3 = Branching.selectTargetAttempt(second, BranchSide.TRUE, List.of(rowA, rowB));
+
+        assertEquals(BranchSide.FALSE, attempt1.preservedPathState().sideFor(first).orElseThrow());
+        assertEquals("values=0", attempt1.selection().rowFingerprint());
+        assertEquals(BranchSide.FALSE, attempt2.preservedPathState().sideFor(first).orElseThrow());
+        assertEquals("values=1", attempt2.selection().rowFingerprint());
+        assertEquals(BranchSide.TRUE, attempt3.preservedPathState().sideFor(first).orElseThrow());
+        assertEquals("values=0", attempt3.selection().rowFingerprint());
     }
 }

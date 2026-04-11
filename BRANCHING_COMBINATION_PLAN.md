@@ -164,13 +164,13 @@ Success criteria:
 
 ### Phase 3: Reduce `LineOfCode` Responsibility
 
-- [ ] Audit current `LineOfCode` state on this branch
-- [ ] Keep only:
+- [x] Audit current `LineOfCode` state on this branch
+- [x] Keep only:
   - branch identity
   - current path coverage state
   - structural predecessors / parent / child links
-- [ ] Do not put preserved-path-state logic in `LineOfCode`
-- [ ] Do not put attempt-planning policy in `LineOfCode`
+- [x] Do not put preserved-path-state logic in `LineOfCode`
+- [x] Do not put attempt-planning policy in `LineOfCode`
 
 Success criteria:
 
@@ -179,14 +179,14 @@ Success criteria:
 ### Phase 4: Build Planner for Direct Fixtures Only
 
 - [ ] Make `BranchAttemptPlanner` operate only on direct fixtures first
-- [ ] For a chosen target branch, compute the relevant preserved predecessor sides
+- [x] For a chosen target branch, compute the relevant preserved predecessor sides
 - [ ] Ask `TruthTable` for satisfying rows for the target side
-- [ ] Track attempted combinations using:
+- [x] Track attempted combinations using:
   - target branch
   - target side
   - preserved predecessor-side state
   - row fingerprint
-- [ ] Return the next untried `BranchAttempt`
+- [x] Return the next untried `BranchAttempt`
 
 Success criteria:
 
@@ -249,8 +249,8 @@ Success criteria:
 
 ### Refactoring
 
-- [ ] Remove or avoid replay-index-based path selection in new code
-- [ ] Keep `LineOfCode` focused on identity and structure
+- [x] Remove or avoid replay-index-based path selection in new code
+- [x] Keep `LineOfCode` focused on identity and structure
 - [ ] Keep `TruthTable` focused on row generation
 - [ ] Keep `SpringEvaluator` focused on materialization
 - [x] Consolidate row fingerprinting into one shared utility used by planner and evaluator
@@ -273,7 +273,7 @@ Success criteria:
 
 ### Validation
 
-- [ ] Run the focused safety net on the clean-start branch
+- [x] Run the focused safety net on the clean-start branch
 - [ ] Run the full `antikythera` module suite once the direct proof targets are green
 
 ## Guardrails

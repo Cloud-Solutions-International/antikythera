@@ -10,10 +10,8 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Set;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestLineOfCode {
 
@@ -24,39 +22,22 @@ class TestLineOfCode {
     }
 
     @Test
-    void tracksCombinationAttemptsPerBranchSide() {
+    void tracksStructuralPredecessorsWithoutDuplication() {
         CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
-                "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Conditional"
+                "sa.com.cloudsolutions.antikythera.testhelper.evaluator.BranchingCombinations"
         );
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
-                md -> md.getNameAsString().equals("conditional1")).orElseThrow();
-        IfStmt ifStmt = method.findFirst(IfStmt.class).orElseThrow();
-        LineOfCode lineOfCode = new LineOfCode(ifStmt);
+                md -> md.getNameAsString().equals("sequentialDirect")).orElseThrow();
+        IfStmt first = method.findAll(IfStmt.class).getFirst();
+        IfStmt second = method.findAll(IfStmt.class).getLast();
+        LineOfCode root = new LineOfCode(first);
+        LineOfCode child = new LineOfCode(second);
 
-        lineOfCode.recordCombinationAttempt(LineOfCode.FALSE_PATH, "row:false:0");
-        lineOfCode.recordCombinationAttempt(LineOfCode.FALSE_PATH, "row:false:0");
-        lineOfCode.recordCombinationAttempt(LineOfCode.TRUE_PATH, "row:true:1");
+        child.addPredecessor(root);
+        child.addPredecessor(root);
 
-        assertEquals(Set.of("row:false:0"), lineOfCode.getAttemptedCombinations(LineOfCode.FALSE_PATH));
-        assertEquals(Set.of("row:true:1"), lineOfCode.getAttemptedCombinations(LineOfCode.TRUE_PATH));
-        assertEquals(1, lineOfCode.getAttemptedCombinationCount(LineOfCode.FALSE_PATH));
-        assertEquals(1, lineOfCode.getAttemptedCombinationCount(LineOfCode.TRUE_PATH));
-        assertEquals(Set.of("row:false:0"), lineOfCode.getAttemptedCombinations(BranchSide.FALSE));
-        assertEquals(Set.of("row:true:1"), lineOfCode.getAttemptedCombinations(BranchSide.TRUE));
-    }
-
-    @Test
-    void rejectsInvalidCombinationAttemptState() {
-        CompilationUnit cu = AntikytheraRunTime.getCompilationUnit(
-                "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Conditional"
-        );
-        MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
-                md -> md.getNameAsString().equals("conditional1")).orElseThrow();
-        IfStmt ifStmt = method.findFirst(IfStmt.class).orElseThrow();
-        LineOfCode lineOfCode = new LineOfCode(ifStmt);
-
-        assertThrows(IllegalArgumentException.class,
-                () -> lineOfCode.recordCombinationAttempt(LineOfCode.BOTH_PATHS, "row:both"));
+        assertEquals(1, child.getPredecessors().size());
+        assertTrue(child.getPredecessors().contains(root));
     }
 
     @Test

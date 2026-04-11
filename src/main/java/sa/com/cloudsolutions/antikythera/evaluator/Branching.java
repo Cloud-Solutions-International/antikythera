@@ -1,10 +1,13 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.stmt.BlockStmt;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.PriorityQueue;
 import java.util.stream.Collectors;
@@ -20,9 +23,11 @@ public class Branching {
     public static void clear() {
         branches.clear();
         conditionals.clear();
+        PLANNER.clear();
     }
 
     public static void add(LineOfCode lineOfCode) {
+        attachPredecessors(lineOfCode);
         if (lineOfCode.shouldSchedule()) {
             PriorityQueue<LineOfCode> queue = conditionals.computeIfAbsent(
                 lineOfCode.getCallableDeclaration(),
@@ -54,6 +59,66 @@ public class Branching {
                 .filter(lineOfCode -> lineOfCode.getCallableDeclaration().equals(methodDeclaration))
                 .collect(Collectors.toList());
         return PLANNER.plan(methodDeclaration, target, relevantBranches);
+    }
+
+    public static BranchAttempt selectTargetAttempt(LineOfCode target, BranchSide side,
+                                                    List<java.util.Map<com.github.javaparser.ast.expr.Expression, Object>> combinations) {
+        return PLANNER.selectNextAttempt(target, side, combinations);
+    }
+
+    private static void attachPredecessors(LineOfCode lineOfCode) {
+        if (lineOfCode.getParent() != null) {
+            lineOfCode.addPredecessor(lineOfCode.getParent());
+            lineOfCode.getParent().getPredecessors().forEach(lineOfCode::addPredecessor);
+        }
+
+        LineOfCode priorSibling = findNearestPriorSibling(lineOfCode);
+        if (priorSibling != null) {
+            lineOfCode.addPredecessor(priorSibling);
+            priorSibling.getPredecessors().forEach(lineOfCode::addPredecessor);
+        }
+    }
+
+    private static LineOfCode findNearestPriorSibling(LineOfCode lineOfCode) {
+        BlockStmt targetBlock = findEnclosingBlock(lineOfCode);
+        if (targetBlock == null) {
+            return null;
+        }
+
+        int targetOrder = getSourceOrder(lineOfCode);
+        LineOfCode best = null;
+        int bestOrder = Integer.MIN_VALUE;
+        for (LineOfCode candidate : branches.values()) {
+            if (candidate.equals(lineOfCode)) {
+                continue;
+            }
+            if (!candidate.getCallableDeclaration().equals(lineOfCode.getCallableDeclaration())) {
+                continue;
+            }
+            if (candidate.getParent() != lineOfCode.getParent()) {
+                continue;
+            }
+            if (!targetBlock.equals(findEnclosingBlock(candidate))) {
+                continue;
+            }
+            int candidateOrder = getSourceOrder(candidate);
+            if (candidateOrder < targetOrder && candidateOrder > bestOrder) {
+                best = candidate;
+                bestOrder = candidateOrder;
+            }
+        }
+        return best;
+    }
+
+    private static BlockStmt findEnclosingBlock(LineOfCode lineOfCode) {
+        return lineOfCode.getStatement().findAncestor(BlockStmt.class).orElse(null);
+    }
+
+    private static int getSourceOrder(LineOfCode lineOfCode) {
+        Node node = lineOfCode.getStatement();
+        return node.getBegin()
+                .map(position -> position.line * 10_000 + position.column)
+                .orElse(Integer.MAX_VALUE);
     }
 
     public static int size(CallableDeclaration<?> methodDeclaration)

@@ -8,10 +8,8 @@ import com.github.javaparser.ast.stmt.Statement;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
@@ -75,7 +73,7 @@ public class LineOfCode {
     private RepositoryQuery repositoryQuery;
     private boolean result;
     private BranchKind branchKind = BranchKind.CONTROL_FLOW;
-    private final Map<Integer, LinkedHashSet<String>> attemptedCombinationsByPath = new HashMap<>();
+    private final LinkedHashSet<LineOfCode> predecessors = new LinkedHashSet<>();
 
     /**
      * Constructs a `LineOfCode` instance for the given statement.
@@ -393,45 +391,13 @@ public class LineOfCode {
         return binaryExpr;
     }
 
-    public void recordCombinationAttempt(int path, String fingerprint) {
-        recordCombinationAttempt(BranchSide.fromLegacyPath(path), fingerprint);
-    }
-
-    public void recordCombinationAttempt(BranchSide side, String fingerprint) {
-        int path = side.legacyPath();
-        if (path != FALSE_PATH && path != TRUE_PATH) {
-            throw new IllegalArgumentException("Combination attempts must target FALSE_PATH or TRUE_PATH");
+    public void addPredecessor(LineOfCode predecessor) {
+        if (predecessor != null && !predecessor.equals(this)) {
+            predecessors.add(predecessor);
         }
-        attemptedCombinationsByPath
-                .computeIfAbsent(path, ignored -> new LinkedHashSet<>())
-                .add(fingerprint);
     }
 
-    public boolean hasAttemptedCombination(int path, String fingerprint) {
-        return hasAttemptedCombination(BranchSide.fromLegacyPath(path), fingerprint);
-    }
-
-    public boolean hasAttemptedCombination(BranchSide side, String fingerprint) {
-        return attemptedCombinationsByPath
-                .getOrDefault(side.legacyPath(), new LinkedHashSet<>())
-                .contains(fingerprint);
-    }
-
-    public Set<String> getAttemptedCombinations(int path) {
-        return getAttemptedCombinations(BranchSide.fromLegacyPath(path));
-    }
-
-    public Set<String> getAttemptedCombinations(BranchSide side) {
-        return Collections.unmodifiableSet(
-                attemptedCombinationsByPath.getOrDefault(side.legacyPath(), new LinkedHashSet<>())
-        );
-    }
-
-    public int getAttemptedCombinationCount(int path) {
-        return getAttemptedCombinationCount(BranchSide.fromLegacyPath(path));
-    }
-
-    public int getAttemptedCombinationCount(BranchSide side) {
-        return attemptedCombinationsByPath.getOrDefault(side.legacyPath(), new LinkedHashSet<>()).size();
+    public Set<LineOfCode> getPredecessors() {
+        return Collections.unmodifiableSet(predecessors);
     }
 }

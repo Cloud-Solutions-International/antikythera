@@ -39,6 +39,19 @@ public final class PreservedPathState {
     }
 
     @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof PreservedPathState other)) {
+            return false;
+        }
+        return preservedSidesByBranch.equals(other.preservedSidesByBranch);
+    }
+
+    @Override
+    public int hashCode() {
+        return preservedSidesByBranch.hashCode();
+    }
+
+    @Override
     public String toString() {
         return preservedSidesByBranch.toString();
     }

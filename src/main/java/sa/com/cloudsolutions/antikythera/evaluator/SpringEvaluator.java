@@ -93,6 +93,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * The method currently being analyzed
      */
     private CallableDeclaration<?> currentCallable;
+    private BranchAttempt currentTargetAttempt;
     private boolean onTest;
 
     protected SpringEvaluator(EvaluatorFactory.Context context) {
@@ -322,6 +323,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private void prepareInvocationContext(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
         getLocals().clear();
         LogRecorder.clearLogs();
+        currentTargetAttempt = null;
         setupFields();
         mockMethodArguments(cd);
     }
@@ -1088,6 +1090,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      */
     @SuppressWarnings("java:S5411")
     void setupIfCondition() {
+        if (currentConditional.getPreconditions() != null && !currentConditional.getPreconditions().isEmpty()) {
+            return;
+        }
+
         boolean state = currentConditional.isFalsePath();
         TruthTable tt = new TruthTable();
 
@@ -1106,15 +1112,66 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 + "|condition=" + tt.getCondition());
 
         if (!values.isEmpty()) {
-            setupIfCondition(values, state);
+            List<Map<Expression, Object>> adjusted = values.stream()
+                    .map(this::adjustForEnums)
+                    .toList();
+            setupIfCondition(adjusted, state);
         }
     }
 
     private void setupIfCondition(List<Map<Expression, Object>> combinations, boolean desiredState) {
-        Map<Expression, Object> combination = selectNextCombination(combinations, desiredState);
+        BranchSide targetSide = desiredState ? BranchSide.TRUE : BranchSide.FALSE;
+        currentTargetAttempt = Branching.selectTargetAttempt(currentConditional, targetSide, combinations);
+        applyPreservedPathState(currentTargetAttempt.preservedPathState());
+
+        Map<Expression, Object> combination = resolveSelectedCombination(combinations, currentTargetAttempt.selection());
         BranchingTrace.record(() -> "selected:"
                 + currentConditional.getCallableDeclaration().getNameAsString()
                 + "|combination=" + combination);
+        materializeCombination(currentConditional.getStatement(), combination);
+    }
+
+    private Map<Expression, Object> resolveSelectedCombination(List<Map<Expression, Object>> combinations,
+                                                               BranchSelection selection) {
+        if (selection == null) {
+            return combinations.isEmpty() ? new HashMap<>() : combinations.getFirst();
+        }
+        return combinations.stream()
+                .filter(candidate -> BranchAttemptFingerprint.fingerprintCombination(candidate)
+                        .equals(selection.rowFingerprint()))
+                .findFirst()
+                .orElseGet(() -> combinations.isEmpty() ? new HashMap<>() : combinations.getFirst());
+    }
+
+    private void applyPreservedPathState(PreservedPathState preservedPathState) {
+        for (Map.Entry<Integer, BranchSide> entry : preservedPathState.asMap().entrySet()) {
+            LineOfCode predecessor = Branching.get(entry.getKey());
+            if (predecessor != null) {
+                materializeBranchSide(predecessor, entry.getValue(), currentConditional.getStatement());
+            }
+        }
+    }
+
+    private void materializeBranchSide(LineOfCode branch, BranchSide side, Statement attachTo) {
+        if (branch.getConditionalExpression() == null) {
+            return;
+        }
+        TruthTable tt = new TruthTable();
+        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(branch.getStatement());
+        tt.addConstraints(collectedConditions);
+        collectedConditions.add(branch.getConditionalExpression());
+        tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> combinations = tt.findValuesForCondition(side == BranchSide.TRUE).stream()
+                .map(this::adjustForEnums)
+                .toList();
+        if (!combinations.isEmpty()) {
+            materializeCombination(attachTo, combinations.getFirst());
+        }
+    }
+
+    private void materializeCombination(Statement statement, Map<Expression, Object> combination) {
         for (var entry : combination.entrySet()) {
             Expression key = entry.getKey();
             if (key instanceof MethodCallExpr mce) {
@@ -1122,56 +1179,19 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                         && name.getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
                     var collection = combination.get(new NameExpr(TruthTable.COLLECTION_UTILS));
                     if (collection != null) {
-                        setupConditionThroughMethodCalls(currentConditional.getStatement(),
+                        setupConditionThroughMethodCalls(statement,
                                 new AbstractMap.SimpleEntry<>(key, collection));
                         break;
                     }
                 }
-                setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
+                setupConditionThroughMethodCalls(statement, entry);
             } else if (key.isNameExpr() && !key.asNameExpr().getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
-                setupConditionThroughAssignment(currentConditional.getStatement(), entry);
+                setupConditionThroughAssignment(statement, entry);
             } else if (key.isObjectCreationExpr() && entry.getValue() instanceof Boolean b && b) {
-                setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
+                setupConditionThroughMethodCalls(statement, entry);
                 return;
             }
         }
-    }
-
-    private Map<Expression, Object> selectNextCombination(List<Map<Expression, Object>> combinations, boolean desiredState) {
-        int targetPath = desiredState ? LineOfCode.TRUE_PATH : LineOfCode.FALSE_PATH;
-        Map<Expression, Object> fallback = null;
-        String fallbackFingerprint = null;
-
-        for (Map<Expression, Object> candidate : combinations) {
-            Map<Expression, Object> adjusted = adjustForEnums(candidate);
-            String fingerprint = BranchAttemptFingerprint.fingerprintCombination(adjusted);
-            if (fallback == null) {
-                fallback = adjusted;
-                fallbackFingerprint = fingerprint;
-            }
-            if (!currentConditional.hasAttemptedCombination(targetPath, fingerprint)) {
-                currentConditional.recordCombinationAttempt(targetPath, fingerprint);
-                BranchingTrace.record(() -> "selectedRow:"
-                        + currentConditional.getCallableDeclaration().getNameAsString()
-                        + "|path=" + targetPath
-                        + "|fingerprint=" + fingerprint
-                        + "|mode=new");
-                return adjusted;
-            }
-        }
-
-        if (fallback != null) {
-            currentConditional.recordCombinationAttempt(targetPath, Objects.requireNonNull(fallbackFingerprint));
-            String recordedFingerprint = fallbackFingerprint;
-            BranchingTrace.record(() -> "selectedRow:"
-                    + currentConditional.getCallableDeclaration().getNameAsString()
-                    + "|path=" + targetPath
-                    + "|fingerprint=" + recordedFingerprint
-                    + "|mode=reuse");
-            return fallback;
-        }
-
-        return new HashMap<>();
     }
 
     private Map<Expression, Object> adjustForEnums(Map<Expression, Object> combination) {
