@@ -2,6 +2,7 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AssignExpr;
@@ -57,14 +58,19 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
         CallableDeclaration<?> md = lineOfCode.getCallableDeclaration();
         NameCollector nameCollector = new NameCollector();
 
-        Set<String> names = nameCollector.getNames();
         condition.accept(nameCollector, null);
+        Set<String> names = nameCollector.getNames();
 
         for (String name : names) {
             for (Parameter p : md.getParameters()) {
                 if (p.getName().asString().equals(name)) {
                     return true;
                 }
+            }
+            if (md.findAncestor(ClassOrInterfaceDeclaration.class)
+                    .flatMap(cid -> cid.getFieldByName(name))
+                    .isPresent()) {
+                return true;
             }
         }
 
