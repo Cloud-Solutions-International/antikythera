@@ -764,11 +764,16 @@ public class AbstractCompiler {
     }
 
     public static TypeWrapper findType(CompilationUnit cu, String className) {
+        // Strip generic type parameters if present (e.g., "ArrayList<Integer>" -> "ArrayList")
+        String baseName = className.contains("<")
+                ? className.substring(0, className.indexOf('<'))
+                : className;
+
         /*
          * If the compilation unit is null, this may be part of the java.lang package.
          */
         if (cu == null) {
-            return findTypeFromJavaLang(className);
+            return findTypeFromJavaLang(baseName);
         }
 
         /*
@@ -780,7 +785,7 @@ public class AbstractCompiler {
          * located in any jar file
          * that we have loaded.
          */
-        TypeDeclaration<?> p = getMatchingType(cu, className).orElse(null);
+        TypeDeclaration<?> p = getMatchingType(cu, baseName).orElse(null);
         if (p != null) {
             return new TypeWrapper(p);
         }
@@ -789,7 +794,7 @@ public class AbstractCompiler {
         // Priority 1: Same package types (most likely match)
         String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
         if (!packageName.isEmpty()) {
-            String samePackageFqn = packageName + "." + className;
+            String samePackageFqn = packageName + "." + baseName;
             Optional<TypeDeclaration<?>> samePackageType = AntikytheraRunTime.getTypeDeclaration(samePackageFqn);
             if (samePackageType.isPresent()) {
                 return new TypeWrapper(samePackageType.orElseThrow());
@@ -797,28 +802,28 @@ public class AbstractCompiler {
         }
 
         // Priority 2: Exact match (might be a fully qualified name passed as className)
-        Optional<TypeDeclaration<?>> exactMatch = AntikytheraRunTime.getTypeDeclaration(className);
+        Optional<TypeDeclaration<?>> exactMatch = AntikytheraRunTime.getTypeDeclaration(baseName);
         if (exactMatch.isPresent()) {
             return new TypeWrapper(exactMatch.orElseThrow());
         }
 
-        TypeWrapper imp = getTypeWrapperFromImports(cu, className);
+        TypeWrapper imp = getTypeWrapperFromImports(cu, baseName);
         if (imp != null)
             return imp;
 
         for (EnumDeclaration ed : cu.findAll(EnumDeclaration.class)) {
             for (EnumConstantDeclaration constant : ed.getEntries()) {
-                if (constant.getNameAsString().equals(className)) {
+                if (constant.getNameAsString().equals(baseName)) {
                     return new TypeWrapper(constant);
                 }
             }
         }
 
-        TypeWrapper typeDecl = searchClassName(className);
+        TypeWrapper typeDecl = searchClassName(baseName);
         if (typeDecl != null)
             return typeDecl;
 
-        return detectTypeWithClassLoaders(cu, className);
+        return detectTypeWithClassLoaders(cu, baseName);
     }
 
     private static TypeWrapper searchClassName(String className) {
