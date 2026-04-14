@@ -910,8 +910,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
 
         EvaluatorException eex;
-        if (unwrapped instanceof EvaluatorException ee && ee.getError() == EvaluatorException.NPE) {
+        if ((unwrapped instanceof EvaluatorException ee && ee.getError() == EvaluatorException.NPE)
+                || containsNullPointerException(e)) {
             // Re-wrap with a real NullPointerException cause so JunitAsserter emits NPE.class
+            eex = new EvaluatorException("Application NPE", new NullPointerException());
+        } else if (unwrapped instanceof EvaluatorException || unwrapped instanceof sa.com.cloudsolutions.antikythera.exception.AUTException) {
+            // The deepest cause is still a framework wrapper with no real Java exception inside —
+            // this happens when the symbolic evaluator fails to dereference a null receiver without
+            // propagating a real NullPointerException (e.g. validateReflectiveMethod else-branch).
+            // Since this method is ONLY called for null-arg FP application, NPE is always correct.
             eex = new EvaluatorException("Application NPE", new NullPointerException());
         } else {
             eex = new EvaluatorException(e.getMessage() != null ? e.getMessage() : "FP application exception", e);
@@ -920,6 +927,16 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         ExceptionContext ctx = new ExceptionContext();
         ctx.setException(eex);
         return ctx;
+    }
+
+    private static boolean containsNullPointerException(Throwable t) {
+        while (t != null) {
+            if (t instanceof NullPointerException) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     /**
