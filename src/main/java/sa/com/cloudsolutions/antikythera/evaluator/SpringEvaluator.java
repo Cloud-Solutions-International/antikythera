@@ -1402,6 +1402,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         if (direct instanceof NameExpr ne) {
             return ne.getNameAsString();
         }
+        if (direct != null) {
+            return direct;
+        }
         EnumConstantDeclaration constant = resolveEnumConstant(expression);
         if (constant != null) {
             return constant.getNameAsString();

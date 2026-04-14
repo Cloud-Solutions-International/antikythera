@@ -273,7 +273,11 @@ public class TruthTable {
                 && mce.getArguments().size() == 1
                 && mce.getArgument(0).equals(variable)
                 && scope.isPresent()) {
-            Object variableValue = normalizeEqualsOperand(truthValues.get(variable));
+            Object rawVariable = truthValues.get(variable);
+            if (rawVariable instanceof Boolean b) {
+                return b;
+            }
+            Object variableValue = normalizeEqualsOperand(rawVariable);
             Object scopeValue = normalizeEqualsOperand(resolveEqualsOperand(scope.orElseThrow(), truthValues));
             if (scopeValue == null) {
                 return variableValue == null;
@@ -1154,6 +1158,7 @@ public class TruthTable {
                             collector.put(nameExpression, enumDomain);
                         } else {
                             collector.putIfAbsent(nameExpression, new Domain(false, true));
+                            collector.putIfAbsent(compareWith, new Domain(true, false));
                         }
                     } else if (isInequalityPresent()) {
                         // Variable-to-variable inequality (e.g. a > b): assign Integer domain so
