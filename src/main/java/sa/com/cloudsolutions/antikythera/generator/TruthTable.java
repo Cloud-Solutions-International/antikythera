@@ -1155,8 +1155,18 @@ public class TruthTable {
                         } else {
                             collector.putIfAbsent(nameExpression, new Domain(false, true));
                         }
+                    } else if (isInequalityPresent()) {
+                        // Variable-to-variable inequality (e.g. a > b): assign Integer domain so
+                        // adjustDomain() can later widen it to the appropriate numeric range.
+                        // Both sides must be registered; otherwise the missing variable stays null.
+                        collector.putIfAbsent(nameExpression, new Domain(0, 1));
+                        collector.putIfAbsent(compareWith, new Domain(0, 1));
                     } else {
-                        collector.putIfAbsent(nameExpression, new Domain(false, true));
+                        // Variable-to-variable equality (e.g. a.equals(b)): both sides need Boolean
+                        // domains so the truth table explores all four (TT/TF/FT/FF) combinations.
+                        // Domain(true, false) means lower=true so combination 0 yields (true, true).
+                        collector.putIfAbsent(nameExpression, new Domain(true, false));
+                        collector.putIfAbsent(compareWith, new Domain(true, false));
                     }
                 }
                 else if (isInequalityPresent()) {
