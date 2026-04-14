@@ -114,7 +114,7 @@ class TestTruthTable {
 
     @Test
     void deletedByDirectProducesTrueAndFalseRows() {
-        MethodDeclaration method = branchingCompilationUnit()
+        MethodDeclaration method = AntikytheraRunTime.getCompilationUnit(BRANCHING_CLASS)
                 .findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("deletedByDirect"))
                 .orElseThrow();
         IfStmt deletedByCondition = method.findAll(IfStmt.class).getLast();
@@ -138,10 +138,6 @@ class TestTruthTable {
 
     private CompilationUnit compilationUnit() {
         return AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
-    }
-
-    private CompilationUnit branchingCompilationUnit() {
-        return AntikytheraRunTime.getCompilationUnit(BRANCHING_CLASS);
     }
 
     private CompilationUnit enumCompilationUnit() {
