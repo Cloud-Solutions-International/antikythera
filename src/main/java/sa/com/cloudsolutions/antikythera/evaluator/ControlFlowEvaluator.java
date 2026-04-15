@@ -156,6 +156,23 @@ public class ControlFlowEvaluator extends Evaluator {
             return List.of();
         }
 
+        // When the getter call's scope is a simple name (e.g. pr.getSource()),
+        // generate a setter-call precondition (pr.setSource("ALL")) instead of
+        // Mockito.when(pr.getSource()).thenReturn("ALL"). The setter form has
+        // scope NameExpr("pr") which matches applyPreconditions()'s check.
+        if (methodCallExpr.getScope().isPresent()
+                && methodCallExpr.getScope().orElseThrow() instanceof NameExpr) {
+            String setterName = AbstractCompiler.setterNameFromGetterName(methodCallExpr.getNameAsString());
+            if (!setterName.equals(methodCallExpr.getNameAsString())) {
+                MethodCallExpr setter = new MethodCallExpr();
+                setter.setName(setterName);
+                setter.setScope(methodCallExpr.getScope().orElseThrow().clone());
+                setter.addArgument(returnValue);
+                BranchingTrace.record(() -> "priorLocal:emit|name=" + variableName + "|expression=" + setter);
+                return List.of(setter);
+            }
+        }
+
         MethodCallExpr when = new MethodCallExpr(new NameExpr("Mockito"), "when")
                 .addArgument(methodCallExpr.clone());
         MethodCallExpr thenReturn = new MethodCallExpr(when, "thenReturn")

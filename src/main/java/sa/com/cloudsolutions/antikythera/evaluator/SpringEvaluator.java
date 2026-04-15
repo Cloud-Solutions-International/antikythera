@@ -302,6 +302,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                             + cd.getNameAsString()
                             + "|statement=" + currentConditional.getStatement()
                             + "|pathTaken=" + currentConditional.getPathTaken());
+
+                    // For zero-parameter methods setupParameter() is never called,
+                    // so drive branch setup here instead.
+                    if (cd.getParameters().isEmpty()
+                            && (currentConditional.getStatement() instanceof IfStmt
+                                || currentConditional.getConditionalExpression() != null)) {
+                        setupIfCondition();
+                        applyFieldPreconditions();
+                    }
                 }
                 if ((currentConditional == null || currentConditional.isFullyTravelled()) && oldSize != 0) {
                     // Before giving up, scan ALL branches for untried cross-product combinations.
@@ -493,6 +502,37 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             } else if (cond.getExpression() instanceof ObjectCreationExpr oce) {
                 va.setValue(createObject(oce).getValue());
                 va.setInitializer(List.of(oce));
+            }
+        }
+    }
+
+    /**
+     * Apply preconditions to field evaluators for zero-parameter methods.
+     * Mirrors applyPreconditions(p, va) but resolves the target from the field map
+     * instead of from a parameter.
+     */
+    private void applyFieldPreconditions() throws ReflectiveOperationException {
+        for (Precondition cond : currentConditional.getPreconditions()) {
+            if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+                if (mce.getScope().orElseThrow() instanceof NameExpr ne) {
+                    Symbol va = getField(ne.getNameAsString());
+                    if (va != null) {
+                        if (va.getValue() instanceof Evaluator eval) {
+                            applyEvaluatorPrecondition(eval, mce);
+                        } else if (va instanceof Variable variable) {
+                            applyCollectionPrecondition(variable, mce);
+                        }
+                    }
+                }
+            } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
+                Symbol va = getField(assignExpr.getTarget().toString());
+                if (va != null) {
+                    parameterAssignment(assignExpr, va);
+                    va.setInitializer(List.of(assignExpr));
+                }
+            } else if (cond.getExpression() instanceof ObjectCreationExpr oce) {
+                // For field preconditions with ObjectCreationExpr, we don't know
+                // which field to target — skip (handled by other mechanisms)
             }
         }
     }

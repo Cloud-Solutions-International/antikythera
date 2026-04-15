@@ -131,10 +131,13 @@ class TestBranchingCombinations extends TestHelper {
 
         evaluator.visit(method);
 
+        String output = outContent.toString();
+        System.err.println("DEBUG sequentialDirect output: [" + output.replace("\n", "\\n") + "]");
         Set<String> combinations = extractCombinations(
-                outContent.toString(),
+                output,
                 Pattern.compile("TYPE_(?:EMPTY|SET)\\|VALUES_(?:EMPTY|PRESENT)")
         );
+        System.err.println("DEBUG combinations: " + combinations);
         assertEquals(4, combinations.size());
     }
 
