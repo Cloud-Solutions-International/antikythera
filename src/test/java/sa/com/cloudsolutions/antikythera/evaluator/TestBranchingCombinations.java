@@ -194,4 +194,37 @@ class TestBranchingCombinations extends TestHelper {
         int end = event.indexOf("|mode=", start);
         return end >= 0 ? event.substring(start, end) : event.substring(start);
     }
+
+        private int extractRowCount(String event) {
+                Matcher matcher = Pattern.compile("\\|rows=(\\d+)\\|").matcher(event);
+                if (!matcher.find()) {
+                        throw new IllegalStateException("Trace event should include row count: " + event);
+                }
+                return Integer.parseInt(matcher.group(1));
+        }
+
+        @Test
+        void sequentialDirectRecordsBranchSelectionTrace() throws ReflectiveOperationException {
+                MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                                md -> md.getNameAsString().equals("sequentialDirect")).orElseThrow();
+
+                evaluator.visit(method);
+
+                List<String> trace = BranchingTrace.snapshot();
+                long selectedCount = trace.stream()
+                                .filter(event -> event.startsWith("selected:sequentialDirect"))
+                                .count();
+
+                assertTrue(trace.stream().anyMatch(event -> event.startsWith("target:sequentialDirect")),
+                                "Expected target trace entries for sequentialDirect");
+                assertTrue(trace.stream().anyMatch(event -> event.startsWith("selected:sequentialDirect")),
+                                "Expected selected-combination trace entries for sequentialDirect");
+                assertTrue(trace.stream()
+                                                .filter(event -> event.startsWith("truthTable:sequentialDirect"))
+                                                .map(this::extractRowCount)
+                                                .allMatch(count -> count >= 1),
+                                "Expected truth-table row counts in sequentialDirect trace");
+                assertTrue(selectedCount >= 4,
+                                "Expected multiple branch-attempt selections for sequentialDirect");
+        }
 }
