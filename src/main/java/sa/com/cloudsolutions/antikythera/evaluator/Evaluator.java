@@ -883,6 +883,9 @@ public class Evaluator implements EvaluationEngine {
                 AntikytheraRunTime.push(variable);
             } else {
                 Variable variable = evaluateExpression(expr);
+                if (variable == null) {
+                    variable = new Variable(null);
+                }
                 if (variable.getType() == null && variable.getValue() instanceof Evaluator eval) {
                     variable.setType(AbstractCompiler.typeFromDeclaration(
                             AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow()));
