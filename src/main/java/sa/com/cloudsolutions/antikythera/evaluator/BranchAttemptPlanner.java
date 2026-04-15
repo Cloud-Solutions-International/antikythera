@@ -99,6 +99,7 @@ final class BranchAttemptPlanner {
         // contradictory preserved states and cause spurious extra iterations.
         List<LineOfCode> orderedPredecessors = target.getPredecessors().stream()
                 .filter(p -> p.getParent() == target.getParent())
+                .filter(p -> p.getConditionalExpression() != null)
                 .toList();
         if (orderedPredecessors.isEmpty()) {
             return List.of(PreservedPathState.empty());

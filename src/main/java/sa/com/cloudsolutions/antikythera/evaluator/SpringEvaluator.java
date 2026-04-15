@@ -214,6 +214,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             v = createInterfaceAutowire(resolvedClass);
             if (v != null) {
                 v.setType(type);
+                AntikytheraRunTime.autoWire(resolvedClass, v);
                 return v;
             }
         }
@@ -403,7 +404,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     private int advanceBranchingState(CallableDeclaration<?> cd) {
-        if (currentConditional != null) {
+        if (currentConditional != null && !currentConditional.isFullyTravelled()) {
             currentConditional.transition();
             Branching.add(currentConditional);
 

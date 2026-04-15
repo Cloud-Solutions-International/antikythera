@@ -387,6 +387,14 @@ public class LineOfCode {
         return this;
     }
 
+    /**
+     * Marks this branch as fully travelled (both paths explored).
+     * Used by repository mock handlers to indicate that both the full and empty paths have been generated.
+     */
+    public void markFullyTravelled() {
+        this.pathTaken = BOTH_PATHS;
+    }
+
     public boolean shouldSchedule() {
         return branchKind == BranchKind.CONTROL_FLOW;
     }
