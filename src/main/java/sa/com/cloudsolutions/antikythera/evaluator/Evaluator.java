@@ -2297,7 +2297,10 @@ public class Evaluator implements EvaluationEngine {
             returnFrom = null;
             returnValue = null;
 
-            List<Statement> statements = md.getBody().orElseThrow().getStatements();
+            BlockStmt body = md.getBody().orElseThrow();
+            body.findAll(BlockStmt.class).forEach(block -> locals.remove(block.hashCode()));
+
+            List<Statement> statements = body.getStatements();
             setupParameters(md);
 
             executeBlock(statements);
