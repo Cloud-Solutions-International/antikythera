@@ -8,9 +8,15 @@ import java.util.Optional;
 
 public final class PreservedPathState {
     private final Map<Integer, BranchSide> preservedSidesByBranch;
+    private final int rowHint;
 
     private PreservedPathState(Map<Integer, BranchSide> preservedSidesByBranch) {
+        this(preservedSidesByBranch, 0);
+    }
+
+    private PreservedPathState(Map<Integer, BranchSide> preservedSidesByBranch, int rowHint) {
         this.preservedSidesByBranch = Collections.unmodifiableMap(new LinkedHashMap<>(preservedSidesByBranch));
+        this.rowHint = rowHint;
     }
 
     public static PreservedPathState empty() {
@@ -18,11 +24,19 @@ public final class PreservedPathState {
     }
 
     public PreservedPathState with(LineOfCode branch, BranchSide side) {
+        return with(branch, side, 0);
+    }
+
+    public PreservedPathState with(LineOfCode branch, BranchSide side, int rowHint) {
         Objects.requireNonNull(branch, "branch");
         Objects.requireNonNull(side, "side");
         LinkedHashMap<Integer, BranchSide> copy = new LinkedHashMap<>(preservedSidesByBranch);
         copy.put(branch.getStatement().hashCode(), side);
-        return new PreservedPathState(copy);
+        return new PreservedPathState(copy, rowHint);
+    }
+
+    public int getRowHint() {
+        return rowHint;
     }
 
     public Optional<BranchSide> sideFor(LineOfCode branch) {
@@ -43,12 +57,12 @@ public final class PreservedPathState {
         if (!(obj instanceof PreservedPathState other)) {
             return false;
         }
-        return preservedSidesByBranch.equals(other.preservedSidesByBranch);
+        return preservedSidesByBranch.equals(other.preservedSidesByBranch) && rowHint == other.rowHint;
     }
 
     @Override
     public int hashCode() {
-        return preservedSidesByBranch.hashCode();
+        return 31 * preservedSidesByBranch.hashCode() + rowHint;
     }
 
     @Override

@@ -520,7 +520,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                         if (va.getValue() instanceof Evaluator eval) {
                             applyEvaluatorPrecondition(eval, mce);
                         } else if (va instanceof Variable variable) {
-                            applyCollectionPrecondition(variable, mce);
+                            Evaluator promoted = promoteFieldToEvaluator(ne.getNameAsString(), variable);
+                            if (promoted != null) {
+                                applyEvaluatorPrecondition(promoted, mce);
+                            } else {
+                                applyCollectionPrecondition(variable, mce);
+                            }
                         }
                     }
                 }
@@ -545,6 +550,29 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             if (!applyDirectSetterFieldPrecondition(eval, mce)) {
                 throw ex;
             }
+        }
+    }
+
+    private Evaluator promoteFieldToEvaluator(String fieldName, Variable variable) {
+        if (variable.getType() == null || variable.getType().isPrimitiveType()) {
+            return null;
+        }
+        String typeName = variable.getType().asString();
+        String fqn = AbstractCompiler.findFullyQualifiedName(cu, typeName);
+        if (fqn == null) {
+            fqn = typeName;
+        }
+        if (AntikytheraRunTime.getCompilationUnit(fqn) == null) {
+            return null;
+        }
+        try {
+            Evaluator eval = EvaluatorFactory.createLazily(fqn, Evaluator.class);
+            eval.setupFields();
+            variable.setValue(eval);
+            fields.put(fieldName, variable);
+            return eval;
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -1215,10 +1243,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     private void applyPreservedPathState(PreservedPathState preservedPathState) {
+        int rowHint = preservedPathState.getRowHint();
         for (Map.Entry<Integer, BranchSide> entry : preservedPathState.asMap().entrySet()) {
             LineOfCode predecessor = Branching.get(entry.getKey());
             if (predecessor != null) {
-                materializeBranchSide(predecessor, entry.getValue(), currentConditional.getStatement());
+                materializeBranchSide(predecessor, entry.getValue(), currentConditional.getStatement(), rowHint);
             } else {
                 logger.trace("applyPreservedPathState: no registered branch for hash {}; "
                         + "predecessor materialization skipped — possible AST identity mismatch",
@@ -1227,7 +1256,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
-    private void materializeBranchSide(LineOfCode branch, BranchSide side, Statement attachTo) {
+    private void materializeBranchSide(LineOfCode branch, BranchSide side, Statement attachTo, int rowHint) {
         if (branch.getConditionalExpression() == null) {
             return;
         }
@@ -1242,7 +1271,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 .map(this::adjustForEnums)
                 .toList();
         if (!combinations.isEmpty()) {
-            materializeCombination(attachTo, combinations.getFirst());
+            int index = rowHint % combinations.size();
+            materializeCombination(attachTo, combinations.get(index));
         }
     }
 

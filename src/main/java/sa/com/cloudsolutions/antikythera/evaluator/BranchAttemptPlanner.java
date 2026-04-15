@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.body.CallableDeclaration;
 
@@ -113,10 +114,17 @@ final class BranchAttemptPlanner {
                 continue;
             }
 
+            int trueRowCount = countOrAlternatives(predecessor);
             List<PreservedPathState> expanded = new ArrayList<>();
             for (PreservedPathState state : states) {
                 for (BranchSide side : availableSides) {
-                    expanded.add(state.with(predecessor, side));
+                    if (side == BranchSide.TRUE && trueRowCount > 1) {
+                        for (int row = 0; row < trueRowCount; row++) {
+                            expanded.add(state.with(predecessor, side, row));
+                        }
+                    } else {
+                        expanded.add(state.with(predecessor, side));
+                    }
                 }
             }
             states = expanded;
@@ -135,6 +143,21 @@ final class BranchAttemptPlanner {
             return List.of(BranchSide.TRUE);
         }
         return List.of();
+    }
+
+    private static int countOrAlternatives(LineOfCode branch) {
+        Expression cond = branch.getConditionalExpression();
+        if (cond == null) {
+            return 1;
+        }
+        return countOrBranches(cond);
+    }
+
+    private static int countOrBranches(Expression expr) {
+        if (expr instanceof BinaryExpr be && be.getOperator() == BinaryExpr.Operator.OR) {
+            return countOrBranches(be.getLeft()) + countOrBranches(be.getRight());
+        }
+        return 1;
     }
 
     private record AttemptKey(int targetHash, BranchSide side, PreservedPathState preservedPathState) {
