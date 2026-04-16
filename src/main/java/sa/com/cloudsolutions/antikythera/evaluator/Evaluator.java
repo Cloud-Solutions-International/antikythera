@@ -884,7 +884,7 @@ public class Evaluator implements EvaluationEngine {
             } else {
                 Variable variable = evaluateExpression(expr);
                 if (variable == null) {
-                    variable = new Variable(null);
+                    throw new EvaluatorException("Cannot evaluate argument: " + expr);
                 }
                 if (variable.getType() == null && variable.getValue() instanceof Evaluator eval) {
                     variable.setType(AbstractCompiler.typeFromDeclaration(
