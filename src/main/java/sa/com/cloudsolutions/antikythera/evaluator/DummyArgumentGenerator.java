@@ -1,6 +1,7 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
@@ -20,6 +21,7 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashSet;
 import java.util.List;
@@ -205,6 +207,7 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
 
     public static Variable createObjectWithSimplestConstructor(TypeDeclaration<?> cdecl, String name) {
         Evaluator o = EvaluatorFactory.create(cdecl.getFullyQualifiedName().orElseThrow(), MockingEvaluator.class);
+        initializeEvaluatorStringFields(o, cdecl);
         Variable v = new Variable(o);
         String init = ArgumentGenerator.instantiateClass(
                 cdecl, name
@@ -212,6 +215,30 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         String[] parts = init.split("=");
         v.setInitializer(List.of(StaticJavaParser.parseExpression(parts[1])));
         return v;
+    }
+
+    private static void initializeEvaluatorStringFields(Evaluator eval, TypeDeclaration<?> typeDecl) {
+        for (FieldDeclaration fd : typeDecl.getFields()) {
+            String fieldName = fd.getVariable(0).getNameAsString();
+            Variable fieldVar = eval.getField(fieldName);
+            if (fieldVar != null && fieldVar.getValue() == null) {
+                Type fieldType = fd.getVariable(0).getType();
+                if (fieldType.isClassOrInterfaceType()
+                        && "String".equals(fieldType.asClassOrInterfaceType().getNameAsString())
+                        && hasSetterMethod(typeDecl, fieldName)) {
+                    fieldVar.setValue("0");
+                    if (fieldVar.getInitializer().isEmpty()) {
+                        fieldVar.setInitializer(List.of(new StringLiteralExpr("0")));
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean hasSetterMethod(TypeDeclaration<?> typeDecl, String fieldName) {
+        String setterName = "set" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+        return typeDecl.getMethodsByName(setterName).stream()
+                .anyMatch(md -> md.getParameters().size() == 1);
     }
 
     private Variable mockNonPrimitiveParameterHelper(Parameter param, TypeWrapper wrapper) throws InstantiationException, IllegalAccessException, InvocationTargetException {
@@ -244,7 +271,9 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
 
         // Try to find a no-arg constructor first
         try {
-            return new Variable(clazz.getDeclaredConstructor().newInstance());
+            Object instance = clazz.getDeclaredConstructor().newInstance();
+            initializeNullStringFields(instance);
+            return new Variable(instance);
         } catch (NoSuchMethodException e) {
             // No no-arg constructor, find the simplest one
             Constructor<?> simplest = findSimplestConstructor(clazz);
@@ -254,6 +283,21 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
         }
 
         return new Variable((Object) null);
+    }
+
+    private static void initializeNullStringFields(Object instance) {
+        for (Field f : instance.getClass().getDeclaredFields()) {
+            if (f.getType() == String.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
+                f.setAccessible(true);
+                try {
+                    if (f.get(instance) == null) {
+                        f.set(instance, "0");
+                    }
+                } catch (IllegalAccessException e) {
+                    // skip fields that can't be accessed
+                }
+            }
+        }
     }
 
     public static Variable createObjectWithSimplestConstructor(Constructor<?> simplest, Type t) throws InstantiationException, IllegalAccessException, InvocationTargetException {

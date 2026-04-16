@@ -247,7 +247,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     private Variable mockRepositoryMethod(Scope sc, Callable callable) throws ReflectiveOperationException {
         Method method = callable.getMethod();
-        if (method.getName().equals("save")) {
+        if (method.getName().equals("save") || method.getName().equals("saveAndFlush")) {
             return mockRepositorySave(callable, method);
         }
         String returnType = method.getReturnType().getName();
@@ -282,8 +282,8 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         MockingCall mockingCall = new MockingCall(callable, variables.getFirst());
         MethodCallExpr mce = StaticJavaParser.parseExpression(
             String.format(
-                    "Mockito.when(%s.save(Mockito.any())).thenAnswer(invocation-> invocation.getArgument(0))",
-                    variableName)
+                    "Mockito.when(%s.%s(Mockito.any())).thenAnswer(invocation-> invocation.getArgument(0))",
+                    variableName, method.getName())
         );
         mockingCall.setExpression(List.of(mce));
 
