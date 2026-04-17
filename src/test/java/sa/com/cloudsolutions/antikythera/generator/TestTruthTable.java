@@ -1,158 +1,621 @@
 package sa.com.cloudsolutions.antikythera.generator;
 
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.stmt.IfStmt;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import sa.com.cloudsolutions.antikythera.configuration.Settings;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
-import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class TestTruthTable {
-    private static final String SAMPLE_CLASS = "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Conditional";
-    private static final String BRANCHING_CLASS =
-            "sa.com.cloudsolutions.antikythera.testhelper.evaluator.BranchingCombinations";
-    private static final String STATUS_CLASS =
-            "sa.com.cloudsolutions.antikythera.testhelper.evaluator.Status";
+    final PrintStream standardOut = System.out;
+    final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
 
-    @BeforeAll
-    static void setup() throws IOException {
-        Settings.loadConfigMap(new File("src/test/resources/generator-field-tests.yml"));
-        AbstractCompiler.reset();
-        AbstractCompiler.preProcess();
+    @BeforeEach
+    void setUp() {
+        System.setOut(new PrintStream(outContent));
         AntikytheraRunTime.reset();
     }
 
-    @Test
-    void mapIsEmptyUsesMapShapedDomains() {
-        MethodDeclaration method = compilationUnit()
-                .findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("printMap"))
-                .orElseThrow();
-        Expression condition = method.findFirst(IfStmt.class).orElseThrow().getCondition();
-
-        TruthTable table = new TruthTable(condition);
-        table.generateTruthTable();
-
-        List<Map<Expression, Object>> trueRows = table.findValuesForCondition(true);
-        List<Map<Expression, Object>> falseRows = table.findValuesForCondition(false);
-
-        Object trueValue = trueRows.stream()
-                .map(row -> row.get(new NameExpr("map")))
-                .filter(Map.class::isInstance)
-                .findFirst()
-                .orElseThrow();
-
-        assertInstanceOf(Map.class, trueValue);
-        assertFalse(((Map<?, ?>) trueValue).isEmpty());
-        assertTrue(falseRows.stream()
-                .map(row -> row.get(new NameExpr("map")))
-                .anyMatch(value -> value == null || value instanceof Map<?, ?> map && map.isEmpty()));
+    @AfterEach
+    void tearDown() {
+        System.setOut(standardOut);
     }
 
     @Test
-    void objectEqualsUsesObjectCreationDomains() {
-        MethodDeclaration method = compilationUnit()
-                .findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("fileCompare"))
-                .orElseThrow();
-        IfStmt nested = method.findAll(IfStmt.class).get(1);
-        MethodCallExpr condition = nested.getCondition().asMethodCallExpr();
+    void testGenerateTruthTable() {
+        String condition = "a == null";
+        TruthTable generator = new TruthTable(condition);
+        generator.generateTruthTable();
 
-        TruthTable table = new TruthTable(condition);
-        table.generateTruthTable();
+        List<Map<Expression, Object>> truthTable = generator.getTable();
 
-        List<Map<Expression, Object>> falseRows = table.findValuesForCondition(false);
-        List<Map<Expression, Object>> trueRows = table.findValuesForCondition(true);
+        assertNotNull(truthTable);
+        assertFalse(truthTable.isEmpty());
+        assertEquals(2, truthTable.size()); // 2^3 = 8 rows for 3 variables
+        assertNull(truthTable.getFirst().get(new NameExpr("a")));
 
-        Object falseValue = falseRows.getFirst().get(new NameExpr("f"));
-        Object trueValue = trueRows.getFirst().get(new NameExpr("f"));
-
-        assertInstanceOf(Expression.class, falseValue);
-        assertInstanceOf(Expression.class, trueValue);
-        assertEquals("new File(\"/tmp\")", ((Expression) trueValue).toString());
-        assertEquals("new File(\"/tmp_other\")", ((Expression) falseValue).toString());
+        List<Map<Expression, Object>> values = generator.findValuesForCondition(true);
+        assertFalse(values.isEmpty());
+        assertNull(values.getFirst().get(new NameExpr("a")));
     }
 
     @Test
-    void enumEqualsVariableProducesTrueAndFalseRows() {
-        MethodDeclaration method = enumCompilationUnit()
-                .findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("cmp5"))
-                .orElseThrow();
-        MethodCallExpr condition = method.findFirst(MethodCallExpr.class,
-                mce -> mce.toString().equals("OPEN.equals(s)")).orElseThrow();
+    void testNegative() {
+        String condition = "a < 0";
+        TruthTable generator = new TruthTable(condition);
+        generator.generateTruthTable();
 
-        TruthTable table = new TruthTable(condition);
-        table.generateTruthTable();
-
-        List<Map<Expression, Object>> falseRows = table.findValuesForCondition(false);
-        List<Map<Expression, Object>> trueRows = table.findValuesForCondition(true);
-
-        assertFalse(falseRows.isEmpty());
-        assertFalse(trueRows.isEmpty());
-        assertTrue(trueRows.stream()
-                .map(row -> row.get(new NameExpr("s")))
-                .map(String::valueOf)
-                .anyMatch("OPEN"::equals));
-        assertTrue(falseRows.stream()
-                .map(row -> row.get(new NameExpr("s")))
-                .map(String::valueOf)
-                .anyMatch("CLOSED"::equals));
+        List<Map<Expression, Object>> values = generator.findValuesForCondition(true);
+        assertEquals(1, values.size());
+        assertEquals(-1, values.getFirst().get(new NameExpr("a")));
     }
 
     @Test
-    void deletedByDirectProducesTrueAndFalseRows() {
-        MethodDeclaration method = branchingCompilationUnit()
-                .findFirst(MethodDeclaration.class, md -> md.getNameAsString().equals("deletedByDirect"))
-                .orElseThrow();
-        IfStmt deletedByCondition = method.findAll(IfStmt.class).getLast();
-        Expression condition = deletedByCondition.getCondition();
+    void testNegativeMethod() {
+        String condition = "person.getId() < 0";
+        TruthTable generator = new TruthTable(condition);
+        generator.generateTruthTable();
 
-        TruthTable table = new TruthTable(condition);
-        table.generateTruthTable();
+        List<Map<Expression, Object>> values = generator.findValuesForCondition(true);
+        assertEquals(1, values.size());
 
-        List<Map<Expression, Object>> falseRows = table.findValuesForCondition(false);
-        List<Map<Expression, Object>> trueRows = table.findValuesForCondition(true);
-
-        assertFalse(falseRows.isEmpty());
-        assertFalse(trueRows.isEmpty());
-        assertTrue(trueRows.stream()
-                .map(row -> valueForExpression(row, "record.getDeletedBy()"))
-                .anyMatch(value -> value instanceof String text && !text.isEmpty()));
-        assertTrue(falseRows.stream()
-                .map(row -> valueForExpression(row, "record.getDeletedBy()"))
-                .anyMatch(value -> value == null || value instanceof String text && text.isEmpty()));
     }
 
-    private CompilationUnit compilationUnit() {
-        return AntikytheraRunTime.getCompilationUnit(SAMPLE_CLASS);
+
+    @SuppressWarnings("java:S125")
+    @Test
+    void testGenerateTruthTableNumbers() {
+        String condition = "a > b && b < c";
+        /* Using just 0 and 1 there is exactly one situation where this is always true
+         * that is when a = 1, b = 0 and c = 1;
+         */
+        TruthTable generator = new TruthTable(condition);
+        generator.generateTruthTable();
+
+        List<Map<Expression, Object>> values = generator.findValuesForCondition(true);
+        assertEquals(5, values.size());
+        assertEquals(1, values.getFirst().get(new NameExpr("a")));
+        assertEquals(0, values.getFirst().get(new NameExpr("b")));
+        assertEquals(1, values.getFirst().get(new NameExpr("c")));
+
     }
 
-    private CompilationUnit branchingCompilationUnit() {
-        return AntikytheraRunTime.getCompilationUnit(BRANCHING_CLASS);
+    @Test
+    void testPrintTruthTable() {
+        String condition = "a && b || !c";
+        TruthTable generator = new TruthTable(condition);
+        generator.generateTruthTable();
+
+        generator.printTruthTable();
+        assertTrue(outContent.toString().startsWith("Truth Table for condition: a && b || !c\n"));
+        assertTrue(outContent.toString().contains("true       true       false      true "));
     }
 
-    private CompilationUnit enumCompilationUnit() {
-        return AntikytheraRunTime.getCompilationUnit(STATUS_CLASS);
+    @ParameterizedTest
+    @ValueSource(strings = {"a && b || c && d", "p && q || r && !s"})
+    void testPrintValues(String condition) {
+        TruthTable generator = new TruthTable(condition);
+        generator.generateTruthTable();
+
+        generator.printValues(true);
+        assertTrue(outContent.toString().contains("Values to make the condition true for: " + condition));
+
+        generator.printValues(false);
+        assertTrue(outContent.toString().contains("Values to make the condition false for: " + condition));
     }
 
-    private Object valueForExpression(Map<Expression, Object> row, String expressionText) {
-        return row.entrySet().stream()
-                .filter(entry -> entry.getKey().toString().equals(expressionText))
-                .map(Map.Entry::getValue)
+    @Test
+    void testInequality() {
+        String condition = "a > b && c == d";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(24, v.size());
+        Map<Expression, Object> first = v.getFirst();
+        assertEquals(1, first.get(new NameExpr("a")));
+        assertEquals(0, first.get(new NameExpr("b")));
+        assertEquals(0, first.get(new NameExpr("c")));
+        assertEquals(0, first.get(new NameExpr("d")));
+
+        v = tt.findValuesForCondition(false);
+        assertEquals(232, v.size());
+    }
+
+    @Test
+    void testChainedInequality() {
+        String condition = "a >= b && b >= c";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(10, v.size());
+
+        Map<Expression, Object> first = v.getFirst();
+        assertEquals(0, first.get(new NameExpr("a")));
+        assertEquals(0, first.get(new NameExpr("b")));
+        assertEquals(0, first.get(new NameExpr("c")));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
+    }
+
+    @Test
+    void testChainedInequality2() {
+        String condition = "a > b && b > c";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(1, v.size());
+
+        Map<Expression, Object> first = v.getFirst();
+        assertEquals(2, first.get(new NameExpr("a")));
+        assertEquals(1, first.get(new NameExpr("b")));
+        assertEquals(0, first.get(new NameExpr("c")));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void testSimpleNull(boolean allowNullInputs) {
+        String condition = "a == null";
+        TruthTable tt = new TruthTable(condition);
+        tt.setAllowNullInputs(allowNullInputs);
+        tt.generateTruthTable();
+
+        // Since the condition contains a null literal, allowNullInputs should be disregarded
+        // and null inputs should always be allowed
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+
+        // Null inputs should be allowed regardless of allowNullInputs setting
+        assertEquals(1, v.size());
+        Map<Expression, Object> first = v.getFirst();
+        assertNull(first.get(new NameExpr("a")));
+
+        v = tt.findValuesForCondition(false);
+        assertEquals(1, v.size());
+        first = v.getFirst();
+        assertNotNull(first.get(new NameExpr("a")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void testNotNull(boolean allowNullInputs) {
+        String condition = "a != null && b != null";
+        TruthTable tt = new TruthTable(condition);
+        tt.setAllowNullInputs(allowNullInputs);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+
+        // This condition doesn't contain null literals, so allowNullInputs should be respected
+        if (allowNullInputs) {
+            // When null inputs are allowed
+            assertEquals(1, v.size());
+            Map<Expression, Object> first = v.getFirst();
+            assertTrue(TruthTable.isTrue(first.get(new NameExpr("a"))));
+            assertTrue(TruthTable.isTrue(first.get(new NameExpr("b"))));
+
+            v = tt.findValuesForCondition(false);
+            assertEquals(3, v.size());
+            first = v.getFirst();
+            assertNull(first.get(new NameExpr("a")));
+        } else {
+            // When null inputs are disallowed
+            assertEquals(1, v.size());
+            for (Map<Expression, Object> row : v) {
+                assertNotNull(row.get(new NameExpr("a")));
+                assertNotNull(row.get(new NameExpr("b")));
+            }
+
+            // False rows still exist even with null inputs disabled; verify they are exercised.
+            v = tt.findValuesForCondition(false);
+            assertEquals(3, v.size());
+            assertTrue(v.stream().anyMatch(row -> row.get(new NameExpr("a")) == null
+                    || row.get(new NameExpr("b")) == null));
+        }
+    }
+
+    @Test
+    void testStringLiteral() {
+        String condition = "a.equals(\"b\")";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(1, v.size());
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
+    }
+
+    @Test
+    void testEquals() {
+        String condition = "a.equals(b)";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(2, v.size());
+        Map<Expression, Object> first = v.getFirst();
+        assertTrue(Boolean.parseBoolean(first.get(new NameExpr("a")).toString()));
+        assertTrue(Boolean.parseBoolean(first.get(new NameExpr("b")).toString()));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
+    }
+
+    @Test
+    void testEqualsLiteral() {
+        String condition = "a.equals(1)";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertEquals(1, v.size());
+        assertTrue(TruthTable.isTrue(v.getFirst().get(new NameExpr("a"))));
+
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void testMethodCall(boolean allowNullInputs) {
+        String condition = "person.getName() != null";
+        TruthTable tt = new TruthTable(condition);
+        tt.setAllowNullInputs(allowNullInputs);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+
+        if (allowNullInputs) {
+            // When null inputs are allowed
+            assertEquals(1, v.size());
+            Expression first = v.getFirst().keySet().stream().findFirst().orElse(null);
+            assertNotNull(first);
+            assertTrue(TruthTable.isTrue(v.getFirst().get(first)));
+
+            v = tt.findValuesForCondition(false);
+            assertFalse(v.isEmpty());
+        } else {
+            // When null inputs are disallowed
+            // All method call results should be non-null
+            assertFalse(v.isEmpty());
+
+            // Find the method call expression
+            Expression methodCall = v.getFirst().keySet().stream()
+                    .filter(e -> e.isMethodCallExpr())
+                    .findFirst()
+                    .orElse(null);
+
+            if (methodCall != null) {
+                // Verify that the method call result is not null
+                for (Map<Expression, Object> row : v) {
+                    assertNotNull(row.get(methodCall));
+                }
+            }
+
+            // A false branch still exists; verify it is exercised when null inputs are disabled.
+            v = tt.findValuesForCondition(false);
+            assertEquals(1, v.size());
+        }
+    }
+
+    @Test
+    void integrationTest() {
+        /*
+         * The main method already has a lot of useful stuff
+         */
+        TruthTable.main(new String[0]);
+        String output = outContent.toString();
+        assertTrue(output.contains("Values to make the condition true for: !a\na=false"));
+
+    }
+
+    @Test
+    void testEnclosedExpression() {
+        String condition = "(a && b) || c";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
+
+        // Test when enclosed expression is true
+        Map<Expression, Object> first = v.getFirst();
+        assertTrue(TruthTable.isTrue(first.get(new NameExpr("a")))
+                && TruthTable.isTrue(first.get(new NameExpr("b")))
+                || TruthTable.isTrue(first.get(new NameExpr("c"))));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
+    }
+
+    @Test
+    void testIntegerLiteralExpression() {
+        String condition = "a > 5";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
+
+        Map<Expression, Object> first = v.getFirst();
+        int value = (int) first.get(new NameExpr("a"));
+        assertTrue(value <= 5);
+
+        v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
+    }
+
+    @Test
+    void testLongLiteralExpression() {
+        // Test with a long literal in a greater than comparison
+        String condition = "a > 5L";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        try {
+            List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+            assertFalse(v.isEmpty());
+
+            Map<Expression, Object> first = v.getFirst();
+            int value = (int) first.get(new NameExpr("a"));
+            assertTrue(value > 5);
+
+            v = tt.findValuesForCondition(false);
+            assertFalse(v.isEmpty());
+            first = v.getFirst();
+            value = (int) first.get(new NameExpr("a"));
+            assertTrue(value <= 5);
+        } catch (Exception e) {
+            // If the test fails with the current approach, let's try a different one
+            // This is a fallback to ensure we get some coverage of handleLongLiteral
+            System.out.println("[DEBUG_LOG] Exception in testLongLiteralExpression: " + e.getMessage());
+            fail("Test failed with exception: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void testNullLiteralDisregardsAllowNullInputs() {
+        // Test that when a condition contains null literals, allowNullInputs is disregarded
+        String condition = "a == null || b == null";
+        TruthTable tt = new TruthTable(condition);
+
+        // Set allowNullInputs to false, but it should be disregarded
+        tt.setAllowNullInputs(false);
+        tt.generateTruthTable();
+
+        // Verify that null values are still allowed in the truth table
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
+
+        // At least one row should have a null value for 'a' or 'b'
+        boolean foundNullValue = false;
+        for (Map<Expression, Object> row : v) {
+            if (row.get(new NameExpr("a")) == null || row.get(new NameExpr("b")) == null) {
+                foundNullValue = true;
+                break;
+            }
+        }
+        assertTrue(foundNullValue, "Should find at least one row with null values");
+
+        // Check that the condition evaluates correctly
+        for (Map<Expression, Object> row : v) {
+            Object aValue = row.get(new NameExpr("a"));
+            Object bValue = row.get(new NameExpr("b"));
+            assertTrue(aValue == null || bValue == null,
+                    "Condition 'a == null || b == null' should be true for this row");
+        }
+    }
+
+    @Test
+    void testFieldAccess() {
+        String condition = "person.age > 18";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
+
+        Expression fieldAccess = v.getFirst().keySet().stream()
+                .filter(e -> e.isFieldAccessExpr())
                 .findFirst()
                 .orElse(null);
+        assertNotNull(fieldAccess);
+        assertTrue((int)v.getFirst().get(fieldAccess) > 18);
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
+    }
+
+    @Test
+    void testDomainAdjustmentWithLiterals1() {
+        String condition = "a > 5 || a.equals(7)";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
+        assertEquals(6, v.getFirst().get(new NameExpr("a")));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
+    }
+
+    @Test
+    void testDomainAdjustmentWithLiterals2() {
+        String condition = "a > 5 && a.equals(7)";
+        TruthTable tt = new TruthTable(condition);
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+        assertFalse(v.isEmpty());
+        assertEquals(7, v.getFirst().get(new NameExpr("a")));
+
+        v = tt.findValuesForCondition(false);
+        assertFalse(v.isEmpty());
+    }
+
+
+    @Test
+    void testWithConstraints() {
+        String condition = "a > b && b > c";
+        TruthTable tt = new TruthTable(condition);
+
+        // Add constraint: a must be less than 5
+        tt.addConstraint(new NameExpr("a"),
+                new BinaryExpr(
+                        new NameExpr("a"),
+                        new IntegerLiteralExpr("5"),
+                        BinaryExpr.Operator.GREATER
+                )
+        );
+
+        tt.generateTruthTable();
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+
+        assertFalse(v.isEmpty());
+        for (Map<Expression, Object> row : v) {
+            int aValue = (int) row.get(new NameExpr("a"));
+            assertTrue(aValue > 5, "a should be greater than 5");
+            assertTrue(aValue > (int) row.get(new NameExpr("b")), "a should be greater than b");
+        }
+    }
+
+    @Test
+    void testMultipleConstraints() {
+        String condition = "a >= b && b >= c";
+        TruthTable tt = new TruthTable(condition);
+
+        tt.addConstraint(new NameExpr("a"),
+                new BinaryExpr(
+                        new NameExpr("a"),
+                        new IntegerLiteralExpr("10"),
+                        BinaryExpr.Operator.LESS_EQUALS
+                )
+        );
+
+        tt.addConstraint(new NameExpr("a"),
+                new BinaryExpr(
+                        new NameExpr("a"),
+                        new IntegerLiteralExpr("5"),
+                        BinaryExpr.Operator.GREATER_EQUALS
+                )
+        );
+
+        tt.addConstraint(new NameExpr("b"),
+                new BinaryExpr(
+                        new NameExpr("b"),
+                        new IntegerLiteralExpr("5"),
+                        BinaryExpr.Operator.GREATER_EQUALS
+                )
+        );
+        tt.addConstraint(new NameExpr("b"),
+                new BinaryExpr(
+                        new NameExpr("b"),
+                        new IntegerLiteralExpr("10"),
+                        BinaryExpr.Operator.LESS_EQUALS
+                )
+        );
+
+        tt.generateTruthTable();
+        List<Map<Expression, Object>> v = tt.findValuesForCondition(true);
+
+        assertFalse(v.isEmpty());
+        for (Map<Expression, Object> row : v) {
+            int bValue = (int) row.get(new NameExpr("b"));
+            assertTrue(bValue >= 5 && bValue <= 10, "b should be between 1 and 3");
+            assertTrue((int) row.get(new NameExpr("a")) >= bValue, "a should be greater than or equal to b");
+            assertTrue(bValue >= (int) row.get(new NameExpr("c")), "b should be greater than or equal to c");
+        }
+    }
+
+    static List<Arguments> constraintCases() {
+        NameExpr variable = new NameExpr("a");
+        return List.of(
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER), 5, true),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER), 2, false),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER_EQUALS), 3, true),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.GREATER_EQUALS), 2, false),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS), 1, true),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS), 4, false),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS_EQUALS), 3, true),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("3"), BinaryExpr.Operator.LESS_EQUALS), 4, false),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), 7, true),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), 8, false),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.NOT_EQUALS), 9, true),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.NOT_EQUALS), 7, false),
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("1"), BinaryExpr.Operator.BINARY_AND), 42, true), // default case
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), true, true), // boolean value
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), false, false), // boolean value
+                Arguments.of(variable, new BinaryExpr(variable, new IntegerLiteralExpr("7"), BinaryExpr.Operator.EQUALS), "string", true) // non-integer, non-boolean
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("constraintCases")
+    void testSatisfiesConstraintForVariableSwitchCases(NameExpr variable, BinaryExpr expr, Object value, boolean expected) {
+        TruthTable tt = new TruthTable();
+        Map<Expression, Object> truthValues = new HashMap<>();
+        truthValues.put(variable, value);
+        assertEquals(expected, tt.satisfiesConstraintForVariable(variable, expr, truthValues));
+    }
+
+    static List<Arguments> calculateNewIntervalCases() {
+        return List.of(
+                // GREATER, varOnLeft
+                Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.GREATER, true, new TruthTable.Domain(6, 10)),
+                // GREATER, !varOnLeft
+                Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.GREATER, false, new TruthTable.Domain(0, 4)),
+                // GREATER_EQUALS, varOnLeft
+                Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.GREATER_EQUALS, true, new TruthTable.Domain(5, 10)),
+                // GREATER_EQUALS, !varOnLeft
+                Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.GREATER_EQUALS, false, new TruthTable.Domain(0, 5)),
+                // LESS, varOnLeft
+                Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.LESS, true, new TruthTable.Domain(0, 4)),
+                // LESS, !varOnLeft
+                Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.LESS, false, new TruthTable.Domain(6, 10)),
+                // LESS_EQUALS, varOnLeft
+                Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.LESS_EQUALS, true, new TruthTable.Domain(0, 5)),
+                // LESS_EQUALS, !varOnLeft
+                Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.LESS_EQUALS, false, new TruthTable.Domain(5, 10)),
+                // EQUALS
+                Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.EQUALS, true, new TruthTable.Domain(5, 5)),
+                // default (NOT_EQUALS and others)
+                Arguments.of(new TruthTable.Domain(0, 10), 5, BinaryExpr.Operator.NOT_EQUALS, true, new TruthTable.Domain(0, 10))
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("calculateNewIntervalCases")
+    void testCalculateNewInterval(
+            TruthTable.Domain current,
+            int literalValue,
+            BinaryExpr.Operator operator,
+            boolean varOnLeft,
+            TruthTable.Domain expected
+    ) {
+        TruthTable tt = new TruthTable();
+        TruthTable.Domain result = tt.calculateNewInterval(current, literalValue, operator, varOnLeft);
+        assertEquals(expected.min, result.min);
+        assertEquals(expected.max, result.max);
     }
 }

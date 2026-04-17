@@ -883,6 +883,9 @@ public class Evaluator implements EvaluationEngine {
                 AntikytheraRunTime.push(variable);
             } else {
                 Variable variable = evaluateExpression(expr);
+                if (variable == null) {
+                    throw new EvaluatorException("Cannot evaluate argument: " + expr);
+                }
                 if (variable.getType() == null && variable.getValue() instanceof Evaluator eval) {
                     variable.setType(AbstractCompiler.typeFromDeclaration(
                             AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow()));
@@ -1268,12 +1271,56 @@ public class Evaluator implements EvaluationEngine {
                 scope.setMCEWrapper(wrapper);
                 return eval.executeMethod(scope);
             }
+            
+            // If the variable has no runtime class but has a source-available type (e.g., inner classes),
+            // route to symbolic evaluation instead of reflective invocation
+            if (v.getClazz() == null && v.getType() != null) {
+                Variable symbolicResult = trySymbolicMethodCall(v, methodCall);
+                if (symbolicResult != null) {
+                    return symbolicResult;
+                }
+            }
+            
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this, v);
             return reflectiveMethodCall(v, reflectionArguments);
         }
         MCEWrapper wrapper = wrapCallExpression(methodCall);
         scope.setMCEWrapper(wrapper);
         return executeMethod(scope);
+    }
+
+    /**
+     * Attempts to handle method calls on source-available types (like inner classes) symbolically
+     * when no runtime class is available. Creates an Evaluator for the type and executes the method
+     * against parsed source code.
+     *
+     * @param v the variable on which the method is being called
+     * @param methodCall the method call expression
+     * @return the result of symbolic execution, or null if the type cannot be resolved
+     */
+    private Variable trySymbolicMethodCall(Variable v, MethodCallExpr methodCall) throws ReflectiveOperationException {
+        String typeString = v.getType().asString();
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, typeString);
+        
+        if (wrapper != null && wrapper.getType() != null) {
+            String fqn = wrapper.getFullyQualifiedName();
+            if (fqn != null) {
+                try {
+                    // First, try to load the class in case it's actually available
+                    Class<?> clazz = AbstractCompiler.loadClass(fqn);
+                    v.setClazz(clazz);
+                    // Class loaded successfully, let reflective call handle it
+                    return null;
+                } catch (ClassNotFoundException e) {
+                    // Class not available at runtime - use symbolic evaluation
+                    Evaluator eval = EvaluatorFactory.create(fqn, this);
+                    if (eval != null && eval.getCompilationUnit() != null) {
+                        return eval.executeSource(methodCall);
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private Variable handleClassForNameCall(MethodCallExpr methodCall) throws ReflectiveOperationException {
@@ -1297,6 +1344,16 @@ public class Evaluator implements EvaluationEngine {
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Class<?> targetClass = v.getClazz();
+        
+        // Minimal type resolution: if we have a TypeWrapper with a runtime class, use it
+        if (targetClass == null && v.getType() != null) {
+            TypeWrapper wrapper = AbstractCompiler.findType(cu, v.getType().asString());
+            if (wrapper != null && wrapper.getClazz() != null) {
+                targetClass = wrapper.getClazz();
+                v.setClazz(targetClass);
+            }
+        }
+        
         if (targetClass == null && v.isFailedMock()) {
             returnValue = new Variable(null);
             return returnValue;
@@ -2243,7 +2300,10 @@ public class Evaluator implements EvaluationEngine {
             returnFrom = null;
             returnValue = null;
 
-            List<Statement> statements = md.getBody().orElseThrow().getStatements();
+            BlockStmt body = md.getBody().orElseThrow();
+            body.findAll(BlockStmt.class).forEach(block -> locals.remove(block.hashCode()));
+
+            List<Statement> statements = body.getStatements();
             setupParameters(md);
 
             executeBlock(statements);

@@ -247,7 +247,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     private Variable mockRepositoryMethod(Scope sc, Callable callable) throws ReflectiveOperationException {
         Method method = callable.getMethod();
-        if (method.getName().equals("save")) {
+        if (method.getName().equals("save") || method.getName().equals("saveAndFlush")) {
             return mockRepositorySave(callable, method);
         }
         String returnType = method.getReturnType().getName();
@@ -277,13 +277,13 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         MockingCall call = MockingRegistry.getThen(className, callable);
         if (call != null) {
-            return call.getVariable();
+            return variables.getFirst();
         }
         MockingCall mockingCall = new MockingCall(callable, variables.getFirst());
         MethodCallExpr mce = StaticJavaParser.parseExpression(
             String.format(
-                    "Mockito.when(%s.save(Mockito.any())).thenAnswer(invocation-> invocation.getArgument(0))",
-                    variableName)
+                    "Mockito.when(%s.%s(Mockito.any())).thenAnswer(invocation-> invocation.getArgument(0))",
+                    variableName, method.getName())
         );
         mockingCall.setExpression(List.of(mce));
 
@@ -679,8 +679,13 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = Branching.get(stmt.hashCode());
 
-        Variable v = (l == null) ? repositoryFullPath(sc, stmt, collectionTypeName)
-                : repositoryEmptyPath(collectionTypeName);
+        Variable v;
+        if (l == null) {
+            v = repositoryFullPath(sc, stmt, collectionTypeName);
+        } else {
+            l.markFullyTravelled();
+            v = repositoryEmptyPath(collectionTypeName);
+        }
 
         MethodCallExpr when = createWhenExpression(methodCall);
         MockingCall then = createThenExpression(sc, v, when);
@@ -747,7 +752,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     private Variable repositoryFullPath(Scope sc, Statement stmt, String collectionTypeName) {
         LineOfCode l = new LineOfCode(stmt);
         l.setPathTaken(LineOfCode.TRUE_PATH);
-        Branching.add(l.markPreconditionOnly());
+        Branching.add(l);
 
         Callable callable = sc.getMCEWrapper().getMatchingCallable();
         CallableDeclaration<?> callableDeclaration = callable.getCallableDeclaration();

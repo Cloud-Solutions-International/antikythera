@@ -4,7 +4,6 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.configuration.Settings;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
@@ -125,7 +124,6 @@ class TestBranchingCombinations extends TestHelper {
                 "Expected more than one selected-row fingerprint for sequentialDirect");
     }
 
-    @Disabled("Pending branch-combination exploration fix")
     @Test
     void sequentialDirectShouldCoverAllFourCombinations() throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
@@ -133,14 +131,14 @@ class TestBranchingCombinations extends TestHelper {
 
         evaluator.visit(method);
 
+        String output = outContent.toString();
         Set<String> combinations = extractCombinations(
-                outContent.toString(),
+                output,
                 Pattern.compile("TYPE_(?:EMPTY|SET)\\|VALUES_(?:EMPTY|PRESENT)")
         );
         assertEquals(4, combinations.size());
     }
 
-    @Disabled("Pending branch-combination exploration fix")
     @Test
     void deletedByDirectShouldCoverAllFourCombinations() throws ReflectiveOperationException {
         MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
@@ -148,8 +146,9 @@ class TestBranchingCombinations extends TestHelper {
 
         evaluator.visit(method);
 
+        String output = outContent.toString();
         Set<String> combinations = extractCombinations(
-                outContent.toString(),
+                output,
                 Pattern.compile("(?:ALL|OPEN)\\|(?:DELETED|ACTIVE)")
         );
         assertEquals(4, combinations.size());
@@ -197,4 +196,37 @@ class TestBranchingCombinations extends TestHelper {
         int end = event.indexOf("|mode=", start);
         return end >= 0 ? event.substring(start, end) : event.substring(start);
     }
+
+        private int extractRowCount(String event) {
+                Matcher matcher = Pattern.compile("\\|rows=(\\d+)\\|").matcher(event);
+                if (!matcher.find()) {
+                        throw new IllegalStateException("Trace event should include row count: " + event);
+                }
+                return Integer.parseInt(matcher.group(1));
+        }
+
+        @Test
+        void sequentialDirectRecordsBranchSelectionTrace() throws ReflectiveOperationException {
+                MethodDeclaration method = cu.findFirst(MethodDeclaration.class,
+                                md -> md.getNameAsString().equals("sequentialDirect")).orElseThrow();
+
+                evaluator.visit(method);
+
+                List<String> trace = BranchingTrace.snapshot();
+                long selectedCount = trace.stream()
+                                .filter(event -> event.startsWith("selected:sequentialDirect"))
+                                .count();
+
+                assertTrue(trace.stream().anyMatch(event -> event.startsWith("target:sequentialDirect")),
+                                "Expected target trace entries for sequentialDirect");
+                assertTrue(trace.stream().anyMatch(event -> event.startsWith("selected:sequentialDirect")),
+                                "Expected selected-combination trace entries for sequentialDirect");
+                assertTrue(trace.stream()
+                                                .filter(event -> event.startsWith("truthTable:sequentialDirect"))
+                                                .map(this::extractRowCount)
+                                                .allMatch(count -> count >= 1),
+                                "Expected truth-table row counts in sequentialDirect trace");
+                assertTrue(selectedCount >= 4,
+                                "Expected multiple branch-attempt selections for sequentialDirect");
+        }
 }

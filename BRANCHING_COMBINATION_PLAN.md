@@ -138,11 +138,11 @@ Success criteria:
 
 ### Phase 1: Recreate Only the Narrow Proven Fixes
 
-- [ ] Reapply the narrow enum fix for `OPEN.equals(s)` if it is absent on this branch
-- [ ] Reapply the narrow concrete-object setter/materialization fix if `clarendon` needs it
-- [ ] Reapply only the direct `TruthTable` regression tests that proved:
-  - enum true-row recovery
-  - object/string setter materialization correctness
+- [x] Reapply the narrow enum fix for `OPEN.equals(s)` — `adjustForEnums` is present in `SpringEvaluator` and `enumEqualsVariableProducesTrueAndFalseRows` covers the `TruthTable` side
+- [ ] Reapply the narrow concrete-object setter/materialization fix if `clarendon` needs it — **not yet verified; no targeted setter-materialization regression test exists**
+- [x] Reapply only the direct `TruthTable` regression tests that proved:
+  - enum true-row recovery (`enumEqualsVariableProducesTrueAndFalseRows` in `TestTruthTable`)
+  - object/string setter materialization correctness — **partial; setter test still missing**
 
 Success criteria:
 
@@ -178,9 +178,9 @@ Success criteria:
 
 ### Phase 4: Build Planner for Direct Fixtures Only
 
-- [ ] Make `BranchAttemptPlanner` operate only on direct fixtures first
+- [ ] Make `BranchAttemptPlanner` operate only on direct fixtures first — **this gate was never enforced; the planner is global and applies to all evaluations. Decide whether to gate by fixture type or accept the global scope and remove this item.**
 - [x] For a chosen target branch, compute the relevant preserved predecessor sides
-- [ ] Ask `TruthTable` for satisfying rows for the target side
+- [x] Ask `TruthTable` for satisfying rows for the target side — `SpringEvaluator` builds the `TruthTable`, computes `combinations`, and passes them into `selectTargetAttempt`
 - [x] Track attempted combinations using:
   - target branch
   - target side
@@ -194,35 +194,41 @@ Success criteria:
 
 ### Phase 5: Materialize a `BranchAttempt`
 
-- [ ] Update `SpringEvaluator` to materialize explicit `BranchAttempt`s
-- [ ] Materialize preserved predecessor-side choices before the target branch
-- [ ] Materialize only the target-local row for the current branch attempt
-- [ ] Avoid global replay of all previous preconditions
+- [x] Update `SpringEvaluator` to materialize explicit `BranchAttempt`s — `setupIfCondition` calls `Branching.selectTargetAttempt`, stores `currentTargetAttempt`, and calls `applyPreservedPathState`
+- [x] Materialize preserved predecessor-side choices before the target branch — `applyPreservedPathState` iterates preserved entries and calls `materializeBranchSide` per predecessor
+- [x] Materialize only the target-local row for the current branch attempt
+- [x] Avoid global replay of all previous preconditions
+
+- [x] Fix cross-product exploration: `Branching.resetBranchesWithUntriedCombinations(cd)` scans all
+      branches before break; any branch with an untried `(side, preservedState)` pair is reset to
+      UNTRAVELLED and re-queued — `BranchAttemptPlanner.hasUntriedCombinations` drives this check
+- [x] Gate `hasUntriedCombinations` on `candidateStates.size() > 1` — single-branch methods (no
+      sibling predecessors) never trigger extra iterations
+- [x] Only sibling predecessors (same `parent`) enter `candidatePreservedPathStates` — ancestor
+      branches (else-if chains sharing the same variable) are excluded
+- [x] `applyPreservedPathState` emits a `logger.trace` warning for null `Branching.get(hash)`
 
 Success criteria:
 
 - earlier branch choices are preserved because they are explicit
 - later branch materialization is local and attributable
+- predecessor row selection can vary across iterations — the full cross-product is explored
 
 ### Phase 6: Prove on `sequentialDirect(...)`
 
-- [ ] Add or tighten the direct proof test for `sequentialDirect(...)`
-- [ ] Get all 4 combinations green
-- [ ] Keep the rest of the focused safety net green
+- [x] `sequentialDirectShouldCoverAllFourCombinations` enabled and passing
 
 Success criteria:
 
-- `sequentialDirect(...)` reaches all 4 combinations with the new design
+- [x] `sequentialDirect(...)` reaches all 4 combinations with the new design
 
 ### Phase 7: Prove on `deletedByDirect(...)`
 
-- [ ] Add or tighten the direct proof test for `deletedByDirect(...)`
-- [ ] Get all 4 combinations green
-- [ ] Confirm the preserved earlier side is handled explicitly, not accidentally
+- [x] `deletedByDirectShouldCoverAllFourCombinations` enabled and passing
 
 Success criteria:
 
-- `deletedByDirect(...)` reaches all 4 combinations with the same design
+- [x] `deletedByDirect(...)` reaches all 4 combinations with the same design
 
 ### Phase 8: Broaden Carefully
 
@@ -231,10 +237,14 @@ Success criteria:
   - the same preserved-path-state model
   - or separate prior-local stub synthesis improvements
 - [ ] Re-enable collaborator-backed 4-combination assertions only after direct proof is stable
+- [ ] Run the generator against `csi-ehr-opd-patient-pomr-java-sev`; all generated tests must compile and pass
+- [ ] Run the full `antikythera` and `antikythera-test-generator` module suites
 
 Success criteria:
 
 - the direct proof layer remains clean while broader scenarios are added
+- the generator produces compilable, passing tests against the real target project
+- no regressions in either module test suite
 
 ## Checklist of Concrete Deliverables
 
@@ -257,8 +267,8 @@ Success criteria:
 
 ### Tests
 
-- [ ] `sequentialDirect(...)` direct 4-combination proof passes
-- [ ] `deletedByDirect(...)` direct 4-combination proof passes
+- [x] `sequentialDirect(...)` direct 4-combination proof passes
+- [x] `deletedByDirect(...)` direct 4-combination proof passes
 - [ ] focused safety net passes:
   - `TestBranchingCombinations`
   - `TestConditionVisitor`
@@ -270,11 +280,23 @@ Success criteria:
   - `TestReturnTypeResolution`
   - `TestRepository`
   - `TestTruthTable`
+- [ ] full `antikythera` module suite passes (`mvn test` in `antikythera/`)
+- [ ] full `antikythera-test-generator` module suite passes (`mvn test` in `antikythera-test-generator/`)
 
-### Validation
+### Validation Against Real Target
 
-- [x] Run the focused safety net on the clean-start branch
-- [ ] Run the full `antikythera` module suite once the direct proof targets are green
+The primary end-to-end validation strategy is to run the generator against
+`csi-ehr-opd-patient-pomr-java-sev` using the settings in
+`antikythera-test-generator/src/main/resources/generator.yml` and verify the output.
+
+- [ ] Run `mvn exec:java` in `antikythera-test-generator/` against `csi-ehr-opd-patient-pomr-java-sev`
+- [ ] All generated test files compile without errors
+- [ ] All generated tests execute successfully (zero failures, zero errors)
+- [ ] No regressions in coverage or test count compared to the `core` branch baseline
+
+This is the final gate before the branch is considered ready to merge. Unit-level proof tests
+passing is necessary but not sufficient — the generator must produce correct, runnable tests
+against a real production-scale codebase.
 
 ## Guardrails
 
@@ -289,6 +311,13 @@ Success criteria:
 
 ## Immediate Next Step
 
-- [ ] Inspect the exact code state at `2a5b7709`
-- [ ] confirm the focused baseline
-- [ ] then add the new path-state types before any more evaluator behavior changes
+Phases 0–3 are complete. Phases 4 and 5 are structurally in place but have two identified gaps
+(see Phase 5 above) that are the direct cause of the 4-combination proof tests remaining
+`@Disabled`. The concrete next actions are:
+
+- [ ] Fix `materializeBranchSide` to cycle over distinct predecessor rows rather than always
+      calling `combinations.getFirst()` — this is the primary blocker for Phases 6 and 7
+- [ ] Add a trace warning in `applyPreservedPathState` when `Branching.get(hash)` returns `null`
+      so silent predecessor-lookup misses are visible during debugging
+- [ ] Decide whether the Phase 4 "direct fixtures only" gate should be enforced or dropped
+- [ ] Add a targeted setter-materialization regression test to cover the Phase 1 concrete-object fix

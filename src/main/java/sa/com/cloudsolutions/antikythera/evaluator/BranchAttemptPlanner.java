@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.body.CallableDeclaration;
 
@@ -62,8 +63,45 @@ final class BranchAttemptPlanner {
         attemptedRows.clear();
     }
 
+    /**
+     * Returns true if cross-product exploration is still needed for {@code target}: specifically,
+     * when there are two or more candidate preserved states (i.e., the target has sibling
+     * predecessors) and at least one (side, preservedState) pair has never been attempted.
+     *
+     * <p>Intentionally does NOT look at per-row fingerprint exhaustion within a single preserved
+     * state — that would cause spurious extra iterations on single-branch methods where the
+     * TruthTable produces multiple rows for the same side.</p>
+     */
+    boolean hasUntriedCombinations(LineOfCode target) {
+        List<PreservedPathState> candidateStates = candidatePreservedPathStates(target);
+        // Cross-product work only exists when there are 2+ distinct preserved states.
+        // A single-entry state (always [empty]) means no sibling predecessor enumeration needed.
+        if (candidateStates.size() <= 1) {
+            return false;
+        }
+        for (BranchSide side : List.of(BranchSide.FALSE, BranchSide.TRUE)) {
+            for (PreservedPathState state : candidateStates) {
+                AttemptKey key = new AttemptKey(target.getStatement().hashCode(), side, state);
+                if (!attemptedRows.containsKey(key)) {
+                    // This (side, preservedState) was never handed to the caller at all.
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private List<PreservedPathState> candidatePreservedPathStates(LineOfCode target) {
-        List<LineOfCode> orderedPredecessors = target.getPredecessors().stream().toList();
+        // Only consider sibling predecessors for cross-product expansion.
+        // A sibling predecessor shares the same parent LineOfCode as the target — these are
+        // branches that are sequential in the same block and are independently satisfiable.
+        // Ancestor/nesting predecessors (e.g., outer if → inner else-if) share variables and
+        // their truth-table rows are mutually constrained; expanding those would yield
+        // contradictory preserved states and cause spurious extra iterations.
+        List<LineOfCode> orderedPredecessors = target.getPredecessors().stream()
+                .filter(p -> p.getParent() == target.getParent())
+                .filter(p -> p.getConditionalExpression() != null)
+                .toList();
         if (orderedPredecessors.isEmpty()) {
             return List.of(PreservedPathState.empty());
         }
@@ -76,10 +114,17 @@ final class BranchAttemptPlanner {
                 continue;
             }
 
+            int trueRowCount = countOrAlternatives(predecessor);
             List<PreservedPathState> expanded = new ArrayList<>();
             for (PreservedPathState state : states) {
                 for (BranchSide side : availableSides) {
-                    expanded.add(state.with(predecessor, side));
+                    if (side == BranchSide.TRUE && trueRowCount > 1) {
+                        for (int row = 0; row < trueRowCount; row++) {
+                            expanded.add(state.with(predecessor, side, row));
+                        }
+                    } else {
+                        expanded.add(state.with(predecessor, side));
+                    }
                 }
             }
             states = expanded;
@@ -98,6 +143,21 @@ final class BranchAttemptPlanner {
             return List.of(BranchSide.TRUE);
         }
         return List.of();
+    }
+
+    private static int countOrAlternatives(LineOfCode branch) {
+        Expression cond = branch.getConditionalExpression();
+        if (cond == null) {
+            return 1;
+        }
+        return countOrBranches(cond);
+    }
+
+    private static int countOrBranches(Expression expr) {
+        if (expr instanceof BinaryExpr be && be.getOperator() == BinaryExpr.Operator.OR) {
+            return countOrBranches(be.getLeft()) + countOrBranches(be.getRight());
+        }
+        return 1;
     }
 
     private record AttemptKey(int targetHash, BranchSide side, PreservedPathState preservedPathState) {

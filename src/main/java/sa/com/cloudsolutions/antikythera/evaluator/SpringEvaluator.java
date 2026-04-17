@@ -214,6 +214,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             v = createInterfaceAutowire(resolvedClass);
             if (v != null) {
                 v.setType(type);
+                AntikytheraRunTime.autoWire(resolvedClass, v);
                 return v;
             }
         }
@@ -301,8 +302,30 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                             + cd.getNameAsString()
                             + "|statement=" + currentConditional.getStatement()
                             + "|pathTaken=" + currentConditional.getPathTaken());
+
+                    // For zero-parameter methods setupParameter() is never called,
+                    // so drive branch setup here instead.
+                    if (cd.getParameters().isEmpty()
+                            && (currentConditional.getStatement() instanceof IfStmt
+                                || currentConditional.getConditionalExpression() != null)) {
+                        setupIfCondition();
+                        applyFieldPreconditions();
+                    }
                 }
                 if ((currentConditional == null || currentConditional.isFullyTravelled()) && oldSize != 0) {
+                    // Before giving up, scan ALL branches for untried cross-product combinations.
+                    // It is not enough to check only currentConditional: a *different* branch may
+                    // still have untried (preservedState, fingerprint) pairs even though the
+                    // currently-popped branch is fully done. Resetting those branches and
+                    // continuing ensures the full cross-product is explored.
+                    boolean resetAny = Branching.resetBranchesWithUntriedCombinations(cd);
+                    if (resetAny) {
+                        if (currentConditional != null) {
+                            Branching.requeue(currentConditional);
+                        }
+                        oldSize = Branching.size(cd);
+                        continue;
+                    }
                     break;
                 }
 
@@ -391,9 +414,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private int advanceBranchingState(CallableDeclaration<?> cd) {
         if (currentConditional != null) {
-            currentConditional.transition();
-            Branching.add(currentConditional);
-
+            if (!currentConditional.isFullyTravelled()) {
+                currentConditional.transition();
+                Branching.add(currentConditional);
+            }
             if (currentConditional.getPreconditions() != null) {
                 currentConditional.getPreconditions().clear();
             }
@@ -483,6 +507,45 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
+    /**
+     * Apply preconditions to field evaluators for zero-parameter methods.
+     * Mirrors applyPreconditions(p, va) but resolves the target from the field map
+     * instead of from a parameter.
+     */
+    private void applyFieldPreconditions() throws ReflectiveOperationException {
+        for (Precondition cond : currentConditional.getPreconditions()) {
+            if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+                if (mce.getScope().orElseThrow() instanceof NameExpr ne) {
+                    Symbol va = getField(ne.getNameAsString());
+                    if (va != null) {
+                        if (va.getValue() instanceof Evaluator eval) {
+                            applyEvaluatorPrecondition(eval, mce);
+                        } else if (va instanceof Variable variable) {
+                            Evaluator promoted = promoteFieldToEvaluator(ne.getNameAsString(), variable);
+                            if (promoted != null) {
+                                applyEvaluatorPrecondition(promoted, mce);
+                            } else {
+                                applyCollectionPrecondition(variable, mce);
+                            }
+                        }
+                    }
+                }
+            } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
+                String targetName = assignExpr.getTarget().isFieldAccessExpr()
+                        ? assignExpr.getTarget().asFieldAccessExpr().getNameAsString()
+                        : assignExpr.getTarget().toString();
+                Symbol va = getField(targetName);
+                if (va != null) {
+                    parameterAssignment(assignExpr, va);
+                    va.setInitializer(List.of(assignExpr));
+                }
+            } else if (cond.getExpression() instanceof ObjectCreationExpr oce) {
+                // For field preconditions with ObjectCreationExpr, we don't know
+                // which field to target — skip (handled by other mechanisms)
+            }
+        }
+    }
+
     private void applyEvaluatorPrecondition(Evaluator eval, MethodCallExpr mce) throws ReflectiveOperationException {
         try {
             MCEWrapper wrapper = eval.wrapCallExpression(mce);
@@ -491,6 +554,29 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             if (!applyDirectSetterFieldPrecondition(eval, mce)) {
                 throw ex;
             }
+        }
+    }
+
+    private Evaluator promoteFieldToEvaluator(String fieldName, Variable variable) {
+        if (variable.getType() == null || variable.getType().isPrimitiveType()) {
+            return null;
+        }
+        String typeName = variable.getType().asString();
+        String fqn = AbstractCompiler.findFullyQualifiedName(cu, typeName);
+        if (fqn == null) {
+            fqn = typeName;
+        }
+        if (AntikytheraRunTime.getCompilationUnit(fqn) == null) {
+            return null;
+        }
+        try {
+            Evaluator eval = EvaluatorFactory.createLazily(fqn, Evaluator.class);
+            eval.setupFields();
+            variable.setValue(eval);
+            fields.put(fieldName, variable);
+            return eval;
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -897,8 +983,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
 
         EvaluatorException eex;
-        if (unwrapped instanceof EvaluatorException ee && ee.getError() == EvaluatorException.NPE) {
+        if ((unwrapped instanceof EvaluatorException ee && ee.getError() == EvaluatorException.NPE)
+                || containsNullPointerException(e)) {
             // Re-wrap with a real NullPointerException cause so JunitAsserter emits NPE.class
+            eex = new EvaluatorException("Application NPE", new NullPointerException());
+        } else if (unwrapped instanceof EvaluatorException || unwrapped instanceof sa.com.cloudsolutions.antikythera.exception.AUTException) {
+            // The deepest cause is still a framework wrapper with no real Java exception inside —
+            // this happens when the symbolic evaluator fails to dereference a null receiver without
+            // propagating a real NullPointerException (e.g. validateReflectiveMethod else-branch).
+            // Since this method is ONLY called for null-arg FP application, NPE is always correct.
             eex = new EvaluatorException("Application NPE", new NullPointerException());
         } else {
             eex = new EvaluatorException(e.getMessage() != null ? e.getMessage() : "FP application exception", e);
@@ -907,6 +1000,16 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         ExceptionContext ctx = new ExceptionContext();
         ctx.setException(eex);
         return ctx;
+    }
+
+    private static boolean containsNullPointerException(Throwable t) {
+        while (t != null) {
+            if (t instanceof NullPointerException) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     /**
@@ -1144,15 +1247,20 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     private void applyPreservedPathState(PreservedPathState preservedPathState) {
+        int rowHint = preservedPathState.getRowHint();
         for (Map.Entry<Integer, BranchSide> entry : preservedPathState.asMap().entrySet()) {
             LineOfCode predecessor = Branching.get(entry.getKey());
             if (predecessor != null) {
-                materializeBranchSide(predecessor, entry.getValue(), currentConditional.getStatement());
+                materializeBranchSide(predecessor, entry.getValue(), currentConditional.getStatement(), rowHint);
+            } else {
+                logger.trace("applyPreservedPathState: no registered branch for hash {}; "
+                        + "predecessor materialization skipped — possible AST identity mismatch",
+                        entry.getKey());
             }
         }
     }
 
-    private void materializeBranchSide(LineOfCode branch, BranchSide side, Statement attachTo) {
+    private void materializeBranchSide(LineOfCode branch, BranchSide side, Statement attachTo, int rowHint) {
         if (branch.getConditionalExpression() == null) {
             return;
         }
@@ -1167,7 +1275,8 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 .map(this::adjustForEnums)
                 .toList();
         if (!combinations.isEmpty()) {
-            materializeCombination(attachTo, combinations.getFirst());
+            int index = rowHint % combinations.size();
+            materializeCombination(attachTo, combinations.get(index));
         }
     }
 
@@ -1384,6 +1493,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
         if (direct instanceof NameExpr ne) {
             return ne.getNameAsString();
+        }
+        if (direct != null) {
+            return direct;
         }
         EnumConstantDeclaration constant = resolveEnumConstant(expression);
         if (constant != null) {

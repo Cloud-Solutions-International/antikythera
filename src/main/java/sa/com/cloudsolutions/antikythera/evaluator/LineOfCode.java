@@ -358,6 +358,14 @@ public class LineOfCode {
     }
 
 
+    /**
+     * Unconditionally resets the path state to {@link #UNTRAVELLED}. Used by the cross-product
+     * exploration loop when a fully-traversed branch still has untried predecessor-side combinations.
+     */
+    public void resetPathTaken() {
+        this.pathTaken = UNTRAVELLED;
+    }
+
     public boolean getResult() {
         return result;
     }
@@ -377,6 +385,14 @@ public class LineOfCode {
     public LineOfCode markPreconditionOnly() {
         this.branchKind = BranchKind.PRECONDITION_ONLY;
         return this;
+    }
+
+    /**
+     * Marks this branch as fully travelled (both paths explored).
+     * Used by repository mock handlers to indicate that both the full and empty paths have been generated.
+     */
+    public void markFullyTravelled() {
+        this.pathTaken = BOTH_PATHS;
     }
 
     public boolean shouldSchedule() {

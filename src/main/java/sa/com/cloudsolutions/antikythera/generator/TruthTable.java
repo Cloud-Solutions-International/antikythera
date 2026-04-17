@@ -273,7 +273,11 @@ public class TruthTable {
                 && mce.getArguments().size() == 1
                 && mce.getArgument(0).equals(variable)
                 && scope.isPresent()) {
-            Object variableValue = normalizeEqualsOperand(truthValues.get(variable));
+            Object rawVariable = truthValues.get(variable);
+            if (rawVariable instanceof Boolean b) {
+                return b;
+            }
+            Object variableValue = normalizeEqualsOperand(rawVariable);
             Object scopeValue = normalizeEqualsOperand(resolveEqualsOperand(scope.orElseThrow(), truthValues));
             if (scopeValue == null) {
                 return variableValue == null;
@@ -324,7 +328,7 @@ public class TruthTable {
             if (domain.containsKey(v)) {
                 totalCombinations *= domain.get(v).width;
             } else {
-                totalCombinations *= 2;
+                totalCombinations *= variables.get(v).valueCount();
             }
         }
         return totalCombinations;
@@ -387,9 +391,10 @@ public class TruthTable {
                 product *= range.width;
             } else {
                 Domain domainObj = variables.get(v);
-                boolean value = ((combination / product) % 2) == 1;
-                truthValues.put(v, value ? domainObj.getUpperBound() : domainObj.getLowerBound());
-                product *= 2;
+                int count = domainObj.valueCount();
+                int index = (combination / product) % count;
+                truthValues.put(v, domainObj.valueAt(index));
+                product *= count;
             }
         }
         return truthValues;
@@ -1101,17 +1106,33 @@ public class TruthTable {
         private void equalsMethodCall(MethodCallExpr m, HashMap<Expression, Domain> collector, ScopeChain chain) {
             Expression scopeExpr = chain.isEmpty() ? m : chain.getChain().getFirst().getExpression();
             Expression argExpr = m.getArgument(0);
+            boolean orContext = isInsideOrExpression(m);
 
             if (isLikelyEnumConstant(scopeExpr) && !isLikelyEnumConstant(argExpr)) {
-                findDomain(argExpr, collector, scopeExpr);
+                findDomain(argExpr, collector, scopeExpr, orContext);
                 return;
             }
             if (!isLikelyEnumConstant(scopeExpr) && isLikelyEnumConstant(argExpr)) {
-                findDomain(scopeExpr, collector, argExpr);
+                findDomain(scopeExpr, collector, argExpr, orContext);
                 return;
             }
 
-            findDomain(scopeExpr, collector, argExpr);
+            if (scopeExpr.isStringLiteralExpr() && !argExpr.isStringLiteralExpr()) {
+                findDomain(argExpr, collector, scopeExpr, orContext);
+                return;
+            }
+            if (argExpr.isStringLiteralExpr() && !scopeExpr.isStringLiteralExpr()) {
+                findDomain(scopeExpr, collector, argExpr, orContext);
+                return;
+            }
+
+            findDomain(scopeExpr, collector, argExpr, orContext);
+        }
+
+        private boolean isInsideOrExpression(Expression expr) {
+            return expr.getParentNode()
+                    .filter(p -> p instanceof BinaryExpr be && be.getOperator() == BinaryExpr.Operator.OR)
+                    .isPresent();
         }
 
         /**
@@ -1121,6 +1142,10 @@ public class TruthTable {
          * @param compareWith the expression that we will compare against.
          */
         private void findDomain(Expression nameExpression, HashMap<Expression, Domain> collector, Expression compareWith) {
+            findDomain(nameExpression, collector, compareWith, false);
+        }
+
+        private void findDomain(Expression nameExpression, HashMap<Expression, Domain> collector, Expression compareWith, boolean orContext) {
             if (compareWith.isNullLiteralExpr()) {
                 handleNullLiteral(nameExpression, collector);
             }
@@ -1134,7 +1159,7 @@ public class TruthTable {
                 handleDoubleLiteral(nameExpression, collector, compareWith);
             }
             else if (compareWith.isStringLiteralExpr()) {
-                handleStringLiteral(nameExpression, collector, compareWith);
+                handleStringLiteral(nameExpression, collector, compareWith, orContext);
             }
             else if (compareWith.isObjectCreationExpr()) {
                 handleObjectCreation(nameExpression, collector, compareWith.asObjectCreationExpr());
@@ -1154,9 +1179,20 @@ public class TruthTable {
                             collector.put(nameExpression, enumDomain);
                         } else {
                             collector.putIfAbsent(nameExpression, new Domain(false, true));
+                            collector.putIfAbsent(compareWith, new Domain(true, false));
                         }
+                    } else if (isInequalityPresent()) {
+                        // Variable-to-variable inequality (e.g. a > b): assign Integer domain so
+                        // adjustDomain() can later widen it to the appropriate numeric range.
+                        // Both sides must be registered; otherwise the missing variable stays null.
+                        collector.putIfAbsent(nameExpression, new Domain(0, 1));
+                        collector.putIfAbsent(compareWith, new Domain(0, 1));
                     } else {
-                        collector.putIfAbsent(nameExpression, new Domain(false, true));
+                        // Variable-to-variable equality (e.g. a.equals(b)): both sides need Boolean
+                        // domains so the truth table explores all four (TT/TF/FT/FF) combinations.
+                        // Domain(true, false) means lower=true so combination 0 yields (true, true).
+                        collector.putIfAbsent(nameExpression, new Domain(true, false));
+                        collector.putIfAbsent(compareWith, new Domain(true, false));
                     }
                 }
                 else if (isInequalityPresent()) {
@@ -1271,12 +1307,23 @@ public class TruthTable {
             return null;
         }
 
-        private void handleStringLiteral(Expression nameExpression, HashMap<Expression, Domain> collector, Expression compareWith) {
+        private void handleStringLiteral(Expression nameExpression, HashMap<Expression, Domain> collector,
+                                           Expression compareWith, boolean orContext) {
+            String newValue = compareWith.asStringLiteralExpr().getValue();
+            if (orContext) {
+                Domain existing = collector.get(nameExpression);
+                if (existing != null && existing.getUpperBound() instanceof String existingStr
+                        && !existingStr.equals(newValue)) {
+                    List<Object> extras = new java.util.ArrayList<>(existing.extraValues);
+                    extras.add(newValue);
+                    collector.put(nameExpression, new Domain(existing.getLowerBound(), existingStr, extras));
+                    return;
+                }
+            }
             if (allowNullInputs) {
-                collector.put(nameExpression, new Domain(null, compareWith.asStringLiteralExpr().getValue()));
+                collector.put(nameExpression, new Domain(null, newValue));
             } else {
-                // If null inputs are not allowed, use a non-null domain for strings
-                collector.put(nameExpression, new Domain("", compareWith.asStringLiteralExpr().getValue()));
+                collector.put(nameExpression, new Domain("", newValue));
             }
         }
 
@@ -1453,13 +1500,19 @@ public class TruthTable {
      static class Domain {
         private final Object lowerBound;
         private final Object upperBound;
+        private final List<Object> extraValues;
         final int min;
         final int max;
         final int width;
 
         Domain(Object lowerBound, Object upperBound) {
+            this(lowerBound, upperBound, List.of());
+        }
+
+        Domain(Object lowerBound, Object upperBound, List<Object> extraValues) {
             this.lowerBound = lowerBound;
             this.upperBound = upperBound;
+            this.extraValues = extraValues;
 
             // Initialize integer fields if bounds are integers
             if (lowerBound instanceof Integer lb && upperBound instanceof Integer ub) {
@@ -1478,9 +1531,20 @@ public class TruthTable {
         Domain(int min, int max) {
             this.lowerBound = min;
             this.upperBound = max;
+            this.extraValues = List.of();
             this.min = min;
             this.max = max;
             this.width = max - min + 1;
+        }
+
+        int valueCount() {
+            return 2 + extraValues.size();
+        }
+
+        Object valueAt(int index) {
+            if (index == 0) return lowerBound;
+            if (index == 1) return upperBound;
+            return extraValues.get(index - 2);
         }
 
         public Object getLowerBound() {

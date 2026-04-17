@@ -156,6 +156,24 @@ public class ControlFlowEvaluator extends Evaluator {
             return List.of();
         }
 
+        // When the getter call's scope is a simple name (e.g. pr.getSource()),
+        // generate a setter-call precondition (pr.setSource("ALL")) instead of
+        // Mockito.when(pr.getSource()).thenReturn("ALL"). The setter form has
+        // scope NameExpr("pr") which matches applyPreconditions()'s check.
+        if (methodCallExpr.getScope().isPresent()
+                && methodCallExpr.getScope().orElseThrow() instanceof NameExpr scopeExpr
+                && getValue(stmt, scopeExpr.getNameAsString()) != null) {
+            String setterName = AbstractCompiler.setterNameFromGetterName(methodCallExpr.getNameAsString());
+            if (!setterName.equals(methodCallExpr.getNameAsString())) {
+                MethodCallExpr setter = new MethodCallExpr();
+                setter.setName(setterName);
+                setter.setScope(scopeExpr.clone());
+                setter.addArgument(returnValue);
+                BranchingTrace.record(() -> "priorLocal:emit|name=" + variableName + "|expression=" + setter);
+                return List.of(setter);
+            }
+        }
+
         MethodCallExpr when = new MethodCallExpr(new NameExpr("Mockito"), "when")
                 .addArgument(methodCallExpr.clone());
         MethodCallExpr thenReturn = new MethodCallExpr(when, "thenReturn")
@@ -652,6 +670,14 @@ public class ControlFlowEvaluator extends Evaluator {
                 }
                 return stubExpressions;
             }
+
+            List<Expression> fieldExpressions = setupCollectionFieldPrecondition(entry, v, nameExpr);
+            if (!fieldExpressions.isEmpty()) {
+                for (Expression expression : fieldExpressions) {
+                    addPreCondition(stmt, expression);
+                }
+                return fieldExpressions;
+            }
             /*
              * We tried to match the name of the variable with the name of the parameter, but
              * a match could not be found. So it is not possible to force branching by
@@ -659,6 +685,22 @@ public class ControlFlowEvaluator extends Evaluator {
              */
         }
         return List.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Expression> setupCollectionFieldPrecondition(Map.Entry<Expression, Object> entry,
+                                                              Symbol v, NameExpr nameExpr) {
+        if (!(v.getValue() instanceof Collection<?>) || !(entry.getValue() instanceof List<?> domainList)) {
+            return List.of();
+        }
+        if (domainList.isEmpty()) {
+            return List.of();
+        }
+        MethodCallExpr addCall = new MethodCallExpr(nameExpr.clone(), "add");
+        Object seedValue = domainList.getFirst();
+        addCall.addArgument(seedValue == null ? new NullLiteralExpr() : Reflect.createLiteralExpression(seedValue));
+        BranchingTrace.record(() -> "fieldCollection:add|name=" + nameExpr.getNameAsString());
+        return List.of(addCall);
     }
 
     private List<Expression> setupConditionThroughMockedLocalInitializer(Map.Entry<Expression, Object> entry, Symbol value) {
@@ -1333,6 +1375,14 @@ public class ControlFlowEvaluator extends Evaluator {
         Expression collectionExpr = collectionDomainValueToExpression(paramType, domainValue);
         if (collectionExpr != null) {
             return collectionExpr;
+        }
+
+        // Handle truth-table type mismatch: when the TruthTable cannot resolve the
+        // variable type for an isEmpty() call it falls back to a Collection domain.
+        // If the actual parameter type is String, convert based on emptiness.
+        if (domainValue instanceof Collection<?> coll && paramType.isClassOrInterfaceType()
+                && "String".equals(paramType.asClassOrInterfaceType().getNameAsString())) {
+            return new StringLiteralExpr(coll.isEmpty() ? "" : "T");
         }
 
         // Try direct type conversion
