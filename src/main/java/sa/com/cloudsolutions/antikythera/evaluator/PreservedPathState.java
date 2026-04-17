@@ -7,14 +7,14 @@ import java.util.Objects;
 import java.util.Optional;
 
 public final class PreservedPathState {
-    private final Map<Integer, BranchSide> preservedSidesByBranch;
+    private final Map<LineOfCode, BranchSide> preservedSidesByBranch;
     private final int rowHint;
 
-    private PreservedPathState(Map<Integer, BranchSide> preservedSidesByBranch) {
+    private PreservedPathState(Map<LineOfCode, BranchSide> preservedSidesByBranch) {
         this(preservedSidesByBranch, 0);
     }
 
-    private PreservedPathState(Map<Integer, BranchSide> preservedSidesByBranch, int rowHint) {
+    private PreservedPathState(Map<LineOfCode, BranchSide> preservedSidesByBranch, int rowHint) {
         this.preservedSidesByBranch = Collections.unmodifiableMap(new LinkedHashMap<>(preservedSidesByBranch));
         this.rowHint = rowHint;
     }
@@ -30,8 +30,8 @@ public final class PreservedPathState {
     public PreservedPathState with(LineOfCode branch, BranchSide side, int rowHint) {
         Objects.requireNonNull(branch, "branch");
         Objects.requireNonNull(side, "side");
-        LinkedHashMap<Integer, BranchSide> copy = new LinkedHashMap<>(preservedSidesByBranch);
-        copy.put(branch.getStatement().hashCode(), side);
+        LinkedHashMap<LineOfCode, BranchSide> copy = new LinkedHashMap<>(preservedSidesByBranch);
+        copy.put(branch, side);
         return new PreservedPathState(copy, rowHint);
     }
 
@@ -41,10 +41,10 @@ public final class PreservedPathState {
 
     public Optional<BranchSide> sideFor(LineOfCode branch) {
         Objects.requireNonNull(branch, "branch");
-        return Optional.ofNullable(preservedSidesByBranch.get(branch.getStatement().hashCode()));
+        return Optional.ofNullable(preservedSidesByBranch.get(branch));
     }
 
-    public Map<Integer, BranchSide> asMap() {
+    public Map<LineOfCode, BranchSide> asMap() {
         return preservedSidesByBranch;
     }
 

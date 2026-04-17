@@ -40,7 +40,7 @@ final class BranchAttemptPlanner {
         PreservedPathState fallbackState = candidateStates.getFirst();
 
         for (PreservedPathState state : candidateStates) {
-            AttemptKey attemptKey = new AttemptKey(target.getStatement().hashCode(), side, state);
+            AttemptKey attemptKey = new AttemptKey(target, side, state);
             LinkedHashSet<String> attemptedFingerprints = attemptedRows.computeIfAbsent(attemptKey, ignored -> new LinkedHashSet<>());
 
             for (Map<Expression, Object> combination : combinations) {
@@ -81,7 +81,7 @@ final class BranchAttemptPlanner {
         }
         for (BranchSide side : List.of(BranchSide.FALSE, BranchSide.TRUE)) {
             for (PreservedPathState state : candidateStates) {
-                AttemptKey key = new AttemptKey(target.getStatement().hashCode(), side, state);
+                AttemptKey key = new AttemptKey(target, side, state);
                 if (!attemptedRows.containsKey(key)) {
                     // This (side, preservedState) was never handed to the caller at all.
                     return true;
@@ -160,7 +160,7 @@ final class BranchAttemptPlanner {
         return 1;
     }
 
-    private record AttemptKey(int targetHash, BranchSide side, PreservedPathState preservedPathState) {
+    private record AttemptKey(LineOfCode target, BranchSide side, PreservedPathState preservedPathState) {
     }
 
     private void recordSelection(LineOfCode target,

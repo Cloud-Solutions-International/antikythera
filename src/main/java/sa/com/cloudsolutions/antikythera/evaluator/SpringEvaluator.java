@@ -1248,15 +1248,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private void applyPreservedPathState(PreservedPathState preservedPathState) {
         int rowHint = preservedPathState.getRowHint();
-        for (Map.Entry<Integer, BranchSide> entry : preservedPathState.asMap().entrySet()) {
-            LineOfCode predecessor = Branching.get(entry.getKey());
-            if (predecessor != null) {
-                materializeBranchSide(predecessor, entry.getValue(), currentConditional.getStatement(), rowHint);
-            } else {
-                logger.trace("applyPreservedPathState: no registered branch for hash {}; "
-                        + "predecessor materialization skipped — possible AST identity mismatch",
-                        entry.getKey());
-            }
+        for (Map.Entry<LineOfCode, BranchSide> entry : preservedPathState.asMap().entrySet()) {
+            LineOfCode predecessor = entry.getKey();
+            materializeBranchSide(predecessor, entry.getValue(), currentConditional.getStatement(), rowHint);
         }
     }
 
