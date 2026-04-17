@@ -47,7 +47,7 @@ class TestTruthTable {
         assertNotNull(truthTable);
         assertFalse(truthTable.isEmpty());
         assertEquals(2, truthTable.size()); // 2^3 = 8 rows for 3 variables
-        assertNull(truthTable.getFirst().get("a"));
+        assertNull(truthTable.getFirst().get(new NameExpr("a")));
 
         List<Map<Expression, Object>> values = generator.findValuesForCondition(true);
         assertFalse(values.isEmpty());
@@ -197,7 +197,7 @@ class TestTruthTable {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, true})
+    @ValueSource(booleans = {true, false})
     void testNotNull(boolean allowNullInputs) {
         String condition = "a != null && b != null";
         TruthTable tt = new TruthTable(condition);
@@ -220,16 +220,17 @@ class TestTruthTable {
             assertNull(first.get(new NameExpr("a")));
         } else {
             // When null inputs are disallowed
-            // All values should be non-null, so the condition should be true for all combinations
-            assertFalse(v.isEmpty());
+            assertEquals(1, v.size());
             for (Map<Expression, Object> row : v) {
                 assertNotNull(row.get(new NameExpr("a")));
                 assertNotNull(row.get(new NameExpr("b")));
             }
 
-            // There should be no false conditions since all values are non-null
+            // False rows still exist even with null inputs disabled; verify they are exercised.
             v = tt.findValuesForCondition(false);
-            assertEquals(0, v.size());
+            assertEquals(3, v.size());
+            assertTrue(v.stream().anyMatch(row -> row.get(new NameExpr("a")) == null
+                    || row.get(new NameExpr("b")) == null));
         }
     }
 
@@ -275,7 +276,7 @@ class TestTruthTable {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, true})
+    @ValueSource(booleans = {true, false})
     void testMethodCall(boolean allowNullInputs) {
         String condition = "person.getName() != null";
         TruthTable tt = new TruthTable(condition);
@@ -311,9 +312,9 @@ class TestTruthTable {
                 }
             }
 
-            // There should be no false conditions since all values are non-null
+            // A false branch still exists; verify it is exercised when null inputs are disabled.
             v = tt.findValuesForCondition(false);
-            assertEquals(0, v.size());
+            assertEquals(1, v.size());
         }
     }
 

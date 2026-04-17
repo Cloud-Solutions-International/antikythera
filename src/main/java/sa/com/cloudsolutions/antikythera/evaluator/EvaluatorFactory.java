@@ -57,11 +57,10 @@ public class EvaluatorFactory {
      * @param evaluatorType the class of {@link Evaluator} (or one of its subclasses) to instantiate
      * @return an eagerly initialized evaluator instance
      */
-    @SuppressWarnings("unchecked")
     private static <T extends Evaluator> T create(Context c, Class<T> evaluatorType) {
         Evaluator autoWired = findAutoWire(c);
         if (autoWired != null) {
-            return evaluatorType.isInstance(autoWired) ? evaluatorType.cast(autoWired) : (T) autoWired;
+            return evaluatorType.cast(autoWired);
         }
 
         Evaluator eval = createLazily(c, evaluatorType);

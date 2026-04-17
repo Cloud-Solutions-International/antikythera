@@ -522,7 +522,7 @@ public class MethodInterceptor {
         public Object intercept(@This Object instance, @Origin Constructor<?> constructor, @AllArguments Object[] args) throws ReflectiveOperationException {
             Field f = instance.getClass().getDeclaredField(AKBuddy.INSTANCE_INTERCEPTOR);
             f.setAccessible(true);
-            Evaluator eval = EvaluatorFactory.create(constructor.getDeclaringClass().getName(), SpringEvaluator.class);
+            Evaluator eval = EvaluatorFactory.create(constructor.getDeclaringClass().getName(), Evaluator.class);
             MethodInterceptor parent = new MethodInterceptor(eval);
             f.set(instance, parent);
             return parent.intercept(instance, constructor, args, sourceConstructor);

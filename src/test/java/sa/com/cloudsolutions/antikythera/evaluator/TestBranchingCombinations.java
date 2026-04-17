@@ -147,15 +147,10 @@ class TestBranchingCombinations extends TestHelper {
         evaluator.visit(method);
 
         String output = outContent.toString();
-        System.err.println("DEBUG deletedByDirect output: [" + output.replace("\n", "\\n") + "]");
-        BranchingTrace.snapshot().stream()
-                .filter(e -> e.contains("truthTable:") || e.contains("selected:") || e.contains("priorLocal:"))
-                .forEach(e -> System.err.println("  TRACE: " + e));
         Set<String> combinations = extractCombinations(
                 output,
                 Pattern.compile("(?:ALL|OPEN)\\|(?:DELETED|ACTIVE)")
         );
-        System.err.println("DEBUG deletedByDirect combinations: " + combinations);
         assertEquals(4, combinations.size());
     }
 

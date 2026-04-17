@@ -161,12 +161,13 @@ public class ControlFlowEvaluator extends Evaluator {
         // Mockito.when(pr.getSource()).thenReturn("ALL"). The setter form has
         // scope NameExpr("pr") which matches applyPreconditions()'s check.
         if (methodCallExpr.getScope().isPresent()
-                && methodCallExpr.getScope().orElseThrow() instanceof NameExpr) {
+                && methodCallExpr.getScope().orElseThrow() instanceof NameExpr scopeExpr
+                && getValue(stmt, scopeExpr.getNameAsString()) != null) {
             String setterName = AbstractCompiler.setterNameFromGetterName(methodCallExpr.getNameAsString());
             if (!setterName.equals(methodCallExpr.getNameAsString())) {
                 MethodCallExpr setter = new MethodCallExpr();
                 setter.setName(setterName);
-                setter.setScope(methodCallExpr.getScope().orElseThrow().clone());
+                setter.setScope(scopeExpr.clone());
                 setter.addArgument(returnValue);
                 BranchingTrace.record(() -> "priorLocal:emit|name=" + variableName + "|expression=" + setter);
                 return List.of(setter);
@@ -696,7 +697,8 @@ public class ControlFlowEvaluator extends Evaluator {
             return List.of();
         }
         MethodCallExpr addCall = new MethodCallExpr(nameExpr.clone(), "add");
-        addCall.addArgument(new StringLiteralExpr("1"));
+        Object seedValue = domainList.getFirst();
+        addCall.addArgument(seedValue == null ? new NullLiteralExpr() : Reflect.createLiteralExpression(seedValue));
         BranchingTrace.record(() -> "fieldCollection:add|name=" + nameExpr.getNameAsString());
         return List.of(addCall);
     }

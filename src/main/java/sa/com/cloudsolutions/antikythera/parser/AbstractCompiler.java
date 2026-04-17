@@ -765,9 +765,22 @@ public class AbstractCompiler {
 
     public static TypeWrapper findType(CompilationUnit cu, String className) {
         // Strip generic type parameters if present (e.g., "ArrayList<Integer>" -> "ArrayList")
-        String baseName = className.contains("<")
-                ? className.substring(0, className.indexOf('<'))
-                : className;
+        StringBuilder baseNameBuilder = new StringBuilder();
+        int genericDepth = 0;
+        for (char ch : className.toCharArray()) {
+            if (ch == '<') {
+                genericDepth++;
+                continue;
+            }
+            if (ch == '>') {
+                genericDepth--;
+                continue;
+            }
+            if (genericDepth == 0) {
+                baseNameBuilder.append(ch);
+            }
+        }
+        String baseName = baseNameBuilder.toString();
 
         /*
          * If the compilation unit is null, this may be part of the java.lang package.

@@ -413,10 +413,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     private int advanceBranchingState(CallableDeclaration<?> cd) {
-        if (currentConditional != null && !currentConditional.isFullyTravelled()) {
-            currentConditional.transition();
-            Branching.add(currentConditional);
-
+        if (currentConditional != null) {
+            if (!currentConditional.isFullyTravelled()) {
+                currentConditional.transition();
+                Branching.add(currentConditional);
+            }
             if (currentConditional.getPreconditions() != null) {
                 currentConditional.getPreconditions().clear();
             }
@@ -530,7 +531,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     }
                 }
             } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
-                Symbol va = getField(assignExpr.getTarget().toString());
+                String targetName = assignExpr.getTarget().isFieldAccessExpr()
+                        ? assignExpr.getTarget().asFieldAccessExpr().getNameAsString()
+                        : assignExpr.getTarget().toString();
+                Symbol va = getField(targetName);
                 if (va != null) {
                     parameterAssignment(assignExpr, va);
                     va.setInitializer(List.of(assignExpr));
@@ -983,12 +987,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 || containsNullPointerException(e)) {
             // Re-wrap with a real NullPointerException cause so JunitAsserter emits NPE.class
             eex = new EvaluatorException("Application NPE", new NullPointerException());
-        } else if (unwrapped instanceof EvaluatorException || unwrapped instanceof sa.com.cloudsolutions.antikythera.exception.AUTException) {
-            // The deepest cause is still a framework wrapper with no real Java exception inside —
-            // this happens when the symbolic evaluator fails to dereference a null receiver without
-            // propagating a real NullPointerException (e.g. validateReflectiveMethod else-branch).
-            // Since this method is ONLY called for null-arg FP application, NPE is always correct.
-            eex = new EvaluatorException("Application NPE", new NullPointerException());
+        } else if (unwrapped instanceof EvaluatorException ee) {
+            eex = ee;
+        } else if (unwrapped instanceof sa.com.cloudsolutions.antikythera.exception.AUTException) {
+            eex = new EvaluatorException(
+                    e.getMessage() != null ? e.getMessage() : "FP application exception", e);
         } else {
             eex = new EvaluatorException(e.getMessage() != null ? e.getMessage() : "FP application exception", e);
         }

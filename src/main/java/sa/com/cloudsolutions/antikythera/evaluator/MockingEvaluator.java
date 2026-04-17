@@ -277,7 +277,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         MockingCall call = MockingRegistry.getThen(className, callable);
         if (call != null) {
-            return variables.getFirst();
+            return call.getVariable();
         }
         MockingCall mockingCall = new MockingCall(callable, variables.getFirst());
         MethodCallExpr mce = StaticJavaParser.parseExpression(
