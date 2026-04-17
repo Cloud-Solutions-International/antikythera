@@ -1467,6 +1467,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                     .findFirst()
                     .orElse(null);
         }
+        if (expr instanceof FieldAccessExpr fae) {
+            TypeWrapper enumType = AbstractCompiler.findType(cu, fae.getScope().toString());
+            if (enumType != null && enumType.getType() instanceof EnumDeclaration enumDecl) {
+                return enumDecl.getEntries().stream()
+                        .filter(entry -> entry.getNameAsString().equals(fae.getNameAsString()))
+                        .findFirst()
+                        .orElse(null);
+            }
+        }
         return null;
     }
 

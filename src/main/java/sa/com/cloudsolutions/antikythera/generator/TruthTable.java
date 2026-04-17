@@ -274,9 +274,6 @@ public class TruthTable {
                 && mce.getArgument(0).equals(variable)
                 && scope.isPresent()) {
             Object rawVariable = truthValues.get(variable);
-            if (rawVariable instanceof Boolean b) {
-                return b;
-            }
             Object variableValue = normalizeEqualsOperand(rawVariable);
             Object scopeValue = normalizeEqualsOperand(resolveEqualsOperand(scope.orElseThrow(), truthValues));
             if (scopeValue == null) {
