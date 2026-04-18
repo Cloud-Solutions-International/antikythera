@@ -5,7 +5,29 @@ public class NumericComparator {
     private NumericComparator() {
     }
 
+    /**
+     * Mirrors JVM comparison semantics when one operand is null. In particular,
+     * {@code LocalDateTime.compareTo(null)} throws {@link NullPointerException}; the previous
+     * implementation fell through to {@code "Cannot compare"} and threw
+     * {@link IllegalArgumentException} because {@code null instanceof Comparable} is false.
+     */
     public static int compare(Object left, Object right) {
+        if (left == null && right == null) {
+            return 0;
+        }
+        if (right == null && left instanceof Comparable<?> lc) {
+            @SuppressWarnings("unchecked")
+            Comparable<Object> lcObj = (Comparable<Object>) left;
+            return lcObj.compareTo(null);
+        }
+        if (left == null && right instanceof Comparable<?> rc) {
+            @SuppressWarnings("unchecked")
+            Comparable<Object> rcObj = (Comparable<Object>) right;
+            return -rcObj.compareTo(null);
+        }
+        if (left == null || right == null) {
+            throw new IllegalArgumentException("Cannot compare " + left + " and " + right);
+        }
         return switch (left) {
             case Number leftNumber when right instanceof Number rightNumber -> {
                 if (leftNumber instanceof Double || rightNumber instanceof Double) {

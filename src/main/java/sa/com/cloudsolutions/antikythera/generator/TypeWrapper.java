@@ -14,6 +14,8 @@ public class TypeWrapper {
     private boolean isController;
     private boolean isService;
     private boolean component;
+    private boolean repository;
+    private boolean configuration;
     private boolean isInterface;
     private boolean isEntity;
 
@@ -85,12 +87,35 @@ public class TypeWrapper {
         this.component = component;
     }
 
+    public boolean isRepository() {
+        return repository;
+    }
+
+    public void setRepository(boolean repository) {
+        this.repository = repository;
+    }
+
+    public boolean isConfiguration() {
+        return configuration;
+    }
+
+    public void setConfiguration(boolean configuration) {
+        this.configuration = configuration;
+    }
+
     public boolean isInterface() {
         return isInterface;
     }
 
     public void setInterface(boolean isInterface) {
         this.isInterface = isInterface;
+    }
+
+    public boolean isEnum() {
+        if (enumConstant != null) return true;
+        if (type != null) return type.isEnumDeclaration();
+        if (clazz != null) return clazz.isEnum();
+        return false;
     }
 
     public EnumConstantDeclaration getEnumConstant() {

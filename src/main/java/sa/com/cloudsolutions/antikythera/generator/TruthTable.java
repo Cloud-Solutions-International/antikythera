@@ -2,6 +2,8 @@ package sa.com.cloudsolutions.antikythera.generator;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
@@ -9,14 +11,17 @@ import com.github.javaparser.ast.expr.InstanceOfExpr;
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.UnaryExpr;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
+import com.github.javaparser.resolution.types.ResolvedType;
+import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
-
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -229,16 +234,24 @@ public class TruthTable {
             Expression variable = constraint.getKey();
             for (Expression expr : constraint.getValue()) {
                 if (expr instanceof MethodCallExpr mce) {
-                    return constraintThroughMethodCall(variable, mce, truthValues);
+                    if (!constraintThroughMethodCall(variable, mce, truthValues)) {
+                        return false;
+                    }
+                    continue;
                 }
                 if (expr instanceof UnaryExpr unaryExpr) {
                     Expression e = unaryExpr.getExpression();
                     if (e instanceof MethodCallExpr mce && unaryExpr.getOperator() == UnaryExpr.Operator.LOGICAL_COMPLEMENT) {
-                        return !constraintThroughMethodCall(variable, mce, truthValues);
+                        if (constraintThroughMethodCall(variable, mce, truthValues)) {
+                            return false;
+                        }
+                        continue;
                     }
                 }
                 if (expr instanceof BinaryExpr binaryExpr) {
-                    return satisfiesConstraintForVariable(variable, binaryExpr, truthValues);
+                    if (!satisfiesConstraintForVariable(variable, binaryExpr, truthValues)) {
+                        return false;
+                    }
                 }
             }
         }
@@ -255,6 +268,18 @@ public class TruthTable {
             if (value instanceof Integer i && mce.toString().contains(EQUALS_CALL)) {
                 return i == Integer.parseInt(mce.getArgument(0).asIntegerLiteralExpr().getValue());
             }
+        }
+        if (EQUALS_CALL.equals(mce.getNameAsString())
+                && mce.getArguments().size() == 1
+                && mce.getArgument(0).equals(variable)
+                && scope.isPresent()) {
+            Object rawVariable = truthValues.get(variable);
+            Object variableValue = normalizeEqualsOperand(rawVariable);
+            Object scopeValue = normalizeEqualsOperand(resolveEqualsOperand(scope.orElseThrow(), truthValues));
+            if (scopeValue == null) {
+                return variableValue == null;
+            }
+            return scopeValue.equals(variableValue);
         }
         return false;
     }
@@ -300,7 +325,7 @@ public class TruthTable {
             if (domain.containsKey(v)) {
                 totalCombinations *= domain.get(v).width;
             } else {
-                totalCombinations *= 2;
+                totalCombinations *= variables.get(v).valueCount();
             }
         }
         return totalCombinations;
@@ -363,9 +388,10 @@ public class TruthTable {
                 product *= range.width;
             } else {
                 Domain domainObj = variables.get(v);
-                boolean value = ((combination / product) % 2) == 1;
-                truthValues.put(v, value ? domainObj.getUpperBound() : domainObj.getLowerBound());
-                product *= 2;
+                int count = domainObj.valueCount();
+                int index = (combination / product) % count;
+                truthValues.put(v, domainObj.valueAt(index));
+                product *= count;
             }
         }
         return truthValues;
@@ -734,6 +760,8 @@ public class TruthTable {
             return getValue(condition, truthValues);
         } else if (condition.isLongLiteralExpr()) {
             return getValue(condition, truthValues);
+        } else if (condition.isObjectCreationExpr()) {
+            return truthValues.getOrDefault(condition, condition);
         }
 
         throw new UnsupportedOperationException("Unsupported expression: " + condition);
@@ -758,7 +786,7 @@ public class TruthTable {
     }
 
     private boolean evaluateIsEquals(MethodCallExpr condition, Map<Expression, Object> truthValues, Expression scope) {
-        Object scopeValue = truthValues.get(scope);
+        Object scopeValue = normalizeEqualsOperand(resolveEqualsOperand(scope, truthValues));
         Expression argument = condition.getArgument(0);
 
         if (argument.isLiteralExpr()) {
@@ -770,7 +798,11 @@ public class TruthTable {
             }
             return scopeValue.equals(getValue(argument, truthValues));
         } else {
-            Object arg = truthValues.get(argument);
+            Object rawArg = resolveEqualsOperand(argument, truthValues);
+            if (rawArg == null && argument.isObjectCreationExpr()) {
+                rawArg = argument;
+            }
+            Object arg = normalizeEqualsOperand(rawArg);
             if (scopeValue == null) {
                 return arg == null;
             }
@@ -778,10 +810,47 @@ public class TruthTable {
         }
     }
 
+    private Object normalizeEqualsOperand(Object value) {
+        if (value instanceof Expression expression) {
+            return expression.toString();
+        }
+        return value;
+    }
+
+    private Object resolveEqualsOperand(Expression operand, Map<Expression, Object> truthValues) {
+        Object value = truthValues.get(operand);
+        if (value != null) {
+            return value;
+        }
+        if (operand == null) {
+            return null;
+        }
+        if (isLikelyEnumConstantExpression(operand)) {
+            return operand.toString();
+        }
+        if (operand.isLiteralExpr() || operand.isFieldAccessExpr()) {
+            return getValue(operand, truthValues);
+        }
+        return null;
+    }
+
+    private boolean isLikelyEnumConstantExpression(Expression expression) {
+        if (expression.isNameExpr()) {
+            return expression.asNameExpr().getNameAsString().matches("[A-Z][A-Z0-9_]*");
+        }
+        if (expression.isFieldAccessExpr()) {
+            return expression.asFieldAccessExpr().getNameAsString().matches("[A-Z][A-Z0-9_]*");
+        }
+        return false;
+    }
+
     private static Object evaluateIsEmpty(Map<Expression, Object> truthValues, Expression scope) {
         Object scopeValue = truthValues.get(scope);
         if (scopeValue == null) {
             return true;
+        }
+        if (scopeValue instanceof String string) {
+            return string.isEmpty();
         }
         if (scopeValue instanceof Collection<?> collection) {
             return collection.isEmpty();
@@ -810,6 +879,8 @@ public class TruthTable {
         } else if (expr.isLiteralExpr()) {
             Variable v = Evaluator.evaluateLiteral(expr);
             return v.getValue();
+        } else if (expr.isObjectCreationExpr()) {
+            return truthValues.getOrDefault(expr, expr);
         }
 
         return truthValues.get(expr);
@@ -835,7 +906,19 @@ public class TruthTable {
         } else if (cond.isMethodCallExpr()) {
             MethodCallExpr mce = cond.asMethodCallExpr();
             Optional<Expression> expr = mce.getScope();
-            expr.ifPresent(expression -> addConstraint(expression, mce));
+            if ("equals".equals(mce.getNameAsString()) && mce.getArguments().size() == 1 && expr.isPresent()) {
+                Expression scope = expr.orElseThrow();
+                Expression argument = mce.getArgument(0);
+                if (isLikelyEnumConstantExpression(scope) && !isLikelyEnumConstantExpression(argument)) {
+                    addConstraint(argument, mce);
+                } else if (!isLikelyEnumConstantExpression(scope) && isLikelyEnumConstantExpression(argument)) {
+                    addConstraint(scope, mce);
+                } else {
+                    addConstraint(scope, mce);
+                }
+            } else {
+                expr.ifPresent(expression -> addConstraint(expression, mce));
+            }
         }
         else if (cond.isUnaryExpr()) {
             UnaryExpr un = cond.asUnaryExpr();
@@ -857,6 +940,10 @@ public class TruthTable {
 
     public void setCondition(Expression condition) {
         this.condition = condition;
+    }
+
+    public Expression getCondition() {
+        return condition;
     }
 
     /**
@@ -915,6 +1002,11 @@ public class TruthTable {
                     } else {
                         findDomain(m, collector, b.getLeft());
                     }
+                } else if (parent.isPresent() && parent.get() instanceof MethodCallExpr parentCall
+                        && IS_EMPTY.equals(parentCall.getNameAsString())
+                        && parentCall.getScope().filter(m::equals).isPresent()) {
+                    super.visit(m, collector);
+                    return;
                 } else {
                     collector.put(m, new Domain(true, false));
                 }
@@ -933,11 +1025,7 @@ public class TruthTable {
                 // no further handling needed for StringUtils.isEmpty()
                 return true;
             }
-            // For isEmpty(), we want to consider both empty and non-empty collections
-            List<?> emptyList = new ArrayList<>();
-            List<Integer> nonEmptyList = new ArrayList<>();
-            nonEmptyList.add(1);
-            Domain domain = new Domain(emptyList, nonEmptyList);
+            Domain domain = createIsEmptyDomain(scope);
             if (chain.isEmpty()) {
                 collector.put(m, domain);
             } else {
@@ -948,6 +1036,56 @@ public class TruthTable {
                 collector.put(chain.getChain().getFirst().getExpression(), domain);
             }
             return false;
+        }
+
+        private Domain createIsEmptyDomain(Expression scope) {
+            Type resolvedType = resolveExpressionType(scope);
+            if (resolvedType != null && isStringType(resolvedType)) {
+                return new Domain("", "T");
+            }
+            if (resolvedType != null && isMapType(resolvedType)) {
+                Map<Integer, Object> nonEmptyMap = new HashMap<>();
+                nonEmptyMap.put(0, null);
+                return new Domain(new HashMap<>(), nonEmptyMap);
+            }
+            if (resolvedType != null && isSetType(resolvedType)) {
+                Set<Integer> nonEmptySet = new HashSet<>();
+                nonEmptySet.add(1);
+                return new Domain(new HashSet<>(), nonEmptySet);
+            }
+
+            List<Integer> nonEmptyList = new ArrayList<>();
+            nonEmptyList.add(1);
+            return new Domain(new ArrayList<>(), nonEmptyList);
+        }
+
+        private Type resolveExpressionType(Expression expression) {
+            if (expression == null) {
+                return null;
+            }
+            try {
+                ResolvedType resolvedType = expression.calculateResolvedType();
+                return StaticJavaParser.parseType(resolvedType.describe());
+            } catch (RuntimeException ignored) {
+                return null;
+            }
+        }
+
+        private boolean isMapType(Type type) {
+            return type.isClassOrInterfaceType()
+                    && Set.of("Map", "HashMap", "LinkedHashMap", "TreeMap")
+                    .contains(type.asClassOrInterfaceType().getNameAsString());
+        }
+
+        private boolean isStringType(Type type) {
+            return type.isClassOrInterfaceType()
+                    && "String".equals(type.asClassOrInterfaceType().getNameAsString());
+        }
+
+        private boolean isSetType(Type type) {
+            return type.isClassOrInterfaceType()
+                    && Set.of("Set", "HashSet", "LinkedHashSet", "TreeSet")
+                    .contains(type.asClassOrInterfaceType().getNameAsString());
         }
 
 
@@ -963,11 +1101,35 @@ public class TruthTable {
         }
 
         private void equalsMethodCall(MethodCallExpr m, HashMap<Expression, Domain> collector, ScopeChain chain) {
-            if (chain.isEmpty()) {
-                findDomain(m, collector, m.getArgument(0));
-            } else {
-                findDomain(chain.getChain().getFirst().getExpression(), collector, m.getArgument(0));
+            Expression scopeExpr = chain.isEmpty() ? m : chain.getChain().getFirst().getExpression();
+            Expression argExpr = m.getArgument(0);
+            boolean orContext = isInsideOrExpression(m);
+
+            if (isLikelyEnumConstant(scopeExpr) && !isLikelyEnumConstant(argExpr)) {
+                findDomain(argExpr, collector, scopeExpr, orContext);
+                return;
             }
+            if (!isLikelyEnumConstant(scopeExpr) && isLikelyEnumConstant(argExpr)) {
+                findDomain(scopeExpr, collector, argExpr, orContext);
+                return;
+            }
+
+            if (scopeExpr.isStringLiteralExpr() && !argExpr.isStringLiteralExpr()) {
+                findDomain(argExpr, collector, scopeExpr, orContext);
+                return;
+            }
+            if (argExpr.isStringLiteralExpr() && !scopeExpr.isStringLiteralExpr()) {
+                findDomain(scopeExpr, collector, argExpr, orContext);
+                return;
+            }
+
+            findDomain(scopeExpr, collector, argExpr, orContext);
+        }
+
+        private boolean isInsideOrExpression(Expression expr) {
+            return expr.getParentNode()
+                    .filter(p -> p instanceof BinaryExpr be && be.getOperator() == BinaryExpr.Operator.OR)
+                    .isPresent();
         }
 
         /**
@@ -977,6 +1139,10 @@ public class TruthTable {
          * @param compareWith the expression that we will compare against.
          */
         private void findDomain(Expression nameExpression, HashMap<Expression, Domain> collector, Expression compareWith) {
+            findDomain(nameExpression, collector, compareWith, false);
+        }
+
+        private void findDomain(Expression nameExpression, HashMap<Expression, Domain> collector, Expression compareWith, boolean orContext) {
             if (compareWith.isNullLiteralExpr()) {
                 handleNullLiteral(nameExpression, collector);
             }
@@ -990,7 +1156,10 @@ public class TruthTable {
                 handleDoubleLiteral(nameExpression, collector, compareWith);
             }
             else if (compareWith.isStringLiteralExpr()) {
-                handleStringLiteral(nameExpression, collector, compareWith);
+                handleStringLiteral(nameExpression, collector, compareWith, orContext);
+            }
+            else if (compareWith.isObjectCreationExpr()) {
+                handleObjectCreation(nameExpression, collector, compareWith.asObjectCreationExpr());
             }
             else {
                 // Handle equals where the other side is a toString() chain by assigning string domains
@@ -1000,26 +1169,167 @@ public class TruthTable {
                     Domain stringDomain = new Domain("A", "B");
                     collector.put(nameExpression, stringDomain);
                 }
+                else if (compareWith.isNameExpr() || compareWith.isFieldAccessExpr()) {
+                    if (isLikelyEnumConstant(compareWith)) {
+                        Domain enumDomain = createEnumDomain(compareWith);
+                        if (enumDomain != null) {
+                            collector.put(nameExpression, enumDomain);
+                        } else {
+                            collector.putIfAbsent(nameExpression, new Domain(false, true));
+                            collector.putIfAbsent(compareWith, new Domain(true, false));
+                        }
+                    } else if (isInequalityPresent()) {
+                        // Variable-to-variable inequality (e.g. a > b): assign Integer domain so
+                        // adjustDomain() can later widen it to the appropriate numeric range.
+                        // Both sides must be registered; otherwise the missing variable stays null.
+                        collector.putIfAbsent(nameExpression, new Domain(0, 1));
+                        collector.putIfAbsent(compareWith, new Domain(0, 1));
+                    } else {
+                        // Variable-to-variable equality (e.g. a.equals(b)): both sides need Boolean
+                        // domains so the truth table explores all four (TT/TF/FT/FF) combinations.
+                        // Domain(true, false) means lower=true so combination 0 yields (true, true).
+                        collector.putIfAbsent(nameExpression, new Domain(true, false));
+                        collector.putIfAbsent(compareWith, new Domain(true, false));
+                    }
+                }
                 else if (isInequalityPresent()) {
-                    collector.put(nameExpression, new Domain(0, 1));
+                    collector.putIfAbsent(nameExpression, new Domain(0, 1));
                 }
                 else {
-                    collector.put(nameExpression, new Domain(true, false));
-                    collector.put(compareWith, new Domain(true, false));
+                    collector.putIfAbsent(nameExpression, new Domain(true, false));
+                    collector.putIfAbsent(compareWith, new Domain(true, false));
                 }
             }
         }
 
-        private void handleStringLiteral(Expression nameExpression, HashMap<Expression, Domain> collector, Expression compareWith) {
-            if (allowNullInputs) {
-                collector.put(nameExpression, new Domain(null, compareWith.asStringLiteralExpr().getValue()));
+        private boolean isLikelyEnumConstant(Expression expression) {
+            String candidate = null;
+            if (expression.isNameExpr()) {
+                candidate = expression.asNameExpr().getNameAsString();
+            } else if (expression.isFieldAccessExpr()) {
+                candidate = expression.asFieldAccessExpr().getNameAsString();
+            }
+            return candidate != null && candidate.matches("[A-Z][A-Z0-9_]*");
+        }
+
+        private Domain createEnumDomain(Expression enumConstantExpr) {
+            EnumDeclaration enumDeclaration = resolveEnumDeclaration(enumConstantExpr);
+            if (enumDeclaration == null) {
+                return null;
+            }
+
+            String targetName = enumConstantName(enumConstantExpr);
+            if (targetName == null) {
+                return null;
+            }
+
+            Expression matching = enumConstantExpr.clone();
+            Expression mismatching = enumDeclaration.getEntries().stream()
+                    .map(EnumConstantDeclaration::getNameAsString)
+                    .filter(name -> !name.equals(targetName))
+                    .findFirst()
+                    .map(name -> createEnumExpression(enumConstantExpr, name))
+                    .orElse(null);
+            if (mismatching == null) {
+                return null;
+            }
+            return new Domain(mismatching, matching);
+        }
+
+        private EnumDeclaration resolveEnumDeclaration(Expression enumConstantExpr) {
+            try {
+                ResolvedType resolvedType = enumConstantExpr.calculateResolvedType();
+                if (resolvedType == null || !resolvedType.isReferenceType()) {
+                    return null;
+                }
+                return AntikytheraRunTime.getTypeDeclaration(resolvedType.describe())
+                        .filter(EnumDeclaration.class::isInstance)
+                        .map(EnumDeclaration.class::cast)
+                        .orElse(null);
+            } catch (RuntimeException ignored) {
+                return enumConstantExpr.findAncestor(EnumDeclaration.class).orElse(null);
+            }
+        }
+
+        private String enumConstantName(Expression enumConstantExpr) {
+            if (enumConstantExpr.isNameExpr()) {
+                return enumConstantExpr.asNameExpr().getNameAsString();
+            }
+            if (enumConstantExpr.isFieldAccessExpr()) {
+                return enumConstantExpr.asFieldAccessExpr().getNameAsString();
+            }
+            return null;
+        }
+
+        private Expression createEnumExpression(Expression template, String constantName) {
+            if (template.isFieldAccessExpr()) {
+                return new FieldAccessExpr(template.asFieldAccessExpr().getScope().clone(), constantName);
+            }
+            return new NameExpr(constantName);
+        }
+
+        private void handleObjectCreation(Expression nameExpression, HashMap<Expression, Domain> collector,
+                                          ObjectCreationExpr compareWith) {
+            ObjectCreationExpr matchingValue = compareWith.clone();
+            ObjectCreationExpr mismatchingValue = createMismatchingObjectCreation(compareWith);
+            if (mismatchingValue != null) {
+                collector.put(nameExpression, new Domain(mismatchingValue, matchingValue));
             } else {
-                // If null inputs are not allowed, use a non-null domain for strings
-                collector.put(nameExpression, new Domain("", compareWith.asStringLiteralExpr().getValue()));
+                collector.putIfAbsent(nameExpression, new Domain(true, false));
+            }
+        }
+
+        private ObjectCreationExpr createMismatchingObjectCreation(ObjectCreationExpr compareWith) {
+            if (compareWith.getArguments().isEmpty()) {
+                return null;
+            }
+            ObjectCreationExpr mismatch = compareWith.clone();
+            Expression firstArg = mismatch.getArgument(0);
+            if (firstArg.isStringLiteralExpr()) {
+                mismatch.setArgument(0, new com.github.javaparser.ast.expr.StringLiteralExpr(
+                        firstArg.asStringLiteralExpr().getValue() + "_other"));
+                return mismatch;
+            }
+            if (firstArg.isIntegerLiteralExpr()) {
+                int value = Integer.parseInt(firstArg.asIntegerLiteralExpr().getValue());
+                mismatch.setArgument(0, new IntegerLiteralExpr(String.valueOf(value + 1)));
+                return mismatch;
+            }
+            if (firstArg.isLongLiteralExpr()) {
+                String raw = firstArg.asLongLiteralExpr().getValue().replace("L", "").replace("l", "");
+                long value = Long.parseLong(raw);
+                mismatch.setArgument(0, new com.github.javaparser.ast.expr.LongLiteralExpr((value + 1) + "L"));
+                return mismatch;
+            }
+            return null;
+        }
+
+        private void handleStringLiteral(Expression nameExpression, HashMap<Expression, Domain> collector,
+                                           Expression compareWith, boolean orContext) {
+            String newValue = compareWith.asStringLiteralExpr().getValue();
+            if (orContext) {
+                Domain existing = collector.get(nameExpression);
+                if (existing != null && existing.getUpperBound() instanceof String existingStr
+                        && !existingStr.equals(newValue)) {
+                    List<Object> extras = new java.util.ArrayList<>(existing.extraValues);
+                    extras.add(newValue);
+                    collector.put(nameExpression, new Domain(existing.getLowerBound(), existingStr, extras));
+                    return;
+                }
+            }
+            if (allowNullInputs) {
+                collector.put(nameExpression, new Domain(null, newValue));
+            } else {
+                collector.put(nameExpression, new Domain("", newValue));
             }
         }
 
         private void handleNullLiteral(Expression nameExpression, HashMap<Expression, Domain> collector) {
+            Domain existing = collector.get(nameExpression);
+            if (existing != null) {
+                collector.put(nameExpression, new Domain(null, existing.getUpperBound()));
+                return;
+            }
             if (allowNullInputs) {
                 collector.put(nameExpression, new Domain(null, "T"));
             } else {
@@ -1187,13 +1497,19 @@ public class TruthTable {
      static class Domain {
         private final Object lowerBound;
         private final Object upperBound;
+        private final List<Object> extraValues;
         final int min;
         final int max;
         final int width;
 
         Domain(Object lowerBound, Object upperBound) {
+            this(lowerBound, upperBound, List.of());
+        }
+
+        Domain(Object lowerBound, Object upperBound, List<Object> extraValues) {
             this.lowerBound = lowerBound;
             this.upperBound = upperBound;
+            this.extraValues = extraValues;
 
             // Initialize integer fields if bounds are integers
             if (lowerBound instanceof Integer lb && upperBound instanceof Integer ub) {
@@ -1212,9 +1528,20 @@ public class TruthTable {
         Domain(int min, int max) {
             this.lowerBound = min;
             this.upperBound = max;
+            this.extraValues = List.of();
             this.min = min;
             this.max = max;
             this.width = max - min + 1;
+        }
+
+        int valueCount() {
+            return 2 + extraValues.size();
+        }
+
+        Object valueAt(int index) {
+            if (index == 0) return lowerBound;
+            if (index == 1) return upperBound;
+            return extraValues.get(index - 2);
         }
 
         public Object getLowerBound() {

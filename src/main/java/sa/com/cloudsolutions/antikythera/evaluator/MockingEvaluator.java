@@ -3,20 +3,24 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.NullLiteralExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingCall;
 import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
@@ -26,6 +30,9 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import sa.com.cloudsolutions.antikythera.parser.Callable;
 import sa.com.cloudsolutions.antikythera.parser.ImportWrapper;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +40,7 @@ import java.util.Optional;
 import java.util.Set;
 
 public class MockingEvaluator extends ControlFlowEvaluator {
+    private static final Logger logger = LoggerFactory.getLogger(MockingEvaluator.class);
     private static final Set<String> collectionTypes = Set.of(
             "java.util.List",
             "java.util.ArrayList",
@@ -66,13 +74,16 @@ public class MockingEvaluator extends ControlFlowEvaluator {
      * @return a Variable that contains an instance of the returnType
      */
     private Variable mockExecution(Method m, String returnType) {
-        if (variableName != null) {
-            Variable result = Reflect.variableFactory(returnType);
-            if (result != null) {
+        Variable result = Reflect.variableFactory(returnType);
+        if (result != null) {
+            if (variableName != null) {
+                // Only register the Mockito stub when we have a named scope variable.
+                // Intermediate/nested evaluators (variableName == null) still return values
+                // so that evaluation can proceed past chained calls.
                 MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(m.getName(), returnType, variableName);
                 methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(m));
-                return result;
             }
+            return result;
         }
         if (m.getDeclaringClass().equals(Object.class)) {
             try {
@@ -151,6 +162,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     private Variable mockRepositoryMethodDeclaration(Scope sc, Callable callable) throws ReflectiveOperationException {
         MethodDeclaration md = callable.getCallableDeclaration().asMethodDeclaration();
         Type t = md.getType();
+        if (t.isPrimitiveType() && t.asPrimitiveType().getType() == PrimitiveType.Primitive.BOOLEAN) {
+            return createRepositoryBooleanVariable(sc);
+        }
         if (t.isClassOrInterfaceType()) {
             Variable v = createVariable(sc, t, md);
             if (v != null) return v;
@@ -174,13 +188,17 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     private Variable createVariable(Scope sc, Type t, MethodDeclaration md) {
         if (t.asClassOrInterfaceType().isBoxedType()) {
+            if (Reflect.BOOLEAN.equals(t.asClassOrInterfaceType().getNameAsString())
+                    || Reflect.JAVA_LANG_BOOLEAN.equals(t.asString())) {
+                return createRepositoryBooleanVariable(sc);
+            }
             MethodCallExpr methodCall = sc.getScopedMethodCall();
             Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
             LineOfCode l = Branching.get(stmt.hashCode());
             Variable v;
             if (l == null) {
                 l = new LineOfCode(stmt);
-                Branching.add(l);
+                Branching.add(l.markPreconditionOnly());
                 v = Reflect.generateDefaultVariable(t.asClassOrInterfaceType().getNameAsString());
             }
             else {
@@ -203,9 +221,34 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         return null;
     }
 
+    private Variable createRepositoryBooleanVariable(Scope sc) {
+        MethodCallExpr methodCall = sc.getScopedMethodCall();
+        Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
+        LineOfCode l = Branching.get(stmt.hashCode());
+        boolean value;
+
+        if (l == null) {
+            l = new LineOfCode(stmt);
+            Branching.add(l.markPreconditionOnly());
+            value = false;
+        } else {
+            l.setPathTaken(LineOfCode.TRUE_PATH);
+            value = true;
+        }
+
+        Variable v = new Variable(value);
+        v.setInitializer(List.of(new BooleanLiteralExpr(value)));
+
+        MethodCallExpr when = createWhenExpression(methodCall);
+        MockingCall then = createThenExpression(sc, v, when);
+        MockingRegistry.when(className, then);
+        return v;
+    }
+
     private Variable mockRepositoryMethod(Scope sc, Callable callable) throws ReflectiveOperationException {
         Method method = callable.getMethod();
-        if (method.getName().equals("save")) {
+        if ((method.getName().equals("save") || method.getName().equals("saveAndFlush"))
+                && method.getParameterCount() > 0) {
             return mockRepositorySave(callable, method);
         }
         String returnType = method.getReturnType().getName();
@@ -235,13 +278,13 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         MockingCall call = MockingRegistry.getThen(className, callable);
         if (call != null) {
-            return call.getVariable();
+            return variables.getFirst();
         }
         MockingCall mockingCall = new MockingCall(callable, variables.getFirst());
         MethodCallExpr mce = StaticJavaParser.parseExpression(
             String.format(
-                    "Mockito.when(%s.save(Mockito.any())).thenAnswer(invocation-> invocation.getArgument(0))",
-                    variableName)
+                    "Mockito.when(%s.%s(Mockito.any())).thenAnswer(invocation-> invocation.getArgument(0))",
+                    variableName, method.getName())
         );
         mockingCall.setExpression(List.of(mce));
 
@@ -312,6 +355,27 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         }
 
         setupParameters(md);
+
+        // Trace the method body to discover mock interactions for stub generation.
+        // This ensures that calls on @Autowired dependencies inside private helpers
+        // (e.g. a boolean helper that calls utilConfig.getConfigValue()) are intercepted
+        // by MockReturnValueHandler and recorded as when().thenReturn() stubs.
+        // Simple single-statement getters are skipped since they have no interesting calls.
+        if (!isSingleStatementAccessor(methodName, "get", body) && body != null) {
+            Node savedReturnFrom = returnFrom;
+            Variable savedReturnValue = returnValue;
+            try {
+                returnFrom = null;
+                returnValue = null;
+                executeBlock(body.getStatements());
+            } catch (Exception e) {
+                logger.debug("Body trace of {} failed: {}", methodName, e.getMessage());
+            } finally {
+                returnFrom = savedReturnFrom;
+                returnValue = savedReturnValue;
+            }
+        }
+
         Variable getterValue = resolveSimpleGetterReturn(methodName, body);
         if (getterValue != null) {
             return getterValue;
@@ -337,6 +401,22 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return;
         }
         setupParameters(md);
+        // Trace the body to discover mock interactions (e.g. calls on @Autowired fields)
+        // so that when().thenReturn() stubs are generated for them.
+        if (body != null) {
+            Node savedReturnFrom = returnFrom;
+            Variable savedReturnValue = returnValue;
+            try {
+                returnFrom = null;
+                returnValue = null;
+                executeBlock(body.getStatements());
+            } catch (Exception e) {
+                logger.debug("Body trace of void method {} failed: {}", methodName, e.getMessage());
+            } finally {
+                returnFrom = savedReturnFrom;
+                returnValue = savedReturnValue;
+            }
+        }
     }
 
     private Variable resolveSimpleGetterReturn(String methodName, BlockStmt body) {
@@ -360,6 +440,9 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             return null;
         }
         Variable result = Reflect.variableFactory(returnType.asClassOrInterfaceType().getNameAsString());
+        if (isUnresolvedObjectReturn(result)) {
+            result = createStructuredObjectReturn(md.findCompilationUnit().orElse(null), returnType);
+        }
         if (result != null) {
             MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
         }
@@ -405,9 +488,59 @@ public class MockingEvaluator extends ControlFlowEvaluator {
                 String fqdn = AbstractCompiler.findFullyQualifiedName(cu1, returnType.toString());
                 result = Reflect.variableFactory(fqdn);
             }
-            MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
+            if (isUnresolvedObjectReturn(result)) {
+                result = createStructuredObjectReturn(cu1, returnType);
+            }
+            if (result == null) {
+                result = new Variable((Object) null);
+                result.setType(returnType);
+            }
+            if (result != null) {
+                MockingRegistry.addMockitoExpression(md, result.getValue(), variableName);
+            }
         }
         return result;
+    }
+
+    private boolean isUnresolvedObjectReturn(Variable result) {
+        return result != null && result.getValue() == null && result.getClazz() == null;
+    }
+
+    private Variable createStructuredObjectReturn(CompilationUnit context, Type returnType) {
+        if (context == null || !returnType.isClassOrInterfaceType()) {
+            return null;
+        }
+        TypeWrapper wrapper = AbstractCompiler.findType(context, returnType.asString());
+        if (wrapper == null) {
+            return null;
+        }
+
+        String simpleName = returnType.asClassOrInterfaceType().getNameAsString();
+        ObjectCreationExpr initializer = new ObjectCreationExpr(null,
+                new ClassOrInterfaceType(null, simpleName), new NodeList<>());
+
+        if (wrapper.getType() != null) {
+            String fqdn = wrapper.getType().getFullyQualifiedName().orElse(wrapper.getFullyQualifiedName());
+            Variable result = new Variable(EvaluatorFactory.createLazily(fqdn, MockingEvaluator.class));
+            result.setInitializer(List.of(initializer));
+            return result;
+        }
+
+        if (wrapper.getClazz() != null) {
+            try {
+                Object instance = wrapper.getClazz().getDeclaredConstructor().newInstance();
+                Variable result = new Variable(instance);
+                result.setClazz(wrapper.getClazz());
+                result.setInitializer(List.of(initializer));
+                return result;
+            } catch (ReflectiveOperationException e) {
+                Variable result = new Variable((Object) null);
+                result.setClazz(wrapper.getClazz());
+                result.setInitializer(List.of(new NullLiteralExpr()));
+                return result;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -428,7 +561,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
     @Override
     Variable optionalPresentPath(Scope sc, Statement stmt, MethodCallExpr methodCall) throws ReflectiveOperationException {
         LineOfCode l = new LineOfCode(stmt);
-        Branching.add(l);
+        Branching.add(l.markPreconditionOnly());
 
         if (sc.getVariable().getValue() instanceof MockingEvaluator eval) {
             l.setPathTaken(LineOfCode.TRUE_PATH);
@@ -500,7 +633,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         Variable v;
         if (branch == null) {
             branch = new LineOfCode(stmt);
-            Branching.add(branch);
+            Branching.add(branch.markPreconditionOnly());
             branch.setPathTaken(LineOfCode.TRUE_PATH);
             v = createRepositoryOptionalDeclarationValue(md, true);
         }
@@ -547,8 +680,13 @@ public class MockingEvaluator extends ControlFlowEvaluator {
         Statement stmt = methodCall.findAncestor(Statement.class).orElseThrow();
         LineOfCode l = Branching.get(stmt.hashCode());
 
-        Variable v = (l == null) ? repositoryFullPath(sc, stmt, collectionTypeName)
-                : repositoryEmptyPath(collectionTypeName);
+        Variable v;
+        if (l == null) {
+            v = repositoryFullPath(sc, stmt, collectionTypeName);
+        } else {
+            l.markFullyTravelled();
+            v = repositoryEmptyPath(collectionTypeName);
+        }
 
         MethodCallExpr when = createWhenExpression(methodCall);
         MockingCall then = createThenExpression(sc, v, when);
@@ -680,11 +818,15 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
         if (l == null) {
             // First iteration: return null so the null-path test is generated.
+            // Register an explicit when().thenReturn(null) stub so that RETURNS_DEEP_STUBS
+            // on the @Mock field does not override the expected null behaviour at runtime.
             l = new LineOfCode(stmt);
-            Branching.registerBranch(l);
-            for (int i = 0; i < methodCall.getArguments().size(); i++) {
-                AntikytheraRunTime.pop();
-            }
+            Branching.add(l.markPreconditionOnly());
+            MethodCallExpr when = createWhenExpression(methodCall); // also pops arguments
+            Variable nullVar = new Variable((Object) null);
+            nullVar.setInitializer(List.of(new NullLiteralExpr()));
+            MockingCall then = createThenExpression(sc, nullVar, when);
+            MockingRegistry.when(className, then);
             return new Variable((Object) null);
         }
 

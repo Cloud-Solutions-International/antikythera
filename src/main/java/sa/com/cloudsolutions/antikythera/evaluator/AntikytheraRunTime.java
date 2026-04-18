@@ -101,6 +101,10 @@ public class AntikytheraRunTime {
         autowired.clear();
     }
 
+    public static void resetStatics() {
+        statics.clear();
+    }
+
     public static void push(Variable variable) {
         stack.push(variable);
     }

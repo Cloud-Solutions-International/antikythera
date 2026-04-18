@@ -1,16 +1,21 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.stmt.BlockStmt;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.stream.Collectors;
 
 public class Branching {
     private static final HashMap<CallableDeclaration<?>, PriorityQueue<LineOfCode>> conditionals = new HashMap<>();
     private static final HashMap<Integer, LineOfCode> branches = new HashMap<>();
+    private static final BranchAttemptPlanner PLANNER = new BranchAttemptPlanner();
 
     private Branching() {
     }
@@ -18,23 +23,20 @@ public class Branching {
     public static void clear() {
         branches.clear();
         conditionals.clear();
+        PLANNER.clear();
     }
 
     public static void add(LineOfCode lineOfCode) {
-        PriorityQueue<LineOfCode> queue = conditionals.computeIfAbsent(
-            lineOfCode.getCallableDeclaration(),
-            k -> new PriorityQueue<>(new LineOfCodeComparator())
-        );
-        queue.add(lineOfCode);
-        branches.putIfAbsent(lineOfCode.getStatement().hashCode(), lineOfCode);
-    }
-
-    /**
-     * Register a LineOfCode only in the branches map (not in the conditionals queue).
-     * Use this for non-if-statement branch points (e.g. repository stubs) where
-     * we only need to track first-vs-second call but don't want extra loop iterations.
-     */
-    public static void registerBranch(LineOfCode lineOfCode) {
+        if (lineOfCode.shouldSchedule()) {
+            PriorityQueue<LineOfCode> queue = conditionals.computeIfAbsent(
+                lineOfCode.getCallableDeclaration(),
+                k -> new PriorityQueue<>(new LineOfCodeComparator())
+            );
+            if (!queue.contains(lineOfCode)) {
+                attachPredecessors(lineOfCode);
+                queue.add(lineOfCode);
+            }
+        }
         branches.putIfAbsent(lineOfCode.getStatement().hashCode(), lineOfCode);
     }
 
@@ -51,14 +53,104 @@ public class Branching {
     }
 
     public static List<Precondition> getApplicableConditions(CallableDeclaration<?> methodDeclaration) {
-        List<Precondition> applicableConditions = new ArrayList<>();
+        return getBranchAttempt(methodDeclaration, null).applicableConditions();
+    }
 
-        for (LineOfCode lineOfCode : branches.values()) {
-            if (lineOfCode.getPathTaken() != LineOfCode.BOTH_PATHS && lineOfCode.getCallableDeclaration().equals(methodDeclaration)) {
-                applicableConditions.addAll(lineOfCode.getPreconditions());
+    public static BranchAttempt getBranchAttempt(CallableDeclaration<?> methodDeclaration, LineOfCode target) {
+        List<LineOfCode> relevantBranches = branches.values().stream()
+                .filter(lineOfCode -> lineOfCode.getCallableDeclaration().equals(methodDeclaration))
+                .collect(Collectors.toList());
+        return PLANNER.plan(methodDeclaration, target, relevantBranches);
+    }
+
+    public static BranchAttempt selectTargetAttempt(LineOfCode target, BranchSide side,
+                                                    List<java.util.Map<com.github.javaparser.ast.expr.Expression, Object>> combinations) {
+        return PLANNER.selectNextAttempt(target, side, combinations);
+    }
+
+    /**
+     * Scans all branches registered for {@code cd}. For any branch that still has untried
+     * cross-product combinations, resets its path state to UNTRAVELLED and re-queues it.
+     * Returns {@code true} if at least one branch was reset, signalling the outer loop to
+     * continue rather than break.
+     */
+    public static boolean resetBranchesWithUntriedCombinations(CallableDeclaration<?> cd) {
+        boolean anyReset = false;
+        for (LineOfCode loc : branches.values()) {
+            if (loc.getCallableDeclaration().equals(cd) && PLANNER.hasUntriedCombinations(loc)) {
+                loc.resetPathTaken();
+                requeue(loc);
+                anyReset = true;
             }
         }
-        return applicableConditions;
+        return anyReset;
+    }
+
+    /**
+     * Re-adds a branch directly to its method's priority queue without re-attaching predecessors
+     * or updating the branch map. Used when a fully-traversed branch needs more cross-product
+     * iterations.
+     */
+    public static void requeue(LineOfCode lineOfCode) {
+        PriorityQueue<LineOfCode> queue = conditionals.get(lineOfCode.getCallableDeclaration());
+        if (queue != null) {
+            queue.add(lineOfCode);
+        }
+    }
+
+    private static void attachPredecessors(LineOfCode lineOfCode) {
+        if (lineOfCode.getParent() != null) {
+            lineOfCode.addPredecessor(lineOfCode.getParent());
+            lineOfCode.getParent().getPredecessors().forEach(lineOfCode::addPredecessor);
+        }
+
+        LineOfCode priorSibling = findNearestPriorSibling(lineOfCode);
+        if (priorSibling != null) {
+            lineOfCode.addPredecessor(priorSibling);
+            priorSibling.getPredecessors().forEach(lineOfCode::addPredecessor);
+        }
+    }
+
+    private static LineOfCode findNearestPriorSibling(LineOfCode lineOfCode) {
+        BlockStmt targetBlock = findEnclosingBlock(lineOfCode);
+        if (targetBlock == null) {
+            return null;
+        }
+
+        int targetOrder = getSourceOrder(lineOfCode);
+        LineOfCode best = null;
+        int bestOrder = Integer.MIN_VALUE;
+        for (LineOfCode candidate : branches.values()) {
+            if (candidate.equals(lineOfCode)) {
+                continue;
+            }
+            if (!candidate.getCallableDeclaration().equals(lineOfCode.getCallableDeclaration())) {
+                continue;
+            }
+            if (candidate.getParent() != lineOfCode.getParent()) {
+                continue;
+            }
+            if (!targetBlock.equals(findEnclosingBlock(candidate))) {
+                continue;
+            }
+            int candidateOrder = getSourceOrder(candidate);
+            if (candidateOrder < targetOrder && candidateOrder > bestOrder) {
+                best = candidate;
+                bestOrder = candidateOrder;
+            }
+        }
+        return best;
+    }
+
+    private static BlockStmt findEnclosingBlock(LineOfCode lineOfCode) {
+        return lineOfCode.getStatement().findAncestor(BlockStmt.class).orElse(null);
+    }
+
+    private static int getSourceOrder(LineOfCode lineOfCode) {
+        Node node = lineOfCode.getStatement();
+        return node.getBegin()
+                .map(position -> position.line * 10_000 + position.column)
+                .orElse(Integer.MAX_VALUE);
     }
 
     public static int size(CallableDeclaration<?> methodDeclaration)

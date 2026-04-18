@@ -17,8 +17,10 @@ import com.github.javaparser.ast.type.VoidType;
 import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.evaluator.InnerClassEvaluator;
+import sa.com.cloudsolutions.antikythera.evaluator.Scope;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 import sa.com.cloudsolutions.antikythera.evaluator.Symbol;
+import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 
@@ -83,7 +85,7 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
                 case 0 -> EvaluatorFactory.create("java.util.function.Supplier", SupplierEvaluator.class);
                 case 1 -> EvaluatorFactory.create("java.util.function.Function", FunctionEvaluator.class);
                 case 2 -> EvaluatorFactory.create("java.util.function.BiFunction", BiFunctionEvaluator.class);
-                default -> throw new UnsupportedOperationException("Not supported yet.");
+                default -> EvaluatorFactory.create("java.util.function.Function", NAryFunctionEvaluator.class);
             };
             eval.setMethod(md);
             return eval;
@@ -92,9 +94,8 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
                 case 0 -> EvaluatorFactory.create("java.lang.Runnable", RunnableEvaluator.class);
                 case 1 -> EvaluatorFactory.create("java.util.function.Consumer", ConsumerEvaluator.class);
                 case 2 -> EvaluatorFactory.create("java.util.function.BiConsumer", BiConsumerEvaluator.class);
-                default -> throw new UnsupportedOperationException("Not supported yet.");
+                default -> EvaluatorFactory.create("java.util.function.Consumer", NAryConsumerEvaluator.class);
             };
-
             eval.setMethod(md);
             return eval;
         }
@@ -122,7 +123,8 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
                 String name = mce.getNameAsString();
                 return switch (name) {
                     case "map", "filter", "sorted", "reduce", "anyMatch", "allMatch", "noneMatch",
-                         "findFirst", "findAny" -> true;
+                         "findFirst", "findAny", "flatMap", "mapToInt", "mapToLong", "mapToDouble",
+                         "mapToObj", "collect", "min", "max", "takeWhile", "dropWhile" -> true;
                     default -> false;
                 };
             }
@@ -138,8 +140,11 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
     }
 
     public void setMethod(MethodDeclaration methodDeclaration) {
-
         this.methodDeclaration = methodDeclaration;
+    }
+
+    public MethodDeclaration getMethodDeclaration() {
+        return methodDeclaration;
     }
 
     @Override
@@ -161,6 +166,37 @@ public abstract class FPEvaluator<T> extends InnerClassEvaluator {
             }
         }
         return v;
+    }
+
+    /**
+     * Dispatch a method call on this functional evaluator (e.g. {@code toPredicate()},
+     * {@code apply()}, {@code accept()}) via {@link FunctionalInvocationHandler}.
+     *
+     * <p>The base {@link Evaluator#executeMethod(Scope)} would attempt
+     * {@code AbstractCompiler.getMatchingType(cu, getClassName()).orElseThrow()}, which fails
+     * when the compilation unit has been borrowed from the enclosure by
+     * {@link InnerClassEvaluator} — the borrowed CU belongs to a different class, so the
+     * FP evaluator's own class name is not found, causing {@link java.util.NoSuchElementException}.
+     * Overriding here routes any functional-interface call directly to the lambda body.</p>
+     */
+    @Override
+    public Variable executeMethod(Scope sc) throws ReflectiveOperationException {
+        MethodCallExpr mce = sc.getMCEWrapper().asMethodCallExpr().orElse(null);
+        if (mce == null) return null;
+
+        Object[] args = new Object[mce.getArguments().size()];
+        for (int i = 0; i < args.length; i++) {
+            Variable v = evaluateExpression(mce.getArgument(i));
+            args[i] = v != null ? v.getValue() : null;
+        }
+
+        try {
+            Object result = new FunctionalInvocationHandler(this).invoke(null, null, args);
+            return result != null ? new Variable(result) : null;
+        } catch (Throwable t) {
+            if (t instanceof ReflectiveOperationException roe) throw roe;
+            throw new AntikytheraException(t);
+        }
     }
 
     public abstract Type getType();

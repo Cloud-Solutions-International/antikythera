@@ -42,8 +42,11 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Reflect {
+    private static final Logger logger = LoggerFactory.getLogger(Reflect.class);
     public static final String ANTIKYTHERA = "Antikythera";
     public static final String BOOLEAN = "Boolean";
     public static final String BYTE = "Byte";
@@ -358,6 +361,65 @@ public class Reflect {
         };
     }
 
+    /**
+     * For reflective calls to {@link Long#parseLong(String)} / {@link Integer#parseInt(String)}
+     * (including radix overloads), replace non-numeric string placeholders so evaluation does not
+     * throw {@link NumberFormatException}.
+     */
+    public static Object[] coerceArgumentsForNumericParsing(Method method, Object[] args) {
+        if (args == null || args.length == 0) {
+            return args;
+        }
+        if (!(args[0] instanceof String s)) {
+            return args;
+        }
+        Class<?> dc = method.getDeclaringClass();
+        String mname = method.getName();
+        if (dc == Long.class && "parseLong".equals(mname)) {
+            String coerced = stringParsableAsLongOrOne(s);
+            if (coerced == s) {
+                return args;
+            }
+            Object[] copy = args.clone();
+            copy[0] = coerced;
+            return copy;
+        }
+        if (dc == Integer.class && "parseInt".equals(mname)) {
+            String coerced = stringParsableAsIntOrOne(s);
+            if (coerced == s) {
+                return args;
+            }
+            Object[] copy = args.clone();
+            copy[0] = coerced;
+            return copy;
+        }
+        return args;
+    }
+
+    private static String stringParsableAsLongOrOne(String s) {
+        if (s == null) {
+            return null;
+        }
+        try {
+            Long.parseLong(s);
+            return s;
+        } catch (NumberFormatException e) {
+            return "1";
+        }
+    }
+
+    private static String stringParsableAsIntOrOne(String s) {
+        if (s == null) {
+            return null;
+        }
+        try {
+            Integer.parseInt(s);
+            return s;
+        } catch (NumberFormatException e) {
+            return "1";
+        }
+    }
+
     public static Expression createLiteralExpression(Object value) {
         if (value == null) {
             return new NullLiteralExpr();
@@ -415,19 +477,27 @@ public class Reflect {
                 v.setInitializer(List.of(mce));
             }
             case JAVA_UTIL_LIST, JAVA_UTIL_ARRAY_LIST -> {
+                GeneratorState.addImport(new ImportDeclaration(JAVA_UTIL_ARRAY_LIST, false, false));
                 ObjectCreationExpr init = new ObjectCreationExpr()
                         .setType(new ClassOrInterfaceType().setName("ArrayList<>"));
                 v.setInitializer(List.of(init));
             }
             case JAVA_UTIL_SET, JAVA_UTIL_HASH_SET -> {
+                GeneratorState.addImport(new ImportDeclaration(JAVA_UTIL_HASH_SET, false, false));
                 ObjectCreationExpr init = new ObjectCreationExpr()
-                        .setType(new ClassOrInterfaceType().setName("HashSet"));
+                        .setType(new ClassOrInterfaceType().setName("HashSet<>"));
                 v.setInitializer(List.of(init));
             }
             case JAVA_UTIL_OPTIONAL, OPTIONAL -> {
                 MethodCallExpr init = new MethodCallExpr("empty");
                 init.setScope(new NameExpr(OPTIONAL));
                 v.setInitializer(List.of(init));
+            }
+            case "java.util.Date" -> {
+                ObjectCreationExpr expr = new ObjectCreationExpr()
+                        .setType(new ClassOrInterfaceType(null, "Date"));
+                v.setInitializer(List.of(expr));
+                GeneratorState.addImport(new ImportDeclaration("java.util.Date", false, false));
             }
             default -> {
                 ObjectCreationExpr expr = new ObjectCreationExpr()
@@ -546,6 +616,7 @@ public class Reflect {
                 result.setInitializer(List.of(new StringLiteralExpr(ANTIKYTHERA)));
                 yield result;
             }
+            case "java.util.Date" -> createVariable(new java.util.Date(), "java.util.Date", null);
             default -> new Variable(null);
         };
     }
@@ -582,6 +653,9 @@ public class Reflect {
      */
     @SuppressWarnings("java:S1872")
     public static Method findMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
+        if (clazz == null) {
+            return null;
+        }
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] argumentTypes = reflectionArguments.getArgumentTypes();
         Object[] arguments = reflectionArguments.getArguments();
@@ -682,7 +756,20 @@ public class Reflect {
      */
     public static List<Method> getMethodsByName(Class<?> clazz, String name) {
         List<Method> methods = new ArrayList<>();
-        for (Method m : clazz.getMethods()) {
+        Method[] candidates;
+        try {
+            candidates = clazz.getMethods();
+        } catch (NoClassDefFoundError e) {
+            // A transitive dependency is missing from the classpath (e.g. spring-messaging for KafkaTemplate).
+            // Fall back to declared methods only, which may still load fine.
+            try {
+                candidates = clazz.getDeclaredMethods();
+            } catch (NoClassDefFoundError e2) {
+                logger.debug("Cannot inspect methods of {} — missing dependency: {}", clazz.getName(), e2.getMessage());
+                return methods;
+            }
+        }
+        for (Method m : candidates) {
             if (m.getName().equals(name)) {
                 methods.add(m);
             }
@@ -803,6 +890,9 @@ public class Reflect {
     }
 
     public static Method findAccessibleMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
+        if (clazz == null) {
+            return null;
+        }
         // First check direct method lookup
         Method method = Reflect.findMethod(clazz, reflectionArguments);
         if (method != null)

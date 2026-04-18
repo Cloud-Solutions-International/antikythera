@@ -1,8 +1,11 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
+import sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -131,6 +134,18 @@ class TestMockReturnValueHandler {
 
         // The result should be an ArrayList since findBetterReturnType should find ArrayList.class from the ParameterizedType
         assertInstanceOf(ArrayList.class, result);
+    }
+
+    @Test
+    void testGenerateArgumentsForWhenUsesEqForConcreteClassHints() throws Exception {
+        Method method = TestService.class.getMethod("convertValue", Object.class, Class.class);
+
+        List<Expression> args = MockingRegistry.generateArgumentsForWhen(method, new Object[]{"input", ArrayList.class});
+
+        assertEquals(2, args.size());
+        assertEquals("Mockito.any()", args.get(0).toString());
+        assertInstanceOf(MethodCallExpr.class, args.get(1));
+        assertEquals("Mockito.eq(java.util.ArrayList.class)", args.get(1).toString());
     }
 
     // Test interfaces/classes used in the tests

@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator.mock;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -55,6 +56,8 @@ public class MockingRegistry {
     private static final Logger logger = LoggerFactory.getLogger(MockingRegistry.class);
     private static final Map<String, Map<Callable, MockingCall>> mockedFields = new HashMap<>();
     private static Map<String, List<Expression>> customMockExpressions = new HashMap<>();
+    /** Types for which all mock-creation attempts have already failed; suppress duplicate warnings. */
+    private static final java.util.Set<String> unmockableTypes = new java.util.HashSet<>();
 
     public static final String MOCKITO = "Mockito";
     public static final String MOCKITO_FQN = "org.mockito.Mockito";
@@ -92,6 +95,7 @@ public class MockingRegistry {
 
     public static void reset() {
         mockedFields.clear();
+        unmockableTypes.clear();
         clearCustomMockExpressions();
     }
 
@@ -177,24 +181,75 @@ public class MockingRegistry {
     }
 
     public static Variable createMockitoMockInstance(Class<?> cls) {
+        String mockName = cls.getSimpleName();
+        mockName = Character.toLowerCase(mockName.charAt(0)) + mockName.substring(1);
+
+        // Attempt 1: full mock with MockReturnValueHandler so when/then stubs are auto-generated
         try {
-            String mockName = cls.getSimpleName();
-            mockName = Character.toLowerCase(mockName.charAt(0)) + mockName.substring(1);
-            Variable v = new Variable(Mockito.mock(cls, withSettings().name(mockName).defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
+            Variable v = new Variable(Mockito.mock(cls, withSettings().name(mockName)
+                    .defaultAnswer(new MockReturnValueHandler()).strictness(Strictness.LENIENT)));
             v.setClazz(cls);
-            // Set initializer so test generator knows to use Mockito.mock()
             v.setInitializer(List.of(new MethodCallExpr(
                 new NameExpr(MOCKITO), "mock",
                 new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
             )));
             return v;
         } catch (MockitoException e) {
-            logger.warn("Cannot create Mockito mock for {} ({}), substituting null — tests involving this type may be incomplete",
-                    cls.getName(), e.getMessage().lines().findFirst().orElse(""));
-            Variable v = new Variable(null);
-            v.setClazz(cls);
-            return v;
+            logger.debug("Full mock creation failed for {} — will retry with plain mock. Reason: {}",
+                    cls.getName(), firstMeaningfulLine(e));
         }
+
+        // Attempt 2: plain mock — allows evaluation to continue past method calls on this type
+        // but when/then stubs will not be auto-generated for its methods.
+        // Catch Throwable because missing transitive dependencies cause NoClassDefFoundError (an Error, not Exception).
+        try {
+            Variable v = new Variable(Mockito.mock(cls));
+            v.setClazz(cls);
+            v.setInitializer(List.of(new MethodCallExpr(
+                new NameExpr(MOCKITO), "mock",
+                new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
+            )));
+            logger.warn("Using plain Mockito mock for {} — when/then stubs will not be generated for its methods",
+                    cls.getName());
+            return v;
+        } catch (Throwable e2) {
+            // Attempt 3: ByteBuddy — handles classes that Mockito cannot subclass (e.g. no no-arg constructor,
+            // requires mockito-inline, etc.)
+            try {
+                MethodInterceptor interceptor = new MethodInterceptor(cls);
+                Class<?> bb = AKBuddy.createDynamicClass(interceptor);
+                Variable v = new Variable(AKBuddy.createInstance(bb, interceptor));
+                v.setClazz(cls);
+                v.setInitializer(List.of(new MethodCallExpr(
+                    new NameExpr(MOCKITO), "mock",
+                    new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
+                )));
+                logger.debug("Fell back to ByteBuddy mock for {} — Mockito could not mock this class",
+                        cls.getName());
+                return v;
+            } catch (Throwable e3) {
+                // Only warn once per unmockable type to avoid log spam when the same type appears multiple times
+                if (unmockableTypes.add(cls.getName())) {
+                    logger.warn("Cannot create any mock for {} — tests involving this type will lack mock setup. Reason: {}",
+                            cls.getName(), firstMeaningfulLine(e2));
+                } else {
+                    logger.debug("Skipping repeated mock-failure for {} (already warned)", cls.getName());
+                }
+                Variable v = new Variable(null);
+                v.setClazz(cls);
+                v.setInitializer(List.of(new MethodCallExpr(
+                    new NameExpr(MOCKITO), "mock",
+                    new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, cls.getSimpleName())))
+                )));
+                v.setFailedMock(true);
+                return v;
+            }
+        }
+    }
+
+    private static String firstMeaningfulLine(Throwable e) {
+        return e.getMessage() == null ? "(no message)"
+                : e.getMessage().lines().filter(l -> !l.isBlank()).findFirst().orElse("(no message)");
     }
 
     public static Variable createByteBuddyMockInstance(String className) throws ReflectiveOperationException {
@@ -230,7 +285,29 @@ public class MockingRegistry {
     }
 
     public static MethodCallExpr buildMockitoWhen(String methodName, String returnType, String variableName) {
-        return buildMockitoWhen(methodName, expressionFactory(returnType), variableName);
+        return buildMockitoWhen(methodName, expressionFactory(resolveReturnTypeForStub(returnType, methodName, variableName)), variableName);
+    }
+
+    /**
+     * When the declared return type is {@code Object}, use a cast target from
+     * {@link GeneratorState} (see {@link sa.com.cloudsolutions.antikythera.evaluator.MethodBodyMockStubAnalyzer})
+     * or from {@code (T) mock.call()} so {@code thenReturn} is compatible with downstream casts.
+     */
+    static String resolveReturnTypeForStub(String returnType, String methodName, String mockScopeVariableName) {
+        if (!"java.lang.Object".equals(returnType)) {
+            return returnType;
+        }
+        String pending = GeneratorState.peekPendingObjectStubReturnFqn();
+        if (pending != null) {
+            return pending;
+        }
+        if (mockScopeVariableName != null) {
+            String hint = GeneratorState.getMockStubReturnHint(mockScopeVariableName, methodName);
+            if (hint != null) {
+                return hint;
+            }
+        }
+        return returnType;
     }
 
     public static MethodCallExpr buildMockitoWhen(String methodName, Expression returnValue, String scopeVariable) {
@@ -257,11 +334,26 @@ public class MockingRegistry {
 
     public static void addMockitoExpression(MethodDeclaration md, Object returnValue, String variableName) {
         if (returnValue != null && variableName != null) {
+            String declaredReturnType = resolveDeclaredReturnType(md);
             MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(
-                    md.getNameAsString(), returnValue.getClass().getName(), variableName);
+                    md.getNameAsString(), declaredReturnType, variableName);
             NodeList<Expression> args = fakeArguments(md);
             methodCall.setArguments(args);
         }
+    }
+
+    private static String resolveDeclaredReturnType(MethodDeclaration md) {
+        CompilationUnit cu = md.findCompilationUnit().orElse(null);
+        if (cu == null) {
+            return md.getType().asString();
+        }
+        String fqn;
+        try {
+            fqn = AbstractCompiler.findFullyQualifiedName(cu, md.getType());
+        } catch (RuntimeException ex) {
+            fqn = null;
+        }
+        return fqn != null ? fqn : md.getType().asString();
     }
 
 
@@ -280,6 +372,18 @@ public class MockingRegistry {
         for (java.lang.reflect.Parameter p : parameters) {
             String typeName = p.getType().getSimpleName();
             args.add(MockingRegistry.createMockitoArgument(typeName));
+        }
+        return args;
+    }
+
+    public static NodeList<Expression> generateArgumentsForWhen(Method m, Object[] invocationArguments) {
+        NodeList<Expression> args = new NodeList<>();
+        java.lang.reflect.Parameter[] parameters = m.getParameters();
+        for (int i = 0; i < parameters.length; i++) {
+            Object invocationArgument = invocationArguments != null && i < invocationArguments.length
+                    ? invocationArguments[i]
+                    : null;
+            args.add(MockingRegistry.createMockitoArgument(parameters[i].getType(), invocationArgument));
         }
         return args;
     }
@@ -342,12 +446,19 @@ public class MockingRegistry {
 
             case "Boolean", "java.lang.Boolean", Reflect.PRIMITIVE_BOOLEAN -> new BooleanLiteralExpr(false);
 
-            case Reflect.PRIMITIVE_FLOAT, Reflect.FLOAT, Reflect.PRIMITIVE_DOUBLE, Reflect.DOUBLE ->
+            case Reflect.PRIMITIVE_FLOAT, Reflect.FLOAT, Reflect.PRIMITIVE_DOUBLE, Reflect.DOUBLE,
+                    "java.lang.Float", "java.lang.Double" ->
                     new DoubleLiteralExpr("0.0");
 
-            case Reflect.INTEGER, "int" -> new IntegerLiteralExpr("0");
+            case Reflect.INTEGER, "int", Reflect.JAVA_LANG_INTEGER -> new IntegerLiteralExpr("0");
 
-            case "Long", "long", "java.lang.Long" -> new LongLiteralExpr("-100L");
+            case "Short", "short", "java.lang.Short" -> new IntegerLiteralExpr("0");
+
+            case "Byte", "byte", Reflect.JAVA_LANG_BYTE -> new IntegerLiteralExpr("0");
+
+            case "Character", "char", Reflect.JAVA_LANG_CHARACTER -> new IntegerLiteralExpr("0");
+
+            case "Long", "long", Reflect.JAVA_LANG_LONG -> new LongLiteralExpr("-100L");
 
             case "String", "java.lang.String" -> new StringLiteralExpr("0");
 
@@ -361,32 +472,46 @@ public class MockingRegistry {
      * generates Mockito.mock(). Otherwise generates new ClassName().
      */
     private static Expression createExpressionForUnknownType(String qualifiedName) {
+        String emittedTypeName = registerImportAndGetEmittedTypeName(qualifiedName);
         try {
             Class<?> cls = AbstractCompiler.loadClass(qualifiedName);
+            if (isJavaLangPrimitiveWrapper(cls)) {
+                return expressionFactory(cls.getName());
+            }
             if (cls.isInterface() || java.lang.reflect.Modifier.isAbstract(cls.getModifiers())) {
-                return createMockExpression(cls.getSimpleName());
+                return createMockExpression(emittedTypeName);
             }
             // Try to find no-arg constructor
             cls.getDeclaredConstructor();
             return new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName(qualifiedName))
+                    .setType(new ClassOrInterfaceType().setName(emittedTypeName))
                     .setArguments(new NodeList<>());
         } catch (NoSuchMethodException e) {
             // No no-arg constructor, use Mockito.mock()
-            String simpleName = qualifiedName.contains(".")
-                    ? qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1)
-                    : qualifiedName;
-            // Handle inner class names (replace $ with .)
-            simpleName = simpleName.replace('$', '.');
-            return createMockExpression(simpleName);
-        } catch (ClassNotFoundException e) {
+            return createMockExpression(emittedTypeName);
+        } catch (ClassNotFoundException | RuntimeException e) {
             // Class not in classpath; use Mockito.mock() as fallback to avoid no-arg constructor issues
-            String simpleName = qualifiedName.contains(".")
-                    ? qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1)
-                    : qualifiedName;
-            simpleName = simpleName.replace('$', '.');
-            return createMockExpression(simpleName);
+            return createMockExpression(emittedTypeName);
         }
+    }
+
+    private static String registerImportAndGetEmittedTypeName(String qualifiedName) {
+        if (qualifiedName == null || qualifiedName.isBlank()) {
+            return qualifiedName;
+        }
+        String normalized = qualifiedName.replace('$', '.');
+        if (!normalized.startsWith("java.lang.") && normalized.contains(".")) {
+            GeneratorState.addImport(new ImportDeclaration(normalized, false, false));
+        }
+        return normalized.contains(".")
+                ? normalized.substring(normalized.lastIndexOf('.') + 1)
+                : normalized;
+    }
+
+    private static boolean isJavaLangPrimitiveWrapper(Class<?> cls) {
+        return Integer.class.equals(cls) || Long.class.equals(cls) || Short.class.equals(cls)
+                || Byte.class.equals(cls) || Character.class.equals(cls) || Float.class.equals(cls)
+                || Double.class.equals(cls) || Boolean.class.equals(cls);
     }
 
     /**
@@ -407,6 +532,18 @@ public class MockingRegistry {
             return new CastExpr(new ClassOrInterfaceType(null, typeName),mce);
         }
         return mce;
+    }
+
+    public static Expression createMockitoArgument(Class<?> parameterType, Object invocationArgument) {
+        if (Class.class.equals(parameterType) && invocationArgument instanceof Class<?> clazz) {
+            GeneratorState.addImport(new ImportDeclaration(MOCKITO_FQN, false, false));
+            return new MethodCallExpr(
+                    new NameExpr(MOCKITO),
+                    "eq",
+                    new NodeList<>(new ClassExpr(new ClassOrInterfaceType(null, clazz.getCanonicalName())))
+            );
+        }
+        return createMockitoArgument(parameterType.getSimpleName());
     }
 
     private static MethodCallExpr generateAnyExpression(String typeName) {

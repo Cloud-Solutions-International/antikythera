@@ -26,6 +26,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -141,7 +142,9 @@ class TestEvaluator extends TestHelper {
 
         Map<String, Symbol> resolvedFields = evaluator.fields;
 
-        assertNull(resolvedFields.get("stringList").getValue());
+        assertNotNull(resolvedFields.get("stringList").getValue());
+        assertTrue(resolvedFields.get("stringList").getValue() instanceof List);
+        assertTrue(((List<?>) resolvedFields.get("stringList").getValue()).isEmpty());
         assertTrue(resolvedFields.get("stringList").getType().isClassOrInterfaceType());
         assertEquals("List", resolvedFields.get("stringList").getType().asClassOrInterfaceType().getNameAsString());
 

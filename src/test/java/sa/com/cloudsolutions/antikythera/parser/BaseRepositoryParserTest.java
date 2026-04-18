@@ -674,4 +674,22 @@ class BaseRepositoryParserTest {
         String nullResult = (String) method.invoke(null, String.class);
         assertNull(nullResult, "Should return null for class without @Table");
     }
+
+    @Test
+    void testProcessTypes_GenericRepositoryInterfaceIsSkipped() throws IOException {
+        // FoodIngredientRepository<FoodIngredient> extends JpaRepository<FoodIngredient, Long>
+        // The first type arg 'FoodIngredient' is a type parameter of the interface itself,
+        // not a concrete entity class. processTypes() should skip it rather than producing
+        // a misleading warning and a broken TypeWrapper.
+        String fqn = "sa.com.cloudsolutions.antikythera.testhelper.repository.FoodIngredientRepository";
+        CompilationUnit repoUnit = AntikytheraRunTime.getCompilationUnit(fqn);
+        assertNotNull(repoUnit, "FoodIngredientRepository CU should be pre-compiled");
+
+        BaseRepositoryParser parser = BaseRepositoryParser.create(repoUnit);
+        parser.processTypes();
+
+        // entity and table should remain null because the type arg is a type parameter
+        assertNull(parser.getEntity(), "Entity should be null for a generic base repository");
+        assertNull(parser.table, "Table should be null for a generic base repository");
+    }
 }
