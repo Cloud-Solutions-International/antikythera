@@ -1613,8 +1613,19 @@ public class Evaluator implements EvaluationEngine {
                 return;
             }
             case COLLECT -> {
-                Collector<Object, ?, Object> col = (Collector<Object, ?, Object>) finalArgs[0];
-                result = Stream.class.getMethod(COLLECT, Collector.class).invoke(stream, col);
+                if (finalArgs.length == 1) {
+                    Collector<Object, ?, Object> col = (Collector<Object, ?, Object>) finalArgs[0];
+                    result = Stream.class.getMethod(COLLECT, Collector.class).invoke(stream, col);
+                } else if (finalArgs.length == 3) {
+                    @SuppressWarnings("unchecked")
+                    Stream<Object> objectStream = (Stream<Object>) stream;
+                    result = objectStream.collect(
+                            (java.util.function.Supplier<Object>) finalArgs[0],
+                            (java.util.function.BiConsumer<Object, Object>) finalArgs[1],
+                            (java.util.function.BiConsumer<Object, Object>) finalArgs[2]);
+                } else {
+                    throw new AntikytheraException("Unsupported collect overload with " + finalArgs.length + " arguments");
+                }
             }
             case COUNT -> result = Stream.class.getMethod(COUNT).invoke(stream);
             case TO_LIST -> result = Stream.class.getMethod(TO_LIST).invoke(stream);
@@ -1634,10 +1645,19 @@ public class Evaluator implements EvaluationEngine {
                 if (finalArgs.length == 1) {
                     BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[0]);
                     result = Stream.class.getMethod(REDUCE, BinaryOperator.class).invoke(stream, op);
-                } else {
+                } else if (finalArgs.length == 2) {
                     BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[1]);
                     result = Stream.class.getMethod(REDUCE, Object.class, BinaryOperator.class)
                             .invoke(stream, finalArgs[0], op);
+                } else if (finalArgs.length == 3) {
+                    @SuppressWarnings("unchecked")
+                    Stream<Object> objectStream = (Stream<Object>) stream;
+                    result = objectStream.reduce(
+                            finalArgs[0],
+                            (java.util.function.BiFunction<Object, Object, Object>) finalArgs[1],
+                            toStreamBinaryOperator(finalArgs[2]));
+                } else {
+                    throw new AntikytheraException("Unsupported reduce overload with " + finalArgs.length + " arguments");
                 }
             }
             default -> { return; }

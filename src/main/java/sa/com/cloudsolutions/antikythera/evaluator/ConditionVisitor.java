@@ -3,11 +3,13 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.CallableDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
@@ -78,13 +80,20 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
     }
 
     private boolean referencesLocalState(LineOfCode lineOfCode, Set<String> names) {
-        if (!(lineOfCode.getCallableDeclaration() instanceof MethodDeclaration md) || md.getBody().isEmpty()) {
+        CallableDeclaration<?> callable = lineOfCode.getCallableDeclaration();
+        List<Statement> statements;
+        if (callable instanceof MethodDeclaration md) {
+            if (md.getBody().isEmpty()) return false;
+            statements = md.getBody().orElseThrow().getStatements();
+        } else if (callable instanceof ConstructorDeclaration cd) {
+            statements = cd.getBody().getStatements();
+        } else {
             return false;
         }
 
         Statement targetStatement = lineOfCode.getStatement();
         Set<String> localNames = new HashSet<>();
-        for (Statement stmt : md.getBody().orElseThrow().getStatements()) {
+        for (Statement stmt : statements) {
             stmt.findAll(VariableDeclarationExpr.class).forEach(vde ->
                     vde.getVariables().forEach(v -> localNames.add(v.getNameAsString())));
             stmt.findAll(AssignExpr.class).forEach(assignExpr -> {
@@ -170,6 +179,14 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
         @Override
         public void visit(NameExpr n, Void arg) {
             names.add(n.getNameAsString());
+            super.visit(n, arg);
+        }
+
+        @Override
+        public void visit(FieldAccessExpr n, Void arg) {
+            if (n.getScope().isThisExpr()) {
+                names.add(n.getNameAsString());
+            }
             super.visit(n, arg);
         }
 

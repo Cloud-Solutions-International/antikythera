@@ -251,16 +251,17 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     private Expression findPreviousAssignmentExpression(BlockStmt block, Statement currentStatement, String variableName) {
+        Expression latestCandidate = null;
         for (Statement statement : block.getStatements()) {
             if (statement == currentStatement) {
                 break;
             }
             Expression candidate = extractAssignmentExpression(statement, variableName);
             if (candidate != null) {
-                return candidate;
+                latestCandidate = candidate;
             }
         }
-        return null;
+        return latestCandidate;
     }
 
     private Expression extractAssignmentExpression(Statement statement, String variableName) {
@@ -326,6 +327,9 @@ public class ControlFlowEvaluator extends Evaluator {
     }
 
     private Optional<Boolean> resolveConditionValue(Expression condition) {
+        if (currentConditional == null) {
+            return Optional.empty();
+        }
         BranchAttempt attempt = Branching.getBranchAttempt(
                 currentConditional.getCallableDeclaration(), currentConditional);
         List<Expression> applicableExpressions = attempt.applicableConditions().stream()
@@ -698,7 +702,18 @@ public class ControlFlowEvaluator extends Evaluator {
         }
         MethodCallExpr addCall = new MethodCallExpr(nameExpr.clone(), "add");
         Object seedValue = domainList.getFirst();
-        addCall.addArgument(seedValue == null ? new NullLiteralExpr() : Reflect.createLiteralExpression(seedValue));
+        Expression seedExpression;
+        if (seedValue == null) {
+            seedExpression = new NullLiteralExpr();
+        } else {
+            Expression literal = Reflect.createLiteralExpression(seedValue);
+            if (literal instanceof StringLiteralExpr && !(seedValue instanceof String)) {
+                seedExpression = new NullLiteralExpr();
+            } else {
+                seedExpression = literal;
+            }
+        }
+        addCall.addArgument(seedExpression);
         BranchingTrace.record(() -> "fieldCollection:add|name=" + nameExpr.getNameAsString());
         return List.of(addCall);
     }
@@ -1840,7 +1855,6 @@ public class ControlFlowEvaluator extends Evaluator {
                         l.setPathTaken(LineOfCode.TRUE_PATH);
                         BranchingTrace.record(() -> "ofNullable:path|statement=" + stmt + "|path=present");
                     } else {
-                        value = null;
                         l.setPathTaken(LineOfCode.FALSE_PATH);
                         if (BranchingTrace.isEnabled()) {
                             BranchingTrace.record("ofNullable:path|statement=" + stmt + "|path=empty|assigned=" + value);
