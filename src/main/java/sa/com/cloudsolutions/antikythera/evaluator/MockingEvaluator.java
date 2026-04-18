@@ -247,7 +247,8 @@ public class MockingEvaluator extends ControlFlowEvaluator {
 
     private Variable mockRepositoryMethod(Scope sc, Callable callable) throws ReflectiveOperationException {
         Method method = callable.getMethod();
-        if (method.getName().equals("save") || method.getName().equals("saveAndFlush")) {
+        if ((method.getName().equals("save") || method.getName().equals("saveAndFlush"))
+                && method.getParameterCount() > 0) {
             return mockRepositorySave(callable, method);
         }
         String returnType = method.getReturnType().getName();
@@ -535,7 +536,7 @@ public class MockingEvaluator extends ControlFlowEvaluator {
             } catch (ReflectiveOperationException e) {
                 Variable result = new Variable((Object) null);
                 result.setClazz(wrapper.getClazz());
-                result.setInitializer(List.of(initializer));
+                result.setInitializer(List.of(new NullLiteralExpr()));
                 return result;
             }
         }
