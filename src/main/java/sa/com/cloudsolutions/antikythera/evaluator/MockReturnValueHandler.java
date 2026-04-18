@@ -102,7 +102,8 @@ public class MockReturnValueHandler implements Answer<Object> {
 
                 if (!mockName.equals("traceable")) {
                     MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(invocation.getMethod().getName(), clsName, mockName);
-                    methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(invocation.getMethod()));
+                    methodCall.setArguments(MockingRegistry.generateArgumentsForWhen(
+                            invocation.getMethod(), invocation.getArguments()));
                 }
             } catch (Exception ex) {
                 logger.warn(ex.getMessage());
@@ -110,4 +111,3 @@ public class MockReturnValueHandler implements Answer<Object> {
         }
     }
 }
-

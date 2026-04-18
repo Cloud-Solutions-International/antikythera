@@ -77,7 +77,7 @@ public class InnerClassEvaluator extends Evaluator {
     @Override
     Variable createObject(ObjectCreationExpr oce) throws ReflectiveOperationException {
         ClassOrInterfaceType type = oce.getType();
-        TypeWrapper wrapper = AbstractCompiler.findType(cu, type.getNameAsString());
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, type.asString());
         if (wrapper == null && enclosure != null && enclosure.getCompilationUnit() != null) {
             wrapper = AbstractCompiler.findType(enclosure.getCompilationUnit(), type.getNameAsString());
         }

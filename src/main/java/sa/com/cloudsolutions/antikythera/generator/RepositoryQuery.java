@@ -233,8 +233,7 @@ public class RepositoryQuery extends BaseRepositoryQuery {
 
     public void buildSimplifiedQuery() throws JSQLParserException, AntikytheraException {
         this.simplifiedStatement = CCJSqlParserUtil.parse(cleanUp(this.originalQuery));
-        TypeWrapper entity = BaseRepositoryParser.findEntity(entityType);
-        BasicConverter.convertFieldsToSnakeCase(simplifiedStatement, entity);
+        BasicConverter.convertFieldsToSnakeCase(simplifiedStatement, resolvedEntity);
 
         if (simplifiedStatement instanceof PlainSelect ps) {
             simplifyWhereClause(ps.getWhere());

@@ -28,7 +28,8 @@ JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto mvn test -Dtest=TestEvaluator#tes
    `ServicesParser`, `RestControllerParser`, and `Antikythera` (CLI) live in `antikythera-test-generator`.
 
 2. **`generator/` is shared model types only.** `TypeWrapper`, `MethodResponse`, `TruthTable`,
-   `RepositoryQuery*`, `CopyUtils` — nothing else.
+   `RepositoryQuery*`, `BaseRepositoryQuery`, `QueryMethod*`, `QueryType`,
+   `AssertionConfidence`, `SerializationConfidence`, `CopyUtils` — nothing else.
 
 3. **Do not move `TypeWrapper`.** Referenced by 90+ files across `parser/`, `evaluator/`, and `depsolver/`.
 
@@ -47,10 +48,11 @@ JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto mvn test -Dtest=TestEvaluator#tes
 | Package | Key classes | Notes |
 | :--- | :--- | :--- |
 | `configuration/` | `Settings` | Loads `depsolver.yml` / app config |
-| `parser/` | `AbstractCompiler`, `AntikytheraRunTime`, `ImportUtils`, `MavenHelper`, `RepositoryParser` | Entry point for all parsing; extend here for new frameworks |
-| `evaluator/` | `Evaluator`, `SpringEvaluator`, `ControlFlowEvaluator`, `MockingEvaluator`, `EvaluatorFactory`, `Branching`, `GeneratorState`, `ITestGenerator` | Core symbolic VM; `SpringEvaluator` is the branch-coverage driver |
+| `parser/` | `AbstractCompiler`, `ImportUtils`, `MavenHelper`, `RepositoryParser`, `BaseRepositoryParser` | Entry point for all parsing; extend here for new frameworks |
+| `evaluator/` | `AntikytheraRunTime`, `Evaluator`, `SpringEvaluator`, `ControlFlowEvaluator`, `MockingEvaluator`, `EvaluatorFactory`, `Branching`, `GeneratorState`, `ITestGenerator` | Core symbolic VM; `SpringEvaluator` is the branch-coverage driver |
+| `exception/` | `AntikytheraException`, `EvaluatorException`, `GeneratorException`, `DepsolverException` | Shared exception hierarchy used across parser/evaluator/depsolver flows |
 | `depsolver/` | `DepSolver`, `DependencyAnalyzer`, `Graph`, `CycleDetector`, `Resolver` | Dependency extraction; `DepSolver` is the entry point |
-| `generator/` | `TypeWrapper`, `MethodResponse`, `TruthTable`, `CopyUtils` | Shared model types only — no test-generation code |
+| `generator/` | `TypeWrapper`, `MethodResponse`, `TruthTable`, `RepositoryQuery`, `BaseRepositoryQuery`, `QueryMethod*`, `QueryType`, `AssertionConfidence`, `SerializationConfidence`, `CopyUtils` | Shared model types only — no test-generation code |
 | `finch/` | `Finch` | Plugin/hook mechanism via ServiceLoader; must stay in core |
 
 `SpringEvaluator` calls `ITestGenerator.createTests(md, response)` at each method exit — the concrete

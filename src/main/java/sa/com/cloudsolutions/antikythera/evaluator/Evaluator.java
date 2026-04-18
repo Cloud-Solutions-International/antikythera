@@ -21,6 +21,7 @@ import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.CharLiteralExpr;
+import com.github.javaparser.ast.expr.CastExpr;
 import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
@@ -91,7 +92,23 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Comparator;
+import java.util.function.BiFunction;
+import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
+import java.util.function.DoubleFunction;
+import java.util.function.Function;
+import java.util.function.IntFunction;
+import java.util.function.LongFunction;
+import java.util.function.Predicate;
+import java.util.function.ToDoubleFunction;
+import java.util.function.ToIntFunction;
+import java.util.function.ToLongFunction;
+import java.util.function.UnaryOperator;
+import java.util.stream.Collector;
+import java.util.stream.DoubleStream;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 import java.util.stream.Stream;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -103,6 +120,43 @@ import java.io.PrintStream;
 @SuppressWarnings("java:S106")
 public class Evaluator implements EvaluationEngine {
     private static final Logger logger = LoggerFactory.getLogger(Evaluator.class);
+    public static final String JAVA_UTIL_STREAM = "java.util.stream.";
+    
+    // Stream terminal operation method names
+    public static final String TO_LIST = "toList";
+    public static final String TO_ARRAY = "toArray";
+    public static final String COUNT = "count";
+    
+    // Stream intermediate operation method names
+    public static final String SORTED = "sorted";
+    public static final String DISTINCT = "distinct";
+    public static final String LIMIT = "limit";
+    public static final String SKIP = "skip";
+    public static final String FILTER = "filter";
+    public static final String TAKE_WHILE = "takeWhile";
+    public static final String DROP_WHILE = "dropWhile";
+    public static final String MAP = "map";
+    public static final String FLAT_MAP = "flatMap";
+    public static final String PEEK = "peek";
+    public static final String MAP_TO_INT = "mapToInt";
+    public static final String MAP_TO_LONG = "mapToLong";
+    public static final String MAP_TO_DOUBLE = "mapToDouble";
+    
+    // Stream terminal operation method names
+    public static final String FOR_EACH = "forEach";
+    public static final String COLLECT = "collect";
+    public static final String FIND_FIRST = "findFirst";
+    public static final String FIND_ANY = "findAny";
+    public static final String ANY_MATCH = "anyMatch";
+    public static final String ALL_MATCH = "allMatch";
+    public static final String NONE_MATCH = "noneMatch";
+    public static final String MIN = "min";
+    public static final String MAX = "max";
+    public static final String REDUCE = "reduce";
+    
+    // Primitive stream operation method names
+    public static final String AS_DOUBLE_STREAM = "asDoubleStream";
+    public static final String MAP_TO_OBJ = "mapToObj";
     /**
      * The fields that were encountered in the current class.
      */
@@ -146,7 +200,13 @@ public class Evaluator implements EvaluationEngine {
 
     private static long sequence = 0;
 
-    private static Exception lastException;
+    private static ExceptionContext lastExceptionContext;
+    
+    /**
+     * Thread-local stack of active loop contexts for exception tracking.
+     */
+    private static final ThreadLocal<Deque<LoopContext>> activeLoops = 
+        ThreadLocal.withInitial(LinkedList::new);
 
     protected Evaluator() {
         locals = new HashMap<>();
@@ -334,7 +394,27 @@ public class Evaluator implements EvaluationEngine {
              */
             return evaluateExpression(expr.asEnclosedExpr().getInner());
         } else if (expr.isCastExpr()) {
-            return evaluateExpression(expr.asCastExpr().getExpression());
+            CastExpr castExpr = expr.asCastExpr();
+            Expression inner = castExpr.getExpression();
+            if (inner instanceof MethodCallExpr) {
+                boolean pushedPending = false;
+                Optional<CompilationUnit> cuOpt = expr.findCompilationUnit();
+                if (cuOpt.isPresent()) {
+                    String fqn = AbstractCompiler.findFullyQualifiedName(cuOpt.get(), castExpr.getType());
+                    if (fqn != null) {
+                        GeneratorState.pushPendingObjectStubReturnFqn(fqn);
+                        pushedPending = true;
+                    }
+                }
+                try {
+                    return evaluateExpression(inner);
+                } finally {
+                    if (pushedPending) {
+                        GeneratorState.popPendingObjectStubReturnFqn();
+                    }
+                }
+            }
+            return evaluateExpression(inner);
         } else if (expr.isConditionalExpr()) {
             return evaluateConditionalExpression(expr.asConditionalExpr());
         } else if (expr.isClassExpr()) {
@@ -528,37 +608,52 @@ public class Evaluator implements EvaluationEngine {
     @SuppressWarnings("java:S3011")
     Variable evaluateFieldAccessExpression(FieldAccessExpr fae) throws ReflectiveOperationException {
         TypeWrapper wrapper = AbstractCompiler.findType(cu, fae.getScope().toString());
-        if (wrapper != null) {
-            if (wrapper.getClazz() != null) {
-                Field field = wrapper.getClazz().getDeclaredField(fae.getNameAsString());
-                field.setAccessible(true);
-                Object value = field.get(null);
-                if (capturedOutputStream != null && (value == System.out || value == System.err)) {
-                    value = new PrintStream(capturedOutputStream, true);
-                }
-                return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), value);
-            }
-            Variable v = evaluateFieldAccessExpression(fae, wrapper.getType());
-            if (v != null) {
-                return v;
-            }
+        Variable resolvedByType = resolveFieldAccessViaTypeWrapper(fae, wrapper);
+        if (resolvedByType != null) {
+            return resolvedByType;
         }
-        Variable v = evaluateExpression(fae.getScope());
-        if (v != null) {
-            Object value = v.getValue();
-            if (value instanceof Evaluator eval) {
-                return eval.getField(fae.getNameAsString());
-            } else if (value != null ) {
-                if (value.getClass().isArray() && fae.getNameAsString().equals("length")) {
-                    return new Variable(Array.getLength(v.getValue()));
-                } else {
-                    Field field = v.getValue().getClass().getDeclaredField(fae.getNameAsString());
-                    field.setAccessible(true);
-                    return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), field.get(v.getValue()));
-                }
-            }
+
+        Variable scopeVariable = evaluateExpression(fae.getScope());
+        return resolveFieldAccessViaScopeValue(fae, scopeVariable);
+    }
+
+    @SuppressWarnings("java:S3011")
+    private Variable resolveFieldAccessViaTypeWrapper(FieldAccessExpr fae, TypeWrapper wrapper) throws ReflectiveOperationException {
+        if (wrapper == null) {
+            return null;
         }
-        return v;
+        if (wrapper.getClazz() != null) {
+            Field field = wrapper.getClazz().getDeclaredField(fae.getNameAsString());
+            field.setAccessible(true);
+            Object value = field.get(null);
+            if (capturedOutputStream != null && (value == System.out || value == System.err)) {
+                value = new PrintStream(capturedOutputStream, true);
+            }
+            return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), value);
+        }
+        return evaluateFieldAccessExpression(fae, wrapper.getType());
+    }
+
+    @SuppressWarnings("java:S3011")
+    private Variable resolveFieldAccessViaScopeValue(FieldAccessExpr fae, Variable scopeVariable)
+            throws ReflectiveOperationException {
+        if (scopeVariable == null) {
+            return null;
+        }
+        Object value = scopeVariable.getValue();
+        if (value instanceof Evaluator eval) {
+            return eval.getField(fae.getNameAsString());
+        }
+        if (value == null) {
+            return scopeVariable;
+        }
+        if (value.getClass().isArray() && "length".equals(fae.getNameAsString())) {
+            return new Variable(Array.getLength(scopeVariable.getValue()));
+        }
+
+        Field field = scopeVariable.getValue().getClass().getDeclaredField(fae.getNameAsString());
+        field.setAccessible(true);
+        return new Variable(new ClassOrInterfaceType().setName(field.getType().getName()), field.get(scopeVariable.getValue()));
     }
 
     private Variable evaluateFieldAccessExpression(FieldAccessExpr fae, TypeDeclaration<?> td) {
@@ -568,23 +663,36 @@ public class Evaluator implements EvaluationEngine {
             for (var variable : field.getVariables()) {
                 if (variable.getNameAsString().equals(fae.getNameAsString())) {
                     if (field.isStatic()) {
-                        return AntikytheraRunTime.getStaticVariable(
-                                getClassName() + "." + fae.getScope().toString(), variable.getNameAsString());
+                        return resolveStaticFieldValue(td, variable.getNameAsString());
                     }
                     Variable v = new Variable(field.getVariable(0).getType().asString());
                     variable.getInitializer().ifPresent(f -> v.setValue(f.toString()));
                     return v;
                 }
             }
-        }
-        else if (td.isEnumDeclaration()) {
+        } else if (td.isEnumDeclaration()) {
             EnumDeclaration enumDeclaration = td.asEnumDeclaration();
-            return AntikytheraRunTime.getStaticVariable(enumDeclaration.getFullyQualifiedName().orElseThrow(), fae.getNameAsString());
+            return AntikytheraRunTime.getStaticVariable(enumDeclaration.getFullyQualifiedName().orElseThrow(),
+                    fae.getNameAsString());
         }
         return null;
     }
 
-    @SuppressWarnings("java:S3011")
+    private Variable resolveStaticFieldValue(TypeDeclaration<?> ownerType, String fieldName) {
+        String ownerClassName = ownerType.getFullyQualifiedName()
+                .orElse(getClassName() + "." + ownerType.getNameAsString());
+        Variable staticVariable = AntikytheraRunTime.getStaticVariable(ownerClassName, fieldName);
+        if (staticVariable != null) {
+            return staticVariable;
+        }
+
+        Evaluator ownerEvaluator = EvaluatorFactory.createLazily(ownerClassName,
+                this.getClass().asSubclass(Evaluator.class));
+        ownerEvaluator.setupFields();
+        ownerEvaluator.initializeFields();
+        return AntikytheraRunTime.getStaticVariable(ownerClassName, fieldName);
+    }
+
     private Variable evaluateAssignment(Expression expr) throws ReflectiveOperationException {
         AssignExpr assignExpr = expr.asAssignExpr();
         Expression target = assignExpr.getTarget();
@@ -705,7 +813,7 @@ public class Evaluator implements EvaluationEngine {
      */
     Variable createObject(ObjectCreationExpr oce) throws ReflectiveOperationException {
         ClassOrInterfaceType type = oce.getType();
-        TypeWrapper wrapper = AbstractCompiler.findType(cu, type.getNameAsString());
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, type.asString());
         if (wrapper == null) {
             return null;
         }
@@ -775,6 +883,9 @@ public class Evaluator implements EvaluationEngine {
                 AntikytheraRunTime.push(variable);
             } else {
                 Variable variable = evaluateExpression(expr);
+                if (variable == null) {
+                    throw new EvaluatorException("Cannot evaluate argument: " + expr);
+                }
                 if (variable.getType() == null && variable.getValue() instanceof Evaluator eval) {
                     variable.setType(AbstractCompiler.typeFromDeclaration(
                             AntikytheraRunTime.getTypeDeclaration(eval.getClassName()).orElseThrow()));
@@ -882,6 +993,15 @@ public class Evaluator implements EvaluationEngine {
             Symbol old = getValue(node, nameAsString);
             if (old instanceof Variable ov) {
                 ov.setValue(v.getValue());
+                if (v instanceof Variable vv) {
+                    if (vv.getType() != null) {
+                        ov.setType(vv.getType());
+                    }
+                    if (vv.getInitializer() != null && !vv.getInitializer().isEmpty()) {
+                        ov.setInitializer(vv.getInitializer());
+                    }
+                    ov.setFailedMock(vv.isFailedMock());
+                }
                 return;
             }
         }
@@ -980,42 +1100,58 @@ public class Evaluator implements EvaluationEngine {
     public Variable evaluateScopeChain(ScopeChain chain) throws ReflectiveOperationException {
         Variable variable = null;
         for (Scope scope : chain.getChain().reversed()) {
-            Expression expr2 = scope.getExpression();
-            if (expr2.isNameExpr()) {
-                variable = resolveExpression(expr2.asNameExpr());
-            } else if (expr2.isFieldAccessExpr()) {
-                if (variable != null) {
-                    /*
-                     * getValue should have returned to us a valid field. That means
-                     * we will have an evaluator instance as the 'value' in the variable v
-                     */
-                    variable = evaluateScopedFieldAccess(variable, expr2);
-                }
-                else if (scope.getTypeWrapper() != null){
-                    return evaluateScopeChainFieldAccessHelper(scope);
-                }
-            } else if (expr2.isMethodCallExpr()) {
-                scope.setVariable(variable);
-                scope.setScopedMethodCall(expr2.asMethodCallExpr());
-                variable = evaluateMethodCall(scope);
-            } else if (expr2.isLiteralExpr()) {
-                variable = evaluateLiteral(expr2);
-            } else if (expr2.isThisExpr()) {
-                variable = new Variable(this);
-            } else if (expr2.isTypeExpr()) {
-                String s = expr2.toString();
-                Object scopeType = findScopeType(s);
-                variable = new Variable(scopeType);
-                if (scopeType instanceof Class<?> clazz) {
-                    variable.setClazz(clazz);
-                }
-            } else if (expr2.isObjectCreationExpr()) {
-                variable = createObject(expr2.asObjectCreationExpr());
-            } else if (expr2.isArrayAccessExpr()) {
-                variable = evaluateArrayAccess(expr2);
+            ScopeStepResult stepResult = evaluateScopeStep(scope, variable);
+            variable = stepResult.variable();
+            if (stepResult.stop()) {
+                return variable;
             }
         }
         return variable;
+    }
+
+    private ScopeStepResult evaluateScopeStep(Scope scope, Variable variable) throws ReflectiveOperationException {
+        Expression expression = scope.getExpression();
+        return switch (expression) {
+            case NameExpr nameExpr -> new ScopeStepResult(resolveExpression(nameExpr), false);
+            case FieldAccessExpr fieldAccessExpr -> evaluateFieldAccessScopeStep(scope, variable, fieldAccessExpr);
+            case MethodCallExpr methodCallExpr -> {
+                scope.setVariable(variable);
+                scope.setScopedMethodCall(methodCallExpr);
+                yield new ScopeStepResult(evaluateMethodCall(scope), false);
+            }
+            case Expression literalExpr when literalExpr.isLiteralExpr() ->
+                    new ScopeStepResult(evaluateLiteral(literalExpr), false);
+            case Expression thisExpr when thisExpr.isThisExpr() -> new ScopeStepResult(new Variable(this), false);
+            case Expression typeExpr when typeExpr.isTypeExpr() ->
+                    new ScopeStepResult(createScopeTypeVariable(typeExpr), false);
+            case ObjectCreationExpr objectCreationExpr ->
+                    new ScopeStepResult(createObject(objectCreationExpr), false);
+            case ArrayAccessExpr arrayAccessExpr -> new ScopeStepResult(evaluateArrayAccess(arrayAccessExpr), false);
+            default -> new ScopeStepResult(variable, false);
+        };
+    }
+
+    private ScopeStepResult evaluateFieldAccessScopeStep(Scope scope, Variable variable, Expression expression)
+            throws ReflectiveOperationException {
+        if (variable != null) {
+            return new ScopeStepResult(evaluateScopedFieldAccess(variable, expression), false);
+        }
+        if (scope.getTypeWrapper() != null) {
+            return new ScopeStepResult(evaluateScopeChainFieldAccessHelper(scope), true);
+        }
+        return new ScopeStepResult(variable, false);
+    }
+
+    private Variable createScopeTypeVariable(Expression expression) {
+        Object scopeType = findScopeType(expression.toString());
+        Variable variable = new Variable(scopeType);
+        if (scopeType instanceof Class<?> clazz) {
+            variable.setClazz(clazz);
+        }
+        return variable;
+    }
+
+    private record ScopeStepResult(Variable variable, boolean stop) {
     }
 
     private Variable evaluateScopeChainFieldAccessHelper(Scope scope) {
@@ -1135,12 +1271,56 @@ public class Evaluator implements EvaluationEngine {
                 scope.setMCEWrapper(wrapper);
                 return eval.executeMethod(scope);
             }
+            
+            // If the variable has no runtime class but has a source-available type (e.g., inner classes),
+            // route to symbolic evaluation instead of reflective invocation
+            if (v.getClazz() == null && v.getType() != null) {
+                Variable symbolicResult = trySymbolicMethodCall(v, methodCall);
+                if (symbolicResult != null) {
+                    return symbolicResult;
+                }
+            }
+            
             ReflectionArguments reflectionArguments = Reflect.buildArguments(methodCall, this, v);
             return reflectiveMethodCall(v, reflectionArguments);
         }
         MCEWrapper wrapper = wrapCallExpression(methodCall);
         scope.setMCEWrapper(wrapper);
         return executeMethod(scope);
+    }
+
+    /**
+     * Attempts to handle method calls on source-available types (like inner classes) symbolically
+     * when no runtime class is available. Creates an Evaluator for the type and executes the method
+     * against parsed source code.
+     *
+     * @param v the variable on which the method is being called
+     * @param methodCall the method call expression
+     * @return the result of symbolic execution, or null if the type cannot be resolved
+     */
+    private Variable trySymbolicMethodCall(Variable v, MethodCallExpr methodCall) throws ReflectiveOperationException {
+        String typeString = v.getType().asString();
+        TypeWrapper wrapper = AbstractCompiler.findType(cu, typeString);
+        
+        if (wrapper != null && wrapper.getType() != null) {
+            String fqn = wrapper.getFullyQualifiedName();
+            if (fqn != null) {
+                try {
+                    // First, try to load the class in case it's actually available
+                    Class<?> clazz = AbstractCompiler.loadClass(fqn);
+                    v.setClazz(clazz);
+                    // Class loaded successfully, let reflective call handle it
+                    return null;
+                } catch (ClassNotFoundException e) {
+                    // Class not available at runtime - use symbolic evaluation
+                    Evaluator eval = EvaluatorFactory.create(fqn, this);
+                    if (eval != null && eval.getCompilationUnit() != null) {
+                        return eval.executeSource(methodCall);
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private Variable handleClassForNameCall(MethodCallExpr methodCall) throws ReflectiveOperationException {
@@ -1163,7 +1343,44 @@ public class Evaluator implements EvaluationEngine {
     }
 
     Variable reflectiveMethodCall(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
-        Method method = Reflect.findAccessibleMethod(v.getClazz(), reflectionArguments);
+        Class<?> targetClass = v.getClazz();
+        
+        // Minimal type resolution: if we have a TypeWrapper with a runtime class, use it
+        if (targetClass == null && v.getType() != null) {
+            TypeWrapper wrapper = AbstractCompiler.findType(cu, v.getType().asString());
+            if (wrapper != null && wrapper.getClazz() != null) {
+                targetClass = wrapper.getClazz();
+                v.setClazz(targetClass);
+            }
+        }
+        
+        if (targetClass == null && v.isFailedMock()) {
+            returnValue = new Variable(null);
+            return returnValue;
+        }
+
+        Method method = Reflect.findAccessibleMethod(targetClass, reflectionArguments);
+        if (method == null && targetClass != null && targetClass.getName().startsWith(JAVA_UTIL_STREAM)) {
+            // Short-circuit: method lookup can fail for stream classes when argument types
+            // don't widen correctly (e.g. int→long for limit/skip). Route directly to
+            // handleStreamMethods which uses the public Stream interface methods.
+            handleStreamMethods(v, reflectionArguments);
+            return returnValue;
+        }
+        // If the variable is a failed mock (null value, mock creation failed due to missing
+        // transitive dependency), absorb the method call silently.  The generated test will
+        // have a real @Mock that works at runtime, so no assertThrows should be emitted.
+        if (v.isFailedMock()) {
+            returnValue = new Variable(null);
+            if (targetClass != null) {
+                returnValue.setClazz(targetClass);
+            }
+            return returnValue;
+        }
+        if (targetClass == null) {
+            throw new EvaluatorException("Cannot invoke " + reflectionArguments.getMethodName()
+                    + " reflectively without a receiver type");
+        }
         validateReflectiveMethod(v, reflectionArguments, method);
         reflectionArguments.setMethod(method);
         reflectionArguments.finalizeArguments();
@@ -1214,8 +1431,8 @@ public class Evaluator implements EvaluationEngine {
             method.setAccessible(true);
             invoke(method, finalArgs, v);
         } catch (InaccessibleObjectException ioe) {
-            // Handle JDK stream methods differently
-            if (v.getClazz().getName().startsWith("java.util.stream.")) {
+            // InaccessibleObjectException: JDK internal classes that can't be opened
+            if (v.getClazz().getName().startsWith(JAVA_UTIL_STREAM)) {
                 handleStreamMethods(v, reflectionArguments);
             } else {
                 Method publicMethod = Reflect.findPublicMethod(v.getClazz(),
@@ -1224,6 +1441,15 @@ public class Evaluator implements EvaluationEngine {
                 if (publicMethod != null) {
                     invoke(publicMethod, finalArgs, v);
                 }
+            }
+        } catch (IllegalArgumentException e) {
+            // IllegalArgumentException: argument type mismatch on the concrete internal class
+            // (e.g. BiFunction passed where BinaryOperator expected). Route stream classes
+            // through handleStreamMethods which invokes via the public Stream interface.
+            if (v.getClazz().getName().startsWith(JAVA_UTIL_STREAM)) {
+                handleStreamMethods(v, reflectionArguments);
+            } else {
+                throw e;
             }
         }
     }
@@ -1237,19 +1463,472 @@ public class Evaluator implements EvaluationEngine {
         }
     }
 
-    @SuppressWarnings({"unchecked", "java:S3740"})
-    private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) {
+    @SuppressWarnings({"java:S3740"})
+    private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
         String methodName = reflectionArguments.getMethodName();
         Object obj = v.getValue();
+        Object[] finalArgs = reflectionArguments.getFinalArgs();
 
-        if ("forEach".equals(methodName)) {
-            Consumer<?> action = (Consumer<?>) reflectionArguments.getFinalArgs()[0];
-            if (obj instanceof Stream stream) {
-                stream.forEach(action);
-                returnValue = new Variable(null); // void method
-            }
+        if (obj instanceof IntStream || obj instanceof LongStream || obj instanceof DoubleStream) {
+            dispatchPrimitiveStreamOp(methodName, obj, finalArgs);
+        } else if (obj instanceof Stream<?> stream  && !dispatchIntermediateOp(methodName, stream, finalArgs)) {
+            dispatchTerminalOp(methodName, stream, finalArgs);
         }
     }
+
+    /**
+     * Dispatch intermediate stream operations (those that return a new Stream).
+     * <p>
+     * This method handles intermediate operations by:
+     * <ul>
+     *     <li>Converting symbolic evaluation results to appropriate functional interfaces</li>
+     *     <li>Using reflection to invoke the actual stream method on the JDK Stream class</li>
+     *     <li>Preserving the stream type for further chained operations</li>
+     * </ul>
+     *
+     * <p><strong>Type Adaptation:</strong> Arguments are automatically converted from symbolic
+     * evaluation representations (e.g., {@link Variable}, {@link Function}) to the appropriate
+     * functional interfaces ({@link Predicate}, {@link Consumer}, {@link Comparator}, etc.)
+     * using the {@code toStream*} helper methods.
+     *
+     * <p><strong>Supported Operations:</strong> filter, takeWhile, dropWhile, map, flatMap,
+     * peek, sorted, distinct, limit, skip, mapToInt, mapToLong, mapToDouble.
+     *
+     * <p><strong>Null Handling:</strong> The sorted() operation can be invoked with or without
+     * a comparator. Other operations expect non-null arguments as per Stream API contracts.
+     *
+     * @param methodName the name of the stream method to invoke
+     * @param stream the stream instance to operate on
+     * @param finalArgs the arguments for the operation (already symbolically evaluated)
+     * @return {@code true} if the operation was handled, {@code false} if the method name is not
+     *         an intermediate operation and the caller should attempt terminal dispatch.
+     * @throws NoSuchMethodException if the stream method cannot be found via reflection
+     * @throws InvocationTargetException if the stream operation throws an exception
+     * @throws IllegalAccessException if the stream method is not accessible
+     */
+    @SuppressWarnings({"java:S3740", "java:S3776"})
+    private boolean dispatchIntermediateOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Object result;
+        switch (methodName) {
+            case FILTER, TAKE_WHILE, DROP_WHILE -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
+                result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
+            }
+            case MAP -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                result = Stream.class.getMethod(MAP, Function.class).invoke(stream, fn);
+            }
+            case FLAT_MAP -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                result = Stream.class.getMethod(FLAT_MAP, Function.class).invoke(stream, fn);
+            }
+            case PEEK -> {
+                Consumer<Object> consumer = toStreamConsumer(finalArgs[0]);
+                result = Stream.class.getMethod(PEEK, Consumer.class).invoke(stream, consumer);
+            }
+            case SORTED -> {
+                if (finalArgs.length == 0 || finalArgs[0] == null) {
+                    result = Stream.class.getMethod(SORTED).invoke(stream);
+                } else {
+                    Comparator<Object> comp = toStreamComparator(finalArgs[0]);
+                    result = Stream.class.getMethod(SORTED, Comparator.class).invoke(stream, comp);
+                }
+            }
+            case DISTINCT -> result = Stream.class.getMethod(DISTINCT).invoke(stream);
+            case LIMIT -> {
+                long n = ((Number) finalArgs[0]).longValue();
+                result = Stream.class.getMethod(LIMIT, long.class).invoke(stream, n);
+            }
+            case SKIP -> {
+                long n = ((Number) finalArgs[0]).longValue();
+                result = Stream.class.getMethod(SKIP, long.class).invoke(stream, n);
+            }
+            case MAP_TO_INT -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                ToIntFunction<Object> toIntFn = x -> ((Number) fn.apply(x)).intValue();
+                result = Stream.class.getMethod(MAP_TO_INT, ToIntFunction.class).invoke(stream, toIntFn);
+            }
+            case MAP_TO_LONG -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                ToLongFunction<Object> toLongFn = x -> ((Number) fn.apply(x)).longValue();
+                result = Stream.class.getMethod(MAP_TO_LONG, ToLongFunction.class).invoke(stream, toLongFn);
+            }
+            case MAP_TO_DOUBLE -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                ToDoubleFunction<Object> toDblFn = x -> ((Number) fn.apply(x)).doubleValue();
+                result = Stream.class.getMethod(MAP_TO_DOUBLE, ToDoubleFunction.class).invoke(stream, toDblFn);
+            }
+            default -> { return false; }
+        }
+        Variable rv = new Variable(result);
+        rv.setClazz(result != null ? result.getClass() : Stream.class);
+        returnValue = rv;
+        return true;
+    }
+
+    /**
+     * Dispatch terminal stream operations (those that consume the stream and return a non-stream
+     * result).
+     * <p>
+     * Terminal operations end the stream pipeline and produce a result. This method:
+     * <ul>
+     *     <li>Converts symbolic evaluation results to appropriate functional interfaces</li>
+     *     <li>Invokes the terminal operation using reflection</li>
+     *     <li>Wraps the result in a {@link Variable} with appropriate type information</li>
+     * </ul>
+     *
+     * <p><strong>Type Adaptation:</strong> Similar to intermediate operations, arguments are
+     * automatically converted from symbolic representations to functional interfaces.
+     *
+     * <p><strong>Supported Operations:</strong> forEach, collect, count, toList, toArray,
+     * findFirst, findAny, anyMatch, allMatch, noneMatch, min, max, reduce.
+     *
+     * <p><strong>Result Handling:</strong>
+     * <ul>
+     *     <li>{@code forEach} returns {@code null} wrapped in a Variable</li>
+     *     <li>{@code findFirst}, {@code findAny}, {@code min}, {@code max} return {@link Optional}</li>
+     *     <li>{@code reduce} with one argument returns {@link Optional}, with two returns direct value</li>
+     *     <li>Other operations return their respective result types</li>
+     * </ul>
+     *
+     * <p><strong>Void Operations:</strong> If the method name is not recognized, this method
+     * returns silently (switch default case), allowing the caller to handle unknown operations.
+     *
+     * @param methodName the name of the terminal stream method to invoke
+     * @param stream the stream instance to consume
+     * @param finalArgs the arguments for the operation (already symbolically evaluated)
+     * @throws NoSuchMethodException if the stream method cannot be found via reflection
+     * @throws InvocationTargetException if the stream operation throws an exception
+     * @throws IllegalAccessException if the stream method is not accessible
+     */
+    @SuppressWarnings({"unchecked", "java:S3740", "java:S3776"})
+    private void dispatchTerminalOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Object result;
+        switch (methodName) {
+            case FOR_EACH -> {
+                Consumer<Object> action = toStreamConsumer(finalArgs[0]);
+                stream.forEach(action);
+                returnValue = new Variable(null);
+                return;
+            }
+            case COLLECT -> {
+                if (finalArgs.length == 1) {
+                    Collector<Object, ?, Object> col = (Collector<Object, ?, Object>) finalArgs[0];
+                    result = Stream.class.getMethod(COLLECT, Collector.class).invoke(stream, col);
+                } else if (finalArgs.length == 3) {
+                    @SuppressWarnings("unchecked")
+                    Stream<Object> objectStream = (Stream<Object>) stream;
+                    result = objectStream.collect(
+                            (java.util.function.Supplier<Object>) finalArgs[0],
+                            (java.util.function.BiConsumer<Object, Object>) finalArgs[1],
+                            (java.util.function.BiConsumer<Object, Object>) finalArgs[2]);
+                } else {
+                    throw new AntikytheraException("Unsupported collect overload with " + finalArgs.length + " arguments");
+                }
+            }
+            case COUNT -> result = Stream.class.getMethod(COUNT).invoke(stream);
+            case TO_LIST -> result = Stream.class.getMethod(TO_LIST).invoke(stream);
+            case TO_ARRAY -> result = Stream.class.getMethod(TO_ARRAY).invoke(stream);
+            case FIND_FIRST -> result = Stream.class.getMethod(FIND_FIRST).invoke(stream);
+            case FIND_ANY -> result = Stream.class.getMethod(FIND_ANY).invoke(stream);
+            case ANY_MATCH, ALL_MATCH, NONE_MATCH -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
+                result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
+            }
+            case MIN, MAX -> {
+                Comparator<Object> comp = toStreamComparator(finalArgs[0]);
+                result = Stream.class.getMethod(methodName, Comparator.class).invoke(stream, comp);
+            }
+            case REDUCE -> {
+                if (finalArgs.length == 1) {
+                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[0]);
+                    result = Stream.class.getMethod(REDUCE, BinaryOperator.class).invoke(stream, op);
+                } else if (finalArgs.length == 2) {
+                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[1]);
+                    result = Stream.class.getMethod(REDUCE, Object.class, BinaryOperator.class)
+                            .invoke(stream, finalArgs[0], op);
+                } else if (finalArgs.length == 3) {
+                    @SuppressWarnings("unchecked")
+                    Stream<Object> objectStream = (Stream<Object>) stream;
+                    result = objectStream.reduce(
+                            finalArgs[0],
+                            (java.util.function.BiFunction<Object, Object, Object>) finalArgs[1],
+                            toStreamBinaryOperator(finalArgs[2]));
+                } else {
+                    throw new AntikytheraException("Unsupported reduce overload with " + finalArgs.length + " arguments");
+                }
+            }
+            default -> { return; }
+        }
+        Variable rv = new Variable(result);
+        if (result instanceof Optional) {
+            rv.setClazz(Optional.class);
+        } else if (result != null) {
+            rv.setClazz(result.getClass());
+        }
+        returnValue = rv;
+
+    }
+
+    /**
+     * Dispatch terminal (and conversion) operations on primitive specialised streams
+     * ({@link IntStream}, {@link LongStream}, {@link DoubleStream}).
+     */
+    @SuppressWarnings({"java:S3740", "java:S3776"})
+    private void dispatchPrimitiveStreamOp(String methodName, Object stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Class<?> iface;
+        if (stream instanceof IntStream) {
+            iface = IntStream.class;
+        } else if (stream instanceof LongStream) {
+            iface = LongStream.class;
+        } else {
+            iface = DoubleStream.class;
+        }
+        Object result;
+        switch (methodName) {
+            case "sum" -> result = iface.getMethod("sum").invoke(stream);
+            case COUNT -> result = iface.getMethod(COUNT).invoke(stream);
+            case "average" -> result = iface.getMethod("average").invoke(stream);
+            case "min" -> result = iface.getMethod("min").invoke(stream);
+            case "max" -> result = iface.getMethod("max").invoke(stream);
+            case "summaryStatistics" -> result = iface.getMethod("summaryStatistics").invoke(stream);
+            case "boxed" -> result = iface.getMethod("boxed").invoke(stream);
+            case TO_LIST -> result = iface.getMethod(TO_LIST).invoke(stream);
+            case TO_ARRAY -> result = iface.getMethod(TO_ARRAY).invoke(stream);
+            case "asLongStream" -> result = IntStream.class.getMethod("asLongStream").invoke(stream);
+            case AS_DOUBLE_STREAM -> {
+                if (stream instanceof IntStream) {
+                    result = IntStream.class.getMethod(AS_DOUBLE_STREAM).invoke(stream);
+                } else {
+                    result = LongStream.class.getMethod(AS_DOUBLE_STREAM).invoke(stream);
+                }
+            }
+            case "filter" -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                result = switch (stream) {
+                    case IntStream is -> is.filter(n -> Boolean.TRUE.equals(fn.apply(n)));
+                    case LongStream ls -> ls.filter(n -> Boolean.TRUE.equals(fn.apply(n)));
+                    case DoubleStream ds -> ds.filter(n -> Boolean.TRUE.equals(fn.apply(n)));
+                    default -> throw new AntikytheraException("Unsupported primitive stream type for filter: "
+                            + stream.getClass().getName());
+                };
+            }
+            case "map" -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                result = switch (stream) {
+                    case IntStream is -> is.map(n -> ((Number) fn.apply(n)).intValue());
+                    case LongStream ls -> ls.map(n -> ((Number) fn.apply(n)).longValue());
+                    case DoubleStream ds -> ds.map(n -> ((Number) fn.apply(n)).doubleValue());
+                    default -> throw new AntikytheraException("Unsupported primitive stream type for map: "
+                            + stream.getClass().getName());
+                };
+            }
+            case SORTED -> result = iface.getMethod(SORTED).invoke(stream);
+            case DISTINCT -> result = iface.getMethod(DISTINCT).invoke(stream);
+            case LIMIT -> {
+                long n = ((Number) finalArgs[0]).longValue();
+                result = iface.getMethod(LIMIT, long.class).invoke(stream, n);
+            }
+            case "skip" -> {
+                long n = ((Number) finalArgs[0]).longValue();
+                result = iface.getMethod("skip", long.class).invoke(stream, n);
+            }
+            case REDUCE -> {
+                if (finalArgs.length == 1) {
+                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[0]);
+                    result = switch (stream) {
+                        case IntStream is -> is.reduce((a, b) -> ((Number) op.apply(a, b)).intValue());
+                        case LongStream ls -> ls.reduce((a, b) -> ((Number) op.apply(a, b)).longValue());
+                        case DoubleStream ds -> ds.reduce((a, b) -> ((Number) op.apply(a, b)).doubleValue());
+                        default -> throw new AntikytheraException("Unsupported primitive stream type for reduce: "
+                                + stream.getClass().getName());
+                    };
+                } else {
+                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[1]);
+                    result = switch (stream) {
+                        case IntStream is -> is.reduce(((Number) finalArgs[0]).intValue(),
+                                (a, b) -> ((Number) op.apply(a, b)).intValue());
+                        case LongStream ls -> ls.reduce(((Number) finalArgs[0]).longValue(),
+                                (a, b) -> ((Number) op.apply(a, b)).longValue());
+                        case DoubleStream ds -> ds.reduce(((Number) finalArgs[0]).doubleValue(),
+                                (a, b) -> ((Number) op.apply(a, b)).doubleValue());
+                        default -> throw new AntikytheraException("Unsupported primitive stream type for reduce: "
+                                + stream.getClass().getName());
+                    };
+                }
+            }
+            case "forEach" -> {
+                Consumer<Object> consumer = toStreamConsumer(finalArgs[0]);
+                switch (stream) {
+                    case IntStream is -> is.forEach(consumer::accept);
+                    case LongStream ls -> ls.forEach(consumer::accept);
+                    case DoubleStream ds -> ds.forEach(consumer::accept);
+                    default -> throw new AntikytheraException("Unsupported primitive stream type for forEach: "
+                            + stream.getClass().getName());
+                }
+                returnValue = new Variable(null);
+                return;
+            }
+            case MAP_TO_OBJ -> {
+                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
+                result = switch (stream) {
+                    case IntStream is -> IntStream.class.getMethod(MAP_TO_OBJ, IntFunction.class)
+                            .invoke(is, (IntFunction<Object>) fn::apply);
+                    case LongStream ls -> LongStream.class.getMethod(MAP_TO_OBJ, LongFunction.class)
+                            .invoke(ls, (LongFunction<Object>) fn::apply);
+                    case DoubleStream ds -> DoubleStream.class.getMethod(MAP_TO_OBJ, DoubleFunction.class)
+                            .invoke(ds, (DoubleFunction<Object>) fn::apply);
+                    default -> throw new AntikytheraException("Unsupported primitive stream type for mapToObj: "
+                            + stream.getClass().getName());
+                };
+            }
+            default -> { return; }
+        }
+        Variable rv = new Variable(result);
+        if (result != null) {
+            rv.setClazz(result.getClass());
+        }
+        returnValue = rv;
+
+    }
+
+    /**
+     * Adapts a symbolic evaluation result to a {@link UnaryOperator} for use in stream operations.
+     * <p>
+     * During symbolic evaluation, lambda expressions and method references are represented as
+     * various functional interface types. This method normalizes them to {@code UnaryOperator<Object>}
+     * which is the common form used internally for stream transformations.
+     *
+     * <p><strong>Supported Input Types:</strong>
+     * <ul>
+     *     <li>{@link UnaryOperator} - returned as-is (with unchecked cast)</li>
+     *     <li>{@link Function} - wrapped to return a UnaryOperator that delegates to the function</li>
+     * </ul>
+     *
+     * @param arg the symbolic evaluation result (typically a lambda or method reference)
+     * @return a {@code UnaryOperator<Object>} that can be used in stream operations
+     * @throws AntikytheraException if the argument is null or not a recognized functional type
+     */
+    private static UnaryOperator<Object> toStreamFunction(Object arg) {
+        if (arg instanceof UnaryOperator<?> uo) {
+            return (UnaryOperator<Object>) uo;
+        }
+        if (arg instanceof Function<?, ?> f) {
+            Function fnRaw = f;
+            return fnRaw::apply;
+        }
+        throw new AntikytheraException("Expected Function for stream operation but got: "
+                + (arg == null ? "null" : arg.getClass().getName()));
+    }
+
+    /**
+     * Adapts a symbolic evaluation result to a {@link Consumer} for use in stream operations.
+     * <p>
+     * Stream operations like {@code forEach} and {@code peek} require {@code Consumer} arguments.
+     * This method converts symbolic representations to the expected type.
+     *
+     * <p><strong>Supported Input Types:</strong>
+     * <ul>
+     *     <li>{@link Consumer} - returned as-is (with unchecked cast)</li>
+     *     <li>{@link Function} - converted via {@link #toStreamFunction(Object)} and wrapped
+     *         as a Consumer that ignores the function's return value</li>
+     * </ul>
+     *
+     * <p><strong>Note:</strong> When a Function is provided, its return value is discarded
+     * (side-effect only execution), which matches the semantics of Consumer.
+     *
+     * @param arg the symbolic evaluation result (typically a lambda or method reference)
+     * @return a {@code Consumer<Object>} that can be used in stream operations
+     * @throws AntikytheraException if the argument is null or not a recognized functional type
+     */
+    @SuppressWarnings("unchecked")
+    private static Consumer<Object> toStreamConsumer(Object arg) {
+        if (arg instanceof Consumer<?> c) {
+            return (Consumer<Object>) c;
+        }
+        if (arg instanceof Function<?, ?>) {
+            UnaryOperator<Object> fn = toStreamFunction(arg);
+            return fn::apply;
+        }
+        throw new AntikytheraException("Expected Consumer for stream operation but got: "
+                + (arg == null ? "null" : arg.getClass().getName()));
+    }
+
+    /**
+     * Adapts a symbolic evaluation result to a {@link Comparator} for use in stream operations.
+     * <p>
+     * Stream operations like {@code sorted}, {@code min}, and {@code max} may require
+     * {@code Comparator} arguments. This method converts symbolic representations to the expected type.
+     *
+     * <p><strong>Supported Input Types:</strong>
+     * <ul>
+     *     <li>{@link Comparator} - returned as-is (with unchecked cast)</li>
+     *     <li>{@link BiFunction} - wrapped as a Comparator that:
+     *         <ul>
+     *             <li>Invokes the BiFunction with two comparison arguments</li>
+     *             <li>Converts the result to an int (0 if not a Number)</li>
+     *         </ul>
+     *     </li>
+     * </ul>
+     *
+     * <p><strong>Note:</strong> BiFunction results are expected to be numeric comparison results
+     * (negative, zero, or positive). Non-numeric results default to 0 (equal).
+     *
+     * @param arg the symbolic evaluation result (typically a lambda or method reference)
+     * @return a {@code Comparator<Object>} that can be used in stream operations
+     * @throws AntikytheraException if the argument is null or not a recognized functional type
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Comparator<Object> toStreamComparator(Object arg) {
+        if (arg instanceof Comparator<?> c) {
+            return (Comparator<Object>) c;
+        }
+        if (arg instanceof BiFunction<?, ?, ?> bf) {
+            BiFunction bfRaw =  bf;
+            return (a, b) -> {
+                Object r = bfRaw.apply(a, b);
+                return r instanceof Number n ? n.intValue() : 0;
+            };
+        }
+        throw new AntikytheraException("Expected Comparator for stream operation but got: "
+                + (arg == null ? "null" : arg.getClass().getName()));
+    }
+
+    /**
+     * Adapts a symbolic evaluation result to a {@link BinaryOperator} for use in stream operations.
+     * <p>
+     * Stream operations like {@code reduce} require {@code BinaryOperator} arguments which combine
+     * two values of the same type into one. This method converts symbolic representations to the
+     * expected type.
+     *
+     * <p><strong>Supported Input Types:</strong>
+     * <ul>
+     *     <li>{@link BinaryOperator} - returned as-is (with unchecked cast)</li>
+     *     <li>{@link BiFunction} - wrapped as a BinaryOperator that delegates to the BiFunction</li>
+     * </ul>
+     *
+     * <p><strong>Note:</strong> Both BinaryOperator and BiFunction have the same functional signature
+     * {@code (T, T) -> T}, so BiFunction can be used interchangeably in this symbolic evaluation context.
+     *
+     * @param arg the symbolic evaluation result (typically a lambda or method reference)
+     * @return a {@code BinaryOperator<Object>} that can be used in stream reduce operations
+     * @throws AntikytheraException if the argument is null or not a recognized functional type
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static BinaryOperator<Object> toStreamBinaryOperator(Object arg) {
+        if (arg instanceof BinaryOperator<?> bo) {
+            return (BinaryOperator<Object>) bo;
+        }
+        if (arg instanceof BiFunction<?, ?, ?> bf) {
+            BiFunction bfRaw =  bf;
+            return bfRaw::apply;
+        }
+        throw new AntikytheraException("Expected BinaryOperator for stream operation but got: "
+                + (arg == null ? "null" : arg.getClass().getName()));
+    }
+
 
     /**
      * Execute a method that is part of a chain of method calls
@@ -1641,7 +2320,10 @@ public class Evaluator implements EvaluationEngine {
             returnFrom = null;
             returnValue = null;
 
-            List<Statement> statements = md.getBody().orElseThrow().getStatements();
+            BlockStmt body = md.getBody().orElseThrow();
+            body.findAll(BlockStmt.class).forEach(block -> locals.remove(block.hashCode()));
+
+            List<Statement> statements = body.getStatements();
             setupParameters(md);
 
             executeBlock(statements);
@@ -1716,10 +2398,10 @@ public class Evaluator implements EvaluationEngine {
 
     @SuppressWarnings("unchecked")
     private void executeBlockHelper(List<Statement> statements) throws Exception {
-        Evaluator.setLastException(null);
+        Evaluator.clearLastExceptionContext();
         for (Statement stmt : statements) {
-            if (lastException != null) {
-                throw lastException;
+            if (lastExceptionContext != null && lastExceptionContext.getException() != null) {
+                throw lastExceptionContext.getException();
             }
             if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
                 executeStatement(stmt);
@@ -1883,17 +2565,39 @@ public class Evaluator implements EvaluationEngine {
     }
 
     private void executeForEachWithCollection(Collection<?> list, ForEachStmt forEachStmt) throws ReflectiveOperationException {
-        for (Object value : list) {
-            for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
-                Symbol v = getLocal(forEachStmt, vdecl.getNameAsString());
-                if (v != null) {
-                    v.setValue(value);
-                } else {
-                    v = new Variable(value);
-                    setLocal(forEachStmt, vdecl.getNameAsString(), v);
+        // Create loop context for exception tracking
+        LoopContext loopCtx = new LoopContext();
+        loopCtx.setLoopStatement(forEachStmt);
+        loopCtx.setEmptyCollection(list.isEmpty());
+        
+        String iteratorVarName = null;
+        if (!forEachStmt.getVariable().getVariables().isEmpty()) {
+            iteratorVarName = forEachStmt.getVariable().getVariables().get(0).getNameAsString();
+            loopCtx.setIteratorVariable(iteratorVarName);
+        }
+        
+        activeLoops.get().push(loopCtx);
+        
+        try {
+            int iteration = 0;
+            for (Object value : list) {
+                loopCtx.setIterationWhenThrown(iteration);
+                loopCtx.setCurrentElement(new Variable(value));
+                
+                for (VariableDeclarator vdecl : forEachStmt.getVariable().getVariables()) {
+                    Symbol v = getLocal(forEachStmt, vdecl.getNameAsString());
+                    if (v != null) {
+                        v.setValue(value);
+                    } else {
+                        v = new Variable(value);
+                        setLocal(forEachStmt, vdecl.getNameAsString(), v);
+                    }
                 }
+                executeBlock(forEachStmt.getBody().asBlockStmt().getStatements());
+                iteration++;
             }
-            executeBlock(forEachStmt.getBody().asBlockStmt().getStatements());
+        } finally {
+            activeLoops.get().pop();
         }
     }
 
@@ -1915,31 +2619,58 @@ public class Evaluator implements EvaluationEngine {
     }
 
     private void executeForLoop(ForStmt forStmt) throws ReflectiveOperationException {
+        // Create loop context for exception tracking
+        LoopContext loopCtx = new LoopContext();
+        loopCtx.setLoopStatement(forStmt);
+        loopCtx.setEmptyCollection(false); // Regular for loops don't iterate collections directly
+        
+        activeLoops.get().push(loopCtx);
         loops.addLast(true);
 
-        for (Node n : forStmt.getInitialization()) {
-            if (n instanceof VariableDeclarationExpr vdecl) {
-                evaluateExpression(vdecl);
-            }
-        }
-        while ((boolean) evaluateExpression(forStmt.getCompare().orElseThrow()).getValue() &&
-                Boolean.TRUE.equals(loops.peekLast())) {
-            executeBlock(forStmt.getBody().asBlockStmt().getStatements());
-            for (Node n : forStmt.getUpdate()) {
-                if (n instanceof Expression e) {
-                    evaluateExpression(e);
+        try {
+            int iteration = 0;
+            for (Node n : forStmt.getInitialization()) {
+                if (n instanceof VariableDeclarationExpr vdecl) {
+                    evaluateExpression(vdecl);
                 }
             }
+            while ((boolean) evaluateExpression(forStmt.getCompare().orElseThrow()).getValue() &&
+                    Boolean.TRUE.equals(loops.peekLast())) {
+                loopCtx.setIterationWhenThrown(iteration);
+                executeBlock(forStmt.getBody().asBlockStmt().getStatements());
+                for (Node n : forStmt.getUpdate()) {
+                    if (n instanceof Expression e) {
+                        evaluateExpression(e);
+                    }
+                }
+                iteration++;
+            }
+        } finally {
+            loops.pollLast();
+            activeLoops.get().pop();
         }
-        loops.pollLast();
     }
 
     private void executeDoWhile(DoStmt whileStmt) throws ReflectiveOperationException {
+        // Create loop context for exception tracking
+        LoopContext loopCtx = new LoopContext();
+        loopCtx.setLoopStatement(whileStmt);
+        loopCtx.setEmptyCollection(false);
+        
+        activeLoops.get().push(loopCtx);
         loops.push(true);
-        do {
-            executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
-        } while ((boolean) evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast()));
-        loops.pollLast();
+        
+        try {
+            int iteration = 0;
+            do {
+                loopCtx.setIterationWhenThrown(iteration);
+                executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+                iteration++;
+            } while ((boolean) evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast()));
+        } finally {
+            loops.pollLast();
+            activeLoops.get().pop();
+        }
     }
 
     /**
@@ -1950,11 +2681,25 @@ public class Evaluator implements EvaluationEngine {
      * @throws ReflectiveOperationException if the classes cannot be instantiated as needed with reflection
      */
     private void executeWhile(WhileStmt whileStmt) throws ReflectiveOperationException {
+        // Create loop context for exception tracking
+        LoopContext loopCtx = new LoopContext();
+        loopCtx.setLoopStatement(whileStmt);
+        loopCtx.setEmptyCollection(false);
+        
+        activeLoops.get().push(loopCtx);
         loops.push(true);
-        while ((boolean) evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast())) {
-            executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+        
+        try {
+            int iteration = 0;
+            while ((boolean) evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast())) {
+                loopCtx.setIterationWhenThrown(iteration);
+                executeBlock(whileStmt.getBody().asBlockStmt().getStatements());
+                iteration++;
+            }
+        } finally {
+            loops.pollLast();
+            activeLoops.get().pop();
         }
-        loops.pollLast();
     }
 
     /**
@@ -2021,7 +2766,22 @@ public class Evaluator implements EvaluationEngine {
     }
 
     private static void setLastException(Exception e) {
-        lastException = e;
+        if (e == null) {
+            lastExceptionContext = null;
+            return;
+        }
+        
+        ExceptionContext ctx = new ExceptionContext();
+        ctx.setException(e);
+        
+        // Capture loop context if inside loop
+        Deque<LoopContext> loops = activeLoops.get();
+        if (!loops.isEmpty()) {
+            ctx.setInsideLoop(true);
+            ctx.setLoopContext(loops.peek());
+        }
+        
+        lastExceptionContext = ctx;
     }
 
     private boolean isExceptionMatch(TypeWrapper wrapper, Exception e) {
@@ -2373,10 +3133,18 @@ public class Evaluator implements EvaluationEngine {
     }
 
     public static Exception getLastException() {
-        return lastException;
+        return lastExceptionContext != null ? lastExceptionContext.getException() : null;
+    }
+    
+    public static ExceptionContext getLastExceptionContext() {
+        return lastExceptionContext;
     }
 
     public static void clearLastException() {
-        lastException = null;
+        lastExceptionContext = null;
+    }
+    
+    public static void clearLastExceptionContext() {
+        lastExceptionContext = null;
     }
 }

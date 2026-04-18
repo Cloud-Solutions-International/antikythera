@@ -3,7 +3,6 @@ package sa.com.cloudsolutions.antikythera.generator;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.Parameter;
-import com.github.javaparser.ast.type.Type;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.expression.BinaryExpression;
 import net.sf.jsqlparser.expression.CaseExpression;
@@ -60,9 +59,11 @@ public class BaseRepositoryQuery {
     private String repositoryClassName;
 
     /**
-     * The type of the entity that is being queried.
+     * The resolved entity TypeWrapper. Populated from the repository parser's already-resolved
+     * entity so that query-processing methods never need to call findEntity() on a stored
+     * (potentially synthetic or cloned) AST node.
      */
-    protected Type entityType;
+    protected TypeWrapper resolvedEntity;
 
     /**
      * The table that the entity is mapped to.
@@ -198,8 +199,8 @@ public class BaseRepositoryQuery {
         return methodArguments;
     }
 
-    public void setEntityType(Type entityType) {
-        this.entityType = entityType;
+    public void setEntity(TypeWrapper entity) {
+        this.resolvedEntity = entity;
     }
 
     public void setPrimaryTable(String table) {
@@ -211,9 +212,8 @@ public class BaseRepositoryQuery {
         query = cleanUp(query);
         try {
             this.statement = CCJSqlParserUtil.parse(query);
-            if (entityType != null) {
-                TypeWrapper entity = BaseRepositoryParser.findEntity(entityType);
-                BasicConverter.convertFieldsToSnakeCase(statement, entity);
+            if (resolvedEntity != null) {
+                BasicConverter.convertFieldsToSnakeCase(statement, resolvedEntity);
             }
         } catch (JSQLParserException e) {
             throw new AntikytheraException("Exception parsing SQL query: " + query, e);
@@ -234,8 +234,11 @@ public class BaseRepositoryQuery {
         /*
          * First up we replace the entity name with the table name
          */
-        if (entityType != null && primaryTable != null) {
-            sql = sql.replace(entityType.asClassOrInterfaceType().getNameAsString(), primaryTable);
+        if (resolvedEntity != null && primaryTable != null) {
+            String entityName = resolvedEntity.getType() != null
+                    ? resolvedEntity.getType().getNameAsString()
+                    : resolvedEntity.getClazz().getSimpleName();
+            sql = sql.replace(entityName, primaryTable);
         }
 
         /*
@@ -287,10 +290,6 @@ public class BaseRepositoryQuery {
 
     public Callable getMethodDeclaration() {
         return methodDeclaration;
-    }
-
-    public Type getEntityType() {
-        return entityType;
     }
 
     public String getMethodName() {
@@ -356,12 +355,11 @@ public class BaseRepositoryQuery {
         try {
             // Parse the converted SQL (not the original HQL)
             this.statement = CCJSqlParserUtil.parse(nativeSql);
-            TypeWrapper entity = BaseRepositoryParser.findEntity(entityType);
             // HQLToPostgreSQLConverter already handles field name conversion and join
             // processing,
             // so we only need minimal post-processing (projection normalization, etc.)
             // Skip join processing since joins are already in SQL format
-            BasicConverter.convertFieldsToSnakeCase(statement, entity, true);
+            BasicConverter.convertFieldsToSnakeCase(statement, resolvedEntity, true);
         } catch (JSQLParserException e) {
             throw new AntikytheraException("Exception parsing converted SQL query: " + nativeSql, e);
         }
