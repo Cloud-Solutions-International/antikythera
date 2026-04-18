@@ -46,9 +46,15 @@ public class Settings {
     public static final String BASE_PACKAGE = "base_package";
     public static final String BASE_PATH = "base_path";
     public static final String OUTPUT_PATH = "output_path";
+    public static final String PROCESSING_REPORT_PATH = "processing_report_path";
     public static final String CONTROLLERS = "controllers";
     public static final String DEPENDENCIES = "dependencies";
     public static final String SERVICES = "services";
+    /**
+     * Optional list of class name suffixes (same matching rules as {@code skip}) to force inclusion
+     * in full-project fallback discovery when automatic classification would skip the type.
+     */
+    public static final String INCLUDE = "include";
     private static final String ARTIFACT_IDS = "artifact_ids";
     private static final String JAR_FILES = "jar_files";
     public static final String DATABASE = "database";
@@ -62,6 +68,12 @@ public class Settings {
      */
     public static final String STRICT_TYPE_RESOLUTION = "strict_type_resolution";
     public static final String APPLICATION_VERSION = "application.version";
+    /**
+     * Optional list of dependency <strong>simple</strong> class names (e.g. {@code ProblemFeignClient})
+     * that should use a plain {@code @Mock} instead of {@code RETURNS_DEEP_STUBS}, even when the name
+     * ends with {@code Client}. Matching is by simple name only (not FQCN).
+     */
+    public static final String PLAIN_MOCK_DEPENDENCY_SIMPLE_NAMES = "plain_mock_dependency_simple_names";
     /**
      * HashMap to store the configurations.
      */

@@ -12,8 +12,12 @@ public record FunctionalInvocationHandler(FPEvaluator<?> evaluator) implements I
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        if (method.getDeclaringClass() == Object.class) {
-            return method.invoke(this, args);
+        if (evaluator instanceof NAryFunctionEvaluator n) {
+            return n.invoke(args);
+        }
+        if (evaluator instanceof NAryConsumerEvaluator n) {
+            n.invoke(args);
+            return null;
         }
         if (evaluator instanceof BiConsumer bc) {
             bc.accept(args[0], args[1]);
@@ -39,6 +43,9 @@ public record FunctionalInvocationHandler(FPEvaluator<?> evaluator) implements I
                 return v.getValue();
             }
             return result;
+        }
+        if (method != null && method.getDeclaringClass() == Object.class) {
+            return method.invoke(this, args);
         }
         return null;
     }

@@ -20,6 +20,8 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collection;
+import java.util.Map;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -27,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 class TestAKBuddy extends TestHelper {
@@ -86,7 +89,7 @@ class TestAKBuddy extends TestHelper {
         }
     }
     @Test
-    void workWithNullLists() throws ReflectiveOperationException {
+    void workWithEmptyCollectionsForUninitializedFields() throws ReflectiveOperationException {
         evaluator = EvaluatorFactory.create("sa.com.cloudsolutions.antikythera.testhelper.evaluator.KitchenSink", Evaluator.class);
         TypeDeclaration<?> cdecl = AbstractCompiler.getMatchingType(evaluator.getCompilationUnit(), "KitchenSink").orElseThrow();
         MethodInterceptor interceptor = new MethodInterceptor(evaluator);
@@ -101,10 +104,17 @@ class TestAKBuddy extends TestHelper {
             declaredField.setAccessible(true);
             assertNotNull(declaredField);
             if (name.equals("text") || name.equals("number") || name.equals("id")) {
-                assertNotNull(declaredField);
+                assertNotNull(declaredField.get(instance));
             }
             else {
-                assertNull(declaredField.get(instance));
+                Object fieldVal = declaredField.get(instance);
+                if (fieldVal instanceof Collection<?> c) {
+                    assertTrue(c.isEmpty(), name);
+                } else if (fieldVal instanceof Map<?, ?> m) {
+                    assertTrue(m.isEmpty(), name);
+                } else {
+                    assertNull(fieldVal, name);
+                }
             }
         }
     }

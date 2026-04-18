@@ -7,6 +7,7 @@ import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -18,6 +19,10 @@ import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
  * Represents a line of code within a method, including its associated conditions and execution paths.
  */
 public class LineOfCode {
+    public enum BranchKind {
+        CONTROL_FLOW,
+        PRECONDITION_ONLY
+    }
 
     /**
      * Represents the state where the node has not been visited at all.
@@ -67,6 +72,8 @@ public class LineOfCode {
      */
     private RepositoryQuery repositoryQuery;
     private boolean result;
+    private BranchKind branchKind = BranchKind.CONTROL_FLOW;
+    private final LinkedHashSet<LineOfCode> predecessors = new LinkedHashSet<>();
 
     /**
      * Constructs a `LineOfCode` instance for the given statement.
@@ -351,6 +358,14 @@ public class LineOfCode {
     }
 
 
+    /**
+     * Unconditionally resets the path state to {@link #UNTRAVELLED}. Used by the cross-product
+     * exploration loop when a fully-traversed branch still has untried predecessor-side combinations.
+     */
+    public void resetPathTaken() {
+        this.pathTaken = UNTRAVELLED;
+    }
+
     public boolean getResult() {
         return result;
     }
@@ -359,11 +374,46 @@ public class LineOfCode {
         this.result = b;
     }
 
+    public BranchKind getBranchKind() {
+        return branchKind;
+    }
+
+    public void setBranchKind(BranchKind branchKind) {
+        this.branchKind = branchKind;
+    }
+
+    public LineOfCode markPreconditionOnly() {
+        this.branchKind = BranchKind.PRECONDITION_ONLY;
+        return this;
+    }
+
+    /**
+     * Marks this branch as fully travelled (both paths explored).
+     * Used by repository mock handlers to indicate that both the full and empty paths have been generated.
+     */
+    public void markFullyTravelled() {
+        this.pathTaken = BOTH_PATHS;
+    }
+
+    public boolean shouldSchedule() {
+        return branchKind == BranchKind.CONTROL_FLOW;
+    }
+
     public List<LineOfCode> getChildren() {
         return children;
     }
 
     public Expression getConditionalExpression() {
         return binaryExpr;
+    }
+
+    public void addPredecessor(LineOfCode predecessor) {
+        if (predecessor != null && !predecessor.equals(this)) {
+            predecessors.add(predecessor);
+        }
+    }
+
+    public Set<LineOfCode> getPredecessors() {
+        return Collections.unmodifiableSet(predecessors);
     }
 }

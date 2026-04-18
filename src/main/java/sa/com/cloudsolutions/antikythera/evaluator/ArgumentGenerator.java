@@ -27,6 +27,15 @@ public abstract class ArgumentGenerator {
             return className + " " + instanceName + " = null;";
         }
 
+        if (classUnderTest.isEnumDeclaration()) {
+            var enumDecl = classUnderTest.asEnumDeclaration();
+            if (!enumDecl.getEntries().isEmpty()) {
+                String firstConstant = enumDecl.getEntries().get(0).getNameAsString();
+                return className + " " + instanceName + " = " + className + "." + firstConstant + ";";
+            }
+            return className + " " + instanceName + " = null;";
+        }
+
         for (ConstructorDeclaration cd : classUnderTest.getConstructors()) {
             if (matched == null) {
                 matched = cd;

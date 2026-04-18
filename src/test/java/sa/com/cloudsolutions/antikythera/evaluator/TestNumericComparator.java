@@ -5,6 +5,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.time.LocalDateTime;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,6 +26,18 @@ class TestNumericComparator {
     void testThrows() {
         assertThrows(ClassCastException.class,  () -> NumericComparator.compare(100, "100"));
         assertThrows(IllegalArgumentException.class,  () -> NumericComparator.compare(Object.class, "100"));
+    }
+
+    @Test
+    void compareWithNullComparableMatchesJvmCompareTo() {
+        LocalDateTime now = LocalDateTime.now();
+        assertThrows(NullPointerException.class, () -> NumericComparator.compare(now, null));
+        assertThrows(NullPointerException.class, () -> NumericComparator.compare(null, now));
+    }
+
+    @Test
+    void compareBothNullsYieldsZero() {
+        assertEquals(0, NumericComparator.compare(null, null));
     }
 
     private static Stream<Arguments> provideNumericComparatorTestCases() {

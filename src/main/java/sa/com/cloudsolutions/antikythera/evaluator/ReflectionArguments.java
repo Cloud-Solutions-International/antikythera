@@ -145,7 +145,7 @@ public class ReflectionArguments {
     }
 
     public Object[] getFinalArgs() {
-        return finalArgs;
+        return finalArgs != null ? finalArgs : arguments;
     }
 
     public void setMethodCallExpression(Expression methodCall) {

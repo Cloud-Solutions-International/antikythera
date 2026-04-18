@@ -31,6 +31,15 @@ public class Variable implements Symbol {
 
     private List<Expression> initializer = new ArrayList<>();
 
+    /**
+     * True when this variable was supposed to be a Mockito mock but mock creation failed
+     * (e.g. due to a missing transitive dependency like spring-messaging).  When a method is
+     * called on a failed-mock variable during symbolic evaluation the call is silently absorbed
+     * (returns null) rather than propagating as an NPE, because the generated test will have a
+     * real {@code @Mock} annotation that works fine at runtime.
+     */
+    private boolean failedMock;
+
     @SuppressWarnings("java:S2245")
     private static final Random random = new Random();
 
@@ -128,7 +137,15 @@ public class Variable implements Symbol {
     }
 
     public void setInitializer(List<Expression> initializer) {
-        this.initializer = initializer;
+        this.initializer = new ArrayList<>(initializer);
+    }
+
+    public boolean isFailedMock() {
+        return failedMock;
+    }
+
+    public void setFailedMock(boolean failedMock) {
+        this.failedMock = failedMock;
     }
 
     public static String generateVariableName(Type type) {

@@ -28,6 +28,7 @@ import sa.com.cloudsolutions.antikythera.parser.converter.RepositoryMethodParser
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.util.Collection;
+import java.util.Set;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -147,7 +148,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                 table = findTableNameFromClass(cls);
             }
         } else {
-            logger.warn("Compilation unit is null");
+            logger.warn("Entity TypeWrapper is null; could not resolve the entity type for this repository");
         }
         return table;
     }
@@ -213,30 +214,47 @@ public class BaseRepositoryParser extends AbstractCompiler {
     }
 
     /**
-     * Find and parse the given entity.
+     * Find and parse the given entity, using the provided compilation unit for import resolution.
+     * Prefer this overload when the enclosing CU is already known (e.g. inside {@code processTypes()}),
+     * as it avoids relying on the AST parent-chain traversal that {@code fd.findCompilationUnit()} performs
+     * — which can fail for synthetic or cloned AST nodes.
      *
-     * @param fd FieldDeclaration for which we need to find the compilation unit
-     * @return a compilation unit
+     * @param fd the type whose entity we want to resolve
+     * @param cu the compilation unit that contains (or whose imports describe) the type
+     * @return a TypeWrapper for the entity, or a hollow TypeWrapper if the type cannot be resolved
+     */
+    public static TypeWrapper findEntity(Type fd, CompilationUnit cu) {
+        for (ImportWrapper wrapper : AbstractCompiler.findImport(cu, fd)) {
+            if (wrapper.getType() != null) {
+                return new TypeWrapper(wrapper.getType());
+            } else if (!wrapper.getImport().getNameAsString().startsWith("java.util")) {
+                try {
+                    Class<?> cls = AbstractCompiler.loadClass(wrapper.getImport().getNameAsString());
+                    return new TypeWrapper(cls);
+                } catch (ClassNotFoundException e) {
+                    // can be ignored, we are trying to check for the existence of the class
+                    logger.debug(e.getMessage());
+                }
+            }
+        }
+        return new TypeWrapper(AbstractCompiler.findInSamePackage(cu, fd).orElse(null));
+    }
+
+    /**
+     * Find and parse the given entity.
+     * This overload infers the compilation unit from the AST parent chain of {@code fd}.
+     * If the node is synthetic or cloned and its parent chain is broken, this returns {@code null}.
+     * Prefer {@link #findEntity(Type, CompilationUnit)} when the CU is already available.
+     *
+     * @param fd the type whose entity we want to resolve
+     * @return a TypeWrapper for the entity, or {@code null} if the CU cannot be inferred
      */
     public static TypeWrapper findEntity(Type fd) {
         Optional<CompilationUnit> cu = fd.findCompilationUnit();
         if (cu.isPresent()) {
-            for (ImportWrapper wrapper : AbstractCompiler.findImport(cu.get(), fd)) {
-                if (wrapper.getType() != null) {
-                    return new TypeWrapper(wrapper.getType());
-                } else if (!wrapper.getImport().getNameAsString().startsWith("java.util")) {
-                    try {
-                        Class<?> cls = AbstractCompiler.loadClass(wrapper.getImport().getNameAsString());
-                        return new TypeWrapper(cls);
-
-                    } catch (ClassNotFoundException e) {
-                        // can be ignored, we are trying to check for the existence of the class
-                        logger.debug(e.getMessage());
-                    }
-                }
-            }
-            return new TypeWrapper(AbstractCompiler.findInSamePackage(cu.get(), fd).orElse(null));
+            return findEntity(fd, cu.get());
         }
+        logger.warn("Cannot infer CompilationUnit from AST parent chain for type '{}'; entity resolution skipped", fd.asString());
         return null;
     }
 
@@ -658,7 +676,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
     RepositoryQuery queryBuilder(String query, QueryType qt, Callable md) {
         RepositoryQuery rql = new RepositoryQuery();
         rql.setMethodDeclaration(md);
-        rql.setEntityType(entityType);
+        rql.setEntity(entity);
         rql.setPrimaryTable(table);
         rql.setRepositoryClassName(className);
         rql.setQueryType(qt);
@@ -703,6 +721,10 @@ public class BaseRepositoryParser extends AbstractCompiler {
         queries.clear();
         parserAdapter = new HQLParserAdapter(cu, entity);
         if (cu != null && entity != null) {
+            if (entity.getType() == null && entity.getClazz() == null) {
+                throw new AntikytheraException("Entity TypeWrapper is hollow for " + cu.getPrimaryTypeName().orElse("unknown")
+                        + ": entity type could not be resolved. Check imports and source path configuration.");
+            }
             cu.accept(new Visitor(), null);
         }
     }
@@ -718,11 +740,24 @@ public class BaseRepositoryParser extends AbstractCompiler {
             if (tp.isClassOrInterfaceDeclaration()) {
                 var cls = tp.asClassOrInterfaceDeclaration();
 
+                Set<String> typeParamNames = cls.getTypeParameters().stream()
+                        .map(tp2 -> tp2.getNameAsString())
+                        .collect(java.util.stream.Collectors.toSet());
+
                 for (var parent : cls.getExtendedTypes()) {
                     if (isRepositoryInterface(parent.toString())) {
                         parent.getTypeArguments().ifPresent(t -> {
-                            entityType = t.getFirst().orElseThrow();
-                            entity = findEntity(entityType);
+                            Type firstArg = t.getFirst().orElseThrow();
+                            if (typeParamNames.contains(firstArg.asString())) {
+                                // The first type argument is a type parameter of this interface (e.g.
+                                // FoodIngredientRepository<FoodIngredient> extends JpaRepository<FoodIngredient, Long>).
+                                // There is no concrete entity to resolve here; skip this extended type.
+                                logger.debug("Skipping generic repository base '{}': first type arg '{}' is a type parameter",
+                                        parent.getNameAsString(), firstArg.asString());
+                                return;
+                            }
+                            entityType = firstArg;
+                            entity = findEntity(entityType, cu);
                             table = findTableName(entity);
                             eval = EvaluatorFactory.create(cls.getFullyQualifiedName().orElseThrow(), Evaluator.class);
                         });

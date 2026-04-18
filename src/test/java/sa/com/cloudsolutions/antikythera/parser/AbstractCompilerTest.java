@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.evaluator.AntikytheraRunTime;
 
 import java.io.FileNotFoundException;
@@ -250,5 +251,84 @@ class AbstractCompilerTest {
         // and handles primitives gracefully
         // We just verify it doesn't crash
         assertTrue(result == null || result.equals("int"));
+    }
+
+    @Test
+    void setterSuffixFromFieldName_handlesBooleanIsPrefix() {
+        assertEquals("Active", AbstractCompiler.setterSuffixFromFieldName("isActive"));
+        assertEquals("Resolved", AbstractCompiler.setterSuffixFromFieldName("isResolved"));
+        assertEquals("Name", AbstractCompiler.setterSuffixFromFieldName("name"));
+    }
+
+    @Test
+    void setterNameFromGetterName_matchesJavaBeans() {
+        assertEquals("setActive", AbstractCompiler.setterNameFromGetterName("isActive"));
+        assertEquals("setName", AbstractCompiler.setterNameFromGetterName("getName"));
+        assertEquals("setIsActive", AbstractCompiler.setterNameFromGetterName("getIsActive"));
+    }
+
+    @Test
+    void populateTypeMetadata_detectsRepositoryAndConfigurationAnnotations() {
+        CompilationUnit cu = StaticJavaParser.parse("""
+                package com.example;
+
+                import org.springframework.stereotype.Repository;
+                import org.springframework.context.annotation.Configuration;
+                import org.springframework.boot.context.properties.ConfigurationProperties;
+
+                class MetadataFixtures {
+                    @Repository
+                    static class RepoType {}
+
+                    @Configuration
+                    static class ConfigType {}
+
+                    @ConfigurationProperties(prefix = "demo")
+                    static class PropsType {}
+                }
+                """);
+
+        ClassOrInterfaceDeclaration holder = cu.getType(0).asClassOrInterfaceDeclaration();
+        TypeDeclaration<?> repositoryType = holder.getMembers().stream()
+                .filter(TypeDeclaration.class::isInstance)
+                .map(TypeDeclaration.class::cast)
+                .filter(t -> t.getNameAsString().equals("RepoType"))
+                .findFirst()
+                .orElseThrow();
+        TypeDeclaration<?> configType = holder.getMembers().stream()
+                .filter(TypeDeclaration.class::isInstance)
+                .map(TypeDeclaration.class::cast)
+                .filter(t -> t.getNameAsString().equals("ConfigType"))
+                .findFirst()
+                .orElseThrow();
+        TypeDeclaration<?> propsType = holder.getMembers().stream()
+                .filter(TypeDeclaration.class::isInstance)
+                .map(TypeDeclaration.class::cast)
+                .filter(t -> t.getNameAsString().equals("PropsType"))
+                .findFirst()
+                .orElseThrow();
+
+        TypeWrapper repositoryWrapper = new TypeWrapper(repositoryType);
+        AbstractCompiler.populateTypeMetadata(repositoryType, repositoryWrapper);
+        assertTrue(repositoryWrapper.isRepository());
+        assertFalse(repositoryWrapper.isConfiguration());
+
+        TypeWrapper configWrapper = new TypeWrapper(configType);
+        AbstractCompiler.populateTypeMetadata(configType, configWrapper);
+        assertTrue(configWrapper.isConfiguration());
+        assertFalse(configWrapper.isRepository());
+
+        TypeWrapper propsWrapper = new TypeWrapper(propsType);
+        AbstractCompiler.populateTypeMetadata(propsType, propsWrapper);
+        assertTrue(propsWrapper.isConfiguration());
+    }
+
+    @Test
+    void matchesSkipPattern_usesConfiguredSuffixMatching() {
+        Settings.setProperty("skip", java.util.List.of("legacy.LegacyService", "generated"));
+
+        assertTrue(AbstractCompiler.matchesSkipPattern("com.example.legacy.LegacyService"));
+        assertTrue(AbstractCompiler.matchesSkipPattern("com.example.generated"));
+        assertFalse(AbstractCompiler.matchesSkipPattern("com.example.ActiveService"));
     }
 }

@@ -1,0 +1,11 @@
+# Configuration for stream evaluation tests.
+# Uses FunctionalStream from antikythera-test-helper repository.
+
+variables:
+  m2_folder: ${HOME}/.m2/repository
+
+base_path: ../antikythera-test-helper/src/main/java
+
+base_package: sa.com.cloudsolutions.antikythera.testhelper
+
+output_path: /tmp/antikythera
