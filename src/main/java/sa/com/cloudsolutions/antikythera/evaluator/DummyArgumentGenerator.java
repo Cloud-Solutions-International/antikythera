@@ -219,19 +219,21 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
 
     private static void initializeEvaluatorStringFields(Evaluator eval, TypeDeclaration<?> typeDecl) {
         for (FieldDeclaration fd : typeDecl.getFields()) {
-            String fieldName = fd.getVariable(0).getNameAsString();
-            Variable fieldVar = eval.getField(fieldName);
-            if (fieldVar != null && fieldVar.getValue() == null) {
-                Type fieldType = fd.getVariable(0).getType();
-                if (fieldType.isClassOrInterfaceType()
-                        && "String".equals(fieldType.asClassOrInterfaceType().getNameAsString())
-                        && hasSetterMethod(typeDecl, fieldName)) {
-                    fieldVar.setValue("0");
-                    if (fieldVar.getInitializer().isEmpty()) {
-                        fieldVar.setInitializer(List.of(new StringLiteralExpr("0")));
+            fd.getVariables().forEach(vd -> {
+                String fieldName = vd.getNameAsString();
+                Variable fieldVar = eval.getField(fieldName);
+                if (fieldVar != null && fieldVar.getValue() == null) {
+                    Type fieldType = vd.getType();
+                    if (fieldType.isClassOrInterfaceType()
+                            && "String".equals(fieldType.asClassOrInterfaceType().getNameAsString())
+                            && hasSetterMethod(typeDecl, fieldName)) {
+                        fieldVar.setValue("0");
+                        if (fieldVar.getInitializer().isEmpty()) {
+                            fieldVar.setInitializer(List.of(new StringLiteralExpr("0")));
+                        }
                     }
                 }
-            }
+            });
         }
     }
 
@@ -288,13 +290,13 @@ public class DummyArgumentGenerator extends ArgumentGenerator {
     private static void initializeNullStringFields(Object instance) {
         for (Field f : instance.getClass().getDeclaredFields()) {
             if (f.getType() == String.class && !java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
-                f.setAccessible(true);
                 try {
+                    f.setAccessible(true);
                     if (f.get(instance) == null) {
                         f.set(instance, "0");
                     }
-                } catch (IllegalAccessException e) {
-                    // skip fields that can't be accessed
+                } catch (RuntimeException | IllegalAccessException e) {
+                    // skip fields that can't be accessed in this runtime
                 }
             }
         }

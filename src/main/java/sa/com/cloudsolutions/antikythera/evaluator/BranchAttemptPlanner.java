@@ -123,7 +123,7 @@ final class BranchAttemptPlanner {
                             expanded.add(state.with(predecessor, side, row));
                         }
                     } else {
-                        expanded.add(state.with(predecessor, side));
+                        expanded.add(state.with(predecessor, side, state.getRowHint()));
                     }
                 }
             }

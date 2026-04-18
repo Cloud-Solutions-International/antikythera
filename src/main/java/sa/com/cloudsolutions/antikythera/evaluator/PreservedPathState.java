@@ -67,6 +67,9 @@ public final class PreservedPathState {
 
     @Override
     public String toString() {
-        return preservedSidesByBranch.toString();
+        return "PreservedPathState{" +
+                "sides=" + preservedSidesByBranch +
+                ", rowHint=" + rowHint +
+                '}';
     }
 }

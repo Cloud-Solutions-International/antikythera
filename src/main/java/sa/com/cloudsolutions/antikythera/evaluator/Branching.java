@@ -27,13 +27,15 @@ public class Branching {
     }
 
     public static void add(LineOfCode lineOfCode) {
-        attachPredecessors(lineOfCode);
         if (lineOfCode.shouldSchedule()) {
             PriorityQueue<LineOfCode> queue = conditionals.computeIfAbsent(
                 lineOfCode.getCallableDeclaration(),
                 k -> new PriorityQueue<>(new LineOfCodeComparator())
             );
-            queue.add(lineOfCode);
+            if (!queue.contains(lineOfCode)) {
+                attachPredecessors(lineOfCode);
+                queue.add(lineOfCode);
+            }
         }
         branches.putIfAbsent(lineOfCode.getStatement().hashCode(), lineOfCode);
     }
