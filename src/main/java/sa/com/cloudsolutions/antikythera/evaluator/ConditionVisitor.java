@@ -2,11 +2,15 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.ConditionalExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
@@ -24,7 +28,7 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
     public void visit(IfStmt stmt, LineOfCode parent) {
         LineOfCode lineOfCode = new LineOfCode(stmt);
         lineOfCode.setParent(parent);
-        if (canMatchParameters(lineOfCode.getCallableDeclaration(), stmt.getCondition())) {
+        if (canDriveCondition(lineOfCode, stmt.getCondition())) {
             Branching.add(lineOfCode);
         }
 
@@ -44,17 +48,18 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
     @Override
     public void visit(ConditionalExpr expr, LineOfCode parent) {
         LineOfCode lineOfCode = new LineOfCode(expr.getCondition());
-        if (canMatchParameters(lineOfCode.getCallableDeclaration(), expr.getCondition())) {
+        if (canDriveCondition(lineOfCode, expr.getCondition())) {
             lineOfCode.setParent(parent);
             Branching.add(lineOfCode);
         }
     }
 
-    private boolean canMatchParameters(CallableDeclaration<?> md, Expression condition) {
+    private boolean canDriveCondition(LineOfCode lineOfCode, Expression condition) {
+        CallableDeclaration<?> md = lineOfCode.getCallableDeclaration();
         NameCollector nameCollector = new NameCollector();
 
-        Set<String> names = nameCollector.getNames();
         condition.accept(nameCollector, null);
+        Set<String> names = nameCollector.getNames();
 
         for (String name : names) {
             for (Parameter p : md.getParameters()) {
@@ -62,8 +67,41 @@ public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
                     return true;
                 }
             }
+            if (md.findAncestor(ClassOrInterfaceDeclaration.class)
+                    .flatMap(cid -> cid.getFieldByName(name))
+                    .isPresent()) {
+                return true;
+            }
         }
 
+        return referencesLocalState(lineOfCode, names);
+    }
+
+    private boolean referencesLocalState(LineOfCode lineOfCode, Set<String> names) {
+        if (!(lineOfCode.getCallableDeclaration() instanceof MethodDeclaration md) || md.getBody().isEmpty()) {
+            return false;
+        }
+
+        Statement targetStatement = lineOfCode.getStatement();
+        Set<String> localNames = new HashSet<>();
+        for (Statement stmt : md.getBody().orElseThrow().getStatements()) {
+            stmt.findAll(VariableDeclarationExpr.class).forEach(vde ->
+                    vde.getVariables().forEach(v -> localNames.add(v.getNameAsString())));
+            stmt.findAll(AssignExpr.class).forEach(assignExpr -> {
+                if (assignExpr.getTarget().isNameExpr()) {
+                    localNames.add(assignExpr.getTarget().asNameExpr().getNameAsString());
+                }
+            });
+            if (stmt == targetStatement) {
+                break;
+            }
+        }
+
+        for (String name : names) {
+            if (localNames.contains(name)) {
+                return true;
+            }
+        }
         return false;
     }
     /**

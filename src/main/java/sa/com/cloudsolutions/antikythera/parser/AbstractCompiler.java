@@ -31,8 +31,12 @@ import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.printer.lexicalpreservation.LexicalPreservingPrinter;
+import com.github.javaparser.resolution.MethodUsage;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JarTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
@@ -760,11 +764,29 @@ public class AbstractCompiler {
     }
 
     public static TypeWrapper findType(CompilationUnit cu, String className) {
+        // Strip generic type parameters if present (e.g., "ArrayList<Integer>" -> "ArrayList")
+        StringBuilder baseNameBuilder = new StringBuilder();
+        int genericDepth = 0;
+        for (char ch : className.toCharArray()) {
+            if (ch == '<') {
+                genericDepth++;
+                continue;
+            }
+            if (ch == '>') {
+                genericDepth--;
+                continue;
+            }
+            if (genericDepth == 0) {
+                baseNameBuilder.append(ch);
+            }
+        }
+        String baseName = baseNameBuilder.toString();
+
         /*
          * If the compilation unit is null, this may be part of the java.lang package.
          */
         if (cu == null) {
-            return findTypeFromJavaLang(className);
+            return findTypeFromJavaLang(baseName);
         }
 
         /*
@@ -776,7 +798,7 @@ public class AbstractCompiler {
          * located in any jar file
          * that we have loaded.
          */
-        TypeDeclaration<?> p = getMatchingType(cu, className).orElse(null);
+        TypeDeclaration<?> p = getMatchingType(cu, baseName).orElse(null);
         if (p != null) {
             return new TypeWrapper(p);
         }
@@ -785,7 +807,7 @@ public class AbstractCompiler {
         // Priority 1: Same package types (most likely match)
         String packageName = cu.getPackageDeclaration().map(NodeWithName::getNameAsString).orElse("");
         if (!packageName.isEmpty()) {
-            String samePackageFqn = packageName + "." + className;
+            String samePackageFqn = packageName + "." + baseName;
             Optional<TypeDeclaration<?>> samePackageType = AntikytheraRunTime.getTypeDeclaration(samePackageFqn);
             if (samePackageType.isPresent()) {
                 return new TypeWrapper(samePackageType.orElseThrow());
@@ -793,28 +815,28 @@ public class AbstractCompiler {
         }
 
         // Priority 2: Exact match (might be a fully qualified name passed as className)
-        Optional<TypeDeclaration<?>> exactMatch = AntikytheraRunTime.getTypeDeclaration(className);
+        Optional<TypeDeclaration<?>> exactMatch = AntikytheraRunTime.getTypeDeclaration(baseName);
         if (exactMatch.isPresent()) {
             return new TypeWrapper(exactMatch.orElseThrow());
         }
 
-        TypeWrapper imp = getTypeWrapperFromImports(cu, className);
+        TypeWrapper imp = getTypeWrapperFromImports(cu, baseName);
         if (imp != null)
             return imp;
 
         for (EnumDeclaration ed : cu.findAll(EnumDeclaration.class)) {
             for (EnumConstantDeclaration constant : ed.getEntries()) {
-                if (constant.getNameAsString().equals(className)) {
+                if (constant.getNameAsString().equals(baseName)) {
                     return new TypeWrapper(constant);
                 }
             }
         }
 
-        TypeWrapper typeDecl = searchClassName(className);
+        TypeWrapper typeDecl = searchClassName(baseName);
         if (typeDecl != null)
             return typeDecl;
 
-        return detectTypeWithClassLoaders(cu, className);
+        return detectTypeWithClassLoaders(cu, baseName);
     }
 
     private static TypeWrapper searchClassName(String className) {
@@ -842,6 +864,41 @@ public class AbstractCompiler {
                 return new TypeWrapper(AbstractCompiler.loadClass(imp.getNameAsString()));
             } catch (ClassNotFoundException e) {
                 // ignorable
+            }
+        }
+        if (className.contains(".")) {
+            String outerName = className.substring(0, className.indexOf('.'));
+            String nestedPath = className.substring(className.indexOf('.') + 1);
+            ImportWrapper outerImport = findImport(cu, outerName);
+            if (outerImport != null && !outerImport.getImport().isAsterisk()) {
+                if (outerImport.getType() != null) {
+                    TypeDeclaration<?> current = outerImport.getType();
+                    String[] parts = nestedPath.split("\\.");
+                    boolean matched = true;
+                    for (String part : parts) {
+                        TypeDeclaration<?> next = current.getMembers().stream()
+                                .filter(member -> member instanceof TypeDeclaration<?>)
+                                .map(member -> (TypeDeclaration<?>) member)
+                                .filter(member -> member.getNameAsString().equals(part))
+                                .findFirst()
+                                .orElse(null);
+                        if (next != null) {
+                            current = next;
+                        } else {
+                            matched = false;
+                            break;
+                        }
+                    }
+                    if (matched) {
+                        return new TypeWrapper(current);
+                    }
+                }
+                try {
+                    String nestedFqn = outerImport.getNameAsString() + "$" + nestedPath.replace(".", "$");
+                    return new TypeWrapper(AbstractCompiler.loadClass(nestedFqn));
+                } catch (ClassNotFoundException e) {
+                    // ignorable
+                }
             }
         }
         return null;
@@ -1265,6 +1322,38 @@ public class AbstractCompiler {
         }
 
         return findConstructorDeclaration(methodCall, decl);
+    }
+
+    public static Optional<ResolvedMethodDeclaration> resolveMethodDeclaration(MethodCallExpr methodCallExpr) {
+        try {
+            return Optional.of(methodCallExpr.resolve());
+        } catch (RuntimeException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    public static Optional<MethodUsage> resolveMethodAsUsage(MethodCallExpr methodCallExpr) {
+        if (combinedTypeSolver == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(JavaParserFacade.get(combinedTypeSolver).solveMethodAsUsage(methodCallExpr));
+        } catch (RuntimeException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    public static Optional<Callable> resolveCallableFromResolvedMethod(MethodCallExpr methodCallExpr, MCEWrapper wrapper) {
+        Optional<ResolvedMethodDeclaration> resolved = resolveMethodDeclaration(methodCallExpr);
+        if (resolved.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Optional<MethodDeclaration> methodDeclaration = resolved.get().toAst(MethodDeclaration.class);
+        if (methodDeclaration.isPresent()) {
+            return Optional.of(new Callable(methodDeclaration.get(), wrapper));
+        }
+        return Optional.empty();
     }
 
     /**

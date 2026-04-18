@@ -653,6 +653,9 @@ public class Reflect {
      */
     @SuppressWarnings("java:S1872")
     public static Method findMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
+        if (clazz == null) {
+            return null;
+        }
         String methodName = reflectionArguments.getMethodName();
         Class<?>[] argumentTypes = reflectionArguments.getArgumentTypes();
         Object[] arguments = reflectionArguments.getArguments();
@@ -887,6 +890,9 @@ public class Reflect {
     }
 
     public static Method findAccessibleMethod(Class<?> clazz, ReflectionArguments reflectionArguments) {
+        if (clazz == null) {
+            return null;
+        }
         // First check direct method lookup
         Method method = Reflect.findMethod(clazz, reflectionArguments);
         if (method != null)

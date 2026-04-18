@@ -64,6 +64,7 @@ import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -92,6 +93,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      * The method currently being analyzed
      */
     private CallableDeclaration<?> currentCallable;
+    private BranchAttempt currentTargetAttempt;
     private boolean onTest;
 
     protected SpringEvaluator(EvaluatorFactory.Context context) {
@@ -208,7 +210,17 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private static Variable wireFromSourceCode(Type type, String resolvedClass, FieldDeclaration fd) {
         Variable v;
         List<TypeWrapper> wrappers = AbstractCompiler.findTypesInVariable(fd.getVariable(0));
-        Evaluator eval = MockingRegistry.isMockTarget(wrappers.getLast().getFullyQualifiedName())
+        if (isSourceInterface(resolvedClass)) {
+            v = createInterfaceAutowire(resolvedClass);
+            if (v != null) {
+                v.setType(type);
+                AntikytheraRunTime.autoWire(resolvedClass, v);
+                return v;
+            }
+        }
+
+        boolean useMockingEvaluator = MockingRegistry.isMockTarget(wrappers.getLast().getFullyQualifiedName());
+        Evaluator eval = useMockingEvaluator
                 ? EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class)
                 : EvaluatorFactory.createLazily(resolvedClass, SpringEvaluator.class);
 
@@ -221,6 +233,19 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             eval.invokeDefaultConstructor();
         }
         return v;
+    }
+
+    private static Variable createInterfaceAutowire(String resolvedClass) {
+        Evaluator eval = EvaluatorFactory.createLazily(resolvedClass, MockingEvaluator.class);
+        return new Variable(eval);
+    }
+
+    private static boolean isSourceInterface(String resolvedClass) {
+        return AntikytheraRunTime.getTypeDeclaration(resolvedClass)
+                .filter(ClassOrInterfaceDeclaration.class::isInstance)
+                .map(ClassOrInterfaceDeclaration.class::cast)
+                .map(ClassOrInterfaceDeclaration::isInterface)
+                .orElse(false);
     }
 
     private static void setupEnumMismatch(TypeWrapper t, Expression key, Map<Expression, Object> result, Expression expr) {
@@ -272,7 +297,35 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                 prepareInvocationContext(cd);
 
                 currentConditional = Branching.getHighestPriority(cd);
+                if (currentConditional != null) {
+                    BranchingTrace.record(() -> "target:"
+                            + cd.getNameAsString()
+                            + "|statement=" + currentConditional.getStatement()
+                            + "|pathTaken=" + currentConditional.getPathTaken());
+
+                    // For zero-parameter methods setupParameter() is never called,
+                    // so drive branch setup here instead.
+                    if (cd.getParameters().isEmpty()
+                            && (currentConditional.getStatement() instanceof IfStmt
+                                || currentConditional.getConditionalExpression() != null)) {
+                        setupIfCondition();
+                        applyFieldPreconditions();
+                    }
+                }
                 if ((currentConditional == null || currentConditional.isFullyTravelled()) && oldSize != 0) {
+                    // Before giving up, scan ALL branches for untried cross-product combinations.
+                    // It is not enough to check only currentConditional: a *different* branch may
+                    // still have untried (preservedState, fingerprint) pairs even though the
+                    // currently-popped branch is fully done. Resetting those branches and
+                    // continuing ensures the full cross-product is explored.
+                    boolean resetAny = Branching.resetBranchesWithUntriedCombinations(cd);
+                    if (resetAny) {
+                        if (currentConditional != null) {
+                            Branching.requeue(currentConditional);
+                        }
+                        oldSize = Branching.size(cd);
+                        continue;
+                    }
                     break;
                 }
 
@@ -293,6 +346,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     private void prepareInvocationContext(CallableDeclaration<?> cd) throws AntikytheraException, ReflectiveOperationException {
         getLocals().clear();
         LogRecorder.clearLogs();
+        currentTargetAttempt = null;
         setupFields();
         mockMethodArguments(cd);
     }
@@ -360,9 +414,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
 
     private int advanceBranchingState(CallableDeclaration<?> cd) {
         if (currentConditional != null) {
-            currentConditional.transition();
-            Branching.add(currentConditional);
-
+            if (!currentConditional.isFullyTravelled()) {
+                currentConditional.transition();
+                Branching.add(currentConditional);
+            }
             if (currentConditional.getPreconditions() != null) {
                 currentConditional.getPreconditions().clear();
             }
@@ -452,6 +507,45 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
     }
 
+    /**
+     * Apply preconditions to field evaluators for zero-parameter methods.
+     * Mirrors applyPreconditions(p, va) but resolves the target from the field map
+     * instead of from a parameter.
+     */
+    private void applyFieldPreconditions() throws ReflectiveOperationException {
+        for (Precondition cond : currentConditional.getPreconditions()) {
+            if (cond.getExpression() instanceof MethodCallExpr mce && mce.getScope().isPresent()) {
+                if (mce.getScope().orElseThrow() instanceof NameExpr ne) {
+                    Symbol va = getField(ne.getNameAsString());
+                    if (va != null) {
+                        if (va.getValue() instanceof Evaluator eval) {
+                            applyEvaluatorPrecondition(eval, mce);
+                        } else if (va instanceof Variable variable) {
+                            Evaluator promoted = promoteFieldToEvaluator(ne.getNameAsString(), variable);
+                            if (promoted != null) {
+                                applyEvaluatorPrecondition(promoted, mce);
+                            } else {
+                                applyCollectionPrecondition(variable, mce);
+                            }
+                        }
+                    }
+                }
+            } else if (cond.getExpression() instanceof AssignExpr assignExpr) {
+                String targetName = assignExpr.getTarget().isFieldAccessExpr()
+                        ? assignExpr.getTarget().asFieldAccessExpr().getNameAsString()
+                        : assignExpr.getTarget().toString();
+                Symbol va = getField(targetName);
+                if (va != null) {
+                    parameterAssignment(assignExpr, va);
+                    va.setInitializer(List.of(assignExpr));
+                }
+            } else if (cond.getExpression() instanceof ObjectCreationExpr oce) {
+                // For field preconditions with ObjectCreationExpr, we don't know
+                // which field to target — skip (handled by other mechanisms)
+            }
+        }
+    }
+
     private void applyEvaluatorPrecondition(Evaluator eval, MethodCallExpr mce) throws ReflectiveOperationException {
         try {
             MCEWrapper wrapper = eval.wrapCallExpression(mce);
@@ -460,6 +554,29 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             if (!applyDirectSetterFieldPrecondition(eval, mce)) {
                 throw ex;
             }
+        }
+    }
+
+    private Evaluator promoteFieldToEvaluator(String fieldName, Variable variable) {
+        if (variable.getType() == null || variable.getType().isPrimitiveType()) {
+            return null;
+        }
+        String typeName = variable.getType().asString();
+        String fqn = AbstractCompiler.findFullyQualifiedName(cu, typeName);
+        if (fqn == null) {
+            fqn = typeName;
+        }
+        if (AntikytheraRunTime.getCompilationUnit(fqn) == null) {
+            return null;
+        }
+        try {
+            Evaluator eval = EvaluatorFactory.createLazily(fqn, Evaluator.class);
+            eval.setupFields();
+            variable.setValue(eval);
+            fields.put(fieldName, variable);
+            return eval;
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -866,8 +983,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
 
         EvaluatorException eex;
-        if (unwrapped instanceof EvaluatorException ee && ee.getError() == EvaluatorException.NPE) {
+        if ((unwrapped instanceof EvaluatorException ee && ee.getError() == EvaluatorException.NPE)
+                || containsNullPointerException(e)) {
             // Re-wrap with a real NullPointerException cause so JunitAsserter emits NPE.class
+            eex = new EvaluatorException("Application NPE", new NullPointerException());
+        } else if (unwrapped instanceof EvaluatorException || unwrapped instanceof sa.com.cloudsolutions.antikythera.exception.AUTException) {
+            // The deepest cause is still a framework wrapper with no real Java exception inside —
+            // this happens when the symbolic evaluator fails to dereference a null receiver without
+            // propagating a real NullPointerException (e.g. validateReflectiveMethod else-branch).
+            // Since this method is ONLY called for null-arg FP application, NPE is always correct.
             eex = new EvaluatorException("Application NPE", new NullPointerException());
         } else {
             eex = new EvaluatorException(e.getMessage() != null ? e.getMessage() : "FP application exception", e);
@@ -876,6 +1000,16 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         ExceptionContext ctx = new ExceptionContext();
         ctx.setException(eex);
         return ctx;
+    }
+
+    private static boolean containsNullPointerException(Throwable t) {
+        while (t != null) {
+            if (t instanceof NullPointerException) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     /**
@@ -917,7 +1051,13 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     Variable createTests(MethodResponse response) {
         if (response != null) {
             for (ITestGenerator generator : generators) {
-                generator.setPreConditions(Branching.getApplicableConditions(currentCallable));
+                BranchAttempt attempt = Branching.getBranchAttempt(currentCallable, currentConditional);
+                List<Precondition> applicableConditions = attempt.applicableConditions();
+                BranchingTrace.record(() -> "preconditions:"
+                        + currentCallable.getNameAsString()
+                        + "|target=" + (attempt.target() == null ? "<none>" : attempt.target().getStatement())
+                        + "|values=" + applicableConditions);
+                generator.setPreConditions(applicableConditions);
                 generator.createTests(currentCallable, response);
             }
             return new Variable(response);
@@ -941,7 +1081,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         String registryKey = MockingRegistry.generateRegistryKey(resolvedTypes);
 
         if (parent.isPresent() && parent.get() instanceof FieldDeclaration fd
-                && (fd.getAnnotationByName("Autowired").isPresent() || MockingRegistry.isMockTarget(registryKey))) {
+                && shouldAutoWireField(fd, variable, registryKey)) {
 
             Variable v = AntikytheraRunTime.getAutoWire(registryKey);
             if (v == null) {
@@ -961,6 +1101,12 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             return v;
         }
         return null;
+    }
+
+    private boolean shouldAutoWireField(FieldDeclaration fd, VariableDeclarator variable, String registryKey) {
+        return fd.getAnnotationByName("Autowired").isPresent()
+                || MockingRegistry.isMockTarget(registryKey)
+                || (fd.isFinal() && variable.getInitializer().isEmpty());
     }
 
     @Override
@@ -1047,6 +1193,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
      */
     @SuppressWarnings("java:S5411")
     void setupIfCondition() {
+        if (currentConditional.getPreconditions() != null && !currentConditional.getPreconditions().isEmpty()) {
+            return;
+        }
+
         boolean state = currentConditional.isFalsePath();
         TruthTable tt = new TruthTable();
 
@@ -1058,14 +1208,73 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         tt.generateTruthTable();
 
         List<Map<Expression, Object>> values = tt.findValuesForCondition(state);
+        BranchingTrace.record(() -> "truthTable:"
+                + currentConditional.getCallableDeclaration().getNameAsString()
+                + "|desiredState=" + state
+                + "|rows=" + values.size()
+                + "|condition=" + tt.getCondition());
 
         if (!values.isEmpty()) {
-            setupIfCondition(values);
+            List<Map<Expression, Object>> adjusted = values.stream()
+                    .map(this::adjustForEnums)
+                    .toList();
+            setupIfCondition(adjusted, state);
         }
     }
 
-    private void setupIfCondition(List<Map<Expression, Object>> combinations) {
-        Map<Expression, Object> combination = adjustForEnums(combinations.getFirst());
+    private void setupIfCondition(List<Map<Expression, Object>> combinations, boolean desiredState) {
+        BranchSide targetSide = desiredState ? BranchSide.TRUE : BranchSide.FALSE;
+        currentTargetAttempt = Branching.selectTargetAttempt(currentConditional, targetSide, combinations);
+        applyPreservedPathState(currentTargetAttempt.preservedPathState());
+
+        Map<Expression, Object> combination = resolveSelectedCombination(combinations, currentTargetAttempt.selection());
+        BranchingTrace.record(() -> "selected:"
+                + currentConditional.getCallableDeclaration().getNameAsString()
+                + "|combination=" + combination);
+        materializeCombination(currentConditional.getStatement(), combination);
+    }
+
+    private Map<Expression, Object> resolveSelectedCombination(List<Map<Expression, Object>> combinations,
+                                                               BranchSelection selection) {
+        if (selection == null) {
+            return combinations.isEmpty() ? new HashMap<>() : combinations.getFirst();
+        }
+        return combinations.stream()
+                .filter(candidate -> BranchAttemptFingerprint.fingerprintCombination(candidate)
+                        .equals(selection.rowFingerprint()))
+                .findFirst()
+                .orElseGet(() -> combinations.isEmpty() ? new HashMap<>() : combinations.getFirst());
+    }
+
+    private void applyPreservedPathState(PreservedPathState preservedPathState) {
+        int rowHint = preservedPathState.getRowHint();
+        for (Map.Entry<LineOfCode, BranchSide> entry : preservedPathState.asMap().entrySet()) {
+            LineOfCode predecessor = entry.getKey();
+            materializeBranchSide(predecessor, entry.getValue(), currentConditional.getStatement(), rowHint);
+        }
+    }
+
+    private void materializeBranchSide(LineOfCode branch, BranchSide side, Statement attachTo, int rowHint) {
+        if (branch.getConditionalExpression() == null) {
+            return;
+        }
+        TruthTable tt = new TruthTable();
+        List<Expression> collectedConditions = ConditionVisitor.collectConditionsUpToMethod(branch.getStatement());
+        tt.addConstraints(collectedConditions);
+        collectedConditions.add(branch.getConditionalExpression());
+        tt.setCondition(BinaryOps.getCombinedCondition(collectedConditions));
+        tt.generateTruthTable();
+
+        List<Map<Expression, Object>> combinations = tt.findValuesForCondition(side == BranchSide.TRUE).stream()
+                .map(this::adjustForEnums)
+                .toList();
+        if (!combinations.isEmpty()) {
+            int index = rowHint % combinations.size();
+            materializeCombination(attachTo, combinations.get(index));
+        }
+    }
+
+    private void materializeCombination(Statement statement, Map<Expression, Object> combination) {
         for (var entry : combination.entrySet()) {
             Expression key = entry.getKey();
             if (key instanceof MethodCallExpr mce) {
@@ -1073,16 +1282,16 @@ public class SpringEvaluator extends ControlFlowEvaluator {
                         && name.getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
                     var collection = combination.get(new NameExpr(TruthTable.COLLECTION_UTILS));
                     if (collection != null) {
-                        setupConditionThroughMethodCalls(currentConditional.getStatement(),
+                        setupConditionThroughMethodCalls(statement,
                                 new AbstractMap.SimpleEntry<>(key, collection));
                         break;
                     }
                 }
-                setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
+                setupConditionThroughMethodCalls(statement, entry);
             } else if (key.isNameExpr() && !key.asNameExpr().getNameAsString().equals(TruthTable.COLLECTION_UTILS)) {
-                setupConditionThroughAssignment(currentConditional.getStatement(), entry);
+                setupConditionThroughAssignment(statement, entry);
             } else if (key.isObjectCreationExpr() && entry.getValue() instanceof Boolean b && b) {
-                setupConditionThroughMethodCalls(currentConditional.getStatement(), entry);
+                setupConditionThroughMethodCalls(statement, entry);
                 return;
             }
         }
@@ -1111,6 +1320,11 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         }
 
         Node node = parentNode.get();
+        if (node instanceof MethodCallExpr methodCall && isEnumEqualsMethodCall(methodCall)) {
+            handleMethodCallWithEnum(methodCall, combination, entry, result);
+            return;
+        }
+
         TypeWrapper keyType = (key instanceof FieldAccessExpr fieldAccessExpr)
                 ? AbstractCompiler.findType(cu, fieldAccessExpr.getScope().toString())
                 : AbstractCompiler.findType(cu, key.toString());
@@ -1122,6 +1336,15 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         } else {
             result.put(key, entry.getValue());
         }
+    }
+
+    private boolean isEnumEqualsMethodCall(MethodCallExpr methodCall) {
+        if (!"equals".equals(methodCall.getNameAsString()) || methodCall.getArguments().size() != 1
+                || methodCall.getScope().isEmpty()) {
+            return false;
+        }
+        return resolveEnumConstant(methodCall.getScope().orElseThrow()) != null
+                || resolveEnumConstant(methodCall.getArgument(0)) != null;
     }
 
     private void adjustForEnumConstantComparison(Node node, Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
@@ -1142,7 +1365,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         TypeWrapper rightType = resolveType(right);
 
         boolean isEquals = binaryExpr.getOperator() == BinaryExpr.Operator.EQUALS;
-        boolean conditionMatches = isEquals == (combination.get(left) == combination.get(right));
+        boolean conditionMatches = isEquals == Objects.equals(combination.get(left), combination.get(right));
 
         if (leftType != null && leftType.getEnumConstant() != null) {
             if (conditionMatches) {
@@ -1194,26 +1417,99 @@ public class SpringEvaluator extends ControlFlowEvaluator {
     }
 
     private void handleMethodCallWithEnum(MethodCallExpr methodCall, Map<Expression, Object> combination, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
-        methodCall.getScope().ifPresent(scope -> {
-            if (scope instanceof NameExpr nameExpr) {
-                TypeWrapper scopeType = AbstractCompiler.findType(cu, nameExpr.getNameAsString());
-                TypeWrapper keyType = AbstractCompiler.findType(cu, entry.getKey().asNameExpr().getNameAsString());
+        if (!"equals".equals(methodCall.getNameAsString()) || methodCall.getArguments().size() != 1
+                || methodCall.getScope().isEmpty()) {
+            result.put(entry.getKey(), entry.getValue());
+            return;
+        }
 
-                if (scopeType != null && scopeType.getEnumConstant() != null) {
-                    handleEnumComparison(scopeType, entry, combination, nameExpr, entry.getKey().asNameExpr(), result);
-                } else if (keyType != null && keyType.getEnumConstant() != null) {
-                    handleEnumComparison(keyType, entry, combination, nameExpr, nameExpr, result);
-                }
-            }
-        });
+        Expression scope = methodCall.getScope().orElseThrow();
+        Expression argument = methodCall.getArgument(0);
+
+        EnumConstantDeclaration scopeEnum = resolveEnumConstant(scope);
+        EnumConstantDeclaration argumentEnum = resolveEnumConstant(argument);
+
+        EnumConstantDeclaration constantEnum;
+        Expression targetExpr;
+        if (scopeEnum != null) {
+            constantEnum = scopeEnum;
+            targetExpr = argument;
+        } else if (argumentEnum != null) {
+            constantEnum = argumentEnum;
+            targetExpr = scope;
+        } else {
+            result.put(entry.getKey(), entry.getValue());
+            return;
+        }
+
+        if (!entry.getKey().toString().equals(targetExpr.toString()) || !targetExpr.isNameExpr()) {
+            return;
+        }
+
+        boolean conditionMatches = Objects.equals(resolveEnumOperandValue(scope, combination),
+                resolveEnumOperandValue(argument, combination));
+        if (conditionMatches) {
+            result.put(targetExpr.asNameExpr(), constantEnum);
+        } else {
+            putEnumMismatch(constantEnum, targetExpr, result);
+        }
     }
 
-    private void handleEnumComparison(TypeWrapper enumType, Map.Entry<Expression, Object> entry, Map<Expression, Object> combination, NameExpr compareExpr, NameExpr targetExpr, Map<Expression, Object> result) {
-        if (entry.getValue() == combination.get(compareExpr)) {
-            result.put(targetExpr, enumType.getEnumConstant());
-        } else {
-            setupEnumMismatch(enumType, entry.getKey(), result, targetExpr);
+    private EnumConstantDeclaration resolveEnumConstant(Expression expr) {
+        if (!(expr instanceof NameExpr || expr instanceof FieldAccessExpr)) {
+            return null;
         }
+        String constantName = expr instanceof NameExpr ne ? ne.getNameAsString() : expr.asFieldAccessExpr().getNameAsString();
+
+        if (typeDeclaration instanceof EnumDeclaration enumDecl) {
+            return enumDecl.getEntries().stream()
+                    .filter(entry -> entry.getNameAsString().equals(constantName))
+                    .findFirst()
+                    .orElse(null);
+        }
+        return null;
+    }
+
+    private void putEnumMismatch(EnumConstantDeclaration constantEnum, Expression targetExpr, Map<Expression, Object> result) {
+        constantEnum.findAncestor(EnumDeclaration.class).ifPresent(enumDecl -> enumDecl.getEntries().stream()
+                .filter(entry -> !entry.getNameAsString().equals(constantEnum.getNameAsString()))
+                .findFirst()
+                .ifPresent(other -> result.put(targetExpr, other)));
+    }
+
+    private Object resolveEnumOperandValue(Expression expression, Map<Expression, Object> combination) {
+        Object direct = combination.get(expression);
+        if (direct instanceof EnumConstantDeclaration ecd) {
+            return ecd.getNameAsString();
+        }
+        if (direct instanceof FieldAccessExpr fae) {
+            return fae.getNameAsString();
+        }
+        if (direct instanceof NameExpr ne) {
+            return ne.getNameAsString();
+        }
+        if (direct != null) {
+            return direct;
+        }
+        EnumConstantDeclaration constant = resolveEnumConstant(expression);
+        if (constant != null) {
+            return constant.getNameAsString();
+        }
+        return direct;
+    }
+
+    private boolean matchesEnumConstant(TypeWrapper enumType, Object candidate) {
+        if (enumType == null || enumType.getEnumConstant() == null || candidate == null) {
+            return false;
+        }
+        String expectedName = enumType.getEnumConstant().getNameAsString();
+        if (candidate instanceof EnumConstantDeclaration ecd) {
+            return expectedName.equals(ecd.getNameAsString());
+        }
+        if (candidate instanceof FieldAccessExpr fae) {
+            return expectedName.equals(fae.getNameAsString());
+        }
+        return Objects.equals(candidate, enumType.getEnumConstant());
     }
 
     private void adjustForEnumMethodCall(MethodCallExpr methodCall, Map.Entry<Expression, Object> entry, Map<Expression, Object> result) {
@@ -1298,7 +1594,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
         LineOfCode branch = Branching.get(stmt.hashCode());
         if (branch == null) {
             branch = new LineOfCode(stmt);
-            Branching.registerBranch(branch);
+            Branching.add(branch.markPreconditionOnly());
             branch.setPathTaken(LineOfCode.TRUE_PATH);
             return createRepositoryOptionalValue(classType, true);
         }

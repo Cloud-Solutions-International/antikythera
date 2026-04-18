@@ -1,5 +1,6 @@
 package sa.com.cloudsolutions.antikythera.evaluator.mock;
 
+import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -333,11 +334,26 @@ public class MockingRegistry {
 
     public static void addMockitoExpression(MethodDeclaration md, Object returnValue, String variableName) {
         if (returnValue != null && variableName != null) {
+            String declaredReturnType = resolveDeclaredReturnType(md);
             MethodCallExpr methodCall = MockingRegistry.buildMockitoWhen(
-                    md.getNameAsString(), returnValue.getClass().getName(), variableName);
+                    md.getNameAsString(), declaredReturnType, variableName);
             NodeList<Expression> args = fakeArguments(md);
             methodCall.setArguments(args);
         }
+    }
+
+    private static String resolveDeclaredReturnType(MethodDeclaration md) {
+        CompilationUnit cu = md.findCompilationUnit().orElse(null);
+        if (cu == null) {
+            return md.getType().asString();
+        }
+        String fqn;
+        try {
+            fqn = AbstractCompiler.findFullyQualifiedName(cu, md.getType());
+        } catch (RuntimeException ex) {
+            fqn = null;
+        }
+        return fqn != null ? fqn : md.getType().asString();
     }
 
 
@@ -456,35 +472,40 @@ public class MockingRegistry {
      * generates Mockito.mock(). Otherwise generates new ClassName().
      */
     private static Expression createExpressionForUnknownType(String qualifiedName) {
+        String emittedTypeName = registerImportAndGetEmittedTypeName(qualifiedName);
         try {
             Class<?> cls = AbstractCompiler.loadClass(qualifiedName);
             if (isJavaLangPrimitiveWrapper(cls)) {
                 return expressionFactory(cls.getName());
             }
             if (cls.isInterface() || java.lang.reflect.Modifier.isAbstract(cls.getModifiers())) {
-                return createMockExpression(cls.getSimpleName());
+                return createMockExpression(emittedTypeName);
             }
             // Try to find no-arg constructor
             cls.getDeclaredConstructor();
             return new ObjectCreationExpr()
-                    .setType(new ClassOrInterfaceType().setName(qualifiedName))
+                    .setType(new ClassOrInterfaceType().setName(emittedTypeName))
                     .setArguments(new NodeList<>());
         } catch (NoSuchMethodException e) {
             // No no-arg constructor, use Mockito.mock()
-            String simpleName = qualifiedName.contains(".")
-                    ? qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1)
-                    : qualifiedName;
-            // Handle inner class names (replace $ with .)
-            simpleName = simpleName.replace('$', '.');
-            return createMockExpression(simpleName);
-        } catch (ClassNotFoundException e) {
+            return createMockExpression(emittedTypeName);
+        } catch (ClassNotFoundException | RuntimeException e) {
             // Class not in classpath; use Mockito.mock() as fallback to avoid no-arg constructor issues
-            String simpleName = qualifiedName.contains(".")
-                    ? qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1)
-                    : qualifiedName;
-            simpleName = simpleName.replace('$', '.');
-            return createMockExpression(simpleName);
+            return createMockExpression(emittedTypeName);
         }
+    }
+
+    private static String registerImportAndGetEmittedTypeName(String qualifiedName) {
+        if (qualifiedName == null || qualifiedName.isBlank()) {
+            return qualifiedName;
+        }
+        String normalized = qualifiedName.replace('$', '.');
+        if (!normalized.startsWith("java.lang.") && normalized.contains(".")) {
+            GeneratorState.addImport(new ImportDeclaration(normalized, false, false));
+        }
+        return normalized.contains(".")
+                ? normalized.substring(normalized.lastIndexOf('.') + 1)
+                : normalized;
     }
 
     private static boolean isJavaLangPrimitiveWrapper(Class<?> cls) {
