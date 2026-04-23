@@ -6,7 +6,7 @@ This document describes how to use the Antikythera package published to GitHub P
 
 - **Group ID**: `sa.com.cloudsolutions`
 - **Artifact ID**: `antikythera`
-- **Version**: `0.1.0`
+- **Version**: `0.1.3.4`
 - **Package URL**: https://github.com/Cloud-Solutions-International/antikythera/packages
 
 ## Using the Package
@@ -27,7 +27,7 @@ Add the following to your `pom.xml`:
     <dependency>
         <groupId>sa.com.cloudsolutions</groupId>
         <artifactId>antikythera</artifactId>
-        <version>0.1.0</version>
+        <version>0.1.3.4</version>
     </dependency>
 </dependencies>
 ```
@@ -49,7 +49,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'sa.com.cloudsolutions:antikythera:0.1.0'
+    implementation 'sa.com.cloudsolutions:antikythera:0.1.3.4'
 }
 ```
 
