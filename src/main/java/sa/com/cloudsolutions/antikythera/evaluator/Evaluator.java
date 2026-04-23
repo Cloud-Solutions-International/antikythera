@@ -112,6 +112,7 @@ import java.util.stream.LongStream;
 import java.util.stream.Stream;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.concurrent.atomic.AtomicLong;
 
 
 /**
@@ -198,7 +199,7 @@ public class Evaluator implements EvaluationEngine {
     protected TypeDeclaration<?> typeDeclaration;
     protected ByteArrayOutputStream capturedOutputStream;
 
-    private static long sequence = 0;
+    private static final AtomicLong sequence = new AtomicLong(0);
 
     private static ExceptionContext lastExceptionContext;
     
@@ -2934,15 +2935,15 @@ public class Evaluator implements EvaluationEngine {
     private void checkSequences(FieldDeclaration field, VariableDeclarator variableDeclarator, Variable v) {
         if (isSequenceField(field, variableDeclarator)) {
             incrementSequence();
-            v.setValue(sequence);
+            v.setValue(sequence.get());
             MethodCallExpr mce = new MethodCallExpr(
                     "set" + AbstractCompiler.setterSuffixFromFieldName(variableDeclarator.getNameAsString()));
             String type = v.getType().asString();
             if (type.equals("long") || type.equals("Long") || type.equals("java.lang.Long")) {
-                mce.addArgument(new LongLiteralExpr().setValue(Long.toString(sequence) + "L"));
+                mce.addArgument(new LongLiteralExpr().setValue(Long.toString(sequence.get()) + "L"));
             }
             else {
-                mce.addArgument(new IntegerLiteralExpr().setValue(Long.toString(sequence)));
+                mce.addArgument(new IntegerLiteralExpr().setValue(Long.toString(sequence.get())));
             }
             v.getInitializer().add(mce);
         }
@@ -3028,7 +3029,7 @@ public class Evaluator implements EvaluationEngine {
     }
 
     private static void incrementSequence() {
-        sequence++;
+        sequence.incrementAndGet();
     }
 
     /**

@@ -128,6 +128,7 @@
             <version>${maven-model.version}</version>
         </dependency>
 
+        <!-- Compile scope: needed on classpath for symbolic evaluation of REST-assured tests -->
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
@@ -161,11 +162,13 @@
             <version>${junit-jupiter.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- Compile scope: antikythera creates Mockito mocks at runtime during symbolic evaluation -->
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
             <version>${mockito.version}</version>
         </dependency>
+        <!-- Compile scope: needed on classpath for symbolic evaluation of Oracle-backed projects -->
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
             <artifactId>ojdbc8</artifactId>
