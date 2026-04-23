@@ -196,7 +196,7 @@ class StreamEvaluator {
 
     // ── Primitive stream operations ─────────────────────────────────────
 
-    @SuppressWarnings({"java:S3740", "java:S3776"})
+    @SuppressWarnings({"java:S3740", "java:S3776", "java:S6541"})
     static Variable dispatchPrimitiveStreamOp(String methodName, Object stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         Class<?> iface;
         if (stream instanceof IntStream) {
@@ -314,12 +314,13 @@ class StreamEvaluator {
 
     // ── Type-adaptation helpers ─────────────────────────────────────────
 
+    @SuppressWarnings("unchecked")
     static UnaryOperator<Object> toStreamFunction(Object arg) {
         if (arg instanceof UnaryOperator<?> uo) {
             return (UnaryOperator<Object>) uo;
         }
         if (arg instanceof Function<?, ?> f) {
-            Function fnRaw = f;
+            Function<Object, Object> fnRaw = (Function<Object, Object>) f;
             return fnRaw::apply;
         }
         throw new AntikytheraException("Expected Function for stream operation but got: "

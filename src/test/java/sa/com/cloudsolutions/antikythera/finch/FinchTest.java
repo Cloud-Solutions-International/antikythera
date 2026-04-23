@@ -4,7 +4,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -56,7 +55,8 @@ class FinchTest {
     void loadClassesThrowsForFileNotDirectory() throws Exception {
         Path tempFile = Files.createTempFile("finch-test", ".txt");
         try {
-            assertThrows(IllegalArgumentException.class, () -> Finch.loadClasses(tempFile.toFile()));
+            File file = tempFile.toFile();
+            assertThrows(IllegalArgumentException.class, () -> Finch.loadClasses(file));
         } finally {
             Files.deleteIfExists(tempFile);
         }
