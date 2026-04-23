@@ -4,6 +4,10 @@ import com.github.javaparser.ast.expr.Expression;
 
 import java.util.Objects;
 
+/**
+ * Wraps a conditional {@link Expression} that must hold true before a particular
+ * branch is entered, used during test precondition generation.
+ */
 public class Precondition {
     Expression expression;
 

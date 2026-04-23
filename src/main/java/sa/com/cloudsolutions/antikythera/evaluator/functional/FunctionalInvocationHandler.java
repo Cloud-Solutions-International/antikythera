@@ -8,6 +8,12 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+/**
+ * JDK dynamic-proxy {@link InvocationHandler} that dispatches functional-interface
+ * method calls to the appropriate {@link FPEvaluator} sub-type (Function, Consumer,
+ * BiFunction, Supplier, Runnable, etc.) so lambda bodies are executed by the
+ * symbolic evaluator.
+ */
 public record FunctionalInvocationHandler(FPEvaluator<?> evaluator) implements InvocationHandler {
 
     @Override

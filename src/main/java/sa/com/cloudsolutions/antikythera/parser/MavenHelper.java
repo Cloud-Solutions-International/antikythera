@@ -27,6 +27,11 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Reads the application-under-test's {@code pom.xml}, resolves dependency JARs
+ * from the local Maven repository, and provides POM-related utilities such as
+ * Java version detection and template POM generation for the output project.
+ */
 public class MavenHelper {
     public static final String POM_XML = "pom.xml";
     private static final Logger logger = LoggerFactory.getLogger(MavenHelper.class);

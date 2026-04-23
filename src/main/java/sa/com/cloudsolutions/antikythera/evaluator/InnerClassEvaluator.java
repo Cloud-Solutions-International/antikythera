@@ -16,6 +16,10 @@ import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Evaluator for inner/nested classes that delegates symbol lookups to the
+ * enclosing class evaluator when the symbol is not found in the inner scope.
+ */
 public class InnerClassEvaluator extends Evaluator {
     protected Evaluator enclosure;
 

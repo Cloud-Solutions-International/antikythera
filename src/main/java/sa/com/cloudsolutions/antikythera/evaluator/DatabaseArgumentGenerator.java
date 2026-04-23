@@ -13,6 +13,11 @@ import sa.com.cloudsolutions.antikythera.generator.RepositoryQuery;
 import java.sql.SQLException;
 import java.util.Optional;
 
+/**
+ * Generates method arguments by querying a database result set obtained from
+ * a previously executed repository query, falling back to dummy values when
+ * no matching column is found.
+ */
 public class DatabaseArgumentGenerator extends DummyArgumentGenerator {
     private static final Logger logger = LoggerFactory.getLogger(DatabaseArgumentGenerator.class);
 

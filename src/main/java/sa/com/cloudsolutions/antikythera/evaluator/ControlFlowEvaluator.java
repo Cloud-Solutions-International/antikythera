@@ -60,6 +60,11 @@ import java.util.Optional;
 import java.util.Set;
 
 
+/**
+ * Extends {@link Evaluator} with branch-coverage-aware control flow handling.
+ * Manages truth-table-driven condition setup, mock stubbing for conditional paths,
+ * and precondition generation for targeting specific branches during test generation.
+ */
 public class ControlFlowEvaluator extends Evaluator {
     private static final Logger logger = LoggerFactory.getLogger(ControlFlowEvaluator.class);
     protected LineOfCode currentConditional;

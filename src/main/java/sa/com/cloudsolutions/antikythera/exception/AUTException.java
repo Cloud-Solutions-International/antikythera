@@ -2,6 +2,11 @@ package sa.com.cloudsolutions.antikythera.exception;
 
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
 
+/**
+ * Thrown when the application-under-test raises an exception during symbolic evaluation.
+ * Carries an optional {@link Variable} representing the exception value within the
+ * symbolic execution context.
+ */
 public class AUTException extends AntikytheraException{
     private transient Variable variable;
 

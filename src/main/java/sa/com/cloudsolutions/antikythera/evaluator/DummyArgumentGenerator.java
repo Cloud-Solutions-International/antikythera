@@ -28,6 +28,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * Generates synthetic method arguments using reflection, Mockito mocks,
+ * and default value factories. Serves as the default strategy when no
+ * database-driven values are available.
+ */
 public class DummyArgumentGenerator extends ArgumentGenerator {
     public DummyArgumentGenerator() {
         super();

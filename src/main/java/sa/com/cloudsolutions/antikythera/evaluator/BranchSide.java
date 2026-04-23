@@ -1,5 +1,9 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+/**
+ * Enumerates the two sides of a conditional branch (TRUE / FALSE) and maps them
+ * to the legacy integer constants used by {@link LineOfCode}.
+ */
 public enum BranchSide {
     FALSE(LineOfCode.FALSE_PATH),
     TRUE(LineOfCode.TRUE_PATH);

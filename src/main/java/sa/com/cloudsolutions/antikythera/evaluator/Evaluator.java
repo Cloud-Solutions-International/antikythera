@@ -92,26 +92,9 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
-import java.util.Comparator;
-import java.util.function.BiFunction;
-import java.util.function.BinaryOperator;
-import java.util.function.Consumer;
-import java.util.function.DoubleFunction;
-import java.util.function.Function;
-import java.util.function.IntFunction;
-import java.util.function.LongFunction;
-import java.util.function.Predicate;
-import java.util.function.ToDoubleFunction;
-import java.util.function.ToIntFunction;
-import java.util.function.ToLongFunction;
-import java.util.function.UnaryOperator;
-import java.util.stream.Collector;
-import java.util.stream.DoubleStream;
-import java.util.stream.IntStream;
-import java.util.stream.LongStream;
-import java.util.stream.Stream;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.concurrent.atomic.AtomicLong;
 
 
 /**
@@ -198,7 +181,7 @@ public class Evaluator implements EvaluationEngine {
     protected TypeDeclaration<?> typeDeclaration;
     protected ByteArrayOutputStream capturedOutputStream;
 
-    private static long sequence = 0;
+    private static final AtomicLong sequence = new AtomicLong(0);
 
     private static ExceptionContext lastExceptionContext;
     
@@ -1463,472 +1446,12 @@ public class Evaluator implements EvaluationEngine {
         }
     }
 
-    @SuppressWarnings({"java:S3740"})
     private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
-        String methodName = reflectionArguments.getMethodName();
-        Object obj = v.getValue();
-        Object[] finalArgs = reflectionArguments.getFinalArgs();
-
-        if (obj instanceof IntStream || obj instanceof LongStream || obj instanceof DoubleStream) {
-            dispatchPrimitiveStreamOp(methodName, obj, finalArgs);
-        } else if (obj instanceof Stream<?> stream  && !dispatchIntermediateOp(methodName, stream, finalArgs)) {
-            dispatchTerminalOp(methodName, stream, finalArgs);
-        }
-    }
-
-    /**
-     * Dispatch intermediate stream operations (those that return a new Stream).
-     * <p>
-     * This method handles intermediate operations by:
-     * <ul>
-     *     <li>Converting symbolic evaluation results to appropriate functional interfaces</li>
-     *     <li>Using reflection to invoke the actual stream method on the JDK Stream class</li>
-     *     <li>Preserving the stream type for further chained operations</li>
-     * </ul>
-     *
-     * <p><strong>Type Adaptation:</strong> Arguments are automatically converted from symbolic
-     * evaluation representations (e.g., {@link Variable}, {@link Function}) to the appropriate
-     * functional interfaces ({@link Predicate}, {@link Consumer}, {@link Comparator}, etc.)
-     * using the {@code toStream*} helper methods.
-     *
-     * <p><strong>Supported Operations:</strong> filter, takeWhile, dropWhile, map, flatMap,
-     * peek, sorted, distinct, limit, skip, mapToInt, mapToLong, mapToDouble.
-     *
-     * <p><strong>Null Handling:</strong> The sorted() operation can be invoked with or without
-     * a comparator. Other operations expect non-null arguments as per Stream API contracts.
-     *
-     * @param methodName the name of the stream method to invoke
-     * @param stream the stream instance to operate on
-     * @param finalArgs the arguments for the operation (already symbolically evaluated)
-     * @return {@code true} if the operation was handled, {@code false} if the method name is not
-     *         an intermediate operation and the caller should attempt terminal dispatch.
-     * @throws NoSuchMethodException if the stream method cannot be found via reflection
-     * @throws InvocationTargetException if the stream operation throws an exception
-     * @throws IllegalAccessException if the stream method is not accessible
-     */
-    @SuppressWarnings({"java:S3740", "java:S3776"})
-    private boolean dispatchIntermediateOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        Object result;
-        switch (methodName) {
-            case FILTER, TAKE_WHILE, DROP_WHILE -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
-                result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
-            }
-            case MAP -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                result = Stream.class.getMethod(MAP, Function.class).invoke(stream, fn);
-            }
-            case FLAT_MAP -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                result = Stream.class.getMethod(FLAT_MAP, Function.class).invoke(stream, fn);
-            }
-            case PEEK -> {
-                Consumer<Object> consumer = toStreamConsumer(finalArgs[0]);
-                result = Stream.class.getMethod(PEEK, Consumer.class).invoke(stream, consumer);
-            }
-            case SORTED -> {
-                if (finalArgs.length == 0 || finalArgs[0] == null) {
-                    result = Stream.class.getMethod(SORTED).invoke(stream);
-                } else {
-                    Comparator<Object> comp = toStreamComparator(finalArgs[0]);
-                    result = Stream.class.getMethod(SORTED, Comparator.class).invoke(stream, comp);
-                }
-            }
-            case DISTINCT -> result = Stream.class.getMethod(DISTINCT).invoke(stream);
-            case LIMIT -> {
-                long n = ((Number) finalArgs[0]).longValue();
-                result = Stream.class.getMethod(LIMIT, long.class).invoke(stream, n);
-            }
-            case SKIP -> {
-                long n = ((Number) finalArgs[0]).longValue();
-                result = Stream.class.getMethod(SKIP, long.class).invoke(stream, n);
-            }
-            case MAP_TO_INT -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                ToIntFunction<Object> toIntFn = x -> ((Number) fn.apply(x)).intValue();
-                result = Stream.class.getMethod(MAP_TO_INT, ToIntFunction.class).invoke(stream, toIntFn);
-            }
-            case MAP_TO_LONG -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                ToLongFunction<Object> toLongFn = x -> ((Number) fn.apply(x)).longValue();
-                result = Stream.class.getMethod(MAP_TO_LONG, ToLongFunction.class).invoke(stream, toLongFn);
-            }
-            case MAP_TO_DOUBLE -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                ToDoubleFunction<Object> toDblFn = x -> ((Number) fn.apply(x)).doubleValue();
-                result = Stream.class.getMethod(MAP_TO_DOUBLE, ToDoubleFunction.class).invoke(stream, toDblFn);
-            }
-            default -> { return false; }
-        }
-        Variable rv = new Variable(result);
-        rv.setClazz(result != null ? result.getClass() : Stream.class);
-        returnValue = rv;
-        return true;
-    }
-
-    /**
-     * Dispatch terminal stream operations (those that consume the stream and return a non-stream
-     * result).
-     * <p>
-     * Terminal operations end the stream pipeline and produce a result. This method:
-     * <ul>
-     *     <li>Converts symbolic evaluation results to appropriate functional interfaces</li>
-     *     <li>Invokes the terminal operation using reflection</li>
-     *     <li>Wraps the result in a {@link Variable} with appropriate type information</li>
-     * </ul>
-     *
-     * <p><strong>Type Adaptation:</strong> Similar to intermediate operations, arguments are
-     * automatically converted from symbolic representations to functional interfaces.
-     *
-     * <p><strong>Supported Operations:</strong> forEach, collect, count, toList, toArray,
-     * findFirst, findAny, anyMatch, allMatch, noneMatch, min, max, reduce.
-     *
-     * <p><strong>Result Handling:</strong>
-     * <ul>
-     *     <li>{@code forEach} returns {@code null} wrapped in a Variable</li>
-     *     <li>{@code findFirst}, {@code findAny}, {@code min}, {@code max} return {@link Optional}</li>
-     *     <li>{@code reduce} with one argument returns {@link Optional}, with two returns direct value</li>
-     *     <li>Other operations return their respective result types</li>
-     * </ul>
-     *
-     * <p><strong>Void Operations:</strong> If the method name is not recognized, this method
-     * returns silently (switch default case), allowing the caller to handle unknown operations.
-     *
-     * @param methodName the name of the terminal stream method to invoke
-     * @param stream the stream instance to consume
-     * @param finalArgs the arguments for the operation (already symbolically evaluated)
-     * @throws NoSuchMethodException if the stream method cannot be found via reflection
-     * @throws InvocationTargetException if the stream operation throws an exception
-     * @throws IllegalAccessException if the stream method is not accessible
-     */
-    @SuppressWarnings({"unchecked", "java:S3740", "java:S3776"})
-    private void dispatchTerminalOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        Object result;
-        switch (methodName) {
-            case FOR_EACH -> {
-                Consumer<Object> action = toStreamConsumer(finalArgs[0]);
-                stream.forEach(action);
-                returnValue = new Variable(null);
-                return;
-            }
-            case COLLECT -> {
-                if (finalArgs.length == 1) {
-                    Collector<Object, ?, Object> col = (Collector<Object, ?, Object>) finalArgs[0];
-                    result = Stream.class.getMethod(COLLECT, Collector.class).invoke(stream, col);
-                } else if (finalArgs.length == 3) {
-                    @SuppressWarnings("unchecked")
-                    Stream<Object> objectStream = (Stream<Object>) stream;
-                    result = objectStream.collect(
-                            (java.util.function.Supplier<Object>) finalArgs[0],
-                            (java.util.function.BiConsumer<Object, Object>) finalArgs[1],
-                            (java.util.function.BiConsumer<Object, Object>) finalArgs[2]);
-                } else {
-                    throw new AntikytheraException("Unsupported collect overload with " + finalArgs.length + " arguments");
-                }
-            }
-            case COUNT -> result = Stream.class.getMethod(COUNT).invoke(stream);
-            case TO_LIST -> result = Stream.class.getMethod(TO_LIST).invoke(stream);
-            case TO_ARRAY -> result = Stream.class.getMethod(TO_ARRAY).invoke(stream);
-            case FIND_FIRST -> result = Stream.class.getMethod(FIND_FIRST).invoke(stream);
-            case FIND_ANY -> result = Stream.class.getMethod(FIND_ANY).invoke(stream);
-            case ANY_MATCH, ALL_MATCH, NONE_MATCH -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
-                result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
-            }
-            case MIN, MAX -> {
-                Comparator<Object> comp = toStreamComparator(finalArgs[0]);
-                result = Stream.class.getMethod(methodName, Comparator.class).invoke(stream, comp);
-            }
-            case REDUCE -> {
-                if (finalArgs.length == 1) {
-                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[0]);
-                    result = Stream.class.getMethod(REDUCE, BinaryOperator.class).invoke(stream, op);
-                } else if (finalArgs.length == 2) {
-                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[1]);
-                    result = Stream.class.getMethod(REDUCE, Object.class, BinaryOperator.class)
-                            .invoke(stream, finalArgs[0], op);
-                } else if (finalArgs.length == 3) {
-                    @SuppressWarnings("unchecked")
-                    Stream<Object> objectStream = (Stream<Object>) stream;
-                    result = objectStream.reduce(
-                            finalArgs[0],
-                            (java.util.function.BiFunction<Object, Object, Object>) finalArgs[1],
-                            toStreamBinaryOperator(finalArgs[2]));
-                } else {
-                    throw new AntikytheraException("Unsupported reduce overload with " + finalArgs.length + " arguments");
-                }
-            }
-            default -> { return; }
-        }
-        Variable rv = new Variable(result);
-        if (result instanceof Optional) {
-            rv.setClazz(Optional.class);
-        } else if (result != null) {
-            rv.setClazz(result.getClass());
-        }
-        returnValue = rv;
-
-    }
-
-    /**
-     * Dispatch terminal (and conversion) operations on primitive specialised streams
-     * ({@link IntStream}, {@link LongStream}, {@link DoubleStream}).
-     */
-    @SuppressWarnings({"java:S3740", "java:S3776"})
-    private void dispatchPrimitiveStreamOp(String methodName, Object stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        Class<?> iface;
-        if (stream instanceof IntStream) {
-            iface = IntStream.class;
-        } else if (stream instanceof LongStream) {
-            iface = LongStream.class;
-        } else {
-            iface = DoubleStream.class;
-        }
-        Object result;
-        switch (methodName) {
-            case "sum" -> result = iface.getMethod("sum").invoke(stream);
-            case COUNT -> result = iface.getMethod(COUNT).invoke(stream);
-            case "average" -> result = iface.getMethod("average").invoke(stream);
-            case "min" -> result = iface.getMethod("min").invoke(stream);
-            case "max" -> result = iface.getMethod("max").invoke(stream);
-            case "summaryStatistics" -> result = iface.getMethod("summaryStatistics").invoke(stream);
-            case "boxed" -> result = iface.getMethod("boxed").invoke(stream);
-            case TO_LIST -> result = iface.getMethod(TO_LIST).invoke(stream);
-            case TO_ARRAY -> result = iface.getMethod(TO_ARRAY).invoke(stream);
-            case "asLongStream" -> result = IntStream.class.getMethod("asLongStream").invoke(stream);
-            case AS_DOUBLE_STREAM -> {
-                if (stream instanceof IntStream) {
-                    result = IntStream.class.getMethod(AS_DOUBLE_STREAM).invoke(stream);
-                } else {
-                    result = LongStream.class.getMethod(AS_DOUBLE_STREAM).invoke(stream);
-                }
-            }
-            case "filter" -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                result = switch (stream) {
-                    case IntStream is -> is.filter(n -> Boolean.TRUE.equals(fn.apply(n)));
-                    case LongStream ls -> ls.filter(n -> Boolean.TRUE.equals(fn.apply(n)));
-                    case DoubleStream ds -> ds.filter(n -> Boolean.TRUE.equals(fn.apply(n)));
-                    default -> throw new AntikytheraException("Unsupported primitive stream type for filter: "
-                            + stream.getClass().getName());
-                };
-            }
-            case "map" -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                result = switch (stream) {
-                    case IntStream is -> is.map(n -> ((Number) fn.apply(n)).intValue());
-                    case LongStream ls -> ls.map(n -> ((Number) fn.apply(n)).longValue());
-                    case DoubleStream ds -> ds.map(n -> ((Number) fn.apply(n)).doubleValue());
-                    default -> throw new AntikytheraException("Unsupported primitive stream type for map: "
-                            + stream.getClass().getName());
-                };
-            }
-            case SORTED -> result = iface.getMethod(SORTED).invoke(stream);
-            case DISTINCT -> result = iface.getMethod(DISTINCT).invoke(stream);
-            case LIMIT -> {
-                long n = ((Number) finalArgs[0]).longValue();
-                result = iface.getMethod(LIMIT, long.class).invoke(stream, n);
-            }
-            case "skip" -> {
-                long n = ((Number) finalArgs[0]).longValue();
-                result = iface.getMethod("skip", long.class).invoke(stream, n);
-            }
-            case REDUCE -> {
-                if (finalArgs.length == 1) {
-                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[0]);
-                    result = switch (stream) {
-                        case IntStream is -> is.reduce((a, b) -> ((Number) op.apply(a, b)).intValue());
-                        case LongStream ls -> ls.reduce((a, b) -> ((Number) op.apply(a, b)).longValue());
-                        case DoubleStream ds -> ds.reduce((a, b) -> ((Number) op.apply(a, b)).doubleValue());
-                        default -> throw new AntikytheraException("Unsupported primitive stream type for reduce: "
-                                + stream.getClass().getName());
-                    };
-                } else {
-                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[1]);
-                    result = switch (stream) {
-                        case IntStream is -> is.reduce(((Number) finalArgs[0]).intValue(),
-                                (a, b) -> ((Number) op.apply(a, b)).intValue());
-                        case LongStream ls -> ls.reduce(((Number) finalArgs[0]).longValue(),
-                                (a, b) -> ((Number) op.apply(a, b)).longValue());
-                        case DoubleStream ds -> ds.reduce(((Number) finalArgs[0]).doubleValue(),
-                                (a, b) -> ((Number) op.apply(a, b)).doubleValue());
-                        default -> throw new AntikytheraException("Unsupported primitive stream type for reduce: "
-                                + stream.getClass().getName());
-                    };
-                }
-            }
-            case "forEach" -> {
-                Consumer<Object> consumer = toStreamConsumer(finalArgs[0]);
-                switch (stream) {
-                    case IntStream is -> is.forEach(consumer::accept);
-                    case LongStream ls -> ls.forEach(consumer::accept);
-                    case DoubleStream ds -> ds.forEach(consumer::accept);
-                    default -> throw new AntikytheraException("Unsupported primitive stream type for forEach: "
-                            + stream.getClass().getName());
-                }
-                returnValue = new Variable(null);
-                return;
-            }
-            case MAP_TO_OBJ -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                result = switch (stream) {
-                    case IntStream is -> IntStream.class.getMethod(MAP_TO_OBJ, IntFunction.class)
-                            .invoke(is, (IntFunction<Object>) fn::apply);
-                    case LongStream ls -> LongStream.class.getMethod(MAP_TO_OBJ, LongFunction.class)
-                            .invoke(ls, (LongFunction<Object>) fn::apply);
-                    case DoubleStream ds -> DoubleStream.class.getMethod(MAP_TO_OBJ, DoubleFunction.class)
-                            .invoke(ds, (DoubleFunction<Object>) fn::apply);
-                    default -> throw new AntikytheraException("Unsupported primitive stream type for mapToObj: "
-                            + stream.getClass().getName());
-                };
-            }
-            default -> { return; }
-        }
-        Variable rv = new Variable(result);
+        Variable result = StreamEvaluator.handleStreamMethods(v, reflectionArguments);
         if (result != null) {
-            rv.setClazz(result.getClass());
+            returnValue = result;
         }
-        returnValue = rv;
-
     }
-
-    /**
-     * Adapts a symbolic evaluation result to a {@link UnaryOperator} for use in stream operations.
-     * <p>
-     * During symbolic evaluation, lambda expressions and method references are represented as
-     * various functional interface types. This method normalizes them to {@code UnaryOperator<Object>}
-     * which is the common form used internally for stream transformations.
-     *
-     * <p><strong>Supported Input Types:</strong>
-     * <ul>
-     *     <li>{@link UnaryOperator} - returned as-is (with unchecked cast)</li>
-     *     <li>{@link Function} - wrapped to return a UnaryOperator that delegates to the function</li>
-     * </ul>
-     *
-     * @param arg the symbolic evaluation result (typically a lambda or method reference)
-     * @return a {@code UnaryOperator<Object>} that can be used in stream operations
-     * @throws AntikytheraException if the argument is null or not a recognized functional type
-     */
-    private static UnaryOperator<Object> toStreamFunction(Object arg) {
-        if (arg instanceof UnaryOperator<?> uo) {
-            return (UnaryOperator<Object>) uo;
-        }
-        if (arg instanceof Function<?, ?> f) {
-            Function fnRaw = f;
-            return fnRaw::apply;
-        }
-        throw new AntikytheraException("Expected Function for stream operation but got: "
-                + (arg == null ? "null" : arg.getClass().getName()));
-    }
-
-    /**
-     * Adapts a symbolic evaluation result to a {@link Consumer} for use in stream operations.
-     * <p>
-     * Stream operations like {@code forEach} and {@code peek} require {@code Consumer} arguments.
-     * This method converts symbolic representations to the expected type.
-     *
-     * <p><strong>Supported Input Types:</strong>
-     * <ul>
-     *     <li>{@link Consumer} - returned as-is (with unchecked cast)</li>
-     *     <li>{@link Function} - converted via {@link #toStreamFunction(Object)} and wrapped
-     *         as a Consumer that ignores the function's return value</li>
-     * </ul>
-     *
-     * <p><strong>Note:</strong> When a Function is provided, its return value is discarded
-     * (side-effect only execution), which matches the semantics of Consumer.
-     *
-     * @param arg the symbolic evaluation result (typically a lambda or method reference)
-     * @return a {@code Consumer<Object>} that can be used in stream operations
-     * @throws AntikytheraException if the argument is null or not a recognized functional type
-     */
-    @SuppressWarnings("unchecked")
-    private static Consumer<Object> toStreamConsumer(Object arg) {
-        if (arg instanceof Consumer<?> c) {
-            return (Consumer<Object>) c;
-        }
-        if (arg instanceof Function<?, ?>) {
-            UnaryOperator<Object> fn = toStreamFunction(arg);
-            return fn::apply;
-        }
-        throw new AntikytheraException("Expected Consumer for stream operation but got: "
-                + (arg == null ? "null" : arg.getClass().getName()));
-    }
-
-    /**
-     * Adapts a symbolic evaluation result to a {@link Comparator} for use in stream operations.
-     * <p>
-     * Stream operations like {@code sorted}, {@code min}, and {@code max} may require
-     * {@code Comparator} arguments. This method converts symbolic representations to the expected type.
-     *
-     * <p><strong>Supported Input Types:</strong>
-     * <ul>
-     *     <li>{@link Comparator} - returned as-is (with unchecked cast)</li>
-     *     <li>{@link BiFunction} - wrapped as a Comparator that:
-     *         <ul>
-     *             <li>Invokes the BiFunction with two comparison arguments</li>
-     *             <li>Converts the result to an int (0 if not a Number)</li>
-     *         </ul>
-     *     </li>
-     * </ul>
-     *
-     * <p><strong>Note:</strong> BiFunction results are expected to be numeric comparison results
-     * (negative, zero, or positive). Non-numeric results default to 0 (equal).
-     *
-     * @param arg the symbolic evaluation result (typically a lambda or method reference)
-     * @return a {@code Comparator<Object>} that can be used in stream operations
-     * @throws AntikytheraException if the argument is null or not a recognized functional type
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Comparator<Object> toStreamComparator(Object arg) {
-        if (arg instanceof Comparator<?> c) {
-            return (Comparator<Object>) c;
-        }
-        if (arg instanceof BiFunction<?, ?, ?> bf) {
-            BiFunction bfRaw =  bf;
-            return (a, b) -> {
-                Object r = bfRaw.apply(a, b);
-                return r instanceof Number n ? n.intValue() : 0;
-            };
-        }
-        throw new AntikytheraException("Expected Comparator for stream operation but got: "
-                + (arg == null ? "null" : arg.getClass().getName()));
-    }
-
-    /**
-     * Adapts a symbolic evaluation result to a {@link BinaryOperator} for use in stream operations.
-     * <p>
-     * Stream operations like {@code reduce} require {@code BinaryOperator} arguments which combine
-     * two values of the same type into one. This method converts symbolic representations to the
-     * expected type.
-     *
-     * <p><strong>Supported Input Types:</strong>
-     * <ul>
-     *     <li>{@link BinaryOperator} - returned as-is (with unchecked cast)</li>
-     *     <li>{@link BiFunction} - wrapped as a BinaryOperator that delegates to the BiFunction</li>
-     * </ul>
-     *
-     * <p><strong>Note:</strong> Both BinaryOperator and BiFunction have the same functional signature
-     * {@code (T, T) -> T}, so BiFunction can be used interchangeably in this symbolic evaluation context.
-     *
-     * @param arg the symbolic evaluation result (typically a lambda or method reference)
-     * @return a {@code BinaryOperator<Object>} that can be used in stream reduce operations
-     * @throws AntikytheraException if the argument is null or not a recognized functional type
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static BinaryOperator<Object> toStreamBinaryOperator(Object arg) {
-        if (arg instanceof BinaryOperator<?> bo) {
-            return (BinaryOperator<Object>) bo;
-        }
-        if (arg instanceof BiFunction<?, ?, ?> bf) {
-            BiFunction bfRaw =  bf;
-            return bfRaw::apply;
-        }
-        throw new AntikytheraException("Expected BinaryOperator for stream operation but got: "
-                + (arg == null ? "null" : arg.getClass().getName()));
-    }
-
 
     /**
      * Execute a method that is part of a chain of method calls
@@ -2934,15 +2457,15 @@ public class Evaluator implements EvaluationEngine {
     private void checkSequences(FieldDeclaration field, VariableDeclarator variableDeclarator, Variable v) {
         if (isSequenceField(field, variableDeclarator)) {
             incrementSequence();
-            v.setValue(sequence);
+            v.setValue(sequence.get());
             MethodCallExpr mce = new MethodCallExpr(
                     "set" + AbstractCompiler.setterSuffixFromFieldName(variableDeclarator.getNameAsString()));
             String type = v.getType().asString();
             if (type.equals("long") || type.equals("Long") || type.equals("java.lang.Long")) {
-                mce.addArgument(new LongLiteralExpr().setValue(Long.toString(sequence) + "L"));
+                mce.addArgument(new LongLiteralExpr().setValue(Long.toString(sequence.get()) + "L"));
             }
             else {
-                mce.addArgument(new IntegerLiteralExpr().setValue(Long.toString(sequence)));
+                mce.addArgument(new IntegerLiteralExpr().setValue(Long.toString(sequence.get())));
             }
             v.getInitializer().add(mce);
         }
@@ -3028,7 +2551,7 @@ public class Evaluator implements EvaluationEngine {
     }
 
     private static void incrementSequence() {
-        sequence++;
+        sequence.incrementAndGet();
     }
 
     /**

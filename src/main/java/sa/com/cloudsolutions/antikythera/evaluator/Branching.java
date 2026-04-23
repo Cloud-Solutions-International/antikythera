@@ -12,6 +12,11 @@ import java.util.List;
 import java.util.PriorityQueue;
 import java.util.stream.Collectors;
 
+/**
+ * Global registry of conditional branches discovered during symbolic evaluation.
+ * Maintains a priority queue per method so the test generator can systematically
+ * target untravelled paths for branch coverage.
+ */
 public class Branching {
     private static final HashMap<CallableDeclaration<?>, PriorityQueue<LineOfCode>> conditionals = new HashMap<>();
     private static final HashMap<Integer, LineOfCode> branches = new HashMap<>();

@@ -6,6 +6,12 @@ import com.github.javaparser.ast.expr.AnnotationExpr;
 
 import java.util.Optional;
 
+/**
+ * Unified descriptor for a Java type that may originate from either a JavaParser
+ * AST ({@link TypeDeclaration}) or from reflection ({@link Class}), with Spring
+ * stereotype flags and JPA entity metadata used throughout the evaluator and
+ * dependency solver.
+ */
 public class TypeWrapper {
     TypeDeclaration<?> type;
     Class<?> clazz;

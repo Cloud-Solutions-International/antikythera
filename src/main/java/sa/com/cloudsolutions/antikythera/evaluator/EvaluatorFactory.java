@@ -6,6 +6,11 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 import java.lang.reflect.Constructor;
 
 
+/**
+ * Factory for creating {@link Evaluator} instances in either eager or lazy mode.
+ * Eager creation discovers and initializes all field evaluators; lazy creation
+ * defers field setup until first access.
+ */
 public class EvaluatorFactory {
 
     private EvaluatorFactory() {}

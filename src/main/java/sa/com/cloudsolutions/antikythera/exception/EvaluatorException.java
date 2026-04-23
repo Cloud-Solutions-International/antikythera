@@ -2,6 +2,10 @@ package sa.com.cloudsolutions.antikythera.exception;
 
 import com.github.javaparser.ast.expr.Expression;
 
+/**
+ * Thrown when the symbolic expression evaluator encounters an unrecoverable error,
+ * such as an unsupported binary operation or a simulated null-pointer dereference.
+ */
 public class EvaluatorException extends AntikytheraException {
     private int error;
     public static final int NPE = 1;

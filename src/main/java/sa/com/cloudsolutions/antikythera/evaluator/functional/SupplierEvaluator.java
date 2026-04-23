@@ -9,6 +9,10 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.Supplier;
 
+/**
+ * Evaluator that implements {@link Supplier} by executing a zero-argument
+ * lambda body that returns a value within the symbolic evaluation engine.
+ */
 public class SupplierEvaluator<T> extends FPEvaluator<T> implements Supplier<T> {
 
     public SupplierEvaluator(EvaluatorFactory.Context context) {

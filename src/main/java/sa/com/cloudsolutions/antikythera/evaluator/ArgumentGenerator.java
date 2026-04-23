@@ -8,6 +8,10 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Abstract base for generating method/constructor arguments during test generation.
+ * Subclasses provide strategies for producing default, database-driven, or null arguments.
+ */
 public abstract class ArgumentGenerator {
     protected Map<String, Variable> arguments = new HashMap<>();
 

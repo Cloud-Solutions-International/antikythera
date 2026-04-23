@@ -39,6 +39,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * Evaluator that produces mock return values and records Mockito stubs
+ * for autowired dependencies and JPA repository methods during symbolic
+ * execution, enabling test generation without a live runtime.
+ */
 public class MockingEvaluator extends ControlFlowEvaluator {
     private static final Logger logger = LoggerFactory.getLogger(MockingEvaluator.class);
     private static final Set<String> collectionTypes = Set.of(

@@ -23,6 +23,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Converts HQL-style camelCase field references and join paths in parsed SQL
+ * statements to snake_case column names, and rewrites HQL entity joins into
+ * concrete table joins with ON clauses derived from JPA annotations.
+ */
 public class BasicConverter {
 
     private static final String ID_ANNOTATION = "Id";

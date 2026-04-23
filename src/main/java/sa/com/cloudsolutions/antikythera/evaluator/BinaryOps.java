@@ -8,6 +8,10 @@ import sa.com.cloudsolutions.antikythera.exception.EvaluatorException;
 
 import java.util.List;
 
+/**
+ * Evaluates binary expressions (equality, comparison, logical, arithmetic) during
+ * symbolic execution and provides utilities for condition negation and combination.
+ */
 public class BinaryOps {
 
     private BinaryOps() {

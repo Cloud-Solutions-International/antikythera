@@ -10,6 +10,10 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.BiFunction;
 
+/**
+ * Evaluator that implements {@link BiFunction} by executing a two-argument
+ * lambda body within the symbolic evaluation engine.
+ */
 public class BiFunctionEvaluator<T, U, R> extends FPEvaluator<T> implements BiFunction<T, U, R> {
 
     public BiFunctionEvaluator(EvaluatorFactory.Context context) {

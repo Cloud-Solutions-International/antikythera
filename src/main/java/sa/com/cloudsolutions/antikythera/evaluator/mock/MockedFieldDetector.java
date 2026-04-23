@@ -7,6 +7,10 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 
 import java.util.Set;
 
+/**
+ * AST visitor that detects field accesses and getter calls on a named variable,
+ * collecting the referenced field names for mock-setup generation.
+ */
 public class MockedFieldDetector extends VoidVisitorAdapter<Set<Expression>> {
     private final String variableName;
 

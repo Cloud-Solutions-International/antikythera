@@ -10,6 +10,10 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.Consumer;
 
+/**
+ * Evaluator that implements {@link Consumer} by executing a void-returning
+ * lambda body within the symbolic evaluation engine.
+ */
 public class ConsumerEvaluator<T> extends FPEvaluator<T> implements Consumer<T> {
 
     public ConsumerEvaluator(EvaluatorFactory.Context context) {

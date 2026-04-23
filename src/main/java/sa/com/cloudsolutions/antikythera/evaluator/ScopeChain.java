@@ -12,6 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Ordered list of {@link Scope} links representing a chained method-call or
+ * field-access expression (e.g. {@code a.getB().doC()}), built by walking the
+ * AST from outermost call inward so the evaluator can resolve each step in turn.
+ */
 public class ScopeChain {
     List<Scope> chain = new ArrayList<>();
     Expression expression;
