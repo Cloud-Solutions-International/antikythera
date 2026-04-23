@@ -20,7 +20,26 @@
         <api-framework-version>2.0.0</api-framework-version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <antikythera.agent.path>${settings.localRepository}/com/github/Cloud-Solutions-International/antikythera-agent/1.0.0.2/antikythera-agent-1.0.0.2.jar</antikythera.agent.path>
+
+        <!-- Dependency versions -->
+        <spring-boot.version>3.5.10</spring-boot.version>
+        <javaparser.version>3.27.1</javaparser.version>
+        <jackson.version>2.21.2</jackson.version>
+        <bytebuddy.version>1.17.8</bytebuddy.version>
+        <slf4j.version>2.0.16</slf4j.version>
+        <maven-model.version>3.9.14</maven-model.version>
+        <rest-assured.version>5.5.7</rest-assured.version>
+        <jsqlparser.version>5.3</jsqlparser.version>
+        <hql-parser.version>1.0.3</hql-parser.version>
+        <antlr4.version>4.13.2</antlr4.version>
+        <mockito.version>5.23.0</mockito.version>
+        <ojdbc.version>19.30.0.0</ojdbc.version>
+        <jakarta-persistence.version>3.1.0</jakarta-persistence.version>
+        <junit-jupiter.version>5.14.3</junit-jupiter.version>
+        <antikythera-common.version>0.0.5</antikythera-common.version>
+        <antikythera-agent.version>1.0.0.2</antikythera-agent.version>
+
+        <antikythera.agent.path>${settings.localRepository}/com/github/Cloud-Solutions-International/antikythera-agent/${antikythera-agent.version}/antikythera-agent-${antikythera-agent.version}.jar</antikythera.agent.path>
     </properties>
 
     <distributionManagement>
@@ -59,73 +78,73 @@
         <dependency>
             <groupId>com.github.javaparser</groupId>
             <artifactId>javaparser-core</artifactId>
-            <version>3.27.1</version>
+            <version>${javaparser.version}</version>
         </dependency>
 
         <dependency>
             <groupId>com.github.javaparser</groupId>
             <artifactId>javaparser-symbol-solver-core</artifactId>
-            <version>3.27.1</version>
+            <version>${javaparser.version}</version>
         </dependency>
 
         <dependency>
             <groupId>net.bytebuddy</groupId>
             <artifactId>byte-buddy</artifactId>
-            <version>1.17.8</version>
+            <version>${bytebuddy.version}</version>
         </dependency>
         <dependency>
             <groupId>com.github.Cloud-Solutions-International</groupId>
             <artifactId>antikythera-common</artifactId>
-            <version>0.0.5</version>
+            <version>${antikythera-common.version}</version>
         </dependency>
 
         <dependency>
             <groupId>com.github.Cloud-Solutions-International</groupId>
             <artifactId>antikythera-agent</artifactId>
-            <version>1.0.0.2</version>
+            <version>${antikythera-agent.version}</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>2.0.16</version>
+            <version>${slf4j.version}</version>
         </dependency>
 
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>2.21.2</version>
+            <version>${jackson.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-yaml</artifactId>
-            <version>2.21.2</version>
+            <version>${jackson.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-model</artifactId>
-            <version>3.9.14</version>
+            <version>${maven-model.version}</version>
         </dependency>
 
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
-            <version>5.5.7</version>
+            <version>${rest-assured.version}</version>
         </dependency>
 
         <dependency>
             <groupId>com.github.jsqlparser</groupId>
             <artifactId>jsqlparser</artifactId>
-            <version>5.3</version>
+            <version>${jsqlparser.version}</version>
         </dependency>
 
         <!-- HQL/JPQL Parser with ANTLR4 -->
         <dependency>
             <groupId>com.raditha</groupId>
             <artifactId>hql-parser</artifactId>
-            <version>1.0.3</version>
+            <version>${hql-parser.version}</version>
             <scope>compile</scope>
         </dependency>
         
@@ -133,42 +152,42 @@
         <dependency>
             <groupId>org.antlr</groupId>
             <artifactId>antlr4-runtime</artifactId>
-            <version>4.13.2</version>
+            <version>${antlr4.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>5.14.3</version>
+            <version>${junit-jupiter.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
-            <version>5.23.0</version>
+            <version>${mockito.version}</version>
         </dependency>
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
             <artifactId>ojdbc8</artifactId>
-            <version>19.30.0.0</version>
+            <version>${ojdbc.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
-            <version>3.5.10</version>
+            <version>${spring-boot.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
-            <version>3.5.10</version>
+            <version>${spring-boot.version}</version>
         </dependency>
 
         <!-- Jakarta Persistence API for compile-time annotations -->
         <dependency>
             <groupId>jakarta.persistence</groupId>
             <artifactId>jakarta.persistence-api</artifactId>
-            <version>3.1.0</version>
+            <version>${jakarta-persistence.version}</version>
         </dependency>
 
         <!-- Note: Hibernate is already included via spring-boot-starter-data-jpa -->
