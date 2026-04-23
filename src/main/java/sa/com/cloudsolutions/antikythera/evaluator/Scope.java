@@ -6,6 +6,10 @@ import com.github.javaparser.ast.expr.MethodCallExpr;
 import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 import sa.com.cloudsolutions.antikythera.parser.MCEWrapper;
 
+/**
+ * Represents a single link in a method-call scope chain, binding an expression
+ * to its resolved variable, type wrapper, and the enclosing {@link ScopeChain}.
+ */
 public class Scope {
     Expression expression;
     MethodCallExpr scopedMethodCall;

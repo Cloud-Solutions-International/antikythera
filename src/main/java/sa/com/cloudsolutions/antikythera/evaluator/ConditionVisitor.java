@@ -24,6 +24,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * AST visitor that discovers conditional branches ({@code if} statements and ternary
+ * expressions) and registers them with {@link Branching} for branch-coverage analysis.
+ */
 public class ConditionVisitor extends VoidVisitorAdapter<LineOfCode> {
 
     @Override

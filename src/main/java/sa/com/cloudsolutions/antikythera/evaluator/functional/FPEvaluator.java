@@ -27,6 +27,11 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Abstract base for functional-interface evaluators (Function, Consumer, Supplier, etc.).
+ * Wraps a lambda expression's body in a synthetic {@link com.github.javaparser.ast.body.MethodDeclaration}
+ * and delegates execution to the enclosing evaluator's scope chain.
+ */
 public abstract class FPEvaluator<T> extends InnerClassEvaluator {
     public static final String OBJECT_TYPE = "Object";
     protected MethodDeclaration methodDeclaration;

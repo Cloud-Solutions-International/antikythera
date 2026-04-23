@@ -45,6 +45,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Reflection utilities for the symbolic evaluator. Handles type mapping between
+ * JavaParser AST types and {@code java.lang.reflect} classes, argument marshalling
+ * for reflective method invocations, and dynamic proxy creation for functional interfaces.
+ */
 public class Reflect {
     private static final Logger logger = LoggerFactory.getLogger(Reflect.class);
     public static final String ANTIKYTHERA = "Antikythera";

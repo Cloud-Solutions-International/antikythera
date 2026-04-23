@@ -13,6 +13,11 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import static org.mockito.Mockito.withSettings;
 
 
+/**
+ * Mockito {@link Answer} that produces sensible default return values during symbolic
+ * evaluation, creating nested mocks or evaluator instances as needed and recording
+ * the stubbing in {@link sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry}.
+ */
 public class MockReturnValueHandler implements Answer<Object> {
     private static final Logger logger = LoggerFactory.getLogger(MockReturnValueHandler.class);
 

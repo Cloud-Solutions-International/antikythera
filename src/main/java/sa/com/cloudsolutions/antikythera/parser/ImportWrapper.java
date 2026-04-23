@@ -5,6 +5,12 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 
+/**
+ * Wraps a JavaParser {@link ImportDeclaration} together with the resolved
+ * {@link Class}, {@link TypeDeclaration}, {@link FieldDeclaration}, or
+ * {@link MethodDeclaration} that the import refers to, so downstream code
+ * can quickly distinguish external (bytecode) imports from source-level ones.
+ */
 public class ImportWrapper {
     ImportDeclaration imp;
     private Class<?> clazz;

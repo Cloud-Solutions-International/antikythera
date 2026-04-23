@@ -7,6 +7,10 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 
 
+/**
+ * Bundles the resolved method name, argument values, and argument types needed
+ * for a reflective method invocation, including varargs packing.
+ */
 public class ReflectionArguments {
     /**
      * The name of the method that will have to be matched in a class for relfection.

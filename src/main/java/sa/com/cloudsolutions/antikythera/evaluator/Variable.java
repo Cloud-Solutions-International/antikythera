@@ -10,6 +10,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Random;
 
+/**
+ * Represents a named value within the symbolic execution environment.
+ * Pairs a JavaParser {@link Type} with a runtime {@link Object} value and tracks
+ * the initializer expressions needed to reproduce the value in generated test code.
+ */
 public class Variable implements Symbol {
     /**
      * Represents a java parser type

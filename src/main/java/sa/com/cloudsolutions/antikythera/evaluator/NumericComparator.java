@@ -1,6 +1,10 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
 
+/**
+ * Provides type-aware comparison of numeric, string, and {@link Comparable} values
+ * with correct widening semantics and null handling mirroring JVM behavior.
+ */
 public class NumericComparator {
     private NumericComparator() {
     }

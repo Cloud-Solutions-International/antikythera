@@ -6,6 +6,11 @@ import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.util.List;
 
+/**
+ * Represents a single {@code when(method).thenReturn(value)} stub recorded
+ * during symbolic execution, pairing a {@link Callable} with its stubbed
+ * return {@link Variable}.
+ */
 public class MockingCall {
     private boolean fromSetup;
     private List<Expression> expression;

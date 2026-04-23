@@ -6,6 +6,10 @@ import com.github.javaparser.ast.type.WildcardType;
 import sa.com.cloudsolutions.antikythera.evaluator.EvaluatorFactory;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
+/**
+ * Evaluator that implements {@link Runnable} by executing a zero-argument
+ * void-returning lambda body within the symbolic evaluation engine.
+ */
 public class RunnableEvaluator extends FPEvaluator implements Runnable {
 
     public RunnableEvaluator(EvaluatorFactory.Context context) {

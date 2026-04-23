@@ -21,6 +21,11 @@ import sa.com.cloudsolutions.antikythera.exception.GeneratorException;
 
 import java.io.IOException;
 
+/**
+ * Abstract parser that first runs the {@link DepSolver} to resolve transitive
+ * dependencies for every public method in a compilation unit, then drives
+ * symbolic evaluation of each method through a {@link SpringEvaluator}.
+ */
 public abstract class DepsolvingParser {
     private static final Logger logger = LoggerFactory.getLogger(DepsolvingParser.class);
     CompilationUnit cu;

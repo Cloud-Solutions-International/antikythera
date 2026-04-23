@@ -30,6 +30,11 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Base representation of a JPA repository query, holding the parsed SQL statement,
+ * method parameters, method arguments, entity mapping, and query-type metadata
+ * shared by both native-SQL and HQL/derived query variants.
+ */
 public class BaseRepositoryQuery {
     /**
      * This is the list of parameters that are defined in the function signature

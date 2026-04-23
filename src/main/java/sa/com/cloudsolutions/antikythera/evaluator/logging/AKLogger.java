@@ -2,6 +2,10 @@ package sa.com.cloudsolutions.antikythera.evaluator.logging;
 
 import org.slf4j.helpers.MarkerIgnoringBase;
 
+/**
+ * SLF4J logger implementation that captures log calls into {@link LogRecorder}
+ * instead of writing to the console, enabling log-assertion generation in tests.
+ */
 public class AKLogger extends MarkerIgnoringBase {
     public static final String STR_TRACE = "TRACE";
     public static final String STR_DEBUG = "DEBUG";

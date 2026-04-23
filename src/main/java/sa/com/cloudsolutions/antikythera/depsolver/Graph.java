@@ -11,6 +11,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Static registry of {@link GraphNode} instances and the trimmed
+ * {@link CompilationUnit} outputs produced by the dependency solver.
+ * Acts as the central adjacency structure for the dependency graph.
+ */
 public class Graph {
     /**
      * Map of fully qualified class names and their generated compilation units.

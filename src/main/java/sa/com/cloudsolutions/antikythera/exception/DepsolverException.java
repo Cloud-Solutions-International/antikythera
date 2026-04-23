@@ -1,5 +1,9 @@
 package sa.com.cloudsolutions.antikythera.exception;
 
+/**
+ * Thrown when the dependency solver encounters an error while resolving or extracting
+ * class, field, or method dependencies from the source AST.
+ */
 public class DepsolverException extends RuntimeException {
 
     public DepsolverException(String message) {

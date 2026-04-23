@@ -11,6 +11,11 @@ import sa.com.cloudsolutions.antikythera.parser.AbstractCompiler;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Captures the outcome of symbolically executing a single controller or service method,
+ * including the return value, HTTP status, response body, captured console output,
+ * and any exception context, so that the test generator can emit appropriate assertions.
+ */
 public class MethodResponse {
     Type type;
     Variable response;

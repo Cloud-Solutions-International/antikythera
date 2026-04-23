@@ -9,6 +9,11 @@ import sa.com.cloudsolutions.antikythera.parser.Callable;
 
 import java.lang.reflect.Method;
 
+/**
+ * Evaluator that replays Mockito {@code when().thenReturn()} stubs found in
+ * existing test setup methods, populating the {@link sa.com.cloudsolutions.antikythera.evaluator.mock.MockingRegistry}
+ * so the engine can reuse pre-defined stubs during symbolic execution.
+ */
 public class TestSuiteEvaluator extends Evaluator {
     private boolean when;
     private Callable callable;

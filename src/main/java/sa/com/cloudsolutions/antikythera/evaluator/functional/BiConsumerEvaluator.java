@@ -10,6 +10,10 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.BiConsumer;
 
+/**
+ * Evaluator that implements {@link BiConsumer} by executing a two-argument
+ * void-returning lambda body within the symbolic evaluation engine.
+ */
 public class BiConsumerEvaluator<T, U> extends FPEvaluator<T> implements BiConsumer<T, U> {
 
     public BiConsumerEvaluator(EvaluatorFactory.Context context) {

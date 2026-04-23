@@ -11,6 +11,10 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * AST visitor that collects the chain of {@code if} conditions guarding a specific
+ * {@link ReturnStmt}, used to derive preconditions for return-value assertions.
+ */
 public class ReturnConditionVisitor extends VoidVisitorAdapter<Void> {
     private final List<Expression> conditions = new ArrayList<>();
     private final ReturnStmt targetReturn;

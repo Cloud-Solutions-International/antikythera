@@ -12,6 +12,11 @@ import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import java.util.Optional;
 
+/**
+ * Utility methods for resolving AST types and expressions to their fully
+ * qualified imports and adding the corresponding {@link GraphNode} entries
+ * to the dependency graph.
+ */
 public class ImportUtils {
     private ImportUtils() {}
 

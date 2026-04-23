@@ -27,6 +27,10 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Optional;
 
+/**
+ * Converts method references ({@code Class::method}) into equivalent lambda
+ * expressions so the symbolic evaluator can execute them uniformly.
+ */
 public class FunctionalConverter {
 
     private FunctionalConverter() {}

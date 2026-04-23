@@ -3,6 +3,10 @@ package sa.com.cloudsolutions.antikythera.evaluator;
 import com.github.javaparser.ast.expr.BinaryExpr;
 import com.github.javaparser.ast.type.Type;
 
+/**
+ * Implements arithmetic and string-concatenation operations for the symbolic evaluator.
+ * Handles numeric type widening and operator dispatch for binary expressions.
+ */
 public class Arithmetics {
 
     private Arithmetics() {

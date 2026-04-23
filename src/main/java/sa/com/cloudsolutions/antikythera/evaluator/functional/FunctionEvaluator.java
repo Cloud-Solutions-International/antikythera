@@ -11,6 +11,10 @@ import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.util.function.Function;
 
+/**
+ * Evaluator that implements {@link Function} by executing a lambda body
+ * within the symbolic evaluation engine.
+ */
 public class FunctionEvaluator<T,R> extends FPEvaluator<T> implements Function<T,R> {
 
     public FunctionEvaluator(EvaluatorFactory.Context context) {

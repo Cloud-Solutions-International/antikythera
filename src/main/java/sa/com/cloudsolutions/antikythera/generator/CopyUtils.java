@@ -13,6 +13,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+/**
+ * File-system utilities for creating Maven project structures, writing generated
+ * source files, and copying classpath template resources into the output directory.
+ */
 public class CopyUtils {
     public static final String SRC = "src";
 
