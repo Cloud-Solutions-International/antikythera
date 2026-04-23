@@ -91,7 +91,8 @@ public class Finch {
     private static void findJavaFiles(File dir, List<String> fileList) {
         File[] files = dir.listFiles();
         if (files == null) {
-            return;
+            throw new IllegalArgumentException("Cannot list files in " + dir.getAbsolutePath()
+                    + ": path is not a valid directory or is not accessible");
         }
         for (File file : files) {
             if (file.isDirectory()) {
