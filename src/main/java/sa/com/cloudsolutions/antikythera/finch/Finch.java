@@ -28,7 +28,7 @@ public class Finch {
     public static void main(String[] args) throws Exception {
 
         if (args.length != 1) {
-            System.err.println("Usage: java Finch <source-directory>");
+            logger.error("Usage: java Finch <source-directory>");
             System.exit(1);
         }
 
@@ -36,7 +36,7 @@ public class Finch {
 
         Map<String, Object> classes = loadClasses(sourceDir);
         for (String cls : classes.keySet()) {
-            System.out.println(cls);
+            logger.info(cls);
         }
     }
 
@@ -89,7 +89,11 @@ public class Finch {
 
     // Helper method to find all Java files in a directory
     private static void findJavaFiles(File dir, List<String> fileList) {
-        for (File file : dir.listFiles()) {
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
             if (file.isDirectory()) {
                 findJavaFiles(file, fileList);
             } else if (file.getName().endsWith(".java")) {
@@ -99,6 +103,9 @@ public class Finch {
     }
 
     public static Object getFinch(String resolvedClass) {
+        if (finches == null) {
+            return null;
+        }
         return finches.get(resolvedClass);
     }
 
