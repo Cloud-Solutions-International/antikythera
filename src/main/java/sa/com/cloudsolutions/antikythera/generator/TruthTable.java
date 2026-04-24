@@ -22,6 +22,9 @@ import sa.com.cloudsolutions.antikythera.evaluator.Evaluator;
 import sa.com.cloudsolutions.antikythera.evaluator.NumericComparator;
 import sa.com.cloudsolutions.antikythera.evaluator.ScopeChain;
 import sa.com.cloudsolutions.antikythera.evaluator.Variable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,6 +46,7 @@ import java.util.Set;
  * implementation will only consider Numeric, Boolean and String expressions.
  */
 public class TruthTable {
+    private static final Logger logger = LoggerFactory.getLogger(TruthTable.class);
     public static final NameExpr RESULT = new NameExpr("Result");
     public static final String EQUALS_CALL = "equals";
     public static final String IS_EMPTY = "isEmpty";
@@ -117,7 +121,6 @@ public class TruthTable {
      *
      * @param args Command line arguments.
      */
-    @SuppressWarnings("java:S106")
     public static void main(String[] args) {
         String[] conditions = {
                 "!a",
@@ -141,7 +144,7 @@ public class TruthTable {
             generator.printTruthTable();
             generator.printValues(true);
             generator.printValues(false);
-            System.out.println("\n");
+            logger.info("\n");
         }
     }
 
@@ -548,7 +551,6 @@ public class TruthTable {
      * Prints the truth table for the given condition.
      *
      */
-    @SuppressWarnings("java:S106")
     public void printTruthTable() {
         writeTruthTable(System.out);
     }
@@ -592,7 +594,6 @@ public class TruthTable {
     /**
      * Prints the values that make the condition true.
      */
-    @SuppressWarnings("java:S106")
     public void printValues(boolean desiredState) {
         writeValues(desiredState, System.out);
     }

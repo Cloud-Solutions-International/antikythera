@@ -71,7 +71,6 @@ import java.util.Set;
 /**
  * Extends the basic evaluator to provide support for JPA repositories and their special behavior.
  */
-@SuppressWarnings("java:S106")
 public class SpringEvaluator extends ControlFlowEvaluator {
     private static final Logger logger = LoggerFactory.getLogger(SpringEvaluator.class);
 
@@ -372,7 +371,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             if (onTest) {
                 output = stopOutputCapture();
                 if (output != null && !output.isEmpty()) {
-                    System.out.print(output);
+                    logger.info(output);
                 }
             }
         }
