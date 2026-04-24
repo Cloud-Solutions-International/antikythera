@@ -126,7 +126,6 @@ public class RepositoryParser extends BaseRepositoryParser {
      * This is useful only for visualization purposes.
      * @throws SQLException if the query cannot be executed
      */
-    @SuppressWarnings("java:S106")
     public void executeAllQueries() throws SQLException, JSQLParserException {
         for (var entry : queries.entrySet()) {
             ResultSet rs = executeQuery(entry.getKey());
@@ -134,17 +133,19 @@ public class RepositoryParser extends BaseRepositoryParser {
                 ResultSetMetaData metaData = rs.getMetaData();
                 int columnCount = metaData.getColumnCount();
 
+                StringBuilder header = new StringBuilder();
                 for (int i = 1; i <= columnCount; i++) {
-                    System.out.print(metaData.getColumnName(i) + "\t");
+                    header.append(metaData.getColumnName(i)).append('\t');
                 }
-                System.out.println();
+                logger.info("{}", header);
 
                 int i = 0;
                 while (rs.next() && i < 10) {
+                    StringBuilder row = new StringBuilder();
                     for (int j = 1; j <= columnCount; j++) {
-                        System.out.print(rs.getString(j) + "\t");
+                        row.append(rs.getString(j)).append('\t');
                     }
-                    System.out.println();
+                    logger.info("{}", row);
                     i++;
                 }
                 rs.close();

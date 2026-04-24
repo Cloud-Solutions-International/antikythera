@@ -908,7 +908,7 @@ public class Evaluator implements EvaluationEngine {
                 throw new EvaluatorException("Could not find a constructor for class " + clazz.getName());
             }
 
-        } catch (Exception e) {
+        } catch (ReflectiveOperationException | AntikytheraException | IllegalArgumentException e) {
             logger.warn("Could not create an instance of type {} using reflection", clazz);
             logger.warn("The error was {}", e.getMessage());
 
@@ -1372,81 +1372,24 @@ public class Evaluator implements EvaluationEngine {
     }
 
     void invokeReflectively(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
-        Method method = reflectionArguments.getMethod();
-
-        Object[] finalArgs = reflectionArguments.getFinalArgs();
-        try {
-            invoke(method, finalArgs, v);
-        } catch (IllegalAccessException e) {
-            invokeinAccessibleMethod(v, reflectionArguments);
-        } catch (IllegalArgumentException e) {
-            invokeFallback(v, reflectionArguments, finalArgs, method);
+        ReflectiveInvoker.StreamMethodHandler streamHandler = this::handleStreamMethodsAndReturn;
+        Variable result = ReflectiveInvoker.invokeWithFallbacks(v, reflectionArguments, streamHandler);
+        if (result != null) {
+            returnValue = result;
         }
     }
 
-    private void invokeFallback(Variable v, ReflectionArguments reflectionArguments, Object[] finalArgs, Method method) throws IllegalAccessException, InvocationTargetException {
-        // Attempt robust fallback by re-resolving method based on runtime argument types
-        Class<?>[] runtimeTypes = new Class<?>[finalArgs.length];
-        for (int i = 0; i < finalArgs.length; i++) {
-            runtimeTypes[i] = finalArgs[i] == null ? Object.class : finalArgs[i].getClass();
-        }
-
-        ReflectionArguments retryArgs = new ReflectionArguments(reflectionArguments.getMethodName(), finalArgs, runtimeTypes);
-        retryArgs.setScope(reflectionArguments.getScope());
-        Method retry = Reflect.findMethod(method.getDeclaringClass(), retryArgs);
-        if (retry != null) {
-            Object target2 = java.lang.reflect.Modifier.isStatic(retry.getModifiers()) ? null : v.getValue();
-            retryArgs.setMethod(retry);
-            retryArgs.finalizeArguments();
-            Object[] retryFinal = retryArgs.getFinalArgs();
-            returnValue = new Variable(retry.invoke(target2, retryFinal));
-            if (returnValue.getValue() == null && returnValue.getClazz() == null) {
-                returnValue.setClazz(retry.getReturnType());
-            }
-        }
-    }
-
-    @SuppressWarnings("java:S3011")
-    private void invokeinAccessibleMethod(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
-        Method method = reflectionArguments.getMethod();
-        Object[] finalArgs = reflectionArguments.getFinalArgs();
-        try {
-            method.setAccessible(true);
-            invoke(method, finalArgs, v);
-        } catch (InaccessibleObjectException ioe) {
-            // InaccessibleObjectException: JDK internal classes that can't be opened
-            if (v.getClazz().getName().startsWith(JAVA_UTIL_STREAM)) {
-                handleStreamMethods(v, reflectionArguments);
-            } else {
-                Method publicMethod = Reflect.findPublicMethod(v.getClazz(),
-                        reflectionArguments.getMethodName(),
-                        reflectionArguments.getArgumentTypes());
-                if (publicMethod != null) {
-                    invoke(publicMethod, finalArgs, v);
-                }
-            }
-        } catch (IllegalArgumentException e) {
-            // IllegalArgumentException: argument type mismatch on the concrete internal class
-            // (e.g. BiFunction passed where BinaryOperator expected). Route stream classes
-            // through handleStreamMethods which invokes via the public Stream interface.
-            if (v.getClazz().getName().startsWith(JAVA_UTIL_STREAM)) {
-                handleStreamMethods(v, reflectionArguments);
-            } else {
-                throw e;
-            }
-        }
+    private Variable handleStreamMethodsAndReturn(Variable v, ReflectionArguments reflectionArguments)
+            throws ReflectiveOperationException {
+        Variable result = StreamEvaluator.handleStreamMethods(v, reflectionArguments);
+        return result != null ? result : returnValue;
     }
 
     void invoke(Method method, Object[] finalArgs, Variable v) throws InvocationTargetException, IllegalAccessException {
-        Object target = java.lang.reflect.Modifier.isStatic(method.getModifiers()) ? null : v.getValue();
-        Object[] argsForInvoke = Reflect.coerceArgumentsForNumericParsing(method, finalArgs);
-        returnValue = new Variable(method.invoke(target, argsForInvoke));
-        if (returnValue.getClazz() == null) {
-            returnValue.setClazz(method.getReturnType());
-        }
+        returnValue = ReflectiveInvoker.invoke(method, finalArgs, v);
     }
 
-    private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+    private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Variable result = StreamEvaluator.handleStreamMethods(v, reflectionArguments);
         if (result != null) {
             returnValue = result;

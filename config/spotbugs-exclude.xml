@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!--
+        SpotBugs exclusion filter for Antikythera.
+        Suppress findings that are intentional or acceptable in this codebase.
+    -->
+
+    <!-- Evaluator classes intentionally use broad exception handling as safety nets -->
+    <Match>
+        <Package name="sa.com.cloudsolutions.antikythera.evaluator"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <!-- Generated or third-party integration code -->
+    <Match>
+        <Package name="~.*\.generated\..*"/>
+    </Match>
+
+    <!-- Test classes -->
+    <Match>
+        <Source name="~.*Test\.java"/>
+    </Match>
+</FindBugsFilter>

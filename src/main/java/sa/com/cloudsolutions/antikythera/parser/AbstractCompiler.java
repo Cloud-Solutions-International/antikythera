@@ -43,6 +43,7 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeS
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
 import org.apache.maven.model.Model;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -146,7 +147,7 @@ public class AbstractCompiler {
             mavenHelper.readPomFile();
             mavenHelper.buildJarPaths();
             setupParser();
-        } catch (Exception e) {
+        } catch (IOException | XmlPullParserException | RuntimeException e) {
             logger.warn("Failed to load maven dependencies from POM: {}", e.getMessage());
         }
     }
@@ -222,7 +223,7 @@ public class AbstractCompiler {
                 combinedTypeSolver.add(new JavaParserTypeSolver(testJava.toFile()));
                 // Do NOT add to sourceDirectories: test sources should not be extracted
             }
-        } catch (Exception e) {
+        } catch (IOException | XmlPullParserException | RuntimeException e) {
             logger.debug("Could not read Maven source directories: {}", e.getMessage());
         }
     }

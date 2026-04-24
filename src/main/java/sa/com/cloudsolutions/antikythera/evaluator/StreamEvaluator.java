@@ -43,7 +43,7 @@ class StreamEvaluator {
      * on the concrete stream type.
      */
     @SuppressWarnings({"java:S3740"})
-    static Variable handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+    static Variable handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         String methodName = reflectionArguments.getMethodName();
         Object obj = v.getValue();
         Object[] finalArgs = reflectionArguments.getFinalArgs();
@@ -64,134 +64,16 @@ class StreamEvaluator {
 
     record IntermediateResult(boolean handled, Variable result) {}
 
-    @SuppressWarnings({"java:S3740", "java:S3776"})
-    static IntermediateResult dispatchIntermediateOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        Object result;
-        switch (methodName) {
-            case FILTER, TAKE_WHILE, DROP_WHILE -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
-                result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
-            }
-            case MAP -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                result = Stream.class.getMethod(MAP, Function.class).invoke(stream, fn);
-            }
-            case FLAT_MAP -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                result = Stream.class.getMethod(FLAT_MAP, Function.class).invoke(stream, fn);
-            }
-            case PEEK -> {
-                Consumer<Object> consumer = toStreamConsumer(finalArgs[0]);
-                result = Stream.class.getMethod(PEEK, Consumer.class).invoke(stream, consumer);
-            }
-            case SORTED -> {
-                if (finalArgs.length == 0 || finalArgs[0] == null) {
-                    result = Stream.class.getMethod(SORTED).invoke(stream);
-                } else {
-                    Comparator<Object> comp = toStreamComparator(finalArgs[0]);
-                    result = Stream.class.getMethod(SORTED, Comparator.class).invoke(stream, comp);
-                }
-            }
-            case DISTINCT -> result = Stream.class.getMethod(DISTINCT).invoke(stream);
-            case LIMIT -> {
-                long n = ((Number) finalArgs[0]).longValue();
-                result = Stream.class.getMethod(LIMIT, long.class).invoke(stream, n);
-            }
-            case SKIP -> {
-                long n = ((Number) finalArgs[0]).longValue();
-                result = Stream.class.getMethod(SKIP, long.class).invoke(stream, n);
-            }
-            case MAP_TO_INT -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                ToIntFunction<Object> toIntFn = x -> ((Number) fn.apply(x)).intValue();
-                result = Stream.class.getMethod(MAP_TO_INT, ToIntFunction.class).invoke(stream, toIntFn);
-            }
-            case MAP_TO_LONG -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                ToLongFunction<Object> toLongFn = x -> ((Number) fn.apply(x)).longValue();
-                result = Stream.class.getMethod(MAP_TO_LONG, ToLongFunction.class).invoke(stream, toLongFn);
-            }
-            case MAP_TO_DOUBLE -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                ToDoubleFunction<Object> toDblFn = x -> ((Number) fn.apply(x)).doubleValue();
-                result = Stream.class.getMethod(MAP_TO_DOUBLE, ToDoubleFunction.class).invoke(stream, toDblFn);
-            }
-            default -> { return new IntermediateResult(false, null); }
-        }
-        Variable rv = new Variable(result);
-        rv.setClazz(result != null ? result.getClass() : Stream.class);
-        return new IntermediateResult(true, rv);
+    static IntermediateResult dispatchIntermediateOp(String methodName, Stream<?> stream, Object[] finalArgs)
+            throws ReflectiveOperationException {
+        return StreamOperationRegistry.tryIntermediate(methodName, stream, finalArgs);
     }
 
     // ── Terminal operations ─────────────────────────────────────────────
 
-    @SuppressWarnings({"unchecked", "java:S3740", "java:S3776"})
-    static Variable dispatchTerminalOp(String methodName, Stream<?> stream, Object[] finalArgs) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        Object result;
-        switch (methodName) {
-            case FOR_EACH -> {
-                Consumer<Object> action = toStreamConsumer(finalArgs[0]);
-                stream.forEach(action);
-                return new Variable(null);
-            }
-            case COLLECT -> {
-                if (finalArgs.length == 1) {
-                    Collector<Object, ?, Object> col = (Collector<Object, ?, Object>) finalArgs[0];
-                    result = Stream.class.getMethod(COLLECT, Collector.class).invoke(stream, col);
-                } else if (finalArgs.length == 3) {
-                    @SuppressWarnings("unchecked")
-                    Stream<Object> objectStream = (Stream<Object>) stream;
-                    result = objectStream.collect(
-                            (java.util.function.Supplier<Object>) finalArgs[0],
-                            (java.util.function.BiConsumer<Object, Object>) finalArgs[1],
-                            (java.util.function.BiConsumer<Object, Object>) finalArgs[2]);
-                } else {
-                    throw new AntikytheraException("Unsupported collect overload with " + finalArgs.length + " arguments");
-                }
-            }
-            case COUNT -> result = Stream.class.getMethod(COUNT).invoke(stream);
-            case TO_LIST -> result = Stream.class.getMethod(TO_LIST).invoke(stream);
-            case TO_ARRAY -> result = Stream.class.getMethod(TO_ARRAY).invoke(stream);
-            case FIND_FIRST -> result = Stream.class.getMethod(FIND_FIRST).invoke(stream);
-            case FIND_ANY -> result = Stream.class.getMethod(FIND_ANY).invoke(stream);
-            case ANY_MATCH, ALL_MATCH, NONE_MATCH -> {
-                UnaryOperator<Object> fn = toStreamFunction(finalArgs[0]);
-                Predicate<Object> pred = x -> Boolean.TRUE.equals(fn.apply(x));
-                result = Stream.class.getMethod(methodName, Predicate.class).invoke(stream, pred);
-            }
-            case MIN, MAX -> {
-                Comparator<Object> comp = toStreamComparator(finalArgs[0]);
-                result = Stream.class.getMethod(methodName, Comparator.class).invoke(stream, comp);
-            }
-            case REDUCE -> {
-                if (finalArgs.length == 1) {
-                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[0]);
-                    result = Stream.class.getMethod(REDUCE, BinaryOperator.class).invoke(stream, op);
-                } else if (finalArgs.length == 2) {
-                    BinaryOperator<Object> op = toStreamBinaryOperator(finalArgs[1]);
-                    result = Stream.class.getMethod(REDUCE, Object.class, BinaryOperator.class)
-                            .invoke(stream, finalArgs[0], op);
-                } else if (finalArgs.length == 3) {
-                    @SuppressWarnings("unchecked")
-                    Stream<Object> objectStream = (Stream<Object>) stream;
-                    result = objectStream.reduce(
-                            finalArgs[0],
-                            (java.util.function.BiFunction<Object, Object, Object>) finalArgs[1],
-                            toStreamBinaryOperator(finalArgs[2]));
-                } else {
-                    throw new AntikytheraException("Unsupported reduce overload with " + finalArgs.length + " arguments");
-                }
-            }
-            default -> { return null; }
-        }
-        Variable rv = new Variable(result);
-        if (result instanceof Optional) {
-            rv.setClazz(Optional.class);
-        } else if (result != null) {
-            rv.setClazz(result.getClass());
-        }
-        return rv;
+    static Variable dispatchTerminalOp(String methodName, Stream<?> stream, Object[] finalArgs)
+            throws ReflectiveOperationException {
+        return StreamOperationRegistry.tryTerminal(methodName, stream, finalArgs);
     }
 
     // ── Primitive stream operations ─────────────────────────────────────

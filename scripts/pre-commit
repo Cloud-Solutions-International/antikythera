@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook for Antikythera.
+# Runs compilation check on staged Java files to catch errors early.
+# Install: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+# Or run: scripts/install-hooks.sh
+
+set -euo pipefail
+
+# Only run if Java files are staged
+STAGED_JAVA=$(git diff --cached --name-only --diff-filter=ACM -- '*.java' || true)
+
+if [ -z "$STAGED_JAVA" ]; then
+    exit 0
+fi
+
+echo "Pre-commit: compiling project..."
+
+# Run compilation check
+if ! mvn compile -q -DskipTests 2>/dev/null; then
+    echo ""
+    echo "❌ Compilation failed. Please fix errors before committing."
+    echo "   Run 'mvn compile' to see full output."
+    exit 1
+fi
+
+echo "Pre-commit: compilation OK"
