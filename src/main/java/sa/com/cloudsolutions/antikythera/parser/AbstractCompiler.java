@@ -147,7 +147,7 @@ public class AbstractCompiler {
             mavenHelper.readPomFile();
             mavenHelper.buildJarPaths();
             setupParser();
-        } catch (IOException | XmlPullParserException e) {
+        } catch (IOException | XmlPullParserException | RuntimeException e) {
             logger.warn("Failed to load maven dependencies from POM: {}", e.getMessage());
         }
     }
@@ -223,7 +223,7 @@ public class AbstractCompiler {
                 combinedTypeSolver.add(new JavaParserTypeSolver(testJava.toFile()));
                 // Do NOT add to sourceDirectories: test sources should not be extracted
             }
-        } catch (IOException | XmlPullParserException e) {
+        } catch (IOException | XmlPullParserException | RuntimeException e) {
             logger.debug("Could not read Maven source directories: {}", e.getMessage());
         }
     }

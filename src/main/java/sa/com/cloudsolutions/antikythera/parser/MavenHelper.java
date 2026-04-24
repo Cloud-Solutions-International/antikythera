@@ -70,7 +70,7 @@ public class MavenHelper {
             helper.buildJarPaths();
             logger.debug("Built {} jar paths", artifacts.size());
             jarPathsBuilt = true;
-        } catch (IOException | XmlPullParserException e) {
+        } catch (IOException | XmlPullParserException | RuntimeException e) {
             logger.warn("Could not build JAR paths: {}", e.getMessage());
             jarPathsBuilt = true; // Don't retry on failure
         }
