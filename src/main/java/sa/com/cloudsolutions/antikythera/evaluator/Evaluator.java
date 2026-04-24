@@ -908,7 +908,7 @@ public class Evaluator implements EvaluationEngine {
                 throw new EvaluatorException("Could not find a constructor for class " + clazz.getName());
             }
 
-        } catch (ReflectiveOperationException e) {
+        } catch (ReflectiveOperationException | EvaluatorException e) {
             logger.warn("Could not create an instance of type {} using reflection", clazz);
             logger.warn("The error was {}", e.getMessage());
 

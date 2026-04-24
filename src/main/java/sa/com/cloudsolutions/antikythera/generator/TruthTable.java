@@ -551,6 +551,7 @@ public class TruthTable {
      * Prints the truth table for the given condition.
      *
      */
+    @SuppressWarnings("java:S106")
     public void printTruthTable() {
         writeTruthTable(System.out);
     }
@@ -594,6 +595,7 @@ public class TruthTable {
     /**
      * Prints the values that make the condition true.
      */
+    @SuppressWarnings("java:S106")
     public void printValues(boolean desiredState) {
         writeValues(desiredState, System.out);
     }

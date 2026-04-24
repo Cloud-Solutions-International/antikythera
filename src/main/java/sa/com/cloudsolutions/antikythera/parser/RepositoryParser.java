@@ -137,7 +137,7 @@ public class RepositoryParser extends BaseRepositoryParser {
                 for (int i = 1; i <= columnCount; i++) {
                     header.append(metaData.getColumnName(i)).append('\t');
                 }
-                logger.info(header.toString());
+                logger.info("{}", header);
 
                 int i = 0;
                 while (rs.next() && i < 10) {
@@ -145,7 +145,7 @@ public class RepositoryParser extends BaseRepositoryParser {
                     for (int j = 1; j <= columnCount; j++) {
                         row.append(rs.getString(j)).append('\t');
                     }
-                    logger.info(row.toString());
+                    logger.info("{}", row);
                     i++;
                 }
                 rs.close();

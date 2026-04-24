@@ -27,6 +27,9 @@ import static sa.com.cloudsolutions.antikythera.evaluator.StreamEvaluator.*;
  */
 final class StreamOperationRegistry {
 
+    private static final String SORTED = "sorted";
+    private static final String REDUCE = "reduce";
+
     private StreamOperationRegistry() {}
 
     @FunctionalInterface
@@ -96,12 +99,12 @@ final class StreamOperationRegistry {
                 Stream.class.getMethod("peek", Consumer.class)
                         .invoke(s, toStreamConsumer(a[0]))));
 
-        registerIntermediate("sorted", (s, a) -> {
+        registerIntermediate(SORTED, (s, a) -> {
             if (a.length == 0 || a[0] == null) {
-                return wrap(Stream.class.getMethod("sorted").invoke(s));
+                return wrap(Stream.class.getMethod(SORTED).invoke(s));
             }
             Comparator<Object> comp = toStreamComparator(a[0]);
-            return wrap(Stream.class.getMethod("sorted", Comparator.class).invoke(s, comp));
+            return wrap(Stream.class.getMethod(SORTED, Comparator.class).invoke(s, comp));
         });
 
         registerIntermediate("distinct", (s, a) -> wrap(
@@ -174,13 +177,13 @@ final class StreamOperationRegistry {
         registerTerminal("max", (s, a) -> wrapOptional(
                 Stream.class.getMethod("max", Comparator.class).invoke(s, toStreamComparator(a[0]))));
 
-        registerTerminal("reduce", (s, a) -> {
+        registerTerminal(REDUCE, (s, a) -> {
             if (a.length == 1) {
                 BinaryOperator<Object> op = toStreamBinaryOperator(a[0]);
-                return wrapOptional(Stream.class.getMethod("reduce", BinaryOperator.class).invoke(s, op));
+                return wrapOptional(Stream.class.getMethod(REDUCE, BinaryOperator.class).invoke(s, op));
             } else if (a.length == 2) {
                 BinaryOperator<Object> op = toStreamBinaryOperator(a[1]);
-                return wrap(Stream.class.getMethod("reduce", Object.class, BinaryOperator.class)
+                return wrap(Stream.class.getMethod(REDUCE, Object.class, BinaryOperator.class)
                         .invoke(s, a[0], op));
             } else if (a.length == 3) {
                 Stream<Object> objectStream = (Stream<Object>) s;

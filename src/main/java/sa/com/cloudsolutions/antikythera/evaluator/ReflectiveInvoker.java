@@ -59,7 +59,7 @@ public final class ReflectiveInvoker {
         } catch (IllegalAccessException e) {
             return handleInaccessible(receiver, reflectionArguments, streamHandler);
         } catch (IllegalArgumentException e) {
-            return handleArgumentMismatch(receiver, reflectionArguments, finalArgs, method, streamHandler);
+            return handleArgumentMismatch(receiver, reflectionArguments, finalArgs, method);
         }
     }
 
@@ -102,8 +102,7 @@ public final class ReflectiveInvoker {
      * runtime argument types.
      */
     private static Variable handleArgumentMismatch(Variable receiver, ReflectionArguments reflectionArguments,
-                                                    Object[] finalArgs, Method method,
-                                                    StreamMethodHandler streamHandler)
+                                                    Object[] finalArgs, Method method)
             throws IllegalAccessException, InvocationTargetException {
         Class<?>[] runtimeTypes = new Class<?>[finalArgs.length];
         for (int i = 0; i < finalArgs.length; i++) {
