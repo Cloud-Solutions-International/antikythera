@@ -173,7 +173,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (ReflectiveOperationException ignored) {
             // jakarta.persistence not available or reflection failed
         }
 
@@ -188,7 +188,7 @@ public class BaseRepositoryParser extends AbstractCompiler {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (ReflectiveOperationException ignored) {
             // javax.persistence not available or reflection failed
         }
 

@@ -50,7 +50,7 @@ public class Finch {
                     Finch.finches.putAll(finches);
                 }
             }
-        } catch (Exception e) {
+        } catch (ReflectiveOperationException | MalformedURLException e) {
             logger.warn("Finches could not be loaded {}", e.getMessage());
         }
     }
