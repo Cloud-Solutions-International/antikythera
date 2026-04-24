@@ -1389,7 +1389,7 @@ public class Evaluator implements EvaluationEngine {
         returnValue = ReflectiveInvoker.invoke(method, finalArgs, v);
     }
 
-    private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) throws InvocationTargetException, NoSuchMethodException, IllegalAccessException {
+    private void handleStreamMethods(Variable v, ReflectionArguments reflectionArguments) throws ReflectiveOperationException {
         Variable result = StreamEvaluator.handleStreamMethods(v, reflectionArguments);
         if (result != null) {
             returnValue = result;
