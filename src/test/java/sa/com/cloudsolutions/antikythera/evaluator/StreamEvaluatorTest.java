@@ -4,13 +4,16 @@ import org.junit.jupiter.api.Test;
 import sa.com.cloudsolutions.antikythera.exception.AntikytheraException;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
@@ -172,6 +175,24 @@ class StreamEvaluatorTest {
     }
 
     @Test
+    void intermediateTakeWhile() throws Exception {
+        Stream<Integer> stream = Stream.of(1, 2, 3, 4, 5);
+        UnaryOperator<Object> fn = x -> ((Integer) x) < 4;
+        StreamEvaluator.IntermediateResult ir = StreamEvaluator.dispatchIntermediateOp("takeWhile", stream, new Object[]{fn});
+        assertTrue(ir.handled());
+        assertEquals(List.of(1, 2, 3), ((Stream<?>) ir.result().getValue()).toList());
+    }
+
+    @Test
+    void intermediateDropWhile() throws Exception {
+        Stream<Integer> stream = Stream.of(1, 2, 3, 4, 5);
+        UnaryOperator<Object> fn = x -> ((Integer) x) < 3;
+        StreamEvaluator.IntermediateResult ir = StreamEvaluator.dispatchIntermediateOp("dropWhile", stream, new Object[]{fn});
+        assertTrue(ir.handled());
+        assertEquals(List.of(3, 4, 5), ((Stream<?>) ir.result().getValue()).toList());
+    }
+
+    @Test
     void intermediateUnknownReturnsNotHandled() throws Exception {
         Stream<String> stream = Stream.of("a");
         StreamEvaluator.IntermediateResult ir = StreamEvaluator.dispatchIntermediateOp("unknownOp", stream, new Object[0]);
@@ -276,6 +297,44 @@ class StreamEvaluatorTest {
         Stream<Integer> stream = Stream.of(1, 2, 3);
         BinaryOperator<Object> op = (a, b) -> (Integer) a + (Integer) b;
         Variable result = StreamEvaluator.dispatchTerminalOp("reduce", stream, new Object[]{0, op});
+        assertNotNull(result);
+        assertEquals(6, result.getValue());
+    }
+
+    @Test
+    void terminalToArray() throws Exception {
+        Stream<String> stream = Stream.of("a", "b");
+        Variable result = StreamEvaluator.dispatchTerminalOp("toArray", stream, new Object[0]);
+        assertNotNull(result);
+        assertArrayEquals(new Object[]{"a", "b"}, (Object[]) result.getValue());
+    }
+
+    @Test
+    void terminalFindAny() throws Exception {
+        Stream<String> stream = Stream.of("only");
+        Variable result = StreamEvaluator.dispatchTerminalOp("findAny", stream, new Object[0]);
+        assertNotNull(result);
+        assertInstanceOf(Optional.class, result.getValue());
+        assertEquals(Optional.of("only"), result.getValue());
+    }
+
+    @Test
+    void terminalCollectThreeArgs() throws Exception {
+        Stream<String> stream = Stream.of("a", "b", "c");
+        Supplier<Object> supplier = () -> new ArrayList<>();
+        BiConsumer<Object, Object> accumulator = (list, item) -> ((List<Object>) list).add(item);
+        BiConsumer<Object, Object> combiner = (list1, list2) -> ((List<Object>) list1).addAll((List<Object>) list2);
+        Variable result = StreamEvaluator.dispatchTerminalOp("collect", stream, new Object[]{supplier, accumulator, combiner});
+        assertNotNull(result);
+        assertEquals(List.of("a", "b", "c"), result.getValue());
+    }
+
+    @Test
+    void terminalReduceThreeArgs() throws Exception {
+        Stream<Integer> stream = Stream.of(1, 2, 3);
+        BiFunction<Object, Object, Object> accumulator = (a, b) -> (Integer) a + (Integer) b;
+        BinaryOperator<Object> combiner = (a, b) -> (Integer) a + (Integer) b;
+        Variable result = StreamEvaluator.dispatchTerminalOp("reduce", stream, new Object[]{0, accumulator, combiner});
         assertNotNull(result);
         assertEquals(6, result.getValue());
     }

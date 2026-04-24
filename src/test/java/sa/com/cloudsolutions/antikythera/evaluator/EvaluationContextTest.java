@@ -1,7 +1,10 @@
 package sa.com.cloudsolutions.antikythera.evaluator;
 
+import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.CompilationUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import sa.com.cloudsolutions.antikythera.generator.TypeWrapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -81,6 +84,91 @@ class EvaluationContextTest {
         ctx.setStaticVariable("com.Foo", "COUNT", new Variable(1));
         ctx.resetStatics();
         assertNull(ctx.getStaticVariable("com.Foo", "COUNT"));
+    }
+
+    // ── Compilation-unit registry ──
+
+    @Test
+    void testCompilationUnitRegistry() {
+        CompilationUnit cu = StaticJavaParser.parse("class Foo {}");
+        ctx.addCompilationUnit("com.example.Foo", cu);
+        assertSame(cu, ctx.getCompilationUnit("com.example.Foo"));
+        assertNull(ctx.getCompilationUnit("com.example.Bar"));
+        assertEquals(1, ctx.getCompilationUnits().size());
+    }
+
+    // ── Type registry ──
+
+    @Test
+    void testTypeRegistry() {
+        TypeWrapper tw = new TypeWrapper();
+        ctx.addType("com.example.Foo", tw);
+        assertSame(tw, ctx.getType("com.example.Foo"));
+        assertNull(ctx.getType("com.example.Bar"));
+        assertEquals(1, ctx.getResolvedTypes().size());
+    }
+
+    @Test
+    void testGetTypeDeclarationPresent() {
+        CompilationUnit cu = StaticJavaParser.parse("class Foo {}");
+        TypeWrapper tw = new TypeWrapper(cu.getType(0));
+        ctx.addType("Foo", tw);
+        assertTrue(ctx.getTypeDeclaration("Foo").isPresent());
+    }
+
+    @Test
+    void testGetTypeDeclarationAbsent() {
+        assertTrue(ctx.getTypeDeclaration("Missing").isEmpty());
+    }
+
+    @Test
+    void testGetTypeDeclarationNullType() {
+        TypeWrapper tw = new TypeWrapper();
+        ctx.addType("NoType", tw);
+        assertTrue(ctx.getTypeDeclaration("NoType").isEmpty());
+    }
+
+    @Test
+    void testIsServiceClass() {
+        TypeWrapper tw = new TypeWrapper();
+        tw.setService(true);
+        ctx.addType("Svc", tw);
+        assertTrue(ctx.isServiceClass("Svc"));
+        assertFalse(ctx.isServiceClass("Missing"));
+    }
+
+    @Test
+    void testIsControllerClass() {
+        TypeWrapper tw = new TypeWrapper();
+        tw.setController(true);
+        ctx.addType("Ctrl", tw);
+        assertTrue(ctx.isControllerClass("Ctrl"));
+        assertFalse(ctx.isControllerClass("Missing"));
+    }
+
+    @Test
+    void testIsComponentClass() {
+        TypeWrapper tw = new TypeWrapper();
+        tw.setComponent(true);
+        ctx.addType("Comp", tw);
+        assertTrue(ctx.isComponentClass("Comp"));
+        assertFalse(ctx.isComponentClass("Missing"));
+    }
+
+    @Test
+    void testIsInterface() {
+        TypeWrapper tw = new TypeWrapper();
+        tw.setInterface(true);
+        ctx.addType("Iface", tw);
+        assertTrue(ctx.isInterface("Iface"));
+        assertFalse(ctx.isInterface("Missing"));
+    }
+
+    @Test
+    void testIsServiceClassReturnsFalseWhenNotService() {
+        TypeWrapper tw = new TypeWrapper();
+        ctx.addType("NotSvc", tw);
+        assertFalse(ctx.isServiceClass("NotSvc"));
     }
 
     @Test
