@@ -400,12 +400,9 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             }
             ExceptionContext last = Evaluator.getLastExceptionContext();
             if (last != null && last.getException() != null) {
-                Throwable t = last.getException();
-                if (t instanceof EvaluatorException ee) {
-                    mr.setException(ee);
-                } else {
-                    mr.setException(new EvaluatorException("Symbolic evaluation", t));
-                }
+                Exception e = last.getException();
+                mr.setExceptionContext(ExceptionContext.of(
+                        e instanceof EvaluatorException ee ? ee : new EvaluatorException("Symbolic evaluation", e)));
             }
             createTests(mr);
         }
@@ -996,9 +993,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             eex = new EvaluatorException(e.getMessage() != null ? e.getMessage() : "FP application exception", e);
         }
 
-        ExceptionContext ctx = new ExceptionContext();
-        ctx.setException(eex);
-        return ctx;
+        return ExceptionContext.of(eex);
     }
 
     private static boolean containsNullPointerException(Throwable t) {
@@ -1175,8 +1170,7 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             // Get context from evaluator or create new one
             ExceptionContext ctx = Evaluator.getLastExceptionContext();
             if (ctx == null) {
-                ctx = new ExceptionContext();
-                ctx.setException(eex);
+                ctx = ExceptionContext.of(eex);
             }
             controllerResponse.setExceptionContext(ctx);
             
@@ -1324,9 +1318,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             return;
         }
 
-        TypeWrapper keyType = (key instanceof FieldAccessExpr fieldAccessExpr)
-                ? AbstractCompiler.findType(cu, fieldAccessExpr.getScope().toString())
-                : AbstractCompiler.findType(cu, key.toString());
+        TypeWrapper keyType = AbstractCompiler.findType(cu,
+                (key instanceof FieldAccessExpr fieldAccessExpr)
+                        ? fieldAccessExpr.getScope().toString()
+                        : key.toString());
 
         if (keyType != null && keyType.isEnum()) {
             adjustForEnumConstantComparison(node, combination, entry, result);

@@ -1,6 +1,6 @@
 # Code Review Report: Antikythera Core Module
-**Date:** April 4, 2026  
-**Branch:** kitchen-sink  
+**Date:** April 4, 2026 (refreshed September 21, 2026)  
+**Branch:** master (originally reviewed on kitchen-sink)  
 **Module:** antikythera (core library only)
 
 ---
@@ -14,7 +14,15 @@ This review focuses on the **antikythera core module**, which handles AST parsin
 **Critical Issues:** 1  
 **Major Issues:** 3  
 **Minor Issues:** 2  
-**Total Findings:** 6
+**Total Findings:** 6  
+**Resolved since the first review:** 3 (stream dispatch OCP, `MethodResponse` dual exception model, `MavenHelper` deprecation markers)
+
+**Continuous integration:** the project has a full build/test pipeline in
+[.github/workflows/build.yaml](.github/workflows/build.yaml): it clones and builds the four sibling
+repositories, runs `mvn clean install`, produces a JaCoCo report, uploads coverage to Codecov, runs
+SpotBugs and Checkstyle (non-blocking), and publishes to GitHub Packages. A separate
+[.github/workflows/code-review.yml](.github/workflows/code-review.yml) runs the AI reviewer. Earlier
+characterisations of this project as having no CI were inaccurate.
 
 ---
 
@@ -25,26 +33,24 @@ This review focuses on the **antikythera core module**, which handles AST parsin
 #### 1.1 `Evaluator.java` - Large Class with Multiple Responsibilities
 **Severity:** CRITICAL  
 **File:** [Evaluator.java](src/main/java/sa/com/cloudsolutions/antikythera/evaluator/Evaluator.java)  
-**Size:** 2,864 lines  
-**Lines:** 1340-1650 (stream handling methods)
+**Size:** 2,581 lines (down from 2,864)  
+**Status:** PARTIALLY ADDRESSED
 
 **Issue:**
-The `Evaluator` class contains stream operation dispatch methods:
-- `dispatchIntermediateOp()` (line 1359)
-- `dispatchTerminalOp()` (line 1424)  
-- `dispatchPrimitiveStreamOp()` (line 1478)
-- Multiple type adapter methods (`toStreamFunction()`, `toStreamConsumer()`, etc.) (lines 1595-1650)
+`Evaluator` still combines general expression evaluation with method reflection and invocation, and
+remains the largest class in the module.
 
-**Problem:** `Evaluator` is responsible for:
-- General expression evaluation
-- Method reflection and invocation
-- Stream operation dispatching
-- Stream type adaptation
-- Exception context tracking
+**Extracted so far, behaviour preserved:**
+- Stream operation dispatch and type adaptation →
+  [StreamEvaluator.java](src/main/java/sa/com/cloudsolutions/antikythera/evaluator/StreamEvaluator.java)
+  plus [StreamOperationRegistry.java](src/main/java/sa/com/cloudsolutions/antikythera/evaluator/StreamOperationRegistry.java)
+- Last-exception and active-loop tracking →
+  [ExceptionStateTracker.java](src/main/java/sa/com/cloudsolutions/antikythera/evaluator/ExceptionStateTracker.java);
+  the static accessors on `Evaluator` now delegate to it
 
-This violates SRP by combining too many concerns in a single class.
-
-**Verified:** ✅ Class is 2,864 lines and contains all mentioned methods.
+**Deliberately not extracted:** the reflective invocation chain and scope-chain resolution are tightly
+coupled to the `returnValue` instance state (see [docs/architecture.md](docs/architecture.md)) and stay
+in place until that coupling is broken.
 
 **Impact:** Maintainability, testability, and code comprehension are negatively affected.
 
@@ -71,10 +77,17 @@ This violates SRP by combining too many concerns in a single class.
 #### 1.3 `MethodResponse.java` - Dual Exception Representation
 **Severity:** MAJOR  
 **File:** [MethodResponse.java](src/main/java/sa/com/cloudsolutions/antikythera/generator/MethodResponse.java)  
-**Lines:** 76-95
+**Status:** RESOLVED
 
-**Issue:**
-`MethodResponse` manages both `EvaluatorException` and `ExceptionContext`, creating two parallel exception representations with bridging logic in `getException()` / `setException()`:
+`ExceptionContext` is now the single representation. `setExceptionContext()` / `getExceptionContext()`
+are canonical and all in-module callers use them together with the new `ExceptionContext.of(Exception)`
+factory. The `EvaluatorException` convenience methods remain only for compatibility with
+`antikythera-test-generator` and carry `@Deprecated(since = "0.1.3.4", forRemoval = true)` with
+migration Javadoc. The canonical API also surfaces exceptions that are not an `EvaluatorException`,
+which the old getter silently reported as `null`.
+
+**Original issue, for history:**
+`MethodResponse` managed both `EvaluatorException` and `ExceptionContext`, creating two parallel exception representations with bridging logic in `getException()` / `setException()`:
 
 ```java
 public void setException(EvaluatorException eex) {
@@ -96,13 +109,8 @@ public EvaluatorException getException() {
 ```
 
 **Problem:**
-- Dual representation creates confusion about which to use
-- Getter contains business logic (instanceof check)
-- Violates single responsibility
-
-**Verified:** ✅ Code matches exactly as described.
-
-**Note:** This is in the `generator/` package which per AGENTS.md should contain only shared model types. This dual representation may be a transitional state.
+- Dual representation created confusion about which to use
+- Getter contained business logic (instanceof check)
 
 ---
 
@@ -111,10 +119,16 @@ public EvaluatorException getException() {
 #### 2.1 Hardcoded Stream Method Names in Switch Statement
 **Severity:** MAJOR  
 **File:** [Evaluator.java](src/main/java/sa/com/cloudsolutions/antikythera/evaluator/Evaluator.java)  
-**Lines:** 1359-1420 (`dispatchIntermediateOp`), 1424-1470 (`dispatchTerminalOp`)
+**Status:** RESOLVED
 
-**Issue:**
-Stream method dispatch uses large switch statements:
+Stream dispatch no longer lives in `Evaluator`. Operations are registered in
+[StreamOperationRegistry.java](src/main/java/sa/com/cloudsolutions/antikythera/evaluator/StreamOperationRegistry.java)
+and executed by [StreamEvaluator.java](src/main/java/sa/com/cloudsolutions/antikythera/evaluator/StreamEvaluator.java),
+so adding an operation means registering a handler instead of editing a switch inside the core
+evaluation loop.
+
+**Original issue, for history:**
+Stream method dispatch used large switch statements:
 ```java
 switch (methodName) {
     case "filter", "takeWhile", "dropWhile" -> { ... }
@@ -129,11 +143,8 @@ switch (methodName) {
 ```
 
 **Problem:**
-- Adding new stream operations requires modifying the switch statement
-- Not open for extension; requires modifying core evaluation logic
-- Violates OCP
-
-**Verified:** ✅ Switch statements exist as described in both methods.
+- Adding new stream operations required modifying the switch statement
+- Not open for extension; required modifying core evaluation logic
 
 ---
 
@@ -224,10 +235,14 @@ Method handles multiple concerns (45 lines):
 #### 3.1 Deprecated Methods in MavenHelper
 **Severity:** MINOR  
 **File:** [MavenHelper.java](src/main/java/sa/com/cloudsolutions/antikythera/parser/MavenHelper.java)  
-**Lines:** 253-275
+**Status:** RESOLVED
 
-**Issue:**
-Methods are deprecated but lack clear migration guidance:
+`copyPom()` and `copyTemplate(String, String...)` are now marked
+`@Deprecated(since = "0.1.3.4", forRemoval = true)` with `@since` tags, and their Javadoc points at
+`copyPom(Path)` and `CopyUtils.copyTemplate(...)` respectively.
+
+**Original issue, for history:**
+Methods were deprecated but lacked removal intent and version metadata:
 ```java
 /**
  * @deprecated Use {@link #copyPom(Path)} with an explicit destination directory so that
@@ -251,13 +266,8 @@ public String copyTemplate(String filename, String... subPath) throws IOExceptio
 ```
 
 **Problem:**
-- Deprecation markers exist but no `@since` or `forRemoval` attributes
+- Deprecation markers existed but had no `@since` or `forRemoval` attributes
 - No timeline for removal
-- Migration guidance could be clearer
-
-**Verified:** ✅ Deprecated methods exist as shown.
-
-**Note:** Deprecation Javadoc is present but could be enhanced with migration timeline.
 
 ---
 
@@ -265,33 +275,36 @@ public String copyTemplate(String filename, String... subPath) throws IOExceptio
 
 ### Issue Summary by Severity
 
-| Severity | Count | Issues |
-|----------|-------|--------|
-| **CRITICAL** | 1 | Large Evaluator class (2,864 lines) |
-| **MAJOR** | 3 | Mixed concerns, Dual exception handling, Hardcoded switch statements, Limited documentation, Complex methods |
-| **MINOR** | 2 | Stream constants location, Deprecated method documentation |
-| **TOTAL** | **6** | |
+| Severity | Count | Issues | Status |
+|----------|-------|--------|--------|
+| **CRITICAL** | 1 | Large Evaluator class (2,581 lines) | Partially addressed — stream dispatch and exception-state tracking extracted |
+| **MAJOR** | 3 | Mixed concerns in `ControlFlowEvaluator`, Limited stream documentation, Complex methods | Open |
+| **MAJOR (resolved)** | 2 | Dual exception handling, Hardcoded stream switch statements | Resolved |
+| **MINOR** | 1 | Stream constants location | Open |
+| **MINOR (resolved)** | 1 | Deprecated method metadata in `MavenHelper` | Resolved |
 
 ---
 
 ### Priority Recommendations
 
 #### High Priority (Address Soon):
-1. **Evaluator Class Size** - 2,864 lines indicates need for refactoring
+1. **Evaluator Class Size** - 2,581 lines; continue extracting collaborators that do not depend on `returnValue`
 2. **Hardcoded Collection Factories** - Forces Java 9+, no extensibility
-3. **MethodResponse Dual Exception Model** - Migrate to single model
-4. **Hardcoded Annotation Names** - Prevents framework extensibility
+3. **Hardcoded Annotation Names** - Prevents framework extensibility
 
 #### Medium Priority (Technical Debt):
-5. **Switch Statements in Stream Dispatch** - Violates OCP
-6. **Type String Comparisons** - Extract to constants or utility class
-7. **Missing Stream Method Documentation** - Important for maintainability
-8. **Method Complexity** - Break down large methods
+4. **Type String Comparisons** - Extract to constants or utility class
+5. **Missing Stream Method Documentation** - Important for maintainability
+6. **Method Complexity** - Break down large methods
 
 #### Low Priority (Quality Improvements):
-9. **Stream Constants Location** - Minor organizational issue
-10. **Null Safety** - Add defensive checks
-11. **Deprecated Method Docs** - Enhance with timeline
+7. **Stream Constants Location** - Minor organizational issue
+8. **Null Safety** - Add defensive checks
+
+#### Resolved:
+- **MethodResponse Dual Exception Model** - consolidated on `ExceptionContext`
+- **Switch Statements in Stream Dispatch** - replaced by `StreamOperationRegistry`
+- **Deprecated Method Docs** - `MavenHelper` now uses `since` / `forRemoval`
 
 ---
 
@@ -299,12 +312,15 @@ public String copyTemplate(String filename, String... subPath) throws IOExceptio
 
 The **antikythera core module** contains verified stream support implementation with several architectural concerns:
 
-### Key Verified Issues:
-1. **Evaluator.java is very large** (2,864 lines) with stream dispatching adding significant complexity
+### Key Open Issues:
+1. **Evaluator.java is still large** (2,581 lines) even after the stream and exception-state extractions
 2. **Hardcoded values throughout** (collection factories, type names, annotations)
-3. **Switch statements for stream operations** violate Open/Closed Principle
-4. **Limited documentation** on stream type adaptation logic
-5. **Dual exception handling model** in MethodResponse needs consolidation
+3. **Limited documentation** on stream type adaptation logic
+
+### Resolved:
+- **Switch statements for stream operations** — now `StreamOperationRegistry` / `StreamEvaluator`
+- **Dual exception handling model in MethodResponse** — now `ExceptionContext` only
+- **`MavenHelper` deprecation metadata** — now `since` / `forRemoval`
 
 ### Not Issues for Core Module:
 - Test generation concerns (those belong in `antikythera-test-generator`)
@@ -319,6 +335,6 @@ The **antikythera core module** contains verified stream support implementation 
 
 ---
 
-*Report Generated: April 4, 2026*  
-*Reviewed Against: antikythera core module (kitchen-sink branch)*  
+*Report Generated: April 4, 2026; refreshed September 21, 2026*  
+*Reviewed Against: antikythera core module (master branch)*  
 *Module Scope: AST parsing, symbolic evaluation, dependency solving only*

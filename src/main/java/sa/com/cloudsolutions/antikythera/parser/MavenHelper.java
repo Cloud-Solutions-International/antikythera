@@ -259,9 +259,9 @@ public class MavenHelper {
      *             the generated pom.xml lands at the intended project root rather than
      *             implicitly inside {@code output_path}. This method will be removed in a
      *             future release.
-     * @since 1.0
+     * @since 0.1.3.4
      */
-    @Deprecated(since = "1.0", forRemoval = true)
+    @Deprecated(since = "0.1.3.4", forRemoval = true)
     public void copyPom() throws IOException, XmlPullParserException {
         copyPom(Path.of(Settings.getOutputPath()));
     }
@@ -275,9 +275,9 @@ public class MavenHelper {
      * @deprecated Use {@link sa.com.cloudsolutions.antikythera.generator.CopyUtils#copyTemplate(String, String, String...)}
      *             instead. Template copying is not a Maven concern. This method will be removed in a
      *             future release.
-     * @since 1.0
+     * @since 0.1.3.4
      */
-    @Deprecated(since = "1.0", forRemoval = true)
+    @Deprecated(since = "0.1.3.4", forRemoval = true)
     public String copyTemplate(String filename, String... subPath) throws IOException {
         return sa.com.cloudsolutions.antikythera.generator.CopyUtils.copyTemplate(
                 filename, Settings.getOutputPath(), subPath);
