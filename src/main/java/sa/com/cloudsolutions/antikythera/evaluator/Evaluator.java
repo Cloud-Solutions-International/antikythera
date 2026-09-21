@@ -686,9 +686,8 @@ public class Evaluator implements EvaluationEngine {
             String fieldName = fae.getNameAsString();
 
 
-            Symbol variable = fae.getScope().toString().equals("this")
-                    ? getValue(expr, fieldName)
-                    : getValue(expr, fae.getScope().toString());
+            Symbol variable = getValue(expr,
+                    fae.getScope().toString().equals("this") ? fieldName : fae.getScope().toString());
 
             if (variable == null) {
                 setField(fae.getNameAsString(), v);
@@ -2194,7 +2193,7 @@ public class Evaluator implements EvaluationEngine {
         }
         else {
             catching.addLast(t);
-            ExceptionStateTracker.record(e);
+            ExceptionStateTracker.recordException(e);
         }
     }
 

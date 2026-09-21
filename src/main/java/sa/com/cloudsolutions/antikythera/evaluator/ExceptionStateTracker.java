@@ -51,7 +51,7 @@ class ExceptionStateTracker {
      *
      * @param e the exception that was raised, or {@code null} to clear the recorded exception
      */
-    static void record(Exception e) {
+    static void recordException(Exception e) {
         if (e == null) {
             lastExceptionContext = null;
             return;

@@ -1318,9 +1318,10 @@ public class SpringEvaluator extends ControlFlowEvaluator {
             return;
         }
 
-        TypeWrapper keyType = (key instanceof FieldAccessExpr fieldAccessExpr)
-                ? AbstractCompiler.findType(cu, fieldAccessExpr.getScope().toString())
-                : AbstractCompiler.findType(cu, key.toString());
+        TypeWrapper keyType = AbstractCompiler.findType(cu,
+                (key instanceof FieldAccessExpr fieldAccessExpr)
+                        ? fieldAccessExpr.getScope().toString()
+                        : key.toString());
 
         if (keyType != null && keyType.isEnum()) {
             adjustForEnumConstantComparison(node, combination, entry, result);

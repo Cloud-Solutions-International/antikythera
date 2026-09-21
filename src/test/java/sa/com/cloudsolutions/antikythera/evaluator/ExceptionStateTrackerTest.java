@@ -32,7 +32,7 @@ class ExceptionStateTrackerTest {
     @Test
     void recordCapturesTheException() {
         IOException e = new IOException("boom");
-        ExceptionStateTracker.record(e);
+        ExceptionStateTracker.recordException(e);
 
         assertSame(e, ExceptionStateTracker.getLastException());
         assertSame(e, ExceptionStateTracker.getLastExceptionContext().getException());
@@ -42,8 +42,8 @@ class ExceptionStateTrackerTest {
 
     @Test
     void recordNullClearsTheException() {
-        ExceptionStateTracker.record(new IOException("boom"));
-        ExceptionStateTracker.record(null);
+        ExceptionStateTracker.recordException(new IOException("boom"));
+        ExceptionStateTracker.recordException(null);
 
         assertNull(ExceptionStateTracker.getLastException());
         assertNull(ExceptionStateTracker.getLastExceptionContext());
@@ -51,7 +51,7 @@ class ExceptionStateTrackerTest {
 
     @Test
     void clearRemovesTheRecordedException() {
-        ExceptionStateTracker.record(new IOException("boom"));
+        ExceptionStateTracker.recordException(new IOException("boom"));
         ExceptionStateTracker.clear();
 
         assertNull(ExceptionStateTracker.getLastException());
@@ -72,7 +72,7 @@ class ExceptionStateTrackerTest {
 
         ExceptionStateTracker.enterLoop(outer);
         ExceptionStateTracker.enterLoop(inner);
-        ExceptionStateTracker.record(new IllegalStateException("in loop"));
+        ExceptionStateTracker.recordException(new IllegalStateException("in loop"));
 
         ExceptionContext ctx = ExceptionStateTracker.getLastExceptionContext();
         assertTrue(ctx.isInsideLoop());
@@ -99,7 +99,7 @@ class ExceptionStateTrackerTest {
     void recordAfterLeavingLoopIsNotMarkedAsInsideLoop() {
         ExceptionStateTracker.enterLoop(new LoopContext());
         ExceptionStateTracker.exitLoop();
-        ExceptionStateTracker.record(new IllegalStateException("outside"));
+        ExceptionStateTracker.recordException(new IllegalStateException("outside"));
 
         assertFalse(ExceptionStateTracker.getLastExceptionContext().isInsideLoop());
     }
