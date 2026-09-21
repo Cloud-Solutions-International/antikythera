@@ -96,22 +96,21 @@ public class MethodResponse {
 
     /**
      * Sets the exception for this method response by wrapping it in an {@link ExceptionContext}.
-     * <p>
-     * This is a convenience method that automatically creates an ExceptionContext with the provided
-     * exception. It delegates to {@link #setExceptionContext(ExceptionContext)}.
      *
      * @param eex the exception to wrap, or {@code null} to clear the exception context
+     * @deprecated {@link ExceptionContext} is the canonical representation of an exception on a
+     *             {@code MethodResponse}. Use
+     *             {@code setExceptionContext(ExceptionContext.of(eex))} instead, or
+     *             {@code setExceptionContext(null)} to clear it. Building the context explicitly
+     *             also allows loop and path metadata to be attached. This method will be removed
+     *             in a future release.
+     * @since 0.1.3.4
      */
+    @Deprecated(since = "0.1.3.4", forRemoval = true)
     public void setException(EvaluatorException eex) {
-        if (eex == null) {
-            this.exceptionContext = null;
-        } else {
-            ExceptionContext ctx = new ExceptionContext();
-            ctx.setException(eex);
-            this.exceptionContext = ctx;
-        }
+        this.exceptionContext = eex == null ? null : ExceptionContext.of(eex);
     }
-    
+
     /**
      * Sets the exception context for this method response.
      * <p>
@@ -126,13 +125,16 @@ public class MethodResponse {
 
     /**
      * Returns the exception from the exception context, if it is an {@link EvaluatorException}.
-     * <p>
-     * This is a convenience method that extracts the exception from the underlying
-     * {@link ExceptionContext}. If no exception context exists, or if the exception is not
-     * an EvaluatorException, this returns {@code null}.
      *
      * @return the EvaluatorException, or {@code null} if none exists or it's a different type
+     * @deprecated {@link ExceptionContext} is the canonical representation of an exception on a
+     *             {@code MethodResponse}. Use {@link #getExceptionContext()} and read
+     *             {@link ExceptionContext#getException()} instead; unlike this method it reports
+     *             exceptions that are not an {@code EvaluatorException} rather than silently
+     *             returning {@code null}. This method will be removed in a future release.
+     * @since 0.1.3.4
      */
+    @Deprecated(since = "0.1.3.4", forRemoval = true)
     public EvaluatorException getException() {
         return (exceptionContext != null && exceptionContext.getException() instanceof EvaluatorException ee) 
             ? ee 

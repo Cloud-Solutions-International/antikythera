@@ -183,14 +183,6 @@ public class Evaluator implements EvaluationEngine {
 
     private static final AtomicLong sequence = new AtomicLong(0);
 
-    private static ExceptionContext lastExceptionContext;
-    
-    /**
-     * Thread-local stack of active loop contexts for exception tracking.
-     */
-    private static final ThreadLocal<Deque<LoopContext>> activeLoops = 
-        ThreadLocal.withInitial(LinkedList::new);
-
     protected Evaluator() {
         locals = new HashMap<>();
         fields = new HashMap<>();
@@ -1866,8 +1858,9 @@ public class Evaluator implements EvaluationEngine {
     private void executeBlockHelper(List<Statement> statements) throws Exception {
         Evaluator.clearLastExceptionContext();
         for (Statement stmt : statements) {
-            if (lastExceptionContext != null && lastExceptionContext.getException() != null) {
-                throw lastExceptionContext.getException();
+            Exception pending = ExceptionStateTracker.getLastException();
+            if (pending != null) {
+                throw pending;
             }
             if (loops.isEmpty() || loops.peekLast().equals(Boolean.TRUE)) {
                 executeStatement(stmt);
@@ -2042,7 +2035,7 @@ public class Evaluator implements EvaluationEngine {
             loopCtx.setIteratorVariable(iteratorVarName);
         }
         
-        activeLoops.get().push(loopCtx);
+        ExceptionStateTracker.enterLoop(loopCtx);
         
         try {
             int iteration = 0;
@@ -2063,7 +2056,7 @@ public class Evaluator implements EvaluationEngine {
                 iteration++;
             }
         } finally {
-            activeLoops.get().pop();
+            ExceptionStateTracker.exitLoop();
         }
     }
 
@@ -2090,7 +2083,7 @@ public class Evaluator implements EvaluationEngine {
         loopCtx.setLoopStatement(forStmt);
         loopCtx.setEmptyCollection(false); // Regular for loops don't iterate collections directly
         
-        activeLoops.get().push(loopCtx);
+        ExceptionStateTracker.enterLoop(loopCtx);
         loops.addLast(true);
 
         try {
@@ -2113,7 +2106,7 @@ public class Evaluator implements EvaluationEngine {
             }
         } finally {
             loops.pollLast();
-            activeLoops.get().pop();
+            ExceptionStateTracker.exitLoop();
         }
     }
 
@@ -2123,7 +2116,7 @@ public class Evaluator implements EvaluationEngine {
         loopCtx.setLoopStatement(whileStmt);
         loopCtx.setEmptyCollection(false);
         
-        activeLoops.get().push(loopCtx);
+        ExceptionStateTracker.enterLoop(loopCtx);
         loops.push(true);
         
         try {
@@ -2135,7 +2128,7 @@ public class Evaluator implements EvaluationEngine {
             } while ((boolean) evaluateExpression(whileStmt.getCondition()).getValue() && Boolean.TRUE.equals(loops.peekLast()));
         } finally {
             loops.pollLast();
-            activeLoops.get().pop();
+            ExceptionStateTracker.exitLoop();
         }
     }
 
@@ -2152,7 +2145,7 @@ public class Evaluator implements EvaluationEngine {
         loopCtx.setLoopStatement(whileStmt);
         loopCtx.setEmptyCollection(false);
         
-        activeLoops.get().push(loopCtx);
+        ExceptionStateTracker.enterLoop(loopCtx);
         loops.push(true);
         
         try {
@@ -2164,7 +2157,7 @@ public class Evaluator implements EvaluationEngine {
             }
         } finally {
             loops.pollLast();
-            activeLoops.get().pop();
+            ExceptionStateTracker.exitLoop();
         }
     }
 
@@ -2201,7 +2194,7 @@ public class Evaluator implements EvaluationEngine {
         }
         else {
             catching.addLast(t);
-            Evaluator.setLastException(e);
+            ExceptionStateTracker.record(e);
         }
     }
 
@@ -2213,7 +2206,7 @@ public class Evaluator implements EvaluationEngine {
                 TypeWrapper wrapper = AbstractCompiler.findType(cu,
                         clause.getParameter().getType().asClassOrInterfaceType().getNameAsString());
 
-                if (wrapper != null && isExceptionMatch(wrapper, e)) {
+                if (wrapper != null && ExceptionStateTracker.matches(wrapper, e)) {
                     setLocal(t, clause.getParameter().getNameAsString(), new Variable(e));
                     executeBlock(clause.getBody().getStatements());
                     matchFound = true;
@@ -2229,33 +2222,6 @@ public class Evaluator implements EvaluationEngine {
         if (!matchFound && t.getFinallyBlock().isEmpty()) {
             throw new AUTException("Unhandled exception: " + e.getClass().getName() + ": " + (e.getMessage() == null ? "" : e.getMessage()), e);
         }
-    }
-
-    private static void setLastException(Exception e) {
-        if (e == null) {
-            lastExceptionContext = null;
-            return;
-        }
-        
-        ExceptionContext ctx = new ExceptionContext();
-        ctx.setException(e);
-        
-        // Capture loop context if inside loop
-        Deque<LoopContext> loops = activeLoops.get();
-        if (!loops.isEmpty()) {
-            ctx.setInsideLoop(true);
-            ctx.setLoopContext(loops.peek());
-        }
-        
-        lastExceptionContext = ctx;
-    }
-
-    private boolean isExceptionMatch(TypeWrapper wrapper, Exception e) {
-        TypeDeclaration<?> decl = wrapper.getType();
-        if (decl != null) {
-            return e.getClass().getName().equals(decl.getFullyQualifiedName().orElse(null));
-        }
-        return wrapper.getClazz().isAssignableFrom(e.getClass());
     }
 
     Variable executeReturnStatement(Statement stmt) throws ReflectiveOperationException {
@@ -2599,18 +2565,18 @@ public class Evaluator implements EvaluationEngine {
     }
 
     public static Exception getLastException() {
-        return lastExceptionContext != null ? lastExceptionContext.getException() : null;
+        return ExceptionStateTracker.getLastException();
     }
-    
+
     public static ExceptionContext getLastExceptionContext() {
-        return lastExceptionContext;
+        return ExceptionStateTracker.getLastExceptionContext();
     }
 
     public static void clearLastException() {
-        lastExceptionContext = null;
+        ExceptionStateTracker.clear();
     }
-    
+
     public static void clearLastExceptionContext() {
-        lastExceptionContext = null;
+        ExceptionStateTracker.clear();
     }
 }

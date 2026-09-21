@@ -27,6 +27,18 @@ public class ExceptionContext {
         this.timestamp = System.currentTimeMillis();
     }
 
+    /**
+     * Creates a context carrying just the given exception, without any loop or path metadata.
+     *
+     * @param exception the exception that was raised during evaluation
+     * @return a context wrapping the exception
+     */
+    public static ExceptionContext of(Exception exception) {
+        ExceptionContext ctx = new ExceptionContext();
+        ctx.setException(exception);
+        return ctx;
+    }
+
     public Exception getException() {
         return exception;
     }

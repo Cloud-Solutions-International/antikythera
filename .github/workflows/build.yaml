@@ -47,6 +47,14 @@ jobs:
       - name: Build and Test
         run: MAVEN_OPTS="--add-opens java.base/java.util.stream=ALL-UNNAMED --add-exports java.base/java.util.stream=ALL-UNNAMED" mvn clean install
 
+      - name: SpotBugs
+        continue-on-error: true
+        run: MAVEN_OPTS="--add-opens java.base/java.util.stream=ALL-UNNAMED --add-exports java.base/java.util.stream=ALL-UNNAMED" mvn spotbugs:check
+
+      - name: Checkstyle
+        continue-on-error: true
+        run: MAVEN_OPTS="--add-opens java.base/java.util.stream=ALL-UNNAMED --add-exports java.base/java.util.stream=ALL-UNNAMED" mvn checkstyle:check
+
       - name: Generate JaCoCo report
         run: mvn jacoco:report
 
